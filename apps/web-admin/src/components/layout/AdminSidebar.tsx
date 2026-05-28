@@ -41,7 +41,7 @@ import {
   type UseOverlayStateReturn,
 } from "@heroui/react";
 import { ROUTES } from "@/lib/routes";
-import { Logo } from "../common/kun-logo";
+import { KunLogo } from "../common/kun-logo";
 
 type NavItem = {
   href: string | null;
@@ -126,7 +126,7 @@ function SidebarNavPanel({ pathname, onNavigate }: SidebarPanelProps) {
         className="mb-8 flex flex-col gap-1 px-2 outline-offset-4 items-center"
         onClick={onNavigate}
       >
-        <Logo size="lg" className="h-18 w-52 object-contain" />
+        <KunLogo size="md" className="h-10 w-52 object-contain" />
       </Link>
 
       <nav
