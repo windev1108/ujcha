@@ -1,0 +1,55 @@
+import type { ApiCartItem } from "@/services/cart/types";
+import { normalizeOptionGroups } from "@/lib/product-options";
+
+function fmt(n: number) {
+  return new Intl.NumberFormat("vi-VN").format(Math.round(n)) + "đ";
+}
+
+type Props = {
+  item: Pick<ApiCartItem, "product" | "selectedOptions" | "toppings">;
+};
+
+export function ItemOptionsDisplay({ item }: Props) {
+  const groups = normalizeOptionGroups(item.product.optionGroups);
+
+  const optionPills = groups
+    .map((g) => {
+      const val = item.selectedOptions[g.name] ?? item.selectedOptions[g.id];
+      if (!val) return null;
+      const v = g.values.find((vv) => vv.label === val);
+      return { label: val, delta: v?.priceDelta ?? 0 };
+    })
+    .filter(Boolean) as { label: string; delta: number }[];
+
+  const toppingPills = item.toppings.map((t) => ({
+    name: t.topping.name,
+    price: parseFloat(t.topping.price),
+  }));
+
+  if (optionPills.length === 0 && toppingPills.length === 0) return null;
+
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1.5">
+      {optionPills.map((p) => (
+        <span
+          key={p.label}
+          className="inline-flex items-center gap-1 rounded-full bg-surface-secondary px-2.5 py-0.5 text-[11px] font-medium text-foreground/70"
+        >
+          {p.label}
+          {p.delta > 0 && (
+            <span className="text-[10px] text-muted">+{fmt(p.delta)}</span>
+          )}
+        </span>
+      ))}
+      {toppingPills.map((t) => (
+        <span
+          key={t.name}
+          className="inline-flex items-center gap-1 rounded-full bg-kun-mint/20 px-2.5 py-0.5 text-[11px] font-medium text-kun-products-forest"
+        >
+          + {t.name}
+          <span className="text-[10px] text-kun-products-forest/60">+{fmt(t.price)}</span>
+        </span>
+      ))}
+    </div>
+  );
+}

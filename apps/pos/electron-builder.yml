@@ -1,0 +1,37 @@
+appId: com.kun.pos
+productName: UjCha POS
+copyright: Copyright © 2026 UjCha
+
+directories:
+  output: dist-release
+  buildResources: build
+
+files:
+  - out/**/*
+  - package.json
+
+npmRebuild: false
+nodeGypRebuild: false
+buildDependenciesFromSource: false
+
+win:
+  icon: build/icon.ico
+  requestedExecutionLevel: asInvoker
+  target:
+    - target: nsis
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: UjCha POS
+  runAfterFinish: true
+
+asar: true
+asarUnpack:
+  - node_modules/iconv-lite/**

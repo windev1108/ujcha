@@ -1,0 +1,389 @@
+"use client";
+
+import {
+  Avatar,
+  Button,
+  Chip,
+  Dropdown,
+  Table,
+} from "@heroui/react";
+import {
+  Bike,
+  CheckSquare2,
+  Eye,
+  FileText,
+  MoreVertical,
+  ShoppingBag,
+  Square,
+  UserPlus,
+  UtensilsCrossed,
+} from "lucide-react";
+
+import { formatVnd } from "@/lib/product-display";
+import type { AdminOrder } from "@/services/admin/types";
+
+import {
+  canAssignShipper,
+  customerDisplayName,
+  customerInitials,
+  formatOrderRef,
+  formatOrderTime,
+  formatOrderTimeFull,
+  formatTimeHm,
+  orderStatusChipClass,
+  orderStatusLabel,
+  serviceTypeLabel,
+  tableLabel,
+} from "./order-display";
+
+type Props = {
+  items: AdminOrder[];
+  isLoading?: boolean;
+  onViewDetail: (order: AdminOrder) => void;
+  onViewInvoice?: (order: AdminOrder) => void;
+  onAssignShipper: (order: AdminOrder) => void;
+  onEdit: (order: AdminOrder) => void;
+  onDelete: (order: AdminOrder) => void;
+  busyOrderId?: string | null;
+  selectedIds: Set<string>;
+  onSelectionChange: (ids: Set<string>) => void;
+};
+
+function ServiceCell({ order }: { order: AdminOrder }) {
+  if (order.type === "delivery") {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="flex size-8 items-center justify-center rounded-lg bg-emerald-50 text-[#1a3c34]">
+          <Bike className="size-4" aria-hidden />
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-medium">{serviceTypeLabel("delivery")}</p>
+          {order.shipper ? (
+            <p className="truncate text-xs text-foreground/50">
+              Shipper: {order.shipper.name}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+  if (order.type === "table") {
+    const t = tableLabel(order);
+    return (
+      <div className="flex items-center gap-2">
+        <span className="flex size-8 items-center justify-center rounded-lg bg-amber-50 text-amber-950">
+          <UtensilsCrossed className="size-4" aria-hidden />
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-medium">
+            {t ? `Bàn ${t}` : serviceTypeLabel("table")}
+          </p>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <span className="flex size-8 items-center justify-center rounded-lg bg-violet-50 text-violet-900">
+        <ShoppingBag className="size-4" aria-hidden />
+      </span>
+      <div className="min-w-0">
+        <p className="text-sm font-medium">{serviceTypeLabel("pickup")}</p>
+        {order.pickupTime ? (
+          <p className="text-xs text-foreground/50">
+            {formatTimeHm(order.pickupTime)}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+export function OrderTable({
+  items,
+  isLoading,
+  onViewDetail,
+  onViewInvoice,
+  onAssignShipper,
+  onEdit,
+  onDelete,
+  busyOrderId,
+  selectedIds,
+  onSelectionChange,
+}: Props) {
+  const allSelected = items.length > 0 && items.every((o) => selectedIds.has(o.id));
+  const someSelected = !allSelected && items.some((o) => selectedIds.has(o.id));
+
+  function toggleAll() {
+    if (allSelected) {
+      const next = new Set(selectedIds);
+      items.forEach((o) => next.delete(o.id));
+      onSelectionChange(next);
+    } else {
+      const next = new Set(selectedIds);
+      items.forEach((o) => next.add(o.id));
+      onSelectionChange(next);
+    }
+  }
+
+  function toggleOne(id: string) {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onSelectionChange(next);
+  }
+
+  const columns = (
+    <Table.Header>
+      <Table.Column
+        isRowHeader
+        textValue="Chọn"
+        className="w-10 px-3 py-3"
+      >
+        <button
+          aria-label={allSelected ? "Bỏ chọn tất cả" : "Chọn tất cả"}
+          onClick={toggleAll}
+          className="flex items-center text-foreground/40 hover:text-foreground/70"
+        >
+          {allSelected ? (
+            <CheckSquare2 className="size-4 text-[#1a3c34]" />
+          ) : someSelected ? (
+            <CheckSquare2 className="size-4 text-foreground/40" />
+          ) : (
+            <Square className="size-4" />
+          )}
+        </button>
+      </Table.Column>
+      <Table.Column
+        isRowHeader
+        textValue="Mã đơn"
+        className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-foreground/45"
+      >
+        Mã đơn
+      </Table.Column>
+      <Table.Column className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-foreground/45">
+        Khách
+      </Table.Column>
+      <Table.Column className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-foreground/45">
+        Dịch vụ
+      </Table.Column>
+      <Table.Column className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-foreground/45">
+        Tổng
+      </Table.Column>
+      <Table.Column className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-foreground/45">
+        Trạng thái
+      </Table.Column>
+      <Table.Column className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-foreground/45">
+        Giờ tạo
+      </Table.Column>
+      <Table.Column className="px-4 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-foreground/45">
+        Thao tác
+      </Table.Column>
+    </Table.Header>
+  );
+
+  if (isLoading) {
+    return (
+      <CardTableShell>
+        <Table.Root className="min-w-[1080px]" aria-hidden>
+          <Table.ScrollContainer>
+            <Table.Content>
+              {columns}
+              <Table.Body>
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <Table.Row key={i}>
+                    {Array.from({ length: 8 }).map((__, j) => (
+                      <Table.Cell key={j} className="px-4 py-3">
+                        <div className="h-4 animate-pulse rounded-md bg-black/5" />
+                      </Table.Cell>
+                    ))}
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table.Content>
+          </Table.ScrollContainer>
+        </Table.Root>
+      </CardTableShell>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className="rounded-2xl border border-dashed border-black/15 bg-white p-12 text-center text-sm text-foreground/50">
+        Không có đơn phù hợp bộ lọc.
+      </div>
+    );
+  }
+  return (
+    <CardTableShell>
+      <Table.Root className="min-w-[1080px]" aria-label="Danh sách đơn hàng">
+        <Table.ScrollContainer>
+          <Table.Content>
+            {columns}
+            <Table.Body>
+              {items.map((order) => {
+                const busy = busyOrderId === order.id;
+                const showAssign = canAssignShipper(order);
+                const checked = selectedIds.has(order.id);
+                return (
+                  <Table.Row
+                    key={order.id}
+                    id={order.id}
+                    className={checked ? "bg-[#1a3c34]/[0.03]" : undefined}
+                  >
+                    <Table.Cell className="w-10 px-3 py-3 align-middle">
+                      <button
+                        aria-label={checked ? "Bỏ chọn đơn" : "Chọn đơn"}
+                        onClick={() => toggleOne(order.id)}
+                        className="flex items-center text-foreground/40 hover:text-foreground/70"
+                      >
+                        {checked ? (
+                          <CheckSquare2 className="size-4 text-[#1a3c34]" />
+                        ) : (
+                          <Square className="size-4" />
+                        )}
+                      </button>
+                    </Table.Cell>
+
+                    <Table.Cell
+                      className="px-4 py-3 align-middle"
+                      textValue={formatOrderRef(order)}
+                    >
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => onViewDetail(order)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ")
+                            onViewDetail(order);
+                        }}
+                        className="cursor-pointer font-mono text-sm font-bold text-[#1a3c34] underline-offset-2 hover:underline"
+                      >
+                        {formatOrderRef(order)}
+                      </span>
+                    </Table.Cell>
+
+                    <Table.Cell className="px-4 py-3 align-middle">
+                      <div className="flex items-center gap-2">
+                        <Avatar size="sm" className="shrink-0" {...({} as any)}>
+                          <Avatar.Fallback className="text-[10px] font-bold" {...({} as any)}>
+                            <>
+                              {customerInitials(order)}
+                            </>
+                          </Avatar.Fallback>
+                        </Avatar >
+                        <span className="truncate text-sm font-medium">
+                          {customerDisplayName(order)}
+                        </span>
+                      </div>
+                    </Table.Cell>
+
+                    <Table.Cell className="px-4 py-3 align-middle">
+                      <ServiceCell order={order} />
+                    </Table.Cell>
+
+                    <Table.Cell className="px-4 py-3 align-middle font-medium tabular-nums">
+                      {formatVnd(
+                        Number(order.totalAmount)
+                        - Number(order.discountAmount)
+                        - Number(order.pointDiscountAmount)
+                        + (order.type === "delivery" ? Number(order.shippingFee) : 0)
+                      )}
+                    </Table.Cell>
+
+                    <Table.Cell className="px-4 py-3 align-middle">
+                      <Chip
+                        size="sm"
+                        variant="soft"
+                        className={`border-0 font-bold uppercase tracking-wide ${orderStatusChipClass(order.status)}`}
+                      >
+                        <Chip.Label>{orderStatusLabel(order.status)}</Chip.Label>
+                      </Chip>
+                    </Table.Cell>
+
+                    <Table.Cell className="px-4 py-3 align-middle text-sm text-foreground/70">
+                      <span title={formatOrderTimeFull(order.createdAt)} className="cursor-default">
+                        {formatOrderTime(order.createdAt)}
+                      </span>
+                    </Table.Cell>
+
+                    <Table.Cell className="px-4 py-3 text-right align-middle">
+                      <div className="inline-flex items-center justify-end gap-1">
+                        {showAssign ? (
+                          <Button
+                            size="sm"
+                            className="rounded-lg bg-[#1a3c34] px-2 font-semibold text-white"
+                            onPress={() => onAssignShipper(order)}
+                            isDisabled={busy}
+                            aria-label="Gán shipper"
+                          >
+                            <UserPlus className="mr-1 size-3.5" />
+                            Shipper
+                          </Button>
+                        ) : null}
+
+                        <Button
+                          isIconOnly
+                          size="sm"
+                          variant="ghost"
+                          aria-label="Chi tiết"
+                          onPress={() => onViewDetail(order)}
+                        >
+                          <Eye className="size-4" />
+                        </Button>
+
+                        <Dropdown.Root>
+                          <Dropdown.Trigger
+                            aria-label="Thêm thao tác"
+                            className="inline-flex size-8 items-center justify-center rounded-lg text-foreground/60 outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-black/20"
+                          >
+                            <MoreVertical className="size-4" />
+                          </Dropdown.Trigger>
+                          <Dropdown.Popover placement="bottom end">
+                            <Dropdown.Menu
+                              aria-label="Menu đơn"
+                              onAction={(key) => {
+                                const k = String(key);
+                                if (k === "invoice" && onViewInvoice)
+                                  onViewInvoice(order);
+                                if (k === "edit") onEdit(order);
+                                if (k === "delete") onDelete(order);
+                              }}
+                            >
+                              {onViewInvoice ? (
+                                <Dropdown.Item id="invoice" textValue="Xem hóa đơn">
+                                  <span className="flex items-center gap-2">
+                                    <FileText className="size-3.5" aria-hidden />
+                                    Xem hóa đơn
+                                  </span>
+                                </Dropdown.Item>
+                              ) : null}
+                              <Dropdown.Item id="edit" textValue="Sửa trạng thái">
+                                Sửa trạng thái / thanh toán
+                              </Dropdown.Item>
+                              <Dropdown.Item id="delete" textValue="Xóa đơn">
+                                Xóa đơn (chưa có thanh toán)
+                              </Dropdown.Item>
+                            </Dropdown.Menu>
+                          </Dropdown.Popover>
+                        </Dropdown.Root>
+                      </div>
+                    </Table.Cell>
+                  </Table.Row>
+                );
+              })}
+            </Table.Body>
+          </Table.Content>
+        </Table.ScrollContainer>
+      </Table.Root>
+    </CardTableShell>
+  );
+}
+
+function CardTableShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="overflow-x-auto rounded-2xl border border-black/6 bg-white shadow-[0_12px_40px_-24px_rgba(0,0,0,0.12)]">
+      {children}
+    </div>
+  );
+}

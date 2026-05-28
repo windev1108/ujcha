@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: kun-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: kun
+      POSTGRES_PASSWORD: kun
+      POSTGRES_DB: kun
+    volumes:
+      - kun_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kun -d kun"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  kun_pgdata:

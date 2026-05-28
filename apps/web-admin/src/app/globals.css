@@ -1,0 +1,226 @@
+@import "tailwindcss";
+@import "@heroui/styles";
+
+/* =============================================================================
+   UjCha — light UI (nền gần trắng, hero ảnh full + chữ overlay).
+   Dùng chung cho các app Next (import trong layout).
+   ============================================================================= */
+
+:root,
+.light,
+.default,
+[data-theme="light"],
+[data-theme="default"] {
+  --kun-bg-page: #ffffff;
+  --kun-surface-card: #ededed;
+  --kun-forest: #1a3c34;
+  --kun-primary: #1a3c34;
+  --kun-sage: #5a8f7a;
+  --kun-secondary: #ededed;
+  --kun-tertiary: #2d4a43;
+  --kun-neutral: #ffffff;
+  --kun-ink: #1a1a1a;
+  --kun-white: #ffffff;
+  --kun-warning: #c9a227;
+  --kun-danger: #c45c5c;
+  --kun-muted: #717171;
+
+  /* Thu hẹp container (trước ~1440px; giờ ~1152px) */
+  --layout-container-max: min(72rem, calc(100vw - 1.5rem));
+
+  --radius-kun-xl: 1.5rem;
+  --radius-kun-2xl: 2rem;
+
+  /* Hero: CTA xanh nhạt hơn nền ảnh, chữ trắng */
+  --kun-hero-cta-bg: #3d7568;
+  --kun-hero-cta-fg: #ffffff;
+  --kun-on-hero: #ffffff;
+
+  --kun-category-overlay-matcha: linear-gradient(
+    to top,
+    color-mix(in oklab, var(--kun-sage) 22%, transparent) 0%,
+    transparent 100%
+  );
+  --kun-category-overlay-coffee: linear-gradient(
+    to top,
+    color-mix(in oklab, var(--kun-warning) 18%, var(--kun-surface-card)) 0%,
+    transparent 100%
+  );
+  --kun-category-overlay-tea: linear-gradient(
+    to top,
+    color-mix(in oklab, var(--kun-forest) 12%, transparent) 0%,
+    transparent 100%
+  );
+
+  --kun-gallery-matcha-bg: color-mix(
+    in oklab,
+    var(--kun-forest) 78%,
+    #0d2822
+  );
+  --kun-gallery-espresso-bg: #141414;
+  --kun-gallery-oolong-bg: color-mix(
+    in oklab,
+    var(--kun-warning) 55%,
+    #6b5a20
+  );
+  --kun-gallery-hojicha-bg: color-mix(
+    in oklab,
+    #4a3228 70%,
+    #2a1f1a
+  );
+
+  --kun-promo-surface: #efefef;
+  --kun-promo-ink: #1a1a1a;
+  --kun-promo-muted: #5c5c5c;
+  --kun-promo-cta-bg: #0a0a0a;
+  --kun-promo-cta-fg: #ffffff;
+
+  --kun-footer-bg: #f7f7f7;
+  --kun-price: var(--kun-forest);
+
+  /* Trang sản phẩm (mockup) */
+  --kun-mint: #99d6b3;
+  --kun-products-forest: #26634d;
+  --kun-filter-pill-bg: #f3f4f6;
+
+  /* HeroUI */
+  --background: var(--kun-bg-page);
+  --foreground: var(--kun-ink);
+
+  --surface: var(--kun-white);
+  --surface-foreground: var(--foreground);
+  --surface-secondary: var(--kun-surface-card);
+  --surface-secondary-foreground: var(--foreground);
+  --surface-tertiary: #e4e4e4;
+  --surface-tertiary-foreground: var(--foreground);
+
+  --overlay: var(--kun-white);
+  --overlay-foreground: var(--foreground);
+
+  --muted: var(--kun-muted);
+  --scrollbar: color-mix(in oklab, var(--kun-ink) 12%, transparent);
+
+  --default: var(--kun-surface-card);
+  --default-foreground: var(--kun-ink);
+
+  --accent: var(--kun-forest);
+  --accent-foreground: var(--kun-white);
+
+  --field-background: var(--kun-white);
+  --field-foreground: var(--kun-ink);
+  --field-placeholder: var(--muted);
+  --field-border: color-mix(in oklab, var(--kun-ink) 8%, transparent);
+
+  --success: var(--kun-hero-cta-bg);
+  --success-foreground: var(--kun-white);
+
+  --warning: var(--kun-warning);
+  --warning-foreground: #1a1a1a;
+
+  --danger: var(--kun-danger);
+  --danger-foreground: var(--kun-white);
+
+  --segment: var(--kun-white);
+  --segment-foreground: var(--foreground);
+
+  --border: color-mix(in oklab, var(--kun-ink) 10%, transparent);
+  --separator: color-mix(in oklab, var(--kun-ink) 6%, transparent);
+  --focus: var(--kun-forest);
+  --link: var(--kun-forest);
+
+  --radius: 0.75rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-kun-primary: var(--kun-primary);
+  --color-kun-tertiary: var(--kun-tertiary);
+  --color-kun-neutral: var(--kun-neutral);
+  --color-kun-on-hero: var(--kun-on-hero);
+  --color-kun-price: var(--kun-price);
+  --color-kun-promo-surface: var(--kun-promo-surface);
+  --color-kun-promo-cta-bg: var(--kun-promo-cta-bg);
+  --color-kun-promo-cta-fg: var(--kun-promo-cta-fg);
+  --color-kun-footer-bg: var(--kun-footer-bg);
+  --color-kun-promo-ink: var(--kun-promo-ink);
+  --color-kun-promo-muted: var(--kun-promo-muted);
+  --color-kun-hero-cta-bg: var(--kun-hero-cta-bg);
+  --color-kun-hero-cta-fg: var(--kun-hero-cta-fg);
+  --color-kun-mint: var(--kun-mint);
+  --color-kun-products-forest: var(--kun-products-forest);
+  --color-kun-filter-pill-bg: var(--kun-filter-pill-bg);
+
+  --max-w-kun: var(--layout-container-max);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+
+/* Container Configuration */
+.container {
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+
+/* Responsive container max-widths matching your breakpoints */
+@media (min-width: 36rem) { /* sm */
+  .container {
+    max-width: 36rem;
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+}
+
+@media (min-width: 48rem) { /* md */
+  .container {
+    max-width: 48rem;
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+}
+
+@media (min-width: 64.25rem) { /* base */
+  .container {
+    max-width: 64.25rem;
+  }
+}
+
+@media (min-width: 80rem) { /* lg */
+  .container {
+    max-width: 80rem;
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+@media (min-width: 90rem) { /* xl */
+  .container {
+    max-width: 90rem;
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+@media (min-width: 96rem) { /* 2xl */
+  .container {
+    max-width: 100rem; /* Keep at 90rem as per your config */
+  }
+}
+
+@media (min-width: 120rem) { /* 3xl */
+  .container {
+    max-width: 110rem; /* Keep at 90rem as per your config */
+  }
+}

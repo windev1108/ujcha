@@ -1,0 +1,47 @@
+{
+  "name": "web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently --raw \"next dev --turbo\" \"i18nexus listen --path i18n/messages\"",
+    "build": "i18nexus pull --path i18n/messages && next build",
+    "start": "i18nexus pull --path i18n/messages && next start",
+    "i18n:pull": "i18nexus pull --path i18n/messages",
+    "i18n:listen": "i18nexus listen --path i18n/messages",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@heroui/react": "^3.0.1",
+    "@heroui/styles": "^3.0.1",
+    "@number-flow/react": "^0.6.0",
+    "@react-oauth/google": "^0.13.4",
+    "@tanstack/react-query": "^5.95.2",
+    "@types/leaflet": "^1.9.21",
+    "axios": "^1.14.0",
+    "clsx": "^2.1.1",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^1.6.0",
+    "motion": "^12.38.0",
+    "next": "16.2.1",
+    "next-intl": "^4.8.3",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-leaflet": "^5.0.0",
+    "socket.io-client": "^4.8.3",
+    "zustand": "^5.0.12"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "class-variance-authority": "^0.7.1",
+    "concurrently": "^8.2.2",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.1",
+    "i18nexus-cli": "^4.0.0",
+    "tailwind-merge": "^3.5.0",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

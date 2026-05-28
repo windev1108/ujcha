@@ -1,0 +1,49 @@
+{
+  "name": "ujcha",
+  "version": "1.0.0",
+  "private": true,
+  "description": "UjCha monorepo — apps (web, api, admin, …) và shared packages",
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "dev:web": "turbo dev --filter=web",
+    "dev:api": "turbo dev --filter=api",
+    "dev:admin": "turbo dev --filter=web-admin",
+    "build": "turbo build",
+    "build:web": "turbo build --filter=web",
+    "build:api": "turbo build --filter=api",
+    "build:admin": "turbo build --filter=web-admin",
+    "i18n:pull:web": "pnpm --filter web run i18n:pull",
+    "lint": "turbo lint",
+    "install:all": "pnpm install"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "keywords": [],
+  "author": "windev",
+  "license": "ISC",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "overrides": {
+    "@types/react": "19.2.4",
+    "@types/react-dom": "19.2.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "@types/react": "19.2.4",
+      "@types/react-dom": "19.2.3"
+    }
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "turbo": "^2.4.4"
+  },
+  "dependencies": {
+    "@types/leaflet": "^1.9.21",
+    "leaflet": "^1.9.4",
+    "react-leaflet": "^5.0.0"
+  }
+}

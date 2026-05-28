@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "ShopSettings" ADD COLUMN     "ttsReturnOption" INTEGER NOT NULL DEFAULT 3,
+ADD COLUMN     "ttsSpeed" DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+ADD COLUMN     "ttsVoice" TEXT NOT NULL DEFAULT 'hcm-diemmy',
+ADD COLUMN     "ttsWithoutFilter" BOOLEAN NOT NULL DEFAULT false;

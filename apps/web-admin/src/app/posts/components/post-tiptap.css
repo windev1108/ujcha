@@ -1,0 +1,8 @@
+/* TipTap Placeholder (extension @tiptap/extension-placeholder) */
+.tiptap-post-editor .tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--muted, #9ca3af);
+  pointer-events: none;
+  height: 0;
+}
