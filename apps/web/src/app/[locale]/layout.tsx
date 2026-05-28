@@ -6,7 +6,7 @@ import { fontSans, fontSerif } from "@/assets/font";
 import { NextIntlClientProvider } from "next-intl";
 import "@/app/globals.css";
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://kun.vn";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ujcha.vercel.app";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -25,13 +25,11 @@ export const metadata: Metadata = {
     siteName: "UjCha",
     title: "UjCha — Matcha & Đồ uống thủ công",
     description: "Matcha ceremonial grade, cà phê và đồ uống thủ công tại UjCha. Nguồn gốc bền vững, chất lượng cao.",
-    images: [{ url: "/logo.png", width: 512, height: 512, alt: "UjCha Logo" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "UjCha — Matcha & Đồ uống thủ công",
     description: "Matcha ceremonial grade, cà phê và đồ uống thủ công tại UjCha.",
-    images: ["/logo.png"],
   },
   icons: {
     icon: [
