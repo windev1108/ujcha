@@ -6,7 +6,8 @@
     "CLOUDINARY_API_SECRET",
     "I18NEXUS_API_KEY",
     "NEXT_PUBLIC_API_URL",
-    "NEXT_PUBLIC_SITE_URL"
+    "NEXT_PUBLIC_SITE_URL",
+    "VIETTEL_TTS_TOKEN"
   ],
   "tasks": {
     "build": {
