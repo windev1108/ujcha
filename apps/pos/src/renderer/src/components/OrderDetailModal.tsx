@@ -49,8 +49,8 @@ type PrintStatus = 'idle' | 'printing' | 'done' | 'error'
 
 // ── Status timeline ────────────────────────────────────────────────────────────
 
-const TIMELINE_STEPS_DELIVERY: OrderStatus[] = ['pending', 'preparing', 'ready', 'delivering', 'completed']
-const TIMELINE_STEPS_OTHER: OrderStatus[] = ['pending', 'preparing', 'ready', 'completed']
+const TIMELINE_STEPS_DELIVERY: OrderStatus[] = ['pending', 'confirmed', 'preparing', 'ready', 'delivering', 'completed']
+const TIMELINE_STEPS_OTHER: OrderStatus[] = ['pending', 'confirmed', 'preparing', 'ready', 'completed']
 
 const STEP_META: Record<OrderStatus, { label: string; icon: React.ElementType }> = {
     pending: { label: 'Chờ xử lý', icon: Clock },
@@ -73,8 +73,7 @@ function StatusTimeline({ status, orderType }: { status: OrderStatus; orderType:
     }
 
     const steps = orderType === 'delivery' ? TIMELINE_STEPS_DELIVERY : TIMELINE_STEPS_OTHER
-    const normalised = steps.includes(status) ? status : (status === 'confirmed' ? 'pending' : status)
-    const activeIdx = steps.indexOf(normalised)
+    const activeIdx = steps.indexOf(steps.includes(status) ? status : 'pending')
 
     return (
         <div className="rounded-2xl border border-gray-100 bg-gray-50/70 px-4 py-4">

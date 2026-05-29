@@ -95,6 +95,7 @@ const STATUS_FILTERS: { key: 'all' | OrderStatus; label: string }[] = [
 ]
 
 const BULK_STATUS_OPTIONS: { status: OrderStatus; label: string; color: string }[] = [
+  { status: 'confirmed', label: 'Xác nhận', color: 'bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200' },
   { status: 'preparing', label: 'Đang làm', color: 'bg-violet-50 text-violet-700 hover:bg-violet-100 border-violet-200' },
   { status: 'ready', label: 'Xong', color: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200' },
   { status: 'completed', label: 'Hoàn thành', color: 'bg-teal-50 text-teal-700 hover:bg-teal-100 border-teal-200' },
@@ -204,7 +205,9 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
   const [quickDate, setQuickDate] = useState<QuickDate>('today')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
-  const [hasNewOrder, setHasNewOrder] = useState(false)
+
+  // Queue: IDs of pending orders that arrived since last full-clear; audio plays until queue is empty
+  const [newOrderQueue, setNewOrderQueue] = useState<Set<string>>(new Set())
 
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set())
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -224,19 +227,44 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
     return () => { audio.pause(); audio.src = ''; audioRef.current = null }
   }, [])
 
-  const stopNewOrderAlert = () => {
-    setHasNewOrder(false)
-    if (audioRef.current) {
-      audioRef.current.pause()
-      audioRef.current.currentTime = 0
+  // Drive audio from queue size: play when queue non-empty, stop when empty
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+    if (newOrderQueue.size > 0) {
+      if (audio.paused) {
+        audio.currentTime = 0
+        audio.play().catch((e) => console.warn('[POS] audio play failed:', e))
+      }
+    } else {
+      audio.pause()
+      audio.currentTime = 0
     }
+  }, [newOrderQueue.size])
+
+  // Remove order from queue (called on confirmed or cancelled)
+  const removeFromQueue = (ids: string[]) => {
+    setNewOrderQueue(prev => {
+      const next = new Set(prev)
+      ids.forEach(id => next.delete(id))
+      return next
+    })
   }
 
-  const load = async (from?: string, to?: string) => {
+  const load = async (from?: string, to?: string, addToQueue = false) => {
     setLoading(true)
     try {
       const data = await fetchOrders(1, 100, from, to)
-      setOrders((data as { items: AdminOrder[] }).items ?? [])
+      const items = (data as { items: AdminOrder[] }).items ?? []
+      setOrders(items)
+      if (addToQueue) {
+        // Add all currently pending orders to queue so audio plays until they're all confirmed
+        setNewOrderQueue(prev => {
+          const next = new Set(prev)
+          items.filter(o => o.status === 'pending').forEach(o => next.add(o.id))
+          return next
+        })
+      }
     } catch { /* ignore */ } finally { setLoading(false) }
   }
 
@@ -261,21 +289,18 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
       reconnectionAttempts: 5,
       reconnectionDelay: 2000,
     })
-    const fullReload = (isNew = false) => {
-      if (isNew) {
-        setHasNewOrder(true)
-        if (audioRef.current) {
-          audioRef.current.currentTime = 0
-          audioRef.current.play().catch((e) => console.warn('[POS] audio play failed:', e))
-        }
-      }
+    const fullReload = (addToQueue = false) => {
       const { from, to } = getApiDateRange(quickDateRef.current, dateFromRef.current, dateToRef.current)
-      void loadRef.current(from, to)
+      void loadRef.current(from, to, addToQueue)
     }
     socket.on('order:status', (payload: { orderId: string; status: string }) => {
       setOrders(prev => prev.map(o =>
         o.id === payload.orderId ? { ...o, status: payload.status as OrderStatus } : o
       ))
+      // Confirmed/cancelled from another terminal also clears from queue
+      if (payload.status === 'confirmed' || payload.status === 'cancelled') {
+        removeFromQueue([payload.orderId])
+      }
     })
     socket.on('order:paid', (payload: { orderId: string }) => {
       setOrders(prev => prev.map(o =>
@@ -308,7 +333,10 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
   }
 
   const handleStatusOrAssign = async (id: string, status: OrderStatus) => {
-    stopNewOrderAlert()
+    // Audio clears only when order is confirmed or cancelled — not for arbitrary status changes
+    if (status === 'confirmed' || status === 'cancelled') {
+      removeFromQueue([id])
+    }
     if (status === 'delivering') {
       const order = orders.find(o => o.id === id)
       if (order && order.type === 'delivery' && !order.shipperId) {
@@ -325,6 +353,9 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
     try {
       await bulkUpdateOrderStatus(ids, status)
       setOrders(prev => prev.map(o => ids.includes(o.id) ? { ...o, status } : o))
+      if (status === 'confirmed' || status === 'cancelled') {
+        removeFromQueue(ids)
+      }
       setSelectedIds(new Set())
     } catch { /* ignore */ } finally {
       setBulkBusy(false)
@@ -356,7 +387,6 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
   })
 
   const handleRefresh = () => {
-    stopNewOrderAlert()
     const { from, to } = getApiDateRange(quickDate, dateFrom, dateTo)
     setSelectedIds(new Set())
     void load(from, to)
@@ -390,14 +420,15 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
               {filtered.length}
             </span>
           </div>
-          {hasNewOrder && (
+          {newOrderQueue.size > 0 && (
             <button
-              onClick={stopNewOrderAlert}
-              className="relative flex items-center gap-1.5 rounded-full bg-emerald-500 px-3.5 py-1.5 text-xs font-bold text-white shadow-lg hover:bg-emerald-600 transition-colors"
+              onClick={() => setFilterStatus('pending')}
+              title={`${newOrderQueue.size} đơn cần xác nhận — nhấn để lọc`}
+              className="relative flex items-center gap-1.5 rounded-full bg-red-500 px-3.5 py-1.5 text-xs font-bold text-white shadow-lg hover:bg-red-600 transition-colors"
             >
-              <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-40" />
-              <Bell className="size-3.5" />
-              Đơn mới!
+              <span className="absolute inset-0 rounded-full bg-red-400 animate-ping opacity-40" />
+              <Bell className="size-3.5 animate-bounce" />
+              {newOrderQueue.size} đơn mới!
             </button>
           )}
           <div className="ml-auto">
@@ -570,7 +601,7 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
                   <OrderCard
                     key={order.id}
                     order={order}
-                    onOpen={() => { stopNewOrderAlert(); setSelectedOrder(order) }}
+                    onOpen={() => { setSelectedOrder(order) }}
                     onStatusChange={handleStatusOrAssign}
                     isBusy={busyIds.has(order.id)}
                     isSelected={selectedIds.has(order.id)}
@@ -696,8 +727,8 @@ function OrderCard({
               </span>
             )}
             {order.paymentStatus === 'paid' && (
-              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
-                ✓ Đã TT
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                <CheckCircle2 className="size-2.5" /> Đã TT
               </span>
             )}
           </div>
@@ -715,7 +746,9 @@ function OrderCard({
       {/* Meta info row */}
       <div className="px-4 py-2 flex flex-wrap items-center gap-x-3 gap-y-1">
         {order.table && (
-          <span className="text-[11px] text-gray-500">🍽 {order.table.name}</span>
+          <span className="inline-flex items-center gap-1 text-[11px] text-gray-500">
+            <Utensils className="size-3 shrink-0" />{order.table.name}
+          </span>
         )}
         {order.type === 'pickup' && order.pickupTime && (
           <span className="flex items-center gap-1 text-[11px] text-gray-500">
@@ -774,7 +807,16 @@ function OrderCard({
         <>
           <div className="mx-4 h-px bg-gray-50" />
           <div className="flex gap-1.5 px-4 pb-3.5 pt-3 flex-wrap">
-            {(order.status === 'pending' || order.status === 'confirmed') && (
+            {order.status === 'pending' && (
+              <button
+                onClick={(e) => { e.stopPropagation(); void onStatusChange(order.id, 'confirmed') }}
+                disabled={isBusy}
+                className="flex flex-1 items-center justify-center gap-1 rounded-full bg-blue-50 px-2.5 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-50 transition-colors"
+              >
+                <CheckCircle2 className="size-3" /> Xác nhận đơn
+              </button>
+            )}
+            {order.status === 'confirmed' && (
               <button
                 onClick={(e) => { e.stopPropagation(); void onStatusChange(order.id, 'preparing') }}
                 disabled={isBusy}
@@ -819,7 +861,7 @@ function OrderCard({
                 <CheckCircle2 className="size-3" /> Hoàn thành
               </button>
             )}
-            {(order.status === 'pending' || order.status === 'confirmed' || order.status === 'preparing') && (
+            {(['pending', 'confirmed', 'preparing'] as OrderStatus[]).includes(order.status) && (
               <button
                 onClick={(e) => { e.stopPropagation(); void onStatusChange(order.id, 'cancelled') }}
                 disabled={isBusy}
