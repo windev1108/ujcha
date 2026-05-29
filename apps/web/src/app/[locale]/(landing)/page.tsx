@@ -5,10 +5,10 @@ import { ProductGallery } from "@/app/[locale]/(landing)/components/ProductGalle
 import { PromoBanner } from "@/app/[locale]/(landing)/components/PromoBanner";
 
 export const metadata: Metadata = {
-  title: "UjCha — Matcha & Đồ uống thủ công",
+  title: "Ujcha - Enjoy matcha, your style",
   description: "Khám phá matcha ceremonial grade, cà phê, trà thủ công và đồ uống theo mùa. Nguồn gốc bền vững — giao hàng tận nơi.",
   openGraph: {
-    title: "UjCha — Matcha & Đồ uống thủ công",
+    title: "Ujcha - Enjoy matcha, your style",
     description: "Matcha ceremonial grade, cà phê và đồ uống thủ công tại UjCha. Nguồn gốc bền vững, chất lượng cao.",
     url: "/",
   },
