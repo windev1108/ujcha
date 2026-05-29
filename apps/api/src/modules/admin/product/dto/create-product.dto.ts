@@ -21,7 +21,7 @@ export class CreateProductDto {
   categoryId!: string;
 
   @ApiPropertyOptional({
-    example: 'KUN-MTC-001',
+    example: 'Ujcha-MTC-001',
     description: 'Tuỳ chọn — để trống sẽ tự sinh từ tên (slugify, tối đa 80 ký tự)',
   })
   @IsOptional()

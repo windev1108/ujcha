@@ -25,8 +25,8 @@ export function AppHeader() {
     { href: ROUTES.PRODUCTS, label: t("menu") },
     { href: ROUTES.PROMOTIONS, label: t("promotions") },
     { href: ROUTES.GROUP_ORDERS, label: t("group_orders") },
-    { href: ROUTES.REFERRAL, label: t("referral") },
-    { href: ROUTES.BLOG, label: "Blog" },
+    { href: ROUTES.REFERRAL, label: t("referral_and_earn") },
+    { href: ROUTES.BLOG, label: t("blog") },
     { href: ROUTES.ABOUT, label: t("about") },
   ] as const;
 
@@ -67,38 +67,41 @@ export function AppHeader() {
           </nav>
 
           {/* Right actions */}
-          <div className="flex items-center gap-1 sm:gap-2">
-            <div className="flex gap-6 items-center">
-              <SearchSection />
+          <div className="flex items-center gap-1 sm:gap-4">
+            <SearchSection />
 
-              <Suspense fallback={<div className="size-8 shrink-0" aria-hidden />}>
+            {/* Lang + Bell — desktop only */}
+            <div className="hidden items-center gap-1.5 md:flex">
+              <Suspense fallback={<div className="w-[58px] h-7 shrink-0" aria-hidden />}>
                 <HeaderLanguageSelect />
               </Suspense>
+
+              {!isHydrated ? (
+                <div className="size-8 shrink-0" aria-hidden />
+              ) : isLoggedIn ? (
+                <Link
+                  href={ROUTES.NOTIFICATIONS}
+                  aria-label="Thông báo"
+                  className="flex size-8 items-center justify-center rounded-full text-foreground/60 transition-colors hover:bg-black/[0.05] hover:text-foreground"
+                >
+                  <Bell className="size-[18px]" />
+                </Link>
+              ) : null}
             </div>
 
-            {/* Bell */}
-            {!isHydrated ? (
-              <div className="size-8 shrink-0" aria-hidden />
-            ) : isLoggedIn ? (
-              <Link
-                href={ROUTES.NOTIFICATIONS}
-                aria-label="Thông báo"
-                className="flex size-8 items-center justify-center rounded-full text-foreground/60 transition-colors hover:bg-black/[0.05] hover:text-foreground"
-              >
-                <Bell className="size-[18px]" />
-              </Link>
-            ) : null}
-            {isLoggedIn &&
-              <CartSection />
-            }
-            <UserProfile />
+            {isLoggedIn && <CartSection />}
+
+            {/* UserProfile — desktop only */}
+            <div className="hidden md:block">
+              <UserProfile />
+            </div>
 
             {/* Hamburger — mobile only */}
             <button
               type="button"
               onClick={() => setMenuOpen(true)}
               aria-label="Mở menu điều hướng"
-              className="flex size-8 items-center justify-center rounded-full text-foreground/60 transition-colors hover:bg-black/[0.05] hover:text-foreground md:hidden"
+              className="flex size-8 shrink-0 items-center justify-center rounded-full text-foreground/60 transition-colors hover:bg-black/[0.05] hover:text-foreground md:hidden"
             >
               <Menu className="size-5" />
             </button>
@@ -173,6 +176,26 @@ export function AppHeader() {
                   );
                 })}
               </nav>
+
+              {/* Mobile footer: lang switch + account */}
+              <div className="flex items-center justify-between border-t border-black/[0.06] px-5 py-3">
+                <Suspense fallback={<div className="w-[58px] h-7 shrink-0" aria-hidden />}>
+                  <HeaderLanguageSelect />
+                </Suspense>
+                <div className="flex items-center gap-2">
+                  {isLoggedIn && (
+                    <Link
+                      href={ROUTES.NOTIFICATIONS}
+                      aria-label="Thông báo"
+                      onClick={() => setMenuOpen(false)}
+                      className="flex size-8 items-center justify-center rounded-full text-foreground/60 transition-colors hover:bg-black/[0.05] hover:text-foreground"
+                    >
+                      <Bell className="size-[18px]" />
+                    </Link>
+                  )}
+                  <UserProfile onNavigate={() => setMenuOpen(false)} />
+                </div>
+              </div>
 
               {/* Safe-area spacer for iOS home indicator */}
               <div className="h-[max(env(safe-area-inset-bottom),16px)]" />

@@ -2,6 +2,7 @@
 
 import { ChevronLeft, ChevronRight, Clock } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -54,6 +55,7 @@ type Props = {
 };
 
 export function PickupScheduler({ value, onChange }: Props) {
+  const t = useTranslations();
   const now = new Date();
   const minMs = now.getTime() + 15 * 60_000; // earliest valid time
 
@@ -200,7 +202,7 @@ export function PickupScheduler({ value, onChange }: Props) {
           <div className="mb-3 flex items-center gap-2">
             <Clock className="size-4 text-foreground/40" />
             <span className="text-xs font-semibold uppercase tracking-wider text-foreground/50">
-              Chọn giờ
+              {t("select_time")}
             </span>
           </div>
           <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6">
@@ -235,7 +237,7 @@ export function PickupScheduler({ value, onChange }: Props) {
       )}
 
       {selDate && !selTime && (
-        <p className="text-xs text-foreground/45">Chọn giờ nhận hàng bên trên.</p>
+        <p className="text-xs text-foreground/45">{t("select_time_above")}</p>
       )}
     </div>
   );

@@ -12,6 +12,7 @@ import {
   computeOptionSurcharge,
   formatVnd,
 } from "@/lib/product-options";
+import { useTranslations } from "next-intl";
 
 type Props = {
   item: ApiCartItem | null;
@@ -19,6 +20,7 @@ type Props = {
 };
 
 export function CartEditModal({ item, onClose }: Props) {
+  const t = useTranslations();
   const { data: toppings = [] } = useToppingsQuery();
   const { mutate: updateItem, isPending } = useUpdateCartItemMutation();
 
@@ -122,7 +124,7 @@ export function CartEditModal({ item, onClose }: Props) {
             {/* Header */}
             <div className="flex items-center justify-between border-b border-black/[0.07] px-5 py-4">
               <div>
-                <h2 className="text-base font-semibold text-foreground">Chỉnh sửa</h2>
+                <h2 className="text-base font-semibold text-foreground">{t("edit")}</h2>
                 {item && (
                   <p className="mt-0.5 text-xs text-muted line-clamp-1">{item.product.name}</p>
                 )}
@@ -141,7 +143,7 @@ export function CartEditModal({ item, onClose }: Props) {
               {optionGroups.length > 0 && (
                 <div className="space-y-4 rounded-2xl border border-black/[0.07] bg-surface-secondary/50 p-4">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-muted">
-                    Tuỳ chọn
+                    {t("options")}
                   </p>
                   {optionGroups.map((grp) => (
                     <div key={grp.id} className="space-y-1.5">
@@ -192,7 +194,7 @@ export function CartEditModal({ item, onClose }: Props) {
               {toppings.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-muted">
-                    Topping
+                    {t("topping")}
                   </p>
                   <div
                     className="max-h-[min(40vh,240px)] space-y-1.5 overflow-y-auto scroll-smooth rounded-2xl border border-black/[0.07] bg-surface-secondary/40 p-2 pr-1.5"
@@ -239,7 +241,7 @@ export function CartEditModal({ item, onClose }: Props) {
                   </div>
                   {selectedToppings.size > 0 && (
                     <p className="text-xs text-foreground/50">
-                      Đã chọn{" "}
+                      {t("selected")}{" "}
                       <span className="font-semibold text-kun-products-forest">
                         {selectedToppings.size}
                       </span>{" "}
@@ -252,7 +254,7 @@ export function CartEditModal({ item, onClose }: Props) {
               {/* Quantity */}
               <div className="space-y-1.5">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-muted">
-                  Số lượng
+                  {t("quantity")}
                 </p>
                 <div className="inline-flex items-center rounded-full border border-black/[0.08] bg-surface-secondary">
                   <button
@@ -279,7 +281,7 @@ export function CartEditModal({ item, onClose }: Props) {
               {/* Live price */}
               <div className="flex items-center justify-between rounded-2xl bg-kun-products-forest/8 px-4 py-3">
                 <span className="text-sm font-semibold text-kun-products-forest">
-                  Đơn giá
+                  {t("unit_price")}
                 </span>
                 <span className="text-xl font-bold tabular-nums text-kun-products-forest">
                   {formatVnd(unitPrice)}
@@ -298,7 +300,7 @@ export function CartEditModal({ item, onClose }: Props) {
                 ) : (
                   <>
                     <Check className="mr-1 size-5" />
-                    Lưu thay đổi
+                    {t("save_changes")}
                   </>
                 )}
               </Button>

@@ -22,7 +22,7 @@ export class UpdateProductDto {
   categoryId?: string;
 
   @ApiPropertyOptional({
-    example: 'KUN-MTC-001',
+    example: 'Ujcha-MTC-001',
     description: 'Để chuỗi rỗng để tự sinh lại SKU từ tên',
   })
   @IsOptional()

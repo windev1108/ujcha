@@ -31,6 +31,7 @@ import {
   Wifi,
   Zap,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { useAuthStore } from "@/store/auth-store";
 import { useProfileQuery } from "@/services/profile/hooks";
@@ -71,7 +72,7 @@ function fmtDate(iso: string) {
 
 type Tier = {
   id: MilestoneTierId;
-  label: string;
+  labelKey: string;
   threshold: number;
   points: number;
   icon: React.ElementType;
@@ -81,10 +82,10 @@ type Tier = {
 };
 
 const TIER_VISUAL = [
-  { id: "bronze" as MilestoneTierId, label: "Đồng", icon: Shield, gradient: "from-amber-400 to-orange-500", activeText: "text-amber-700", badge: "bg-amber-100 text-amber-700" },
-  { id: "silver" as MilestoneTierId, label: "Bạc", icon: Medal, gradient: "from-slate-400 to-zinc-500", activeText: "text-slate-600", badge: "bg-slate-100 text-slate-600" },
-  { id: "gold" as MilestoneTierId, label: "Vàng", icon: Star, gradient: "from-yellow-400 to-amber-500", activeText: "text-yellow-700", badge: "bg-yellow-100 text-yellow-700" },
-  { id: "diamond" as MilestoneTierId, label: "Kim cương", icon: Gem, gradient: "from-violet-500 to-indigo-600", activeText: "text-violet-700", badge: "bg-violet-100 text-violet-700" },
+  { id: "bronze" as MilestoneTierId, labelKey: "tier_bronze", icon: Shield, gradient: "from-amber-400 to-orange-500", activeText: "text-amber-700", badge: "bg-amber-100 text-amber-700" },
+  { id: "silver" as MilestoneTierId, labelKey: "tier_silver", icon: Medal, gradient: "from-slate-400 to-zinc-500", activeText: "text-slate-600", badge: "bg-slate-100 text-slate-600" },
+  { id: "gold" as MilestoneTierId, labelKey: "tier_gold", icon: Star, gradient: "from-yellow-400 to-amber-500", activeText: "text-yellow-700", badge: "bg-yellow-100 text-yellow-700" },
+  { id: "diamond" as MilestoneTierId, labelKey: "tier_diamond", icon: Gem, gradient: "from-violet-500 to-indigo-600", activeText: "text-violet-700", badge: "bg-violet-100 text-violet-700" },
 ];
 
 function buildTiers(cfg: ReferralPublicConfig | null): Tier[] {
@@ -107,8 +108,8 @@ function getNextTier(count: number, tiers: Tier[]) {
 // ── invitation status helpers ─────────────────────────────────────────────────
 
 type StatusMeta = {
-  label: string;
-  sublabel: string;
+  labelKey: string;
+  sublabelKey: string;
   icon: React.ElementType;
   badgeBg: string;
   badgeText: string;
@@ -118,19 +119,19 @@ type StatusMeta = {
 function getStatusMeta(status: InvitationStatus): StatusMeta {
   switch (status) {
     case "rewarded":
-      return { label: "Đã thưởng", sublabel: "Điểm đã được cộng vào tài khoản của bạn", icon: CheckCircle2, badgeBg: "bg-emerald-50", badgeText: "text-emerald-700", iconColor: "text-emerald-500" };
+      return { labelKey: "inv_rewarded", sublabelKey: "inv_rewarded_sub", icon: CheckCircle2, badgeBg: "bg-emerald-50", badgeText: "text-emerald-700", iconColor: "text-emerald-500" };
     case "pending_first_order":
-      return { label: "Chờ đơn đầu tiên", sublabel: "Bạn bè chưa đặt đơn hàng nào", icon: Clock, badgeBg: "bg-sky-50", badgeText: "text-sky-700", iconColor: "text-sky-400" };
+      return { labelKey: "inv_pending", sublabelKey: "inv_pending_sub", icon: Clock, badgeBg: "bg-sky-50", badgeText: "text-sky-700", iconColor: "text-sky-400" };
     case "eligible_processing":
-      return { label: "Đang xử lý", sublabel: "Đơn đủ điều kiện — phần thưởng sẽ được cộng sớm", icon: Zap, badgeBg: "bg-amber-50", badgeText: "text-amber-700", iconColor: "text-amber-500" };
+      return { labelKey: "inv_processing", sublabelKey: "inv_processing_sub", icon: Zap, badgeBg: "bg-amber-50", badgeText: "text-amber-700", iconColor: "text-amber-500" };
     case "rejected_blocked_ip":
-      return { label: "Từ chối — Cùng mạng", sublabel: "Bạn bè đăng ký từ cùng địa chỉ IP với bạn", icon: Wifi, badgeBg: "bg-red-50", badgeText: "text-red-700", iconColor: "text-red-500" };
+      return { labelKey: "inv_rejected_ip", sublabelKey: "inv_rejected_ip_sub", icon: Wifi, badgeBg: "bg-red-50", badgeText: "text-red-700", iconColor: "text-red-500" };
     case "rejected_blocked_device":
-      return { label: "Từ chối — Cùng thiết bị", sublabel: "Bạn bè đăng ký từ cùng thiết bị với bạn", icon: Smartphone, badgeBg: "bg-red-50", badgeText: "text-red-700", iconColor: "text-red-500" };
+      return { labelKey: "inv_rejected_device", sublabelKey: "inv_rejected_device_sub", icon: Smartphone, badgeBg: "bg-red-50", badgeText: "text-red-700", iconColor: "text-red-500" };
     case "rejected_phone_not_verified":
-      return { label: "Từ chối — Chưa xác minh", sublabel: "Bạn bè chưa xác minh số điện thoại", icon: ShieldOff, badgeBg: "bg-orange-50", badgeText: "text-orange-700", iconColor: "text-orange-500" };
+      return { labelKey: "inv_rejected_phone", sublabelKey: "inv_rejected_phone_sub", icon: ShieldOff, badgeBg: "bg-orange-50", badgeText: "text-orange-700", iconColor: "text-orange-500" };
     case "rejected_below_min_amount":
-      return { label: "Từ chối — Đơn quá nhỏ", sublabel: "Giá trị đơn đầu tiên chưa đạt mức tối thiểu", icon: AlertTriangle, badgeBg: "bg-orange-50", badgeText: "text-orange-700", iconColor: "text-orange-500" };
+      return { labelKey: "inv_rejected_amount", sublabelKey: "inv_rejected_amount_sub", icon: AlertTriangle, badgeBg: "bg-orange-50", badgeText: "text-orange-700", iconColor: "text-orange-500" };
   }
 }
 
@@ -154,6 +155,7 @@ function StatPill({ icon: Icon, value, label, delay }: { icon: React.ElementType
 }
 
 function MilestoneTrack({ successfulReferrals, tiers }: { successfulReferrals: number; tiers: Tier[] }) {
+  const t = useTranslations();
   const currentTier = getCurrentTier(successfulReferrals, tiers);
   const nextTier = getNextTier(successfulReferrals, tiers);
   const prevThreshold = currentTier?.threshold ?? 0;
@@ -163,7 +165,7 @@ function MilestoneTrack({ successfulReferrals, tiers }: { successfulReferrals: n
 
   return (
     <div className="rounded-3xl border border-black/6 bg-white px-5 py-6 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.08)] sm:px-6 sm:py-8">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">Hành trình thành viên</p>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{t("milestone_journey")}</p>
 
       <div className="mt-5 flex items-center overflow-x-auto pb-1">
         {tiers.map((tier, i) => {
@@ -191,7 +193,7 @@ function MilestoneTrack({ successfulReferrals, tiers }: { successfulReferrals: n
                     </span>
                   )}
                 </motion.div>
-                <p className={`max-w-[52px] text-center text-[9px] font-semibold leading-tight sm:text-[10px] ${reached ? tier.activeText : "text-muted"}`}>{tier.label}</p>
+                <p className={`max-w-[52px] text-center text-[9px] font-semibold leading-tight sm:text-[10px] ${reached ? tier.activeText : "text-muted"}`}>{t(tier.labelKey as any)}</p>
                 <p className="text-[9px] text-muted">{tier.threshold}+</p>
               </div>
 
@@ -216,13 +218,13 @@ function MilestoneTrack({ successfulReferrals, tiers }: { successfulReferrals: n
             <div>
               <p className="text-sm font-semibold text-foreground">
                 {successfulReferrals === 0
-                  ? `Mời ${nextTier.threshold} người để đạt ${nextTier.label}`
-                  : `Còn ${nextTier.threshold - successfulReferrals} lượt → ${nextTier.label}`}
+                  ? `${nextTier.threshold} ${t("referral_count_unit")} → ${t(nextTier.labelKey as any)}`
+                  : `${t("remaining_referrals", { count: nextTier.threshold - successfulReferrals })} → ${t(nextTier.labelKey as any)}`}
               </p>
               <p className="text-xs text-muted">
                 {currentTier
-                  ? `Hiện tại: ${currentTier.label} · ${successfulReferrals} lượt hợp lệ`
-                  : "Bắt đầu mời để nhận huy hiệu đầu tiên"}
+                  ? `${t(currentTier.labelKey as any)} · ${successfulReferrals} ${t("valid_referrals_suffix")}`
+                  : t("start_to_earn_badge")}
               </p>
             </div>
             {(() => {
@@ -238,8 +240,8 @@ function MilestoneTrack({ successfulReferrals, tiers }: { successfulReferrals: n
           <div className="flex items-center gap-3">
             <Crown className="size-5 text-violet-500" />
             <div>
-              <p className="font-semibold text-foreground">Kim cương — Đỉnh cao!</p>
-              <p className="text-xs text-muted">Bạn đã đạt cấp cao nhất của chương trình</p>
+              <p className="font-semibold text-foreground">{t("diamond_peak")}</p>
+              <p className="text-xs text-muted">{t("max_tier_reached")}</p>
             </div>
           </div>
         )}
@@ -249,6 +251,7 @@ function MilestoneTrack({ successfulReferrals, tiers }: { successfulReferrals: n
 }
 
 function FraudWarningBanners({ blockIp, blockDevice }: { blockIp: boolean; blockDevice: boolean }) {
+  const t = useTranslations();
   if (!blockIp && !blockDevice) return null;
   return (
     <div className="space-y-2">
@@ -256,8 +259,8 @@ function FraudWarningBanners({ blockIp, blockDevice }: { blockIp: boolean; block
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
           <Wifi className="mt-0.5 size-4 shrink-0 text-amber-600" />
           <div>
-            <p className="text-sm font-semibold text-amber-800">Lưu ý: Hệ thống chặn cùng địa chỉ mạng</p>
-            <p className="mt-0.5 text-xs text-amber-700">Bạn bè đăng ký từ cùng mạng WiFi hoặc IP với bạn sẽ <strong>không được tính phần thưởng</strong>. Hãy đảm bảo họ dùng mạng di động riêng hoặc mạng khác khi tạo tài khoản.</p>
+            <p className="text-sm font-semibold text-amber-800">{t("warn_same_ip_title")}</p>
+            <p className="mt-0.5 text-xs text-amber-700">{t("warn_same_ip_desc")}</p>
           </div>
         </motion.div>
       )}
@@ -265,8 +268,8 @@ function FraudWarningBanners({ blockIp, blockDevice }: { blockIp: boolean; block
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06 }} className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
           <Smartphone className="mt-0.5 size-4 shrink-0 text-amber-600" />
           <div>
-            <p className="text-sm font-semibold text-amber-800">Lưu ý: Hệ thống chặn cùng thiết bị</p>
-            <p className="mt-0.5 text-xs text-amber-700">Mỗi người cần đăng ký từ <strong>thiết bị riêng của họ</strong>. Giới thiệu từ cùng điện thoại hoặc máy tính sẽ bị từ chối tự động để chống gian lận.</p>
+            <p className="text-sm font-semibold text-amber-800">{t("warn_same_device_title")}</p>
+            <p className="mt-0.5 text-xs text-amber-700">{t("warn_same_device_desc")}</p>
           </div>
         </motion.div>
       )}
@@ -275,6 +278,7 @@ function FraudWarningBanners({ blockIp, blockDevice }: { blockIp: boolean; block
 }
 
 function InvitationRow({ item, index }: { item: ReferralInvitation; index: number }) {
+  const t = useTranslations();
   const meta = getStatusMeta(item.status);
   const StatusIcon = meta.icon;
   const isRejected = item.status.startsWith("rejected_");
@@ -299,23 +303,23 @@ function InvitationRow({ item, index }: { item: ReferralInvitation; index: numbe
         {isRejected && (
           <div className="mt-1.5 flex items-start gap-1.5">
             <StatusIcon className={`mt-0.5 size-3.5 shrink-0 ${meta.iconColor}`} />
-            <p className={`text-[11px] font-medium leading-snug ${meta.badgeText}`}>{meta.sublabel}</p>
+            <p className={`text-[11px] font-medium leading-snug ${meta.badgeText}`}>{t(meta.sublabelKey as any)}</p>
           </div>
         )}
         {item.status === "eligible_processing" && (
           <div className="mt-1.5 flex items-start gap-1.5">
             <Zap className="mt-0.5 size-3.5 shrink-0 text-amber-500" />
-            <p className="text-[11px] font-medium text-amber-700 leading-snug">{meta.sublabel}</p>
+            <p className="text-[11px] font-medium text-amber-700 leading-snug">{t(meta.sublabelKey as any)}</p>
           </div>
         )}
       </div>
       <div className="shrink-0">
         <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${meta.badgeBg} ${meta.badgeText}`}>
           <StatusIcon className="size-3" />
-          {meta.label}
+          {t(meta.labelKey as any)}
         </span>
         {item.pointsGranted !== null && item.pointsGranted > 0 && (
-          <p className="mt-1 text-right text-[11px] font-bold text-kun-primary">+{item.pointsGranted} điểm</p>
+          <p className="mt-1 text-right text-[11px] font-bold text-kun-primary">+{item.pointsGranted} {t("points_unit")}</p>
         )}
       </div>
     </motion.div>
@@ -323,6 +327,7 @@ function InvitationRow({ item, index }: { item: ReferralInvitation; index: numbe
 }
 
 function InvitationsSection() {
+  const t = useTranslations();
   const { data: invitations = [], isLoading } = useReferralInvitationsQuery();
   const rejectedCount = invitations.filter((i) => i.status.startsWith("rejected_")).length;
   const rewardedCount = invitations.filter((i) => i.status === "rewarded").length;
@@ -337,16 +342,16 @@ function InvitationsSection() {
             <Users className="size-4 text-kun-primary" />
           </div>
           <div>
-            <p className="font-semibold text-foreground">Người đã mời</p>
-            <p className="text-xs text-muted">{isLoading ? "Đang tải…" : `${invitations.length} người đăng ký qua mã của bạn`}</p>
+            <p className="font-semibold text-foreground">{t("invited_people")}</p>
+            <p className="text-xs text-muted">{isLoading ? "…" : t("inv_count_registered", { count: invitations.length })}</p>
           </div>
         </div>
         {!isLoading && invitations.length > 0 && (
           <div className="flex flex-wrap justify-end gap-1.5">
-            {rewardedCount > 0 && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">✓ {rewardedCount} thưởng</span>}
-            {processingCount > 0 && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">⟳ {processingCount} xử lý</span>}
-            {pendingCount > 0 && <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-bold text-sky-700">… {pendingCount} chờ đơn</span>}
-            {rejectedCount > 0 && <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-700">✕ {rejectedCount} từ chối</span>}
+            {rewardedCount > 0 && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">✓ {rewardedCount} {t("inv_rewarded_label")}</span>}
+            {processingCount > 0 && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">⟳ {processingCount} {t("inv_processing_label")}</span>}
+            {pendingCount > 0 && <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-bold text-sky-700">… {pendingCount} {t("inv_pending_label")}</span>}
+            {rejectedCount > 0 && <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-700">✕ {rejectedCount} {t("inv_rejected_label")}</span>}
           </div>
         )}
       </div>
@@ -356,15 +361,15 @@ function InvitationsSection() {
         ) : invitations.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-10 text-center">
             <div className="flex size-12 items-center justify-center rounded-full bg-surface-card"><UserPlus className="size-5 text-muted" /></div>
-            <p className="text-sm font-medium text-foreground">Chưa có ai đăng ký qua mã của bạn</p>
-            <p className="text-xs text-muted">Chia sẻ link ở trên để bắt đầu mời bạn bè</p>
+            <p className="text-sm font-medium text-foreground">{t("no_invitations")}</p>
+            <p className="text-xs text-muted">{t("share_link_to_invite")}</p>
           </div>
         ) : (
           <div className="space-y-2">
             {invitations.map((item, i) => <InvitationRow key={item.id} item={item} index={i} />)}
             <div className="mt-3 flex items-start gap-2 rounded-xl border border-black/[0.05] bg-surface-soft px-3 py-2.5">
               <Info className="mt-0.5 size-3.5 shrink-0 text-muted" />
-              <p className="text-[11px] text-muted">Email và số điện thoại được ẩn một phần để bảo vệ quyền riêng tư. Chỉ lượt giới thiệu hợp lệ mới tính thưởng — xem lý do từ chối trên từng dòng.</p>
+              <p className="text-[11px] text-muted">{t("inv_privacy_note")}</p>
             </div>
           </div>
         )}
@@ -381,14 +386,15 @@ const RANK_CONFIG: Record<number, { bg: string; border: string; nameCls: string;
   3: { bg: "bg-gradient-to-br from-orange-50 to-amber-50", border: "border-orange-200", nameCls: "text-orange-900 font-semibold", countCls: "text-orange-700 font-semibold", glow: "shadow-[0_0_14px_-4px_rgba(251,146,60,0.45)]", icon: Medal, iconCls: "text-orange-400" },
 };
 
-const TIER_BADGE: Record<MilestoneTierId, { label: string; cls: string }> = {
-  diamond: { label: "Kim cương", cls: "bg-violet-100 text-violet-700" },
-  gold: { label: "Vàng", cls: "bg-yellow-100 text-yellow-700" },
-  silver: { label: "Bạc", cls: "bg-slate-100 text-slate-600" },
-  bronze: { label: "Đồng", cls: "bg-amber-100 text-amber-700" },
+const TIER_BADGE: Record<MilestoneTierId, { labelKey: string; cls: string }> = {
+  diamond: { labelKey: "tier_diamond", cls: "bg-violet-100 text-violet-700" },
+  gold: { labelKey: "tier_gold", cls: "bg-yellow-100 text-yellow-700" },
+  silver: { labelKey: "tier_silver", cls: "bg-slate-100 text-slate-600" },
+  bronze: { labelKey: "tier_bronze", cls: "bg-amber-100 text-amber-700" },
 };
 
 function LeaderboardRow({ entry, isMe, index }: { entry: LeaderboardEntry; isMe: boolean; index: number }) {
+  const t = useTranslations();
   const rank = entry.rank;
   const top = RANK_CONFIG[rank];
   const tierMeta = entry.tier ? TIER_BADGE[entry.tier] : null;
@@ -427,13 +433,13 @@ function LeaderboardRow({ entry, isMe, index }: { entry: LeaderboardEntry; isMe:
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
             <p className={`truncate text-sm ${top.nameCls}`}>{entry.name}</p>
-            {isMe && <span className="rounded-full bg-kun-primary/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-kun-primary">Bạn</span>}
+            {isMe && <span className="rounded-full bg-kun-primary/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-kun-primary">{t("you_label")}</span>}
           </div>
-          {tierMeta && <span className={`mt-0.5 inline-flex rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${tierMeta.cls}`}>{tierMeta.label}</span>}
+          {tierMeta && <span className={`mt-0.5 inline-flex rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${tierMeta.cls}`}>{t(tierMeta.labelKey as any)}</span>}
         </div>
         <div className="shrink-0 text-right">
           <p className={`text-lg tabular-nums leading-none ${top.countCls}`}>{entry.successfulReferrals}</p>
-          <p className="mt-0.5 text-[10px] text-foreground/40">lượt</p>
+          <p className="mt-0.5 text-[10px] text-foreground/40">{t("referral_count_unit")}</p>
         </div>
         {rank === 1 && <div className="pointer-events-none absolute -top-px inset-x-4 h-px bg-gradient-to-r from-transparent via-amber-300/80 to-transparent" />}
       </motion.div>
@@ -452,19 +458,20 @@ function LeaderboardRow({ entry, isMe, index }: { entry: LeaderboardEntry; isMe:
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <p className="truncate text-sm font-medium text-foreground">{entry.name}</p>
-          {isMe && <span className="rounded-full bg-kun-primary/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-kun-primary">Bạn</span>}
+          {isMe && <span className="rounded-full bg-kun-primary/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-kun-primary">{t("you_label")}</span>}
         </div>
-        {tierMeta && <span className={`mt-0.5 inline-flex rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${tierMeta.cls}`}>{tierMeta.label}</span>}
+        {tierMeta && <span className={`mt-0.5 inline-flex rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${tierMeta.cls}`}>{t(tierMeta.labelKey as any)}</span>}
       </div>
       <div className="shrink-0 text-right">
         <p className="text-sm font-semibold tabular-nums text-foreground">{entry.successfulReferrals}</p>
-        <p className="text-[10px] text-muted">lượt</p>
+        <p className="text-[10px] text-muted">{t("referral_count_unit")}</p>
       </div>
     </motion.div>
   );
 }
 
 function LeaderboardSection({ myReferralCode }: { myReferralCode?: string }) {
+  const t = useTranslations();
   const { data: entries = [], isLoading } = useReferralLeaderboardQuery();
 
   return (
@@ -479,8 +486,8 @@ function LeaderboardSection({ myReferralCode }: { myReferralCode?: string }) {
           <Trophy className="size-4 text-amber-500" />
         </div>
         <div>
-          <p className="font-semibold text-foreground">Bảng xếp hạng</p>
-          <p className="text-[11px] text-muted">Top người giới thiệu tháng này</p>
+          <p className="font-semibold text-foreground">{t("leaderboard")}</p>
+          <p className="text-[11px] text-muted">{t("leaderboard_subtitle")}</p>
         </div>
       </div>
       <div className="px-4 pb-4 sm:px-5">
@@ -489,8 +496,8 @@ function LeaderboardSection({ myReferralCode }: { myReferralCode?: string }) {
         ) : entries.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-10 text-center">
             <div className="flex size-12 items-center justify-center rounded-full bg-surface-card"><Trophy className="size-5 text-muted" /></div>
-            <p className="text-sm font-medium text-foreground">Chưa có ai lên bảng</p>
-            <p className="text-xs text-muted">Hãy là người đầu tiên giới thiệu bạn bè!</p>
+            <p className="text-sm font-medium text-foreground">{t("leaderboard_empty")}</p>
+            <p className="text-xs text-muted">{t("leaderboard_empty_desc")}</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -507,6 +514,7 @@ function LeaderboardSection({ myReferralCode }: { myReferralCode?: string }) {
 // ── CodeBox ───────────────────────────────────────────────────────────────────
 
 function CodeBox({ code }: { code: string }) {
+  const t = useTranslations();
   const [copied, setCopied] = useState<"code" | "link" | null>(null);
 
   const shareUrl =
@@ -523,8 +531,8 @@ function CodeBox({ code }: { code: string }) {
   async function handleNativeShare() {
     if (typeof navigator !== "undefined" && navigator.share) {
       await navigator.share({
-        title: "Mã giới thiệu UjCha",
-        text: `Dùng mã ${code} khi đăng ký tại UjCha để nhận voucher chào mừng!`,
+        title: t("your_referral_code"),
+        text: t("referral_share_text", { code }),
         url: shareUrl,
       }).catch(() => null);
     } else {
@@ -536,7 +544,7 @@ function CodeBox({ code }: { code: string }) {
     <div className="space-y-3">
       <div className="relative overflow-hidden rounded-2xl border border-kun-primary/20 bg-gradient-to-br from-kun-primary/[0.05] to-kun-primary/[0.01] px-5 py-4">
         <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-kun-primary/50 to-transparent" />
-        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">Mã của bạn</p>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{t("your_code")}</p>
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <p className="font-mono text-[22px] font-black tracking-[0.18em] text-foreground uppercase leading-none sm:text-[30px] sm:tracking-[0.22em]">
             {code}
@@ -550,11 +558,11 @@ function CodeBox({ code }: { code: string }) {
             <AnimatePresence mode="wait">
               {copied === "code" ? (
                 <motion.span key="check" initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-1.5">
-                  <Check className="size-3.5" /> Đã sao chép
+                  <Check className="size-3.5" /> {t("copied")}
                 </motion.span>
               ) : (
                 <motion.span key="copy" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-1.5">
-                  <Copy className="size-3.5" /> Sao chép
+                  <Copy className="size-3.5" /> {t("copy")}
                 </motion.span>
               )}
             </AnimatePresence>
@@ -575,7 +583,7 @@ function CodeBox({ code }: { code: string }) {
             className="flex items-center gap-1 rounded-full border border-black/10 bg-white px-3 py-2 text-[11px] font-semibold text-foreground transition hover:bg-surface-card"
           >
             {copied === "link" ? <Check className="size-3.5 text-kun-primary" /> : <Copy className="size-3" />}
-            <span className="hidden sm:inline">{copied === "link" ? "Đã copy" : "Copy link"}</span>
+            <span className="hidden sm:inline">{copied === "link" ? t("copied_short") : t("copy_link")}</span>
           </motion.button>
           <motion.button
             type="button"
@@ -583,7 +591,7 @@ function CodeBox({ code }: { code: string }) {
             onClick={handleNativeShare}
             className="flex items-center gap-1.5 rounded-full bg-kun-primary/10 px-3 py-2 text-[11px] font-semibold text-kun-primary transition hover:bg-kun-primary/15"
           >
-            <Share2 className="size-3" /> Chia sẻ
+            <Share2 className="size-3" /> {t("share")}
           </motion.button>
         </div>
       </div>
@@ -600,6 +608,7 @@ function TierRewardCard({ tier, successfulReferrals, claimed, onClaim, isClaimin
   onClaim: () => void;
   isClaiming: boolean;
 }) {
+  const t = useTranslations();
   const Icon = tier.icon;
   const points = tier.points;
   const eligible = successfulReferrals >= tier.threshold;
@@ -625,16 +634,16 @@ function TierRewardCard({ tier, successfulReferrals, claimed, onClaim, isClaimin
           <Icon className="size-5 text-white" />
         </div>
 
-        <p className={`mt-3 font-bold leading-tight ${eligible ? tier.activeText : "text-foreground"}`}>{tier.label}</p>
-        <p className="text-[11px] text-muted">{tier.threshold}+ lượt hợp lệ</p>
+        <p className={`mt-3 font-bold leading-tight ${eligible ? tier.activeText : "text-foreground"}`}>{t(tier.labelKey as any)}</p>
+        <p className="text-[11px] text-muted">{tier.threshold}+ {t("valid_referrals_suffix")}</p>
 
         <div className="mt-2.5">
           <p className="text-[18px] font-black tabular-nums text-foreground leading-none">
             +{points.toLocaleString("vi-VN")}
-            <span className="ml-1 text-xs font-semibold text-muted">điểm</span>
+            <span className="ml-1 text-xs font-semibold text-muted">{t("points_unit")}</span>
           </p>
-          {tier.id === "gold" && <p className="mt-0.5 text-[11px] text-muted">Danh hiệu Ambassador</p>}
-          {tier.id === "diamond" && <p className="mt-0.5 text-[11px] text-muted">Ưu đãi VIP đặc biệt</p>}
+          {tier.id === "gold" && <p className="mt-0.5 text-[11px] text-muted">{t("ambassador_title")}</p>}
+          {tier.id === "diamond" && <p className="mt-0.5 text-[11px] text-muted">{t("vip_perks")}</p>}
         </div>
 
         {eligible && !claimed && (
@@ -645,18 +654,18 @@ function TierRewardCard({ tier, successfulReferrals, claimed, onClaim, isClaimin
             disabled={isClaiming}
             className={`mt-4 flex w-full items-center justify-center gap-1.5 rounded-full bg-gradient-to-r ${tier.gradient} py-2.5 text-[12px] font-bold text-white shadow-sm transition hover:opacity-90 disabled:opacity-60`}
           >
-            {isClaiming ? <Loader2 className="size-3.5 animate-spin" /> : <><Gift className="size-3.5" /> Nhận thưởng</>}
+            {isClaiming ? <Loader2 className="size-3.5 animate-spin" /> : <><Gift className="size-3.5" /> {t("claim_reward")}</>}
           </motion.button>
         )}
 
         {claimed && (
           <div className="mt-4 flex items-center justify-center gap-1.5 rounded-full bg-emerald-50 py-2 text-[11px] font-semibold text-emerald-700">
-            <CheckCircle2 className="size-3.5" /> Đã nhận +{points.toLocaleString("vi-VN")} điểm
+            <CheckCircle2 className="size-3.5" /> {t("reward_claimed", { points: points.toLocaleString("vi-VN") })}
           </div>
         )}
 
         {!eligible && !claimed && (
-          <p className="mt-4 text-center text-[11px] text-muted">Còn {remaining} lượt nữa</p>
+          <p className="mt-4 text-center text-[11px] text-muted">{t("remaining_referrals", { count: remaining })}</p>
         )}
       </div>
     </motion.div>
@@ -666,6 +675,7 @@ function TierRewardCard({ tier, successfulReferrals, claimed, onClaim, isClaimin
 // ── VoucherPill ───────────────────────────────────────────────────────────────
 
 function VoucherPill({ item }: { item: MyVoucherItem }) {
+  const t = useTranslations();
   const v = item.voucher;
   const used = !!item.usedAt;
   const expired = v.isExpired;
@@ -679,9 +689,9 @@ function VoucherPill({ item }: { item: MyVoucherItem }) {
         <p className="truncate text-sm font-medium text-foreground">{v.name}</p>
         <p className={`text-[11px] ${available ? "text-kun-primary font-semibold" : "text-muted"}`}>{label}</p>
       </div>
-      {used && <span className="shrink-0 rounded-full bg-surface-card px-2 py-0.5 text-[10px] font-medium text-muted">Đã dùng</span>}
-      {!used && expired && <span className="shrink-0 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-500">Hết hạn</span>}
-      {available && <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Dùng được</span>}
+      {used && <span className="shrink-0 rounded-full bg-surface-card px-2 py-0.5 text-[10px] font-medium text-muted">{t("used")}</span>}
+      {!used && expired && <span className="shrink-0 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-500">{t("expired")}</span>}
+      {available && <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">{t("available")}</span>}
     </div>
   );
 }
@@ -689,6 +699,7 @@ function VoucherPill({ item }: { item: MyVoucherItem }) {
 // ── RewardRulesSection ────────────────────────────────────────────────────────
 
 function RewardRulesSection({ cfg, rewardsToday, isLoggedIn }: { cfg: ReferralPublicConfig | null; rewardsToday: number; isLoggedIn: boolean }) {
+  const t = useTranslations();
   const commission = cfg?.referrerCommissionPercent ?? 5;
   const minOrder = cfg ? parseFloat(cfg.minOrderAmount) : 0;
 
@@ -699,8 +710,8 @@ function RewardRulesSection({ cfg, rewardsToday, isLoggedIn }: { cfg: ReferralPu
       viewport={{ once: true, margin: "-32px" }}
       className="rounded-3xl border border-black/6 bg-white p-5 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.08)] sm:p-6"
     >
-      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">Quyền lợi chi tiết</p>
-      <h2 className="mt-1.5 text-[18px] font-bold text-foreground">Ai nhận được gì?</h2>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{t("reward_rules_eyebrow")}</p>
+      <h2 className="mt-1.5 text-[18px] font-bold text-foreground">{t("who_gets_what")}</h2>
 
       <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-3 rounded-2xl border border-kun-primary/20 bg-kun-primary/[0.04] p-4">
@@ -708,15 +719,15 @@ function RewardRulesSection({ cfg, rewardsToday, isLoggedIn }: { cfg: ReferralPu
             <div className="flex size-7 items-center justify-center rounded-full bg-kun-primary/10">
               <UserCheck className="size-3.5 text-kun-primary" />
             </div>
-            <p className="text-[10px] font-bold uppercase tracking-wide text-kun-primary">Người mời</p>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-kun-primary">{t("referrer")}</p>
           </div>
           <div>
             <p className="text-3xl font-black tabular-nums leading-none text-kun-primary">{commission}%</p>
-            <p className="mt-1 text-[11px] font-medium text-kun-primary/70">hoa hồng đơn đầu tiên</p>
+            <p className="mt-1 text-[11px] font-medium text-kun-primary/70">{t("commission_first_order")}</p>
           </div>
           <div className="rounded-xl bg-white/80 px-3 py-2.5 space-y-1">
-            <p className="text-[11px] font-semibold text-foreground leading-snug">Điểm UjCha cộng ngay sau khi bạn bè hoàn thành đơn hàng đầu tiên</p>
-            {minOrder > 0 && <p className="text-[10px] text-muted">Đơn tối thiểu {fmtVnd(minOrder)}</p>}
+            <p className="text-[11px] font-semibold text-foreground leading-snug">{t("points_after_first_order")}</p>
+            {minOrder > 0 && <p className="text-[10px] text-muted">{t("min_order_label", { amount: fmtVnd(minOrder) })}</p>}
           </div>
         </div>
 
@@ -725,25 +736,25 @@ function RewardRulesSection({ cfg, rewardsToday, isLoggedIn }: { cfg: ReferralPu
             <div className="flex size-7 items-center justify-center rounded-full bg-amber-100">
               <UserPlus className="size-3.5 text-amber-600" />
             </div>
-            <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700">Bạn được mời</p>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700">{t("invitee")}</p>
           </div>
           <div className="flex size-10 items-center justify-center rounded-xl bg-amber-100">
             <Gift className="size-5 text-amber-600" />
           </div>
           <div>
-            <p className="text-sm font-bold text-amber-900">Voucher chào mừng</p>
-            <p className="mt-1 text-[11px] text-amber-700 leading-snug">Nhận ngay khi đăng ký thành công — áp dụng cho đơn hàng đầu tiên tại UjCha</p>
+            <p className="text-sm font-bold text-amber-900">{t("welcome_voucher")}</p>
+            <p className="mt-1 text-[11px] text-amber-700 leading-snug">{t("welcome_voucher_desc")}</p>
           </div>
         </div>
       </div>
 
       <div className="mt-4 rounded-2xl border border-black/[0.06] bg-surface-soft px-4 py-4">
-        <p className="text-xs font-semibold text-foreground">Điều kiện để lượt giới thiệu được tính:</p>
+        <p className="text-xs font-semibold text-foreground">{t("referral_conditions")}</p>
         <ul className="mt-3 space-y-2.5">
           {[
-            { icon: CheckCircle2, cls: "bg-emerald-100", icls: "text-emerald-600", text: "Bạn bè là người dùng mới, chưa có tài khoản UjCha" },
-            { icon: CheckCircle2, cls: "bg-emerald-100", icls: "text-emerald-600", text: "Xác minh số điện thoại thành công" },
-            { icon: CheckCircle2, cls: "bg-emerald-100", icls: "text-emerald-600", text: `Hoàn thành đơn hàng đầu tiên${minOrder > 0 ? ` từ ${fmtVnd(minOrder)}` : ""}` },
+            { icon: CheckCircle2, cls: "bg-emerald-100", icls: "text-emerald-600", text: t("cond_new_user") },
+            { icon: CheckCircle2, cls: "bg-emerald-100", icls: "text-emerald-600", text: t("cond_phone_verified") },
+            { icon: CheckCircle2, cls: "bg-emerald-100", icls: "text-emerald-600", text: `${t("cond_first_order")}${minOrder > 0 ? ` (${fmtVnd(minOrder)})` : ""}` },
           ].map((item, i) => {
             const Icon = item.icon;
             return (
@@ -756,18 +767,18 @@ function RewardRulesSection({ cfg, rewardsToday, isLoggedIn }: { cfg: ReferralPu
           {cfg?.blockSameIpAsReferrer && (
             <li className="flex items-center gap-2.5">
               <div className="flex size-5 shrink-0 items-center justify-center rounded-full bg-amber-100"><Wifi className="size-3 text-amber-600" /></div>
-              <p className="text-xs text-muted">Đăng ký từ <span className="font-semibold text-foreground/70">mạng khác</span> với người mời (không cùng WiFi / IP)</p>
+              <p className="text-xs text-muted">{t("cond_diff_network")}</p>
             </li>
           )}
           {cfg?.blockSameDeviceAsReferrer && (
             <li className="flex items-center gap-2.5">
               <div className="flex size-5 shrink-0 items-center justify-center rounded-full bg-amber-100"><Smartphone className="size-3 text-amber-600" /></div>
-              <p className="text-xs text-muted">Đăng ký từ <span className="font-semibold text-foreground/70">thiết bị riêng</span> (không cùng điện thoại / máy tính)</p>
+              <p className="text-xs text-muted">{t("cond_diff_device")}</p>
             </li>
           )}
           <li className="flex items-center gap-2.5">
             <div className="flex size-5 shrink-0 items-center justify-center rounded-full bg-sky-100"><ShoppingBag className="size-3 text-sky-600" /></div>
-            <p className="text-xs text-muted">Mỗi tài khoản chỉ ghi nhận mã giới thiệu <span className="font-semibold text-foreground/70">một lần duy nhất</span> khi đăng ký</p>
+            <p className="text-xs text-muted">{t("cond_one_time")}</p>
           </li>
         </ul>
 
@@ -782,15 +793,15 @@ function RewardRulesSection({ cfg, rewardsToday, isLoggedIn }: { cfg: ReferralPu
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Clock className="size-3.5 shrink-0 text-violet-600" />
-                  <p className="text-xs font-semibold text-violet-800">Hạn mức hôm nay</p>
+                  <p className="text-xs font-semibold text-violet-800">{t("daily_limit")}</p>
                 </div>
-                <p className={`text-xs font-bold tabular-nums ${isFull ? "text-red-600" : "text-violet-700"}`}>{used} / {limit} lượt</p>
+                <p className={`text-xs font-bold tabular-nums ${isFull ? "text-red-600" : "text-violet-700"}`}>{used} / {limit} {t("referral_count_unit")}</p>
               </div>
               <div className="h-2 overflow-hidden rounded-full bg-violet-100">
                 <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.7, ease: "easeOut" }} className={`h-full rounded-full ${isFull ? "bg-red-400" : "bg-violet-500"}`} />
               </div>
               <p className={`text-[11px] ${isFull ? "font-semibold text-red-600" : "text-violet-600"}`}>
-                {isFull ? "Đã đạt giới hạn hôm nay — reset lúc 0:00 UTC" : `Còn ${remaining} lượt thưởng trong ngày hôm nay`}
+                {isFull ? t("daily_limit_reached") : t("daily_remaining", { count: remaining })}
               </p>
             </div>
           );
@@ -799,7 +810,7 @@ function RewardRulesSection({ cfg, rewardsToday, isLoggedIn }: { cfg: ReferralPu
 
       <div className="mt-4 flex items-start gap-3 rounded-2xl border border-violet-100 bg-violet-50/60 px-4 py-3">
         <Trophy className="mt-0.5 size-4 shrink-0 text-violet-500" />
-        <p className="text-xs text-violet-800 leading-snug">Càng mời nhiều bạn hợp lệ, bạn đạt mốc thưởng <strong>Đồng → Bạc → Vàng → Kim cương</strong> và nhận thêm điểm milestone thưởng một lần.</p>
+        <p className="text-xs text-violet-800 leading-snug">{t("milestone_incentive")}</p>
       </div>
     </motion.div>
   );
@@ -808,6 +819,7 @@ function RewardRulesSection({ cfg, rewardsToday, isLoggedIn }: { cfg: ReferralPu
 // ── main shell ────────────────────────────────────────────────────────────────
 
 export function ReferralPageShell() {
+  const t = useTranslations();
   const accessToken = useAuthStore((s) => s.accessToken);
   const { data: profile, isLoading: profileLoading } = useProfileQuery();
   const { data: stats, isLoading: statsLoading } = useReferralStatsQuery();
@@ -833,8 +845,8 @@ export function ReferralPageShell() {
     setClaimingTier(tier);
     claimMutation.mutate(tier, {
       onSuccess: (data) => {
-        const tierLabel = tiers.find((t) => t.id === tier)?.label ?? tier;
-        setClaimSuccess({ tier: tierLabel, points: data.points });
+        const tierLabel = tiers.find((tt) => tt.id === tier)?.labelKey ?? tier;
+        setClaimSuccess({ tier: t(tierLabel as any), points: data.points });
         setTimeout(() => setClaimSuccess(null), 4000);
       },
       onSettled: () => setClaimingTier(null),
@@ -858,7 +870,7 @@ export function ReferralPageShell() {
                 <Sparkles className="size-3.5 text-white" />
               </span>
               <p className="text-sm font-semibold text-white">
-                Nhận thưởng {claimSuccess.tier} thành công! +{claimSuccess.points.toLocaleString("vi-VN")} điểm
+                {t("claim_success_toast", { tier: claimSuccess.tier, points: claimSuccess.points.toLocaleString("vi-VN") })}
               </p>
             </div>
           </motion.div>
@@ -883,10 +895,10 @@ export function ReferralPageShell() {
             </div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">Affiliate Program</p>
             <h1 className="mt-2 text-4xl font-bold tracking-tight text-white sm:text-5xl lg:text-5xl">
-              Giới thiệu & kiếm thưởng
+              {t("referral_headline")}
             </h1>
             <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-white/60">
-              Mời bạn bè — cả hai nhận ưu đãi. Càng mời nhiều, cấp càng cao.
+              {t("referral_subline")}
             </p>
           </motion.div>
 
@@ -901,11 +913,11 @@ export function ReferralPageShell() {
                 <Loader2 className="size-6 animate-spin text-white/50" />
               ) : (
                 <>
-                  <StatPill icon={Users} value={inviteCount} label="Đã mời" delay={0.14} />
+                  <StatPill icon={Users} value={inviteCount} label={t("stat_invited")} delay={0.14} />
                   <div className="h-12 w-px bg-white/15" />
-                  <StatPill icon={Sparkles} value={pointsEarned.toLocaleString("vi-VN")} label="Điểm tích lũy" delay={0.18} />
+                  <StatPill icon={Sparkles} value={pointsEarned.toLocaleString("vi-VN")} label={t("stat_points")} delay={0.18} />
                   <div className="h-12 w-px bg-white/15" />
-                  <StatPill icon={CheckCircle2} value={successfulReferrals} label="Thành công" delay={0.22} />
+                  <StatPill icon={CheckCircle2} value={successfulReferrals} label={t("stat_successful")} delay={0.22} />
                 </>
               )}
             </motion.div>
@@ -920,7 +932,7 @@ export function ReferralPageShell() {
             >
               <div className={`flex items-center gap-2 rounded-full bg-gradient-to-r ${currentTier.gradient} px-5 py-2 shadow-lg`}>
                 {(() => { const CIcon = currentTier.icon; return <CIcon className="size-4 text-white" />; })()}
-                <span className="text-xs font-bold uppercase tracking-wider text-white">{currentTier.label}</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-white">{t(currentTier.labelKey as any)}</span>
               </div>
             </motion.div>
           )}
@@ -949,13 +961,13 @@ export function ReferralPageShell() {
               transition={{ delay: 0.06 }}
               className="rounded-3xl border border-black/6 bg-white p-5 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.08)] sm:p-6"
             >
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">Mã giới thiệu của bạn</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{t("your_referral_code")}</p>
               {!accessToken ? (
                 <div className="mt-4 flex flex-col items-center gap-3 py-4 text-center">
                   <Share2 className="size-8 text-kun-primary/40" />
-                  <p className="text-sm text-muted">Đăng nhập để lấy mã giới thiệu và bắt đầu nhận thưởng.</p>
+                  <p className="text-sm text-muted">{t("login_to_get_code")}</p>
                   <Link href={ROUTES.LOGIN} className="mt-1 inline-flex items-center gap-2 rounded-full bg-kun-primary px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-90">
-                    Đăng nhập ngay <ChevronRight className="size-4" />
+                    {t("login_now")} <ChevronRight className="size-4" />
                   </Link>
                 </div>
               ) : profileLoading ? (
@@ -963,7 +975,7 @@ export function ReferralPageShell() {
               ) : profile ? (
                 <div className="mt-3">
                   <CodeBox code={profile.referralCode} />
-                  <p className="mt-2 text-[11px] text-muted">Bạn bè nhập mã hoặc nhấp link khi đăng ký để cả hai nhận thưởng.</p>
+                  <p className="mt-2 text-[11px] text-muted">{t("code_usage_note")}</p>
                 </div>
               ) : null}
             </motion.div>
@@ -1008,17 +1020,17 @@ export function ReferralPageShell() {
               className="rounded-3xl border border-black/6 bg-white p-5 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.08)] sm:p-6"
             >
               <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">Cách thức hoạt động</p>
-              <h2 className="mt-1.5 text-[18px] font-bold text-foreground">3 bước đơn giản</h2>
+              <h2 className="mt-1.5 text-[18px] font-bold text-foreground">{t("only_3_steps")}</h2>
               <div className="mt-5">
                 {[
-                  { icon: Share2, title: "Chia sẻ mã", desc: "Sao chép link hoặc mã và gửi cho bạn bè qua bất kỳ kênh nào.", color: "bg-kun-primary/10 text-kun-primary" },
-                  { icon: UserPlus, title: "Bạn bè đăng ký", desc: "Họ nhấp link và tạo tài khoản — mã giới thiệu tự động được ghi nhận.", color: "bg-sky-50 text-sky-600" },
+                  { icon: Share2, title: t("step_share_title"), desc: t("step_share_desc"), color: "bg-kun-primary/10 text-kun-primary" },
+                  { icon: UserPlus, title: t("step_friend_register_title"), desc: t("step_friend_register_desc"), color: "bg-sky-50 text-sky-600" },
                   {
                     icon: Gift,
-                    title: "Cả hai nhận thưởng",
+                    title: t("step_both_rewarded_title"),
                     desc: cfg
-                      ? `Bạn nhận ${cfg.referrerCommissionPercent}% giá trị đơn đầu tiên của bạn bè quy thành điểm UjCha${parseFloat(cfg.minOrderAmount) > 0 ? ` (đơn từ ${fmtVnd(cfg.minOrderAmount)})` : ""}. Bạn bè nhận voucher chào mừng ngay khi đăng ký.`
-                      : "Bạn nhận hoa hồng % đơn đầu tiên của bạn bè, bạn bè nhận voucher chào mừng.",
+                      ? `${cfg.referrerCommissionPercent}% ${t("commission_first_order")}${parseFloat(cfg.minOrderAmount) > 0 ? ` (${fmtVnd(cfg.minOrderAmount)})` : ""}. ${t("welcome_voucher")}.`
+                      : `${t("commission_first_order")}. ${t("welcome_voucher")}.`,
                     color: "bg-amber-50 text-amber-600",
                   },
                 ].map((step, i) => {
@@ -1059,7 +1071,7 @@ export function ReferralPageShell() {
           <div>
             <div className="mb-4 flex items-center gap-2">
               <Trophy className="size-4 text-kun-primary" />
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">Mốc thưởng affiliate</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{t("affiliate_milestones")}</p>
             </div>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               {tiers.map((tier) => (
@@ -1083,7 +1095,7 @@ export function ReferralPageShell() {
               viewport={{ once: true, margin: "-32px" }}
               className="rounded-3xl border border-black/6 bg-white p-5 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.08)] sm:p-6"
             >
-              <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">Voucher giới thiệu của bạn</p>
+              <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{t("your_referral_vouchers")}</p>
               <div className="space-y-2">
                 {referralVouchers.map((item) => <VoucherPill key={item.id} item={item} />)}
               </div>
@@ -1097,24 +1109,24 @@ export function ReferralPageShell() {
             viewport={{ once: true }}
             className="rounded-2xl border border-black/6 bg-surface-soft px-5 py-4"
           >
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">Điều kiện chương trình</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{t("program_terms")}</p>
             <ul className="mt-2 space-y-1.5 text-xs text-muted">
-              <li>• Bạn bè phải là tài khoản mới, chưa đăng ký tại UjCha.</li>
-              <li>• Phần thưởng cộng sau khi bạn bè hoàn thành đơn đầu tiên{cfg && parseFloat(cfg.minOrderAmount) > 0 ? ` tối thiểu ${fmtVnd(cfg.minOrderAmount)}` : ""}.</li>
+              <li>• {t("term_new_account")}</li>
+              <li>• {t("term_first_order")}{cfg && parseFloat(cfg.minOrderAmount) > 0 ? ` (${fmtVnd(cfg.minOrderAmount)})` : ""}.</li>
               {cfg?.blockSameIpAsReferrer && (
                 <li className="flex items-start gap-1.5">
                   <ShieldAlert className="mt-0.5 size-3 shrink-0 text-amber-500" />
-                  <span>Không hợp lệ nếu bạn bè đăng ký từ cùng địa chỉ mạng (IP) với bạn.</span>
+                  <span>{t("term_diff_network")}</span>
                 </li>
               )}
               {cfg?.blockSameDeviceAsReferrer && (
                 <li className="flex items-start gap-1.5">
                   <ShieldAlert className="mt-0.5 size-3 shrink-0 text-amber-500" />
-                  <span>Không hợp lệ nếu bạn bè đăng ký từ cùng thiết bị với bạn.</span>
+                  <span>{t("term_diff_device")}</span>
                 </li>
               )}
-              <li>• Mỗi tài khoản chỉ nhập mã giới thiệu một lần khi đăng ký.</li>
-              <li>• UjCha có quyền điều chỉnh chương trình mà không cần báo trước.</li>
+              <li>• {t("term_one_code")}</li>
+              <li>• {t("term_rights_reserved")}</li>
             </ul>
           </motion.div>
         </div>

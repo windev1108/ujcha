@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 
 type KunLogoProps = {
   className?: string;
+  horizontal?: boolean;
   size?: "sm" | "md" | "lg";
 };
 
@@ -12,11 +13,11 @@ const sizes = {
   lg: { w: 240, h: 144 },
 };
 
-export function Logo({ className, size = "md" }: KunLogoProps) {
+export function Logo({ className, horizontal = true, size = "md" }: KunLogoProps) {
   const { w, h } = sizes[size];
   return (
     <Image
-      src="/logo.png"
+      src={horizontal ? "/logo.png" : "/vertical-logo.png"}
       alt="UjCha"
       width={w}
       height={h}

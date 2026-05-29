@@ -86,14 +86,14 @@ export function CartLineList({
           isIndeterminate={isIndeterminate}
           onChange={onToggleAll}
           variant="primary"
-          aria-label="Chọn tất cả"
+          aria-label={t("select_all")}
         >
           <Checkbox.Control className="size-6 rounded-lg border-2 border-black/25">
             <Checkbox.Indicator className="size-4" />
           </Checkbox.Control>
           <Checkbox.Content>
             <span className="text-sm font-medium text-foreground">
-              Chọn tất cả
+              {t("select_all")}
               <span className="ml-1 text-foreground/50">({items.length})</span>
             </span>
           </Checkbox.Content>
@@ -203,7 +203,7 @@ export function CartLineList({
                               isIconOnly
                               variant="ghost"
                               size="sm"
-                              aria-label="Giảm"
+                              aria-label={t("decrease_qty")}
                               isDisabled={isUpdating || quantity <= 1}
                               className="size-7 min-w-7 rounded-full"
                               onPress={() => onQuantityChange(id, quantity - 1)}
@@ -217,7 +217,7 @@ export function CartLineList({
                               isIconOnly
                               variant="ghost"
                               size="sm"
-                              aria-label="Tăng"
+                              aria-label={t("increase_qty")}
                               isDisabled={isUpdating}
                               className="size-7 min-w-7 rounded-full"
                               onPress={() => onQuantityChange(id, quantity + 1)}
@@ -236,14 +236,14 @@ export function CartLineList({
                             }
                           >
                             <Pencil className="size-3" />
-                            Sửa
+                            {t("edit")}
                           </Button>
 
                           <Button
                             isIconOnly
                             variant="ghost"
                             size="sm"
-                            aria-label="Xóa"
+                            aria-label={t("remove")}
                             isDisabled={isUpdating}
                             className="size-8 min-w-8 rounded-full text-muted hover:text-red-500"
                             onPress={() => onRemove(id)}

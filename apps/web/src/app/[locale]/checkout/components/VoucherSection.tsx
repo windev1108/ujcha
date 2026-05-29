@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { CheckCircle2, Loader2, Ticket, X } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { usePreviewVoucherMutation } from "@/services/order/hooks";
 import { useMyVouchersQuery } from "@/services/voucher/hooks";
 import type { MyVoucherItem } from "@/services/voucher/api";
@@ -38,6 +39,7 @@ function isVoucherAvailable(item: MyVoucherItem, subtotal: number) {
 }
 
 export function VoucherSection({ subtotal, applied, onApply, onRemove }: Props) {
+  const t = useTranslations();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const mutation = usePreviewVoucherMutation();
   const { data: myVouchers = [], isLoading } = useMyVouchersQuery();
@@ -73,7 +75,7 @@ export function VoucherSection({ subtotal, applied, onApply, onRemove }: Props) 
         <button
           type="button"
           onClick={onRemove}
-          aria-label="Xóa voucher"
+          aria-label={t("remove_voucher")}
           className="flex size-7 shrink-0 items-center justify-center rounded-full text-foreground/40 transition hover:bg-black/8 hover:text-foreground"
         >
           <X className="size-3.5" />
@@ -96,7 +98,7 @@ export function VoucherSection({ subtotal, applied, onApply, onRemove }: Props) 
     return (
       <div className="flex flex-col items-center gap-2 rounded-2xl border border-black/6 bg-surface-soft py-6 text-center">
         <Ticket className="size-7 text-muted/30" />
-        <p className="text-xs text-muted">Bạn chưa có voucher nào trong túi</p>
+        <p className="text-xs text-muted">{t("no_vouchers")}</p>
       </div>
     );
   }
@@ -122,7 +124,7 @@ export function VoucherSection({ subtotal, applied, onApply, onRemove }: Props) 
         <>
           {available.length > 0 && <div className="border-t border-black/5" />}
           <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-muted/60">
-            Chưa đủ điều kiện
+            {t("not_eligible")}
           </p>
           <div className="space-y-1.5 opacity-50">
             {unavailable.map((item) => (
@@ -169,6 +171,7 @@ function VoucherCard({
   isApplying: boolean;
   available: boolean;
 }) {
+  const t = useTranslations();
   const { voucher } = item;
   const minOrder = parseFloat(voucher.minOrderAmount);
   const shortfall = minOrder - subtotal;
@@ -211,7 +214,7 @@ function VoucherCard({
           disabled={isApplying}
           className="shrink-0 rounded-full bg-kun-primary px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
         >
-          {isApplying ? <Loader2 className="size-3.5 animate-spin" /> : "Dùng"}
+          {isApplying ? <Loader2 className="size-3.5 animate-spin" /> : t("use_voucher")}
         </button>
       )}
     </div>

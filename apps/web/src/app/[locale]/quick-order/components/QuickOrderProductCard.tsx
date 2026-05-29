@@ -4,6 +4,7 @@ import { Badge, Button, Card, CardContent } from "@heroui/react";
 import { motion } from "motion/react";
 import { Plus } from "lucide-react";
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 import type { QuickProduct } from "./quick-order-data";
 import { formatVnd } from "./quick-order-data";
 import { easeOutSmooth } from "@/app/[locale]/(landing)/components/RevealSection";
@@ -14,6 +15,7 @@ type Props = {
 };
 
 export function QuickOrderProductCard({ product, onAdd }: Props) {
+  const t = useTranslations();
   return (
     <motion.div
       layout
@@ -31,7 +33,7 @@ export function QuickOrderProductCard({ product, onAdd }: Props) {
                   size="sm"
                   className="absolute left-3 top-3 z-10 rounded-full border-0 bg-kun-mint/85 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-kun-products-forest backdrop-blur-[2px]"
                 >
-                  Bán chạy
+                  {t("bestseller")}
                 </Badge>
               ) : null}
               {product.badge === "new" ? (
@@ -41,7 +43,7 @@ export function QuickOrderProductCard({ product, onAdd }: Props) {
                   size="sm"
                   className="absolute left-3 top-3 z-10 rounded-full border-0 bg-kun-mint/85 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-kun-products-forest backdrop-blur-[2px]"
                 >
-                  Mới về
+                  {t("new_arrival")}
                 </Badge>
               ) : null}
               <Image
@@ -69,7 +71,7 @@ export function QuickOrderProductCard({ product, onAdd }: Props) {
               <Button
                 isIconOnly
                 variant="primary"
-                aria-label={`Thêm ${product.name}`}
+                aria-label={`${t("add_to_cart")} ${product.name}`}
                 className="size-12 shrink-0 rounded-full bg-kun-products-forest text-white shadow-[0_4px_14px_-4px_rgba(38,99,77,0.55)] hover:opacity-95"
                 onPress={onAdd}
               >

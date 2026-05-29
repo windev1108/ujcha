@@ -9,6 +9,7 @@ import { ArrowLeft, ChevronRight } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { ROUTES } from "@/lib/routes";
 import { motion } from "motion/react";
+import { useTranslations } from "next-intl";
 
 const PLACEHOLDER_BG = ["#1a3c34", "#2d1a0a", "#0d2035", "#1a0d2e"];
 
@@ -40,6 +41,7 @@ function DetailSkeleton() {
 }
 
 export function ProductDetailPageShell() {
+  const t = useTranslations();
   const params = useParams<{ slug: string }>();
   const { data: product, isLoading, isError } = useProductBySlugQuery(params.slug ?? "");
 
@@ -59,11 +61,11 @@ export function ProductDetailPageShell() {
           aria-label="Breadcrumb"
         >
           <Link href={ROUTES.HOME} className="transition-colors hover:text-foreground">
-            Trang chủ
+            {t("home")}
           </Link>
           <ChevronRight className="size-3.5 opacity-40" />
           <Link href={ROUTES.MENU} className="transition-colors hover:text-foreground">
-            Thực đơn
+            {t("menu")}
           </Link>
           {product && (
             <>
@@ -79,13 +81,13 @@ export function ProductDetailPageShell() {
 
         {isError && (
           <div className="flex flex-col items-center justify-center gap-4 py-32 text-muted">
-            <p className="text-base font-medium text-foreground">Không tìm thấy sản phẩm</p>
+            <p className="text-base font-medium text-foreground">{t("product_not_found")}</p>
             <Link
               href={ROUTES.MENU}
               className="inline-flex items-center gap-1.5 text-sm text-kun-products-forest underline underline-offset-4"
             >
               <ArrowLeft className="size-4" />
-              Quay lại thực đơn
+              {t("back_to_menu")}
             </Link>
           </div>
         )}

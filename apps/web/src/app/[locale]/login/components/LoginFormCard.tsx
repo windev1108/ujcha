@@ -7,13 +7,15 @@ import { Logo } from "@/components/common/Logo";
 import { AuthSplitLayout } from "@/components/auth/AuthSplitLayout";
 import { useLocalizedHref } from "@/i18n/use-localized-href";
 import { useLoginMutation } from "@/services/auth/hooks";
+import { useTranslations } from "next-intl";
 
-function axiosErrorMessage(e: unknown): string {
+function axiosErrorMessage(e: unknown, fallback: string): string {
   const err = e as { response?: { data?: { message?: string } }; message?: string };
-  return err.response?.data?.message ?? err.message ?? "Có lỗi xảy ra.";
+  return err.response?.data?.message ?? err.message ?? fallback;
 }
 
 export function LoginFormCard() {
+  const t = useTranslations();
   const { route } = useLocalizedHref();
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
@@ -33,25 +35,16 @@ export function LoginFormCard() {
       </div>
 
       <div className="space-y-2">
-        <h2 className="text-2xl font-bold tracking-tight text-[#1a3c34]">
-          Đăng nhập
-        </h2>
-        <p className="text-sm text-foreground/50">
-          Chào mừng trở lại! Nhập thông tin để tiếp tục.
-        </p>
+        <h2 className="text-2xl font-bold tracking-tight text-[#1a3c34]">{t("login")}</h2>
+        <p className="text-sm text-foreground/50">{t("login_welcome")}</p>
       </div>
 
       <form onSubmit={handleSubmit} className="mt-8 space-y-4">
         {/* Phone */}
         <div className="space-y-1.5">
-          <label className="block text-xs font-semibold text-foreground/60">
-            Số điện thoại
-          </label>
+          <label className="block text-xs font-semibold text-foreground/60">{t("phone_number")}</label>
           <div className="relative">
-            <Phone
-              className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-foreground/35"
-              aria-hidden
-            />
+            <Phone className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-foreground/35" aria-hidden />
             <input
               type="tel"
               inputMode="tel"
@@ -68,24 +61,19 @@ export function LoginFormCard() {
         {/* Password */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <label className="block text-xs font-semibold text-foreground/60">
-              Mật khẩu
-            </label>
+            <label className="block text-xs font-semibold text-foreground/60">{t("password")}</label>
             <Link
               href={route("FORGOT_PASSWORD")}
               className="text-xs font-medium text-[#1a3c34] underline-offset-2 hover:underline"
             >
-              Quên mật khẩu?
+              {t("forgot_password")}
             </Link>
           </div>
           <div className="relative">
-            <Lock
-              className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-foreground/35"
-              aria-hidden
-            />
+            <Lock className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-foreground/35" aria-hidden />
             <input
               type={showPwd ? "text" : "password"}
-              placeholder="Mật khẩu của bạn"
+              placeholder={t("password_placeholder")}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
@@ -94,9 +82,9 @@ export function LoginFormCard() {
             <button
               type="button"
               onClick={() => setShowPwd((v) => !v)}
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-foreground/35 hover:text-foreground/60 transition"
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-foreground/35 transition hover:text-foreground/60"
               tabIndex={-1}
-              aria-label={showPwd ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+              aria-label={showPwd ? t("hide_password") : t("show_password")}
             >
               {showPwd ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
             </button>
@@ -106,7 +94,7 @@ export function LoginFormCard() {
         {/* Error */}
         {login.isError && (
           <div className="rounded-xl border border-red-100 bg-red-50 px-3.5 py-2.5 text-xs text-red-700">
-            {axiosErrorMessage(login.error)}
+            {axiosErrorMessage(login.error, t("generic_error"))}
           </div>
         )}
 
@@ -118,22 +106,19 @@ export function LoginFormCard() {
         >
           {login.isPending ? (
             <span className="flex items-center gap-2">
-              <span className="size-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-              Đang đăng nhập…
+              <span className="size-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              {t("logging_in")}
             </span>
           ) : (
-            "Đăng nhập"
+            t("login")
           )}
         </button>
 
         {/* Register link */}
         <p className="text-center text-sm text-foreground/50">
-          Chưa có tài khoản?{" "}
-          <Link
-            href={route("REGISTER")}
-            className="font-semibold text-[#1a3c34] underline-offset-2 hover:underline"
-          >
-            Đăng ký ngay
+          {t("no_account")}{" "}
+          <Link href={route("REGISTER")} className="font-semibold text-[#1a3c34] underline-offset-2 hover:underline">
+            {t("register_now")}
           </Link>
         </p>
       </form>
@@ -141,15 +126,11 @@ export function LoginFormCard() {
       {/* Footer */}
       <div className="mt-10 border-t border-black/6 pt-6 text-center">
         <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-foreground/35">
-          <Link href={route("TERMS")} className="hover:text-foreground/60 transition">
-            Điều khoản
-          </Link>
+          <Link href={route("TERMS")} className="transition hover:text-foreground/60">{t("terms")}</Link>
           <span aria-hidden>·</span>
-          <Link href={route("PRIVACY")} className="hover:text-foreground/60 transition">
-            Bảo mật
-          </Link>
+          <Link href={route("PRIVACY")} className="transition hover:text-foreground/60">{t("privacy")}</Link>
           <span aria-hidden>·</span>
-          <span>KUN © 2026</span>
+          <span>{`Ujcha © ${new Date().getFullYear()}`}</span>
         </div>
       </div>
     </AuthSplitLayout>

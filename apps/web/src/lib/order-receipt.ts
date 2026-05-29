@@ -104,7 +104,7 @@ export function buildReceiptHtml(order: ReceiptOrder): string {
 
   const body = [
     // Shop header
-    `<div style="text-align:center;font-size:22px;font-weight:bold;letter-spacing:4px;color:#000;">KUN</div>`,
+    `<div style="text-align:center;font-size:22px;font-weight:bold;letter-spacing:4px;color:#000;">Ujcha</div>`,
     `<div style="border-top:2px dashed #000;margin:6px 0;"></div>`,
 
     // Order meta

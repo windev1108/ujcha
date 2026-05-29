@@ -189,7 +189,7 @@ function renderElement(
   switch (el.type) {
     case 'shop-name':
       return (
-        `<div style="${aln}font-size:${paperWidth <= 58 ? 16 : 20}px;font-weight:bold;letter-spacing:2px;color:#000;margin-bottom:1px;">KUN</div>`
+        `<div style="${aln}font-size:${paperWidth <= 58 ? 16 : 20}px;font-weight:bold;letter-spacing:2px;color:#000;margin-bottom:1px;">Ujcha</div>`
       )
 
     case 'order-ref':
@@ -262,7 +262,7 @@ function renderElement(
       if (loyaltyQrUrl) {
         return (
           `<div style="border-top:2px dashed #000;margin:8px 0 6px;"></div>` +
-          `<div style="text-align:center;font-size:12px;font-weight:bold;letter-spacing:0.5px;margin-bottom:6px;color:#000;">QUÉT ĐỂ TÍCH ĐIỂM KUN</div>` +
+          `<div style="text-align:center;font-size:12px;font-weight:bold;letter-spacing:0.5px;margin-bottom:6px;color:#000;">QUÉT ĐỂ TÍCH ĐIỂM UJCHA</div>` +
           `<img src="${loyaltyQrUrl}" style="display:block;margin:0 auto 4px;width:160px;height:160px;" />` +
           `<div style="text-align:center;font-size:10px;color:#666;margin-bottom:6px;">Đăng nhập &amp; tích điểm ngay từ đơn hàng này</div>`
         )

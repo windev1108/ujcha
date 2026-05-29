@@ -8,38 +8,29 @@ import { Link } from "@/i18n/navigation";
 import { useBlogPostsQuery } from "@/services/blog/hooks";
 import type { BlogPostSummary, PostType } from "@/services/blog/api";
 import { ROUTES } from "@/lib/routes";
-
-// ── helpers ───────────────────────────────────────────────────────────────────
+import { useTranslations } from "next-intl";
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("vi-VN", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-const TYPE_META: Record<PostType, { label: string; bg: string; text: string; dot: string }> = {
-  news: { label: "Tin tức", bg: "bg-sky-50", text: "text-sky-700", dot: "bg-sky-400" },
-  blog: { label: "Blog", bg: "bg-kun-primary/10", text: "text-kun-primary", dot: "bg-kun-primary" },
-  promotion: { label: "Ưu đãi", bg: "bg-amber-50", text: "text-amber-700", dot: "bg-amber-400" },
+const TYPE_STYLE: Record<PostType, { labelKey: string; bg: string; text: string; dot: string }> = {
+  news:      { labelKey: "post_type_news",      bg: "bg-sky-50",         text: "text-sky-700",     dot: "bg-sky-400"     },
+  blog:      { labelKey: "post_type_blog",      bg: "bg-kun-primary/10", text: "text-kun-primary", dot: "bg-kun-primary" },
+  promotion: { labelKey: "post_type_promotion", bg: "bg-amber-50",       text: "text-amber-700",   dot: "bg-amber-400"   },
 };
 
 const TYPE_COVER: Record<PostType, string> = {
-  news: "from-sky-500 to-blue-600",
-  blog: "from-[#1a3c34] to-[#2d6a4f]",
+  news:      "from-sky-500 to-blue-600",
+  blog:      "from-[#1a3c34] to-[#2d6a4f]",
   promotion: "from-amber-400 to-orange-500",
 };
 
-const FILTERS: { label: string; value: PostType | undefined }[] = [
-  { label: "Tất cả", value: undefined },
-  { label: "Tin tức", value: "news" },
-  { label: "Blog", value: "blog" },
-  { label: "Ưu đãi", value: "promotion" },
-];
-
 const PAGE_LIMIT = 9;
 
-// ── PostCard ──────────────────────────────────────────────────────────────────
-
 function PostCard({ post, index }: { post: BlogPostSummary; index: number }) {
-  const meta = TYPE_META[post.type];
+  const t = useTranslations();
+  const style = TYPE_STYLE[post.type];
   const coverGrad = TYPE_COVER[post.type];
 
   return (
@@ -53,7 +44,6 @@ function PostCard({ post, index }: { post: BlogPostSummary; index: number }) {
         href={ROUTES.BLOG_POST(post.slug)}
         className="group flex h-full flex-col overflow-hidden rounded-3xl border border-black/[0.06] bg-white shadow-[0_4px_20px_-8px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.15)] hover:-translate-y-0.5"
       >
-        {/* Thumbnail */}
         <div className="relative aspect-video w-full overflow-hidden">
           {post.thumbnail ? (
             <Image
@@ -71,12 +61,11 @@ function PostCard({ post, index }: { post: BlogPostSummary; index: number }) {
           <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
         </div>
 
-        {/* Content */}
         <div className="flex flex-1 flex-col p-5">
           <div className="flex items-center gap-2">
-            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.15em] ${meta.bg} ${meta.text}`}>
-              <span className={`size-1.5 rounded-full ${meta.dot}`} />
-              {meta.label}
+            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.15em] ${style.bg} ${style.text}`}>
+              <span className={`size-1.5 rounded-full ${style.dot}`} />
+              {t(style.labelKey as Parameters<typeof t>[0])}
             </span>
             <span className="flex items-center gap-1 text-[11px] text-muted">
               <Calendar className="size-3" />
@@ -90,7 +79,7 @@ function PostCard({ post, index }: { post: BlogPostSummary; index: number }) {
 
           <div className="mt-auto pt-4">
             <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-kun-primary/70 transition-colors group-hover:text-kun-primary">
-              Đọc tiếp <ChevronRight className="size-3.5" />
+              {t("read_more")} <ChevronRight className="size-3.5" />
             </span>
           </div>
         </div>
@@ -99,13 +88,11 @@ function PostCard({ post, index }: { post: BlogPostSummary; index: number }) {
   );
 }
 
-// ── skeleton ──────────────────────────────────────────────────────────────────
-
 function PostCardSkeleton() {
   return (
     <div className="overflow-hidden rounded-3xl border border-black/[0.06] bg-white">
       <div className="aspect-video w-full animate-pulse bg-surface-card" />
-      <div className="p-5 space-y-3">
+      <div className="space-y-3 p-5">
         <div className="flex gap-2">
           <div className="h-5 w-16 animate-pulse rounded-full bg-surface-card" />
           <div className="h-5 w-20 animate-pulse rounded-full bg-surface-card" />
@@ -117,9 +104,8 @@ function PostCardSkeleton() {
   );
 }
 
-// ── main shell ────────────────────────────────────────────────────────────────
-
 export function BlogPageShell() {
+  const t = useTranslations();
   const [activeType, setActiveType] = useState<PostType | undefined>(undefined);
   const [page, setPage] = useState(1);
 
@@ -128,6 +114,13 @@ export function BlogPageShell() {
   const posts = data?.items ?? [];
   const totalPages = data?.totalPages ?? 1;
   const total = data?.total ?? 0;
+
+  const FILTERS: { labelKey: string; value: PostType | undefined }[] = [
+    { labelKey: "all",                value: undefined },
+    { labelKey: "post_type_news",     value: "news" },
+    { labelKey: "post_type_blog",     value: "blog" },
+    { labelKey: "post_type_promotion", value: "promotion" },
+  ];
 
   function handleFilter(type: PostType | undefined) {
     setActiveType(type);
@@ -153,20 +146,17 @@ export function BlogPageShell() {
             <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/10">
               <Newspaper className="size-7 text-white" />
             </div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">Câu chuyện UjCha</p>
-            <h1 className="mt-2 text-4xl font-bold tracking-tight text-white sm:text-5xl">
-              Blog & Tin tức
-            </h1>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">{t("blog_eyebrow")}</p>
+            <h1 className="mt-2 text-4xl font-bold tracking-tight text-white sm:text-5xl">{t("blog_and_news")}</h1>
             <motion.p
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.08 }}
               className="mx-auto mt-4 max-w-sm text-base leading-relaxed text-white/60"
             >
-              Công thức pha chế, câu chuyện thương hiệu và tin tức mới nhất từ UjCha.
+              {t("blog_desc")}
             </motion.p>
 
-            {/* Stats pill */}
             {!isLoading && total > 0 && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
@@ -176,7 +166,7 @@ export function BlogPageShell() {
               >
                 <div className="flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 ring-1 ring-white/15">
                   <Sparkles className="size-3.5 text-white/70" />
-                  <span className="text-xs font-semibold text-white/80">{total} bài viết</span>
+                  <span className="text-xs font-semibold text-white/80">{t("total_posts", { count: total })}</span>
                 </div>
               </motion.div>
             )}
@@ -205,12 +195,13 @@ export function BlogPageShell() {
               key={String(f.value)}
               type="button"
               onClick={() => handleFilter(f.value)}
-              className={`rounded-full px-4 py-2 text-xs font-semibold transition-colors ${activeType === f.value
+              className={`rounded-full px-4 py-2 text-xs font-semibold transition-colors ${
+                activeType === f.value
                   ? "bg-kun-primary text-white shadow-sm"
                   : "bg-white border border-black/8 text-foreground hover:bg-surface-card"
-                }`}
+              }`}
             >
-              {f.label}
+              {t(f.labelKey as Parameters<typeof t>[0])}
             </button>
           ))}
         </motion.div>
@@ -230,8 +221,8 @@ export function BlogPageShell() {
               <div className="flex size-14 items-center justify-center rounded-full bg-surface-card">
                 <BookOpen className="size-6 text-muted" />
               </div>
-              <p className="text-base font-medium text-foreground">Chưa có bài viết nào</p>
-              <p className="text-sm text-muted">Hãy quay lại sau để xem nội dung mới.</p>
+              <p className="text-base font-medium text-foreground">{t("no_posts")}</p>
+              <p className="text-sm text-muted">{t("check_back_later")}</p>
             </motion.div>
           ) : (
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -270,7 +261,9 @@ export function BlogPageShell() {
                     key={p}
                     type="button"
                     onClick={() => setPage(p)}
-                    className={`flex size-9 items-center justify-center rounded-full text-sm font-semibold transition-colors ${isActive ? "bg-kun-primary text-white shadow-sm" : "border border-black/8 bg-white text-foreground hover:bg-surface-card"}`}
+                    className={`flex size-9 items-center justify-center rounded-full text-sm font-semibold transition-colors ${
+                      isActive ? "bg-kun-primary text-white shadow-sm" : "border border-black/8 bg-white text-foreground hover:bg-surface-card"
+                    }`}
                   >
                     {p}
                   </button>
@@ -289,10 +282,9 @@ export function BlogPageShell() {
           </motion.div>
         )}
 
-        {/* Page indicator */}
         {!isLoading && totalPages > 1 && (
           <p className="mt-3 text-center text-[11px] text-muted">
-            Trang {page} / {totalPages} · {total} bài viết
+            {t("page_indicator", { page, totalPages, total })}
           </p>
         )}
       </div>

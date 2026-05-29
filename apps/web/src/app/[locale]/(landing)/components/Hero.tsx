@@ -11,6 +11,7 @@ import { useRouter } from "../../../../i18n/navigation";
 import { Link } from "@/i18n/navigation";
 import { ChevronRight, ChevronDown, Star, Clock, Leaf, ArrowRight } from "lucide-react";
 import { useCategoriesQuery } from "@/services/category/hooks";
+import { useTranslations } from "next-intl";
 
 const CAROUSEL_INTERVAL_MS = 5000;
 const CROSSFADE_DURATION = 0.85;
@@ -18,17 +19,18 @@ const stagger = 0.12;
 
 const FALLBACK_SLIDE = { src: MEDIA.hero, alt: "UjCha" };
 
-const TRUST_PILLS = [
-  { icon: <Star className="size-3 fill-[#c9a227] text-[#c9a227]" />, text: "4.9 đánh giá" },
-  { icon: <Clock className="size-3 text-[#99d6b3]" />, text: "Giao trong 30 phút" },
-  { icon: <Leaf className="size-3 text-[#99d6b3]" />, text: "100% nguyên liệu tự nhiên" },
-] as const;
-
 export function Hero() {
   const router = useRouter();
+  const t = useTranslations();
   const [active, setActive] = useState(0);
   const reduceMotion = useReducedMotion();
   const { data: categories, isLoading: categoriesLoading } = useCategoriesQuery();
+
+  const trustPills = [
+    { icon: <Star className="size-3 fill-[#c9a227] text-[#c9a227]" />, text: t("trust_rating") },
+    { icon: <Clock className="size-3 text-[#99d6b3]" />, text: t("trust_delivery") },
+    { icon: <Leaf className="size-3 text-[#99d6b3]" />, text: t("trust_natural") },
+  ];
 
   // Build slide list from category thumbnails; fall back to single static image
   const slides = useMemo(() => {
@@ -110,7 +112,7 @@ export function Hero() {
             >
               <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[10px] font-semibold text-white backdrop-blur-sm sm:gap-2 sm:px-3.5 sm:py-1.5 sm:text-[11px]">
                 <Leaf className="size-3 text-[#99d6b3]" />
-                Matcha thuần chất từ Nhật Bản
+                {t("hero_eyebrow")}
               </span>
             </motion.div>
 
@@ -121,7 +123,7 @@ export function Hero() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, ease: easeOutSmooth, delay: stagger }}
             >
-              Nghệ thuật của
+              {t("hero_headline")}
               <br />
               <span className="text-[#99d6b3]">Matcha.</span>
             </motion.h1>
@@ -133,7 +135,7 @@ export function Hero() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.75, ease: easeOutSmooth, delay: stagger * 2 }}
             >
-              Thức uống thủ công từ trà xanh đá nghiền cấp lễ nghi — trải nghiệm sự thuần khiết trong từng ngụm.
+              {t("hero_subline")}
             </motion.p>
 
             {/* Trust pills — desktop only */}
@@ -143,7 +145,7 @@ export function Hero() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.65, ease: easeOutSmooth, delay: stagger * 2.6 }}
             >
-              {TRUST_PILLS.map(({ icon, text }) => (
+              {trustPills.map(({ icon, text }) => (
                 <span
                   key={text}
                   className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-[11px] font-medium text-white/88 ring-1 ring-white/12 backdrop-blur-sm"
@@ -165,14 +167,14 @@ export function Hero() {
                 onClick={() => router.push(ROUTES.PRODUCTS)}
                 className="h-9 rounded-full bg-[#3d7568] px-5 text-sm font-semibold text-white shadow-lg shadow-black/25 transition-opacity hover:opacity-90 sm:h-11 sm:px-7"
               >
-                Khám phá thực đơn
+                {t("explore_menu")}
                 <ArrowRight className="ml-1 size-3.5 sm:size-4" />
               </Button>
               <Link
                 href={ROUTES.PROMOTIONS}
                 className="inline-flex h-9 items-center gap-1.5 rounded-full border border-white/22 bg-white/10 px-4 text-xs font-semibold text-white backdrop-blur-sm transition-colors hover:bg-white/17 sm:h-11 sm:gap-2 sm:px-6 sm:text-sm"
               >
-                Xem ưu đãi
+                {t("view_promotions")}
                 <ChevronRight className="size-3.5 sm:size-4" />
               </Link>
             </motion.div>
@@ -187,7 +189,7 @@ export function Hero() {
           transition={{ delay: 1.8, duration: 0.6 }}
         >
           <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/40">
-            Cuộn xuống
+            {t("scroll_down")}
           </span>
           <motion.div
             animate={{ y: [0, 6, 0] }}

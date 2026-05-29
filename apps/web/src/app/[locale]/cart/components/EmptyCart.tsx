@@ -5,8 +5,10 @@ import { ShoppingBag } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { revealTransition } from "@/app/[locale]/(landing)/components/RevealSection";
 import { ROUTES } from "@/lib/routes";
+import { useTranslations } from "next-intl";
 
 export function EmptyCart() {
+  const t = useTranslations();
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -18,16 +20,16 @@ export function EmptyCart() {
         <ShoppingBag className="size-8 stroke-[1.5] text-muted" aria-hidden />
       </div>
       <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-        Giỏ hàng trống
+        {t("cart_empty")}
       </h1>
       <p className="mt-3 max-w-md text-sm leading-relaxed text-foreground/70 sm:text-base">
-        Hãy khám phá thực đơn và thêm những món yêu thích vào giỏ hàng của bạn.
+        {t("cart_empty_desc")}
       </p>
       <Link
         href={ROUTES.PRODUCTS}
         className="mt-8 inline-flex rounded-full bg-kun-primary px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
       >
-        Xem thực đơn
+        {t("view_menu")}
       </Link>
     </motion.div>
   );

@@ -100,7 +100,7 @@ export function PaymentConfigClient() {
   const [isEnabled, setIsEnabled] = useState(false);
 
   const [previewAmount, setPreviewAmount] = useState("");
-  const [previewDes, setPreviewDes] = useState("KUN-ORDER-XXX");
+  const [previewDes, setPreviewDes] = useState("UJCHA-ORDER-XXX");
 
   const [copied, setCopied] = useState(false);
   const [qrKey, setQrKey] = useState(0);
@@ -350,7 +350,7 @@ export function PaymentConfigClient() {
                       <Input
                         value={previewDes}
                         onChange={(e) => setPreviewDes(e.target.value)}
-                        placeholder="KUN-ORDER-XXX"
+                        placeholder="UJCHA-ORDER-XXX"
                         className={adminInputClass}
                       />
                       <p className="text-[11px] text-foreground/45">

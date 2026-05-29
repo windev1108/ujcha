@@ -31,7 +31,7 @@ export class GroupOrderService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
-  ) {}
+  ) { }
 
   private fullInclude() {
     return {
@@ -73,9 +73,9 @@ export class GroupOrderService {
           const unit = Number(item.unitPrice);
           const toppings = Array.isArray(item.toppingsJson)
             ? (item.toppingsJson as any[]).reduce(
-                (s: number, t: any) => s + Number(t.price ?? 0),
-                0,
-              )
+              (s: number, t: any) => s + Number(t.price ?? 0),
+              0,
+            )
             : 0;
           return sum + (unit + toppings) * item.quantity;
         }, 0);
@@ -620,9 +620,9 @@ export class GroupOrderService {
     const discountAmount =
       discountPercent > 0
         ? totalAmount
-            .mul(new Prisma.Decimal(discountPercent))
-            .div(new Prisma.Decimal(100))
-            .toDecimalPlaces(0)
+          .mul(new Prisma.Decimal(discountPercent))
+          .div(new Prisma.Decimal(100))
+          .toDecimalPlaces(0)
         : new Prisma.Decimal(0);
 
     const shippingFee = new Prisma.Decimal(go.shippingFee ?? 0);
@@ -655,7 +655,7 @@ export class GroupOrderService {
 
   private async generateOrderPaymentCode(): Promise<string> {
     for (let attempt = 0; attempt < 10; attempt++) {
-      const code = `KUN-${randomBytes(4).toString('hex').toUpperCase()}`;
+      const code = `UJCHA-${randomBytes(4).toString('hex').toUpperCase()}`;
       const clash = await this.prisma.order.findUnique({ where: { paymentCode: code } });
       if (!clash) return code;
     }

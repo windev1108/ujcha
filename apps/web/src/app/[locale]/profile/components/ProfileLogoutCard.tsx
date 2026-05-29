@@ -3,12 +3,14 @@
 import { Card, CardContent } from "@heroui/react";
 import { ChevronRight, LogOut } from "lucide-react";
 import { motion } from "motion/react";
+import { useTranslations } from "next-intl";
 
 type Props = {
   onLogout: () => void;
 };
 
 export function ProfileLogoutCard({ onLogout }: Props) {
+  const t = useTranslations();
   return (
     <motion.div
       initial={{ opacity: 0, y: 14 }}
@@ -27,8 +29,8 @@ export function ProfileLogoutCard({ onLogout }: Props) {
               <LogOut className="size-5 text-red-600" strokeWidth={1.75} />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="font-semibold text-red-600">Đăng xuất</p>
-              <p className="mt-0.5 text-xs text-red-500/90">Hẹn gặp lại bạn sớm</p>
+              <p className="font-semibold text-red-600">{t("logout")}</p>
+              <p className="mt-0.5 text-xs text-red-500/90">{t("see_you_soon")}</p>
             </div>
             <ChevronRight className="size-5 shrink-0 text-red-400" />
           </CardContent>

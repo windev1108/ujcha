@@ -16,10 +16,12 @@ import {
   computeOptionSurcharge,
   formatVnd,
 } from "@/lib/product-options";
+import { useTranslations } from "next-intl";
 
 type Props = { product: ApiProduct };
 
 export function ProductOptionPanel({ product }: Props) {
+  const t = useTranslations();
   const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
   const { data: toppings = [] } = useToppingsQuery();
@@ -129,7 +131,7 @@ export function ProductOptionPanel({ product }: Props) {
           </span>
           {product.isSoldOut && (
             <span className="rounded-full bg-black/8 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-muted">
-              Hết hàng
+              {t("sold_out")}
             </span>
           )}
           {hasProductDiscount && !product.isSoldOut && (
@@ -221,9 +223,9 @@ export function ProductOptionPanel({ product }: Props) {
               <div className="flex items-baseline justify-between gap-2">
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-muted">
-                    Topping thêm
+                    {t("extra_toppings")}
                   </p>
-                  <p className="mt-0.5 text-xs text-foreground/50">Giá cộng thêm vào mỗi ly</p>
+                  <p className="mt-0.5 text-xs text-foreground/50">{t("topping_desc")}</p>
                 </div>
                 <span className={`shrink-0 text-[11px] font-semibold tabular-nums ${
                   selectedToppings.size >= MAX_TOPPINGS ? "text-kun-products-forest" : "text-muted"
@@ -272,7 +274,7 @@ export function ProductOptionPanel({ product }: Props) {
               </div>
               {selectedToppings.size >= MAX_TOPPINGS && (
                 <p className="text-[11px] text-kun-products-forest/70">
-                  Đã chọn tối đa {MAX_TOPPINGS} topping / ly
+                  {t("max_toppings_msg")}
                 </p>
               )}
             </div>
@@ -284,13 +286,13 @@ export function ProductOptionPanel({ product }: Props) {
       <div className="space-y-2">
         <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted">
           <StickyNote className="size-3" />
-          Ghi chú
+          {t("note")}
         </label>
         <input
           type="text"
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="Ít đá, không ống hút, thêm đường…"
+          placeholder={t("note_placeholder")}
           className="h-11 w-full rounded-xl border border-black/[0.09] bg-white px-3.5 text-sm text-foreground placeholder:text-muted/60 focus:border-kun-primary focus:outline-none focus:ring-2 focus:ring-kun-primary/20"
         />
       </div>
@@ -317,7 +319,7 @@ export function ProductOptionPanel({ product }: Props) {
         </div>
 
         <div className="text-right">
-          <p className="text-[10px] font-medium text-muted">Tổng cộng</p>
+          <p className="text-[10px] font-medium text-muted">{t("total")}</p>
           <AnimatePresence mode="wait">
             <motion.p
               key={totalPrice}
@@ -349,23 +351,19 @@ export function ProductOptionPanel({ product }: Props) {
         ) : addedFeedback ? (
           <>
             <Check className="mr-2 size-5" />
-            Đã thêm vào giỏ!
+            {t("added_to_cart")}
           </>
         ) : (
           <>
             <ShoppingCart className="mr-2 size-5" />
-            {product.isSoldOut ? "Hết hàng" : "Thêm vào giỏ hàng"}
+            {product.isSoldOut ? t("sold_out") : t("add_to_cart")}
           </>
         )}
       </Button>
 
       {!accessToken && (
         <p className="text-center text-xs text-muted">
-          Bạn cần{" "}
-          <a href={ROUTES.LOGIN} className="text-kun-products-forest underline underline-offset-4">
-            đăng nhập
-          </a>{" "}
-          để thêm vào giỏ hàng
+          {t("login_to_add")}
         </p>
       )}
     </motion.div>

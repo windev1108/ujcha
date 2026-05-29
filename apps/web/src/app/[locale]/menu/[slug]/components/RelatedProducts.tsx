@@ -8,12 +8,14 @@ import { Link } from "@/i18n/navigation";
 import { ROUTES } from "@/lib/routes";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { ProductCard } from "@/components/product/ProductCard";
+import { useTranslations } from "next-intl";
 
 type Props = { categorySlug: string; excludeId: string };
 
 const SCROLL_STEP = 220;
 
 export function RelatedProducts({ categorySlug, excludeId }: Props) {
+  const t = useTranslations();
   const scrollRef = useRef<HTMLDivElement>(null);
   const { data: products } = useProductsQuery({ categorySlug });
 
@@ -41,10 +43,10 @@ export function RelatedProducts({ categorySlug, excludeId }: Props) {
       <div className="flex items-end justify-between">
         <div>
           <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-            Gợi ý
+            {t("suggestions")}
           </p>
           <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-            Sản phẩm cùng loại
+            {t("related_products")}
           </h2>
         </div>
 
@@ -53,7 +55,7 @@ export function RelatedProducts({ categorySlug, excludeId }: Props) {
             <button
               type="button"
               onClick={() => scroll("left")}
-              aria-label="Cuộn trái"
+              aria-label={t("scroll_left")}
               className="flex size-9 items-center justify-center rounded-full border border-black/10 bg-white text-foreground shadow-sm transition hover:border-black/20 hover:shadow"
             >
               <ChevronLeft className="size-4" />
@@ -61,7 +63,7 @@ export function RelatedProducts({ categorySlug, excludeId }: Props) {
             <button
               type="button"
               onClick={() => scroll("right")}
-              aria-label="Cuộn phải"
+              aria-label={t("scroll_right")}
               className="flex size-9 items-center justify-center rounded-full border border-black/10 bg-white text-foreground shadow-sm transition hover:border-black/20 hover:shadow"
             >
               <ChevronRight className="size-4" />
@@ -71,7 +73,7 @@ export function RelatedProducts({ categorySlug, excludeId }: Props) {
             href={`${ROUTES.MENU}?category=${categorySlug}`}
             className="hidden text-sm font-medium text-kun-products-forest transition-colors hover:opacity-75 sm:block"
           >
-            Xem tất cả
+            {t("see_all")}
           </Link>
         </div>
       </div>

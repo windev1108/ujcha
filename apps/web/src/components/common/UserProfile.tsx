@@ -16,7 +16,7 @@ const Av = Avatar as unknown as React.FC<{ className?: string; children?: React.
 const AvImg = Avatar.Image as unknown as React.FC<{ src?: string; className?: string }>;
 const AvFb = Avatar.Fallback as unknown as React.FC<{ children?: React.ReactNode; className?: string }>;
 
-export const UserProfile = () => {
+export const UserProfile = ({ onNavigate }: { onNavigate?: () => void } = {}) => {
   const t = useTranslations();
   const { isLoggedIn, user } = useAuth();
   const clearSession = useAuthStore((s) => s.clearSession);
@@ -30,7 +30,7 @@ export const UserProfile = () => {
         variant="ghost"
         aria-label={t("account")}
         className="text-foreground"
-        onPress={() => router.push(ROUTES.LOGIN)}
+        onPress={() => { onNavigate?.(); router.push(ROUTES.LOGIN); }}
       >
         <LogInIcon className="size-5" />
       </Button>

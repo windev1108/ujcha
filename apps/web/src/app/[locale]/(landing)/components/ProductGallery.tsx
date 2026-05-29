@@ -7,11 +7,12 @@ import { ChevronRight } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { useProductsQuery } from "@/services/product/hooks";
 import { ProductCard, ProductCardSkeleton } from "@/components/product/ProductCard";
+import { useTranslations } from "next-intl";
 
 export function ProductGallery() {
   const { data: products, isLoading } = useProductsQuery();
   const displayed = products?.filter((p) => p.isAvailable).slice(0, 12) ?? [];
-
+  const t = useTranslations()
   if (!isLoading && displayed.length === 0) return null;
 
   return (
@@ -27,17 +28,17 @@ export function ProductGallery() {
         >
           <div>
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-              Thực đơn
+              {t('menu')}
             </p>
             <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-              Sản phẩm được đánh giá cao
+              {t('highly_recommend_products')}
             </h2>
           </div>
           <Link
             href={ROUTES.MENU}
             className="inline-flex items-center gap-1 text-sm font-medium text-foreground outline-offset-4 hover:text-kun-primary transition-colors"
           >
-            Xem tất cả
+            {t('see_all')}
             <ChevronRight className="size-4" />
           </Link>
         </motion.div>
@@ -47,8 +48,8 @@ export function ProductGallery() {
           {isLoading
             ? Array.from({ length: 12 }).map((_, i) => <ProductCardSkeleton key={i} />)
             : displayed.map((product, index) => (
-                <ProductCard key={product.id} product={product} index={index} />
-              ))}
+              <ProductCard key={product.id} product={product} index={index} />
+            ))}
         </div>
       </div>
     </RevealSection>

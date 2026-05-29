@@ -6,6 +6,7 @@ import { motion } from "motion/react";
 import Image from "next/image";
 import type { SVGProps } from "react";
 import { revealTransition } from "@/app/[locale]/(landing)/components/RevealSection";
+import { useTranslations } from "next-intl";
 
 function SparkleIcon(props: SVGProps<SVGSVGElement>) {
   return (
@@ -16,6 +17,7 @@ function SparkleIcon(props: SVGProps<SVGSVGElement>) {
 }
 
 export function FeaturedRitualCard() {
+  const t = useTranslations();
   return (
     <motion.div
       className="relative min-h-[360px] overflow-hidden rounded-2xl ring-1 ring-black/[0.06] sm:min-h-[420px] lg:min-h-0 lg:h-full"
@@ -45,13 +47,13 @@ export function FeaturedRitualCard() {
             href={FEATURED_RITUAL.href}
             className="inline-flex rounded-full bg-white px-6 py-2.5 text-sm font-semibold text-kun-products-forest shadow-sm transition hover:opacity-95"
           >
-            Explore Collection
+            {t("explore_collection")}
           </Link>
         </div>
       </div>
       <button
         type="button"
-        aria-label="Gợi ý ritual"
+        aria-label={t("ritual_suggestion")}
         className="absolute bottom-6 right-6 flex size-12 items-center justify-center rounded-full bg-kun-products-forest text-white shadow-lg transition hover:opacity-95 sm:bottom-8 sm:right-8"
       >
         <SparkleIcon className="size-5" />

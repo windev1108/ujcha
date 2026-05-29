@@ -6,6 +6,7 @@ import {
   ArrowLeft, CheckCircle2, Clock, Loader2, MessageSquare, Send, Star, User,
 } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
+import { useTranslations } from "next-intl";
 import { revealTransition } from "@/app/[locale]/(landing)/components/RevealSection";
 import { useAuthStore } from "@/store/auth-store";
 import { submitFeedback } from "@/services/feedback/api";
@@ -13,7 +14,6 @@ import Image from "next/image";
 import type { AxiosError } from "axios";
 
 const STORAGE_KEY = "kun-feedback-submitted";
-const RATING_LABELS = ["", "Rất tệ", "Tệ", "Bình thường", "Tốt", "Xuất sắc"];
 
 function todayKey() {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
@@ -41,6 +41,7 @@ function AuthUserBadge({ name, email, phone, avatar }: {
   phone: string | null;
   avatar: string | null;
 }) {
+  const t = useTranslations();
   const initial = name.charAt(0).toUpperCase();
   const sub = email ?? phone ?? null;
   return (
@@ -59,13 +60,14 @@ function AuthUserBadge({ name, email, phone, avatar }: {
         {sub && <p className="text-xs text-foreground/50 truncate">{sub}</p>}
       </div>
       <span className="shrink-0 rounded-full bg-kun-primary/10 px-2 py-0.5 text-[10px] font-semibold text-kun-primary">
-        Đã đăng nhập
+        {t("logged_in")}
       </span>
     </div>
   );
 }
 
 function AlreadySubmitted() {
+  const t = useTranslations();
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
@@ -76,19 +78,21 @@ function AlreadySubmitted() {
       <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-amber-50">
         <Clock className="size-7 text-amber-500" />
       </div>
-      <h2 className="text-lg font-semibold text-foreground">Đã gửi hôm nay</h2>
+      <h2 className="text-lg font-semibold text-foreground">{t("already_submitted")}</h2>
       <p className="mt-1 text-sm text-foreground/55">
-        Bạn đã gửi phản hồi hôm nay rồi. Mỗi người chỉ có thể gửi 1 lần mỗi ngày.
-        Hãy quay lại vào ngày mai!
+        {t("already_submitted_desc")}
       </p>
     </motion.div>
   );
 }
 
 export default function FeedbackPage() {
+  const t = useTranslations();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const isLoggedIn = !!user;
+
+  const RATING_LABELS = ["", t("very_bad_rating"), t("bad_rating"), t("average_rating"), t("good_rating"), t("excellent_rating")];
 
   const [alreadySubmitted, setAlreadySubmitted] = useState(false);
   const [rating, setRating] = useState(0);
@@ -98,7 +102,6 @@ export default function FeedbackPage() {
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Check localStorage on mount (client-only)
   useEffect(() => {
     setAlreadySubmitted(hasSubmittedToday());
   }, []);
@@ -148,7 +151,7 @@ export default function FeedbackPage() {
             className="mb-4 flex items-center gap-1.5 text-sm text-foreground/55 hover:text-foreground transition-colors"
           >
             <ArrowLeft className="size-4" />
-            Quay lại
+            {t("back")}
           </button>
           <div className="flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-2xl bg-kun-primary/10">
@@ -156,11 +159,11 @@ export default function FeedbackPage() {
             </div>
             <div>
               <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-                Góp ý
+                {t("feedback")}
               </p>
-              <h1 className="text-2xl font-bold text-foreground">Phản hồi</h1>
+              <h1 className="text-2xl font-bold text-foreground">{t("feedback")}</h1>
               <p className="text-sm text-foreground/50">
-                Ý kiến của bạn giúp chúng tôi cải thiện dịch vụ
+                {t("feedback_desc")}
               </p>
             </div>
           </div>
@@ -181,16 +184,16 @@ export default function FeedbackPage() {
               <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-kun-primary/10">
                 <CheckCircle2 className="size-7 text-kun-primary" />
               </div>
-              <h2 className="text-lg font-semibold text-foreground">Cảm ơn bạn!</h2>
+              <h2 className="text-lg font-semibold text-foreground">{t("thank_you")}</h2>
               <p className="mt-1 text-sm text-foreground/55">
-                Phản hồi của bạn đã được ghi nhận. Chúng tôi sẽ cải thiện dịch vụ dựa trên ý kiến của bạn.
+                {t("feedback_received")}
               </p>
               <button
                 type="button"
                 onClick={() => router.back()}
                 className="mt-6 inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-6 py-2.5 text-sm font-medium text-foreground hover:bg-surface-card transition"
               >
-                Quay lại trang chủ
+                {t("back_home")}
               </button>
             </motion.div>
           ) : (
@@ -214,15 +217,15 @@ export default function FeedbackPage() {
               ) : (
                 <div className="flex items-center gap-2 rounded-2xl border border-black/8 bg-white px-4 py-2.5">
                   <User className="size-4 shrink-0 text-foreground/30" />
-                  <p className="text-sm text-foreground/45">Bạn đang gửi phản hồi ẩn danh</p>
+                  <p className="text-sm text-foreground/45">{t("anonymous_feedback")}</p>
                 </div>
               )}
 
               {/* Star rating */}
               <div className="rounded-3xl border border-black/6 bg-white p-5 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.08)]">
                 <p className="mb-3 text-sm font-semibold text-foreground">
-                  Đánh giá trải nghiệm của bạn
-                  <span className="ml-1.5 text-xs font-normal text-foreground/40">(không bắt buộc)</span>
+                  {t("rate_experience")}
+                  <span className="ml-1.5 text-xs font-normal text-foreground/40">{t("optional")}</span>
                 </p>
                 <div className="flex gap-2">
                   {[1, 2, 3, 4, 5].map((star) => (
@@ -233,7 +236,7 @@ export default function FeedbackPage() {
                       onMouseEnter={() => setHoveredRating(star)}
                       onMouseLeave={() => setHoveredRating(0)}
                       className="transition-transform hover:scale-110 active:scale-95"
-                      aria-label={`${star} sao`}
+                      aria-label={`${star} ${t("stars")}`}
                     >
                       <Star
                         className={`size-8 transition-colors ${
@@ -259,14 +262,14 @@ export default function FeedbackPage() {
               {/* Content */}
               <div className="rounded-3xl border border-black/6 bg-white p-5 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.08)]">
                 <label htmlFor="fb-content" className="mb-3 block text-sm font-semibold text-foreground">
-                  Nội dung phản hồi <span className="text-red-500">*</span>
+                  {t("feedback_content")} <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   id="fb-content"
                   rows={5}
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
-                  placeholder="Chia sẻ trải nghiệm, góp ý hoặc báo lỗi..."
+                  placeholder={t("feedback_placeholder")}
                   maxLength={2000}
                   className="w-full resize-none rounded-2xl border border-black/[0.1] bg-transparent px-3.5 py-3 text-sm text-foreground placeholder:text-foreground/35 outline-none focus:border-kun-primary/50 focus:ring-2 focus:ring-kun-primary/15 transition-all"
                 />
@@ -287,12 +290,12 @@ export default function FeedbackPage() {
                 {submitting ? (
                   <>
                     <Loader2 className="size-4 animate-spin" />
-                    Đang gửi...
+                    {t("sending")}
                   </>
                 ) : (
                   <>
                     <Send className="size-4" />
-                    Gửi phản hồi
+                    {t("send_feedback")}
                   </>
                 )}
               </button>

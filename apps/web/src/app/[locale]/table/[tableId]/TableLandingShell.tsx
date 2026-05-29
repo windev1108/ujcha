@@ -20,6 +20,7 @@ import {
 import { Button } from "@heroui/react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRouter } from "@/i18n/navigation";
+import { useTranslations } from "next-intl";
 import { api } from "@/config/server";
 import { fetchPublicTable, type CreatedOrder, type PublicTableInfo } from "@/services/order/api";
 import { fetchProducts } from "@/services/product/api";
@@ -109,14 +110,16 @@ function LocationGate({
   onRetry: () => void;
   onGoHome: () => void;
 }) {
+  const t = useTranslations();
+
   if (phase === "checking") {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-surface-soft px-6 text-center">
         <div className="flex size-16 items-center justify-center rounded-full bg-kun-primary/8">
           <LocateFixed className="size-7 text-kun-primary animate-pulse" />
         </div>
-        <p className="font-semibold text-kun-primary">Đang xác minh vị trí…</p>
-        <p className="text-sm text-foreground/50">Vui lòng cho phép truy cập vị trí khi được hỏi.</p>
+        <p className="font-semibold text-kun-primary">{t("checking_location")}</p>
+        <p className="text-sm text-foreground/50">{t("allow_location")}</p>
       </div>
     );
   }
@@ -128,9 +131,9 @@ function LocationGate({
           <MapPinOff className="size-7 text-amber-500" />
         </div>
         <div>
-          <p className="font-bold text-foreground">Cần quyền truy cập vị trí</p>
+          <p className="font-bold text-foreground">{t("location_permission_required")}</p>
           <p className="mt-1.5 text-sm text-foreground/55 max-w-xs">
-            Vui lòng cấp quyền vị trí cho trình duyệt rồi thử lại để đặt món tại bàn.
+            {t("allow_location_retry")}
           </p>
         </div>
         <div className="flex flex-col gap-2 w-full max-w-xs">
@@ -140,14 +143,14 @@ function LocationGate({
             className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-kun-primary text-sm font-bold text-white"
           >
             <LocateFixed className="size-4" />
-            Thử lại
+            {t("retry")}
           </button>
           <button
             type="button"
             onClick={onGoHome}
             className="h-10 w-full rounded-full border border-black/10 text-sm font-semibold text-foreground/60"
           >
-            Về trang chủ
+            {t("go_home")}
           </button>
         </div>
       </div>
@@ -161,9 +164,9 @@ function LocationGate({
         <MapPin className="size-7 text-red-500" />
       </div>
       <div>
-        <p className="font-bold text-foreground">Bạn đang ở ngoài khu vực</p>
+        <p className="font-bold text-foreground">{t("outside_area")}</p>
         <p className="mt-1.5 text-sm text-foreground/55 max-w-xs">
-          Tính năng đặt món tại bàn chỉ khả dụng khi bạn ở trong nhà hàng.
+          {t("table_only_instore")}
         </p>
         {distance !== undefined && radiusMeters !== undefined && (
           <p className="mt-3 inline-block rounded-full bg-red-50 px-4 py-1.5 text-xs font-semibold text-red-600">
@@ -176,7 +179,7 @@ function LocationGate({
         onClick={onGoHome}
         className="flex h-11 items-center justify-center gap-2 rounded-full bg-kun-primary px-8 text-sm font-bold text-white"
       >
-        Về trang chủ
+        {t("go_home")}
       </button>
     </div>
   );
@@ -193,6 +196,7 @@ function CategoryTabs({
   selectedId: string | null;
   onSelect: (id: string | null) => void;
 }) {
+  const t = useTranslations();
   return (
     <div className="sticky top-[57px] z-20 overflow-x-auto border-b border-black/[0.06] bg-white [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <div className="flex min-w-max gap-2 px-4 py-2.5">
@@ -205,7 +209,7 @@ function CategoryTabs({
               : "bg-black/[0.05] text-foreground/60 hover:bg-black/[0.08]"
           }`}
         >
-          Tất cả
+          {t("all")}
         </button>
         {categories.map((cat) => (
           <button
@@ -235,6 +239,7 @@ function ProductCard({
   product: ApiProduct;
   onPick: (p: ApiProduct) => void;
 }) {
+  const t = useTranslations();
   const img = product.imageUrls[0];
   const sold = product.isSoldOut || !product.isAvailable;
   const disc = product.discountPercent > 0;
@@ -265,7 +270,7 @@ function ProductCard({
         {sold && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40">
             <span className="rounded-full bg-black/80 px-2.5 py-1 text-[11px] font-bold text-white">
-              Hết món
+              {t("sold_out")}
             </span>
           </div>
         )}
@@ -314,6 +319,7 @@ function ProductPickModal({
   onAdd: (item: Omit<TableOrderItem, "localId">) => void;
   onClose: () => void;
 }) {
+  const t = useTranslations();
   const groups = normalizeOptionGroups(product.optionGroups);
   const base = parseFloat(product.price);
   const disc = product.discountPercent > 0;
@@ -332,8 +338,8 @@ function ProductPickModal({
 
   const optionSurcharge = computeOptionSurcharge(groups, selectedOptions);
   const toppingSum = selectedToppingIds.reduce((s, id) => {
-    const t = toppings.find((x) => x.id === id);
-    return s + (t ? parseFloat(t.price) : 0);
+    const tp = toppings.find((x) => x.id === id);
+    return s + (tp ? parseFloat(tp.price) : 0);
   }, 0);
   const unitPrice = baseEffective + optionSurcharge + toppingSum;
 
@@ -419,13 +425,13 @@ function ProductPickModal({
 
           {toppings.length > 0 && (
             <div className="mt-5">
-              <p className="mb-2 text-sm font-bold text-kun-primary">Topping</p>
+              <p className="mb-2 text-sm font-bold text-kun-primary">{t("topping")}</p>
               <div className="divide-y divide-black/[0.05]">
-                {toppings.map((t) => {
-                  const checked = selectedToppingIds.includes(t.id);
+                {toppings.map((tp) => {
+                  const checked = selectedToppingIds.includes(tp.id);
                   return (
                     <label
-                      key={t.id}
+                      key={tp.id}
                       className="flex cursor-pointer items-center justify-between py-2.5"
                     >
                       <div className="flex items-center gap-2.5">
@@ -447,16 +453,16 @@ function ProductPickModal({
                             </svg>
                           )}
                         </div>
-                        <span className="text-sm text-foreground/80">{t.name}</span>
+                        <span className="text-sm text-foreground/80">{tp.name}</span>
                       </div>
                       <span className="text-sm font-semibold text-foreground/60">
-                        +{formatVnd(t.price)}
+                        +{formatVnd(tp.price)}
                       </span>
                       <input
                         type="checkbox"
                         className="sr-only"
                         checked={checked}
-                        onChange={() => toggleTopping(t.id)}
+                        onChange={() => toggleTopping(tp.id)}
                       />
                     </label>
                   );
@@ -471,7 +477,7 @@ function ProductPickModal({
               type="text"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Không hành, ít đường…"
+              placeholder={t("note_placeholder_table")}
               maxLength={500}
               className="w-full rounded-xl border border-black/12 bg-surface-soft px-3 py-2.5 text-sm outline-none focus:border-kun-primary/40 focus:ring-2 focus:ring-kun-primary/10"
             />
@@ -504,7 +510,7 @@ function ProductPickModal({
               className="flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-kun-primary text-sm font-bold text-white shadow-[0_4px_16px_-4px_rgba(26,60,52,0.4)]"
             >
               <ShoppingBag className="size-4" />
-              Thêm — {formatVnd(unitPrice * qty)}
+              {t("add_to_cart")} — {formatVnd(unitPrice * qty)}
             </button>
           </div>
         </div>
@@ -532,6 +538,7 @@ function OrderBasketSheet({
   onRemoveItem: (localId: string) => void;
   onOrderSuccess: (order: CreatedOrder) => void;
 }) {
+  const t = useTranslations();
   const [paymentType, setPaymentType] = useState<"cash" | "bank_transfer">("cash");
   const total = basket.reduce((s, b) => s + b.unitPrice * b.quantity, 0);
 
@@ -559,7 +566,7 @@ function OrderBasketSheet({
         <div className="flex shrink-0 items-center justify-between border-b border-black/[0.06] px-4 py-3.5">
           <div className="flex items-center gap-2">
             <ShoppingBag className="size-4 text-kun-primary" />
-            <span className="font-bold text-kun-primary">Đơn của bạn</span>
+            <span className="font-bold text-kun-primary">{t("your_order")}</span>
             <span className="rounded-full bg-kun-primary/10 px-2 py-0.5 text-xs font-bold text-kun-primary">
               {basket.reduce((s, b) => s + b.quantity, 0)}
             </span>
@@ -577,7 +584,7 @@ function OrderBasketSheet({
           <div className="divide-y divide-black/[0.05] px-4">
             {basket.map((b) => {
               const toppingNames = b.selectedToppingIds
-                .map((id) => toppings.find((t) => t.id === id)?.name)
+                .map((id) => toppings.find((tp) => tp.id === id)?.name)
                 .filter(Boolean)
                 .join(", ");
               const optionText = Object.values(b.selectedOptions).join(", ");
@@ -630,7 +637,7 @@ function OrderBasketSheet({
           </div>
 
           <div className="px-4 pb-4">
-            <p className="mb-2 text-sm font-bold text-kun-primary">Thanh toán</p>
+            <p className="mb-2 text-sm font-bold text-kun-primary">{t("payment")}</p>
             <div className="flex gap-2">
               {(["cash", "bank_transfer"] as const).map((pm) => (
                 <button
@@ -643,7 +650,7 @@ function OrderBasketSheet({
                       : "border-black/10 text-foreground/60"
                   }`}
                 >
-                  {pm === "cash" ? "💵 Tiền mặt" : "🏦 Chuyển khoản"}
+                  {pm === "cash" ? `💵 ${t("cash")}` : `🏦 ${t("bank_transfer")}`}
                 </button>
               ))}
             </div>
@@ -652,13 +659,13 @@ function OrderBasketSheet({
 
         <div className="shrink-0 border-t border-black/[0.06] bg-white px-4 pb-8 pt-4">
           <div className="mb-4 flex items-center justify-between">
-            <span className="text-sm text-foreground/60">Tổng cộng</span>
+            <span className="text-sm text-foreground/60">{t("total")}</span>
             <span className="text-xl font-bold text-kun-primary">{formatVnd(total)}</span>
           </div>
           {mutation.error && (
             <p className="mb-3 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-600">
               {(mutation.error as { response?: { data?: { message?: string } } })?.response?.data
-                ?.message ?? "Có lỗi xảy ra. Vui lòng thử lại."}
+                ?.message ?? t("error_try_again")}
             </p>
           )}
           <button
@@ -672,7 +679,7 @@ function OrderBasketSheet({
             ) : (
               <>
                 <ShoppingBag className="size-5" />
-                Đặt ngay
+                {t("place_order")}
               </>
             )}
           </button>
@@ -693,6 +700,7 @@ function SuccessScreen({
   tableName: string;
   onNewOrder: () => void;
 }) {
+  const t = useTranslations();
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.96 }}
@@ -708,19 +716,19 @@ function SuccessScreen({
         <CheckCircle2 className="size-10 text-emerald-500" />
       </motion.div>
       <div>
-        <h2 className="text-2xl font-bold text-kun-primary">Đặt món thành công!</h2>
+        <h2 className="text-2xl font-bold text-kun-primary">{t("order_placed")}</h2>
         <p className="mt-2 text-sm text-foreground/60">
-          Nhân viên sẽ mang món đến{" "}
+          {t("staff_brings_to_table")}{" "}
           <span className="font-semibold text-kun-primary">{tableName}</span>
         </p>
       </div>
       <div className="rounded-3xl border border-kun-primary/15 bg-kun-sage/10 px-6 py-4 text-center">
-        <p className="text-xs font-bold uppercase tracking-widest text-kun-primary/50">Mã đơn</p>
+        <p className="text-xs font-bold uppercase tracking-widest text-kun-primary/50">{t("order_code")}</p>
         <p className="mt-1 text-2xl font-bold tracking-widest text-kun-primary">
           {order.paymentCode}
         </p>
         <p className="mt-2 text-sm text-foreground/60">
-          Tổng: <span className="font-bold text-kun-primary">{formatVnd(order.totalAmount)}</span>
+          {t("total")}: <span className="font-bold text-kun-primary">{formatVnd(order.totalAmount)}</span>
         </p>
       </div>
       <button
@@ -729,7 +737,7 @@ function SuccessScreen({
         className="flex items-center gap-2 rounded-full bg-kun-primary px-8 py-3.5 text-sm font-bold text-white"
       >
         <RotateCcw className="size-4" />
-        Đặt thêm món
+        {t("order_more")}
       </button>
     </motion.div>
   );
@@ -738,6 +746,7 @@ function SuccessScreen({
 // ── Main Shell ────────────────────────────────────────────────────────────────
 
 export function TableLandingShell({ tableId }: { tableId: string }) {
+  const t = useTranslations();
   const router = useRouter();
   const [table, setTable] = useState<PublicTableInfo | null>(null);
   const [tableError, setTableError] = useState<string | null>(null);
@@ -759,14 +768,15 @@ export function TableLandingShell({ tableId }: { tableId: string }) {
   // Step 1: fetch table info
   useEffect(() => {
     fetchPublicTable(tableId)
-      .then((t) => {
-        setTable(t);
-        if (t.isActive && typeof localStorage !== "undefined") {
-          localStorage.setItem(TABLE_STORAGE_KEY, t.id);
+      .then((tbl) => {
+        setTable(tbl);
+        if (tbl.isActive && typeof localStorage !== "undefined") {
+          localStorage.setItem(TABLE_STORAGE_KEY, tbl.id);
         }
       })
-      .catch(() => setTableError("Không tìm thấy bàn hoặc bàn không còn hoạt động."))
+      .catch(() => setTableError(t("table_not_found")))
       .finally(() => setTableLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tableId]);
 
   // Step 2: after table loads and is active, run location check
@@ -779,20 +789,17 @@ export function TableLandingShell({ tableId }: { tableId: string }) {
       try {
         config = await fetchStoreLocation();
       } catch {
-        // If store location can't be fetched, skip the check
         setGeoPhase("ok");
         return;
       }
 
-      // If store hasn't configured a location yet, skip check
       if (!config.lat && !config.lng) {
         setGeoPhase("ok");
         return;
       }
 
-      // Request user's GPS
       if (!navigator.geolocation) {
-        setGeoPhase("ok"); // fallback: allow if geolocation not supported
+        setGeoPhase("ok");
         return;
       }
 
@@ -822,7 +829,6 @@ export function TableLandingShell({ tableId }: { tableId: string }) {
         if (code === GeolocationPositionError.PERMISSION_DENIED) {
           setGeoPhase("denied");
         } else {
-          // timeout or unavailable — skip check to not block legitimate users
           setGeoPhase("ok");
         }
       }
@@ -880,12 +886,12 @@ export function TableLandingShell({ tableId }: { tableId: string }) {
         <div className="flex size-16 items-center justify-center rounded-full bg-red-50">
           <AlertCircle className="size-7 text-red-500" />
         </div>
-        <p className="font-semibold text-foreground">{tableError ?? "Bàn không tìm thấy."}</p>
+        <p className="font-semibold text-foreground">{tableError ?? t("table_not_found")}</p>
         <Button
           onPress={() => router.push(ROUTES.HOME)}
           className="rounded-full bg-kun-primary px-6 font-semibold text-white"
         >
-          Về trang chủ
+          {t("go_home")}
         </Button>
       </div>
     );
@@ -897,13 +903,13 @@ export function TableLandingShell({ tableId }: { tableId: string }) {
         <div className="flex size-16 items-center justify-center rounded-full bg-amber-50">
           <AlertCircle className="size-7 text-amber-500" />
         </div>
-        <p className="font-semibold text-foreground">Bàn {table.name} hiện chưa phục vụ.</p>
-        <p className="text-sm text-foreground/55">Vui lòng liên hệ nhân viên để được hỗ trợ.</p>
+        <p className="font-semibold text-foreground">{table.name} {t("table_inactive_msg")}</p>
+        <p className="text-sm text-foreground/55">{t("contact_staff")}</p>
         <Button
           onPress={() => router.push(ROUTES.HOME)}
           className="rounded-full bg-kun-primary px-6 font-semibold text-white"
         >
-          Về trang chủ
+          {t("go_home")}
         </Button>
       </div>
     );
@@ -981,7 +987,7 @@ export function TableLandingShell({ tableId }: { tableId: string }) {
         ) : !productsQuery.data?.length ? (
           <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
             <Utensils className="size-10 text-black/15" />
-            <p className="text-sm text-foreground/40">Chưa có món nào trong danh mục này.</p>
+            <p className="text-sm text-foreground/40">{t("no_items_in_category")}</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -1014,7 +1020,7 @@ export function TableLandingShell({ tableId }: { tableId: string }) {
                     {basketCount}
                   </span>
                 </div>
-                <span className="text-sm font-bold text-white">Xem đơn hàng</span>
+                <span className="text-sm font-bold text-white">{t("view_order")}</span>
               </div>
               <span className="text-sm font-bold text-white/80">{formatVnd(basketTotal)}</span>
             </button>

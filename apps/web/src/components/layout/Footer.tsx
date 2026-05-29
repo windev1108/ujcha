@@ -34,7 +34,7 @@ export default function Footer() {
   const NAV_LINKS = [
     { href: ROUTES.PRODUCTS, label: t('menu') },
     { href: ROUTES.PROMOTIONS, label: t('promotions') },
-    { href: ROUTES.REFERRAL, label: t('referral') },
+    { href: ROUTES.REFERRAL, label: t('referral_and_earn') },
     { href: ROUTES.ABOUT, label: t('about') },
     { href: ROUTES.FEEDBACK, label: t('feedback') },
   ] as const;
@@ -44,7 +44,7 @@ export default function Footer() {
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
           {/* Brand */}
           <div className="flex flex-col gap-4">
-            <Logo size="md" className="self-start" />
+            <Logo horizontal={false} size="md" className="self-start" />
             <p className="max-w-xs text-sm leading-relaxed text-muted">
               Stone-ground ceremonial matcha và các thức uống thủ công, chọn lọc kỹ lưỡng cho nghi thức thường ngày của bạn.
             </p>
@@ -112,7 +112,7 @@ export default function Footer() {
           {/* Map */}
           <div className="flex flex-col gap-3">
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-              Vị trí
+              {t('location')}
             </p>
             <div className="h-44 w-full overflow-hidden rounded-2xl border border-black/6">
               {hasCoords ? (

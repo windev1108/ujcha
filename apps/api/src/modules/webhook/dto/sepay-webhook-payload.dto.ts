@@ -23,7 +23,7 @@ export class SepayWebhookPayloadDto {
   @IsOptional()
   code?: string | null;
 
-  @ApiProperty({ example: 'chuyen tien don hang KUN-ABC', description: 'Nội dung chuyển khoản' })
+  @ApiProperty({ example: 'chuyen tien don hang UJCHA-ABC', description: 'Nội dung chuyển khoản' })
   @IsString()
   content!: string;
 

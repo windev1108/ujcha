@@ -3,11 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently --raw \"next dev --turbo\" \"i18nexus listen --path i18n/messages\"",
-    "build": "i18nexus pull --path i18n/messages && next build",
-    "start": "i18nexus pull --path i18n/messages && next start",
-    "i18n:pull": "i18nexus pull --path i18n/messages",
-    "i18n:listen": "i18nexus listen --path i18n/messages",
+    "dev": "next dev --turbo",
+    "build": "next build",
+    "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
@@ -39,8 +37,7 @@
     "concurrently": "^8.2.2",
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
-    "i18nexus-cli": "^4.0.0",
-    "tailwind-merge": "^3.5.0",
+"tailwind-merge": "^3.5.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

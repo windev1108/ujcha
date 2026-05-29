@@ -235,8 +235,8 @@ export class OrderService {
         normalized: optionsNormalized,
         details: optionDetails,
       } = skipOptionValidation
-        ? { surcharge: new Prisma.Decimal(0), normalized: {} as Record<string, string>, details: [] as { group: string; label: string; priceDelta: number }[] }
-        : validateOptionsAndSurcharge(optionGroupsResolved, item.options);
+          ? { surcharge: new Prisma.Decimal(0), normalized: {} as Record<string, string>, details: [] as { group: string; label: string; priceDelta: number }[] }
+          : validateOptionsAndSurcharge(optionGroupsResolved, item.options);
       unit = unit.add(optionSurcharge);
 
       const noteTrim = item.note?.trim()
@@ -663,19 +663,19 @@ export class OrderService {
     const [txns, groupLinks] = await Promise.all([
       orderIds.length > 0
         ? this.prisma.pointTransaction.findMany({
-            where: {
-              type: PointTransactionType.earn,
-              source: PointSource.order,
-              referenceId: { in: orderIds },
-            },
-            select: { referenceId: true, amount: true },
-          })
+          where: {
+            type: PointTransactionType.earn,
+            source: PointSource.order,
+            referenceId: { in: orderIds },
+          },
+          select: { referenceId: true, amount: true },
+        })
         : Promise.resolve([]),
       orderIds.length > 0
         ? this.prisma.groupOrder.findMany({
-            where: { orderId: { in: orderIds } },
-            select: { orderId: true, token: true },
-          })
+          where: { orderId: { in: orderIds } },
+          select: { orderId: true, token: true },
+        })
         : Promise.resolve([]),
     ]);
 
@@ -751,7 +751,7 @@ export class OrderService {
     tx: Prisma.TransactionClient,
   ): Promise<string> {
     for (let attempt = 0; attempt < 10; attempt += 1) {
-      const paymentCode = `KUN-${randomBytes(4).toString('hex').toUpperCase()}`;
+      const paymentCode = `UJCHA-${randomBytes(4).toString('hex').toUpperCase()}`;
       const clash = await tx.order.findUnique({
         where: { paymentCode },
         select: { id: true },

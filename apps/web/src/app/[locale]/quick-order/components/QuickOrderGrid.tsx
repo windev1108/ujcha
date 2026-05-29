@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
+import { useTranslations } from "next-intl";
 import type { CategoryId, QuickProduct } from "./quick-order-data";
 import { QUICK_ORDER_PRODUCTS } from "./quick-order-data";
 import { QuickOrderProductCard } from "./QuickOrderProductCard";
@@ -29,6 +30,7 @@ const item = {
 };
 
 export function QuickOrderGrid({ categoryId, onAdd }: Props) {
+  const t = useTranslations();
   const items = QUICK_ORDER_PRODUCTS.filter((p) => p.categoryId === categoryId);
 
   if (items.length === 0) {
@@ -38,7 +40,7 @@ export function QuickOrderGrid({ categoryId, onAdd }: Props) {
         animate={{ opacity: 1, y: 0 }}
         className="rounded-[28px] border border-dashed border-black/12 bg-white/70 px-8 py-16 text-center text-sm text-foreground/55"
       >
-        Danh mục đang cập nhật. Vui lòng chọn nhóm khác.
+        {t("category_updating")}
       </motion.p>
     );
   }

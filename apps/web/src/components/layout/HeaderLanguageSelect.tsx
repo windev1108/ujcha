@@ -1,69 +1,49 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useMemo } from "react";
-import Image from "next/image";
-import enFlag from "@/assets/images/en.svg";
-import vnFlag from "@/assets/images/vn.svg";
+import { useLocale } from "next-intl";
+import { useRouter } from "next/navigation";
+import { useTransition } from "react";
 
 const LOCALE_COOKIE = "NEXT_LOCALE";
 type Locale = "en" | "vi";
 
-function localeFromPath(pathname: string): Locale {
-  const seg = pathname.split("/").filter(Boolean)[0];
-  return seg === "en" || seg === "vi" ? seg : "vi";
-}
-
-function pathWithLocale(pathname: string, next: Locale): string {
-  const parts = pathname.split("/").filter(Boolean);
-  if (parts.length === 0) return `/${next}`;
-  if (parts[0] === "en" || parts[0] === "vi") {
-    parts[0] = next;
-    return `/${parts.join("/")}`;
-  }
-  return `/${next}${pathname === "/" ? "" : pathname}`;
-}
-
-const FLAGS: Record<Locale, { src: typeof vnFlag; alt: string }> = {
-  vi: { src: vnFlag, alt: "Tiếng Việt" },
-  en: { src: enFlag, alt: "English" },
-};
-
 export function HeaderLanguageSelect() {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const locale = useLocale() as Locale;
   const router = useRouter();
-  const locale = useMemo(() => localeFromPath(pathname), [pathname]);
+  const [isPending, startTransition] = useTransition();
 
-  function toggle() {
-    const next: Locale = locale === "vi" ? "en" : "vi";
-    const base = pathWithLocale(pathname, next);
-    const qs = searchParams.toString();
-    const href = qs ? `${base}?${qs}` : base;
+  function switchTo(next: Locale) {
+    if (next === locale) return;
     document.cookie = `${LOCALE_COOKIE}=${next}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
-    router.replace(href);
-    router.refresh();
+    startTransition(() => router.refresh());
   }
-
-  const { src, alt } = FLAGS[locale];
 
   return (
-    <button
-      type="button"
-      onClick={toggle}
-      aria-label="Đổi ngôn ngữ"
-      className="flex size-8 items-center justify-center rounded-full transition-colors hover:bg-black/[0.05] active:bg-black/[0.08]"
+    <div
+      role="group"
+      aria-label="Chọn ngôn ngữ"
+      className="flex items-center rounded-full border border-black/10 bg-[#f0f0f0] p-0.5"
     >
-      <span className="overflow-hidden rounded-[3px] shadow-[0_0_0_1px_rgba(0,0,0,0.12)]">
-        <Image
-          src={src}
-          alt={alt}
-          width={22}
-          height={15}
-          unoptimized
-          className="block"
-        />
-      </span>
-    </button>
+      {(["vi", "en"] as Locale[]).map((lang) => {
+        const active = locale === lang;
+        return (
+          <button
+            key={lang}
+            type="button"
+            onClick={() => switchTo(lang)}
+            aria-pressed={active}
+            disabled={isPending}
+            className={[
+              "rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide transition-all duration-150",
+              active
+                ? "bg-[#1a3c34] text-white shadow-sm"
+                : "text-[#717171] hover:text-[#1a1a1a]",
+            ].join(" ")}
+          >
+            {lang}
+          </button>
+        );
+      })}
+    </div>
   );
 }

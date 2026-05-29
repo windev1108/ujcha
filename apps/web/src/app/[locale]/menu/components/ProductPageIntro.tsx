@@ -2,8 +2,10 @@
 
 import { motion } from "motion/react";
 import { Leaf } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 export function ProductPageIntro() {
+  const t = useTranslations()
   return (
     <section className="relative overflow-hidden bg-gradient-to-br from-[#1a3c34] via-[#1e4438] to-[#112a21] pb-20 pt-16 sm:pb-24 sm:pt-20">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -25,10 +27,10 @@ export function ProductPageIntro() {
             <Leaf className="size-7 text-white" />
           </div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">
-            Thực đơn · UjCha
+            {t('menu')} · UjCha
           </p>
           <h1 className="mt-2 text-4xl font-bold tracking-tight text-white sm:text-5xl">
-            Thực đơn của UjCha
+            {t('menu_of')} UjCha
           </h1>
           <motion.p
             initial={{ opacity: 0, y: 10 }}
@@ -36,7 +38,7 @@ export function ProductPageIntro() {
             transition={{ delay: 0.08 }}
             className="mx-auto mt-4 max-w-sm text-base leading-relaxed text-white/60"
           >
-            Matcha, cà phê, trà và đồ uống — nguồn gốc bền vững, chất lượng ceremonial.
+            {t('menu_intro_desc')}
           </motion.p>
         </motion.div>
       </div>

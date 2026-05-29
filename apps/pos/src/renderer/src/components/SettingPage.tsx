@@ -131,7 +131,7 @@ const LABEL_SIZES = [
 // ─── Defaults ─────────────────────────────────────────────────────────────────
 const DEFAULT_BILL: BillConfig = {
     enabled: true, printerId: null, paperWidth: 80, autoPrint: true,
-    copies: 1, showLogo: true, headerText: 'KUN Matcha & Coffee',
+    copies: 1, showLogo: true, headerText: 'Ujcha Matcha & Coffee',
     footerText: 'Cảm ơn quý khách! Hẹn gặp lại.', showQr: true,
 }
 const DEFAULT_LABEL: LabelConfig = {
@@ -143,7 +143,7 @@ const DEFAULT_LABEL: LabelConfig = {
 function makeDefaultManual(enabled = true, isBill = true): ManualPrinterConfig {
     return {
         typeId: '', address: '', printerName: '', port: '9100', paperWidth: 80,
-        copies: 1, headerText: 'KUN Matcha & Coffee',
+        copies: 1, headerText: 'UJCHA Matcha & Coffee',
         footerText: 'Cảm ơn quý khách! Hẹn gặp lại.',
         autoPrint: true, enabled,
         lineSpacing: isBill ? 30 : 24,
@@ -216,7 +216,7 @@ function LabelPreview({ cfg }: { cfg: ManualPrinterConfig }) {
                 <div style={{ width: displayW, height: displayH, overflow: 'hidden', background: 'white', border: '1px solid #d1d5db', borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', position: 'relative' }}>
                     <div style={{ position: 'absolute', top: 0, left: 0, transform: `scale(${scale})`, transformOrigin: 'top left', width: naturalW, fontFamily: "'Courier New', monospace", fontSize: 10, padding: '4px 8px', lineHeight: 1.3, color: '#000' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
-                            <span>KUN</span><span>1/3</span>
+                            <span>UJCHA</span><span>1/3</span>
                         </div>
                         <div style={{ borderTop: '1px dashed #000', margin: '2px 0' }} />
                         <div style={{ fontWeight: 'bold', fontSize: 11 }}>Trà Sữa Oolong Nướng</div>
@@ -251,10 +251,10 @@ function BillPreview({ cfg }: { cfg: ManualPrinterConfig }) {
                 <p className="text-[10px] text-gray-400">{paperW}mm (mẫu)</p>
                 <div style={{ width: displayW, height: displayH, overflow: 'hidden', background: 'white', border: '1px solid #d1d5db', borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', position: 'relative' }}>
                     <div style={{ position: 'absolute', top: 0, left: 0, transform: `scale(${scale})`, transformOrigin: 'top left', width: naturalW, fontFamily: "'Courier New', monospace", fontSize: 12, padding: '4px 0', lineHeight: 1.35, color: '#000' }}>
-                        <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: 16, letterSpacing: 2 }}>KUN</div>
-                        <div style={{ textAlign: 'center', fontSize: 10 }}>{cfg.headerText || 'KUN Matcha & Coffee'}</div>
+                        <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: 16, letterSpacing: 2 }}>UJCHA</div>
+                        <div style={{ textAlign: 'center', fontSize: 10 }}>{cfg.headerText || 'UJCHA Matcha & Coffee'}</div>
                         <div style={{ borderTop: '2px dashed #000', margin: '5px 0' }} />
-                        <div style={{ fontSize: 10 }}>Đơn: KUN-20250501-0001</div>
+                        <div style={{ fontSize: 10 }}>Đơn: UJCHA-20250501-0001</div>
                         <div style={{ fontSize: 10 }}>01/05/2025 09:30</div>
                         <div style={{ fontSize: 10 }}>Loại: Tại bàn</div>
                         <div style={{ borderTop: '2px dashed #000', margin: '5px 0' }} />
@@ -1332,7 +1332,7 @@ export function SettingsPage({
             port: '9100',
             paperWidth: (saved.paperWidth === 58 || saved.paperWidth === 80) ? saved.paperWidth : 58,
             copies: saved.copies ?? 1,
-            headerText: saved.headerText || 'KUN Matcha & Coffee',
+            headerText: saved.headerText || 'UJCHA Matcha & Coffee',
             footerText: saved.footerText || 'Cảm ơn quý khách! Hẹn gặp lại.',
             autoPrint: saved.autoPrint ?? true,
             enabled: saved.enabled ?? true,
@@ -1378,7 +1378,7 @@ export function SettingsPage({
             autoPrint: m.autoPrint,
             copies: m.copies,
             showLogo: true,
-            headerText: m.headerText || 'KUN Matcha & Coffee',
+            headerText: m.headerText || 'UJCHA Matcha & Coffee',
             footerText: m.footerText || 'Cảm ơn quý khách!',
             showQr: true,
             address: m.address || null,

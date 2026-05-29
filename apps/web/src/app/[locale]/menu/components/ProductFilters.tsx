@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { easeOutSmooth } from "@/app/[locale]/(landing)/components/RevealSection";
 import { Search, X } from "lucide-react";
 import { useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 type Props = {
   activeCategory: string;
@@ -14,6 +15,7 @@ type Props = {
 };
 
 export function ProductFilters({ activeCategory, onCategoryChange, search, onSearchChange }: Props) {
+  const t = useTranslations();
   const { data: categories } = useCategoriesQuery();
   const [showSearch, setShowSearch] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -43,7 +45,7 @@ export function ProductFilters({ activeCategory, onCategoryChange, search, onSea
                   : "bg-kun-filter-pill-bg text-foreground/80 hover:bg-black/[0.07]"
                 }`}
             >
-              Tất cả
+              {t("all")}
             </button>
             {categories?.map((cat) => (
               <button
@@ -68,7 +70,7 @@ export function ProductFilters({ activeCategory, onCategoryChange, search, onSea
         <button
           type="button"
           onClick={showSearch ? closeSearch : openSearch}
-          aria-label={showSearch ? "Đóng tìm kiếm" : "Tìm sản phẩm"}
+          aria-label={showSearch ? t("close") : t("search_product")}
           className={`cursor-pointer flex size-8 shrink-0 items-center justify-center rounded-full transition-colors ${showSearch || search
               ? "bg-kun-products-forest text-white"
               : "bg-kun-filter-pill-bg text-foreground/60 hover:bg-black/[0.07] hover:text-foreground"
@@ -95,7 +97,7 @@ export function ProductFilters({ activeCategory, onCategoryChange, search, onSea
                 type="text"
                 value={search}
                 onChange={(e) => onSearchChange(e.target.value)}
-                placeholder="Tìm sản phẩm…"
+                placeholder={t("search_product")}
                 className="h-9 w-full rounded-full border border-black/8 bg-surface-soft pl-9 pr-9 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-kun-primary/25 focus:border-transparent"
                 maxLength={80}
               />

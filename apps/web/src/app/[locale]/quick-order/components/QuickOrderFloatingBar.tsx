@@ -4,6 +4,7 @@ import { Badge, Button } from "@heroui/react";
 import { AnimatePresence, motion } from "motion/react";
 import { ShoppingBag } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { formatVnd } from "./quick-order-data";
 import { easeOutSmooth, revealTransition } from "@/app/[locale]/(landing)/components/RevealSection";
 import { useLocalizedHref } from "../../../../i18n/use-localized-href";
@@ -14,6 +15,7 @@ type Props = {
 };
 
 export function QuickOrderFloatingBar({ itemCount, total }: Props) {
+    const t = useTranslations();
     const router = useRouter();
     const { route } = useLocalizedHref();
     const visible = itemCount > 0;
@@ -45,7 +47,7 @@ export function QuickOrderFloatingBar({ itemCount, total }: Props) {
                         </div>
                         <div className="min-w-0 flex-1">
                             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/45 sm:text-[11px]">
-                                Đơn hàng của bạn
+                                {t("your_order")}
                             </p>
                             <p className="mt-0.5 text-xl font-bold tabular-nums tracking-tight text-foreground sm:text-2xl">
                                 {formatVnd(total)}
@@ -56,7 +58,7 @@ export function QuickOrderFloatingBar({ itemCount, total }: Props) {
                             className="h-12 shrink-0 rounded-full bg-kun-products-forest px-6 text-sm font-bold text-white shadow-[0_4px_20px_-6px_rgba(38,99,77,0.65)] hover:opacity-95 sm:h-14 sm:px-10 sm:text-base"
                             onPress={() => router.push(route("CHECKOUT"))}
                         >
-                            Thanh toán
+                            {t("payment")}
                         </Button>
                     </div>
                 </motion.div>

@@ -251,7 +251,7 @@ model Product {
   category    Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   name        String
   slug        String   @unique
-  /// Mã SKU hiển thị (vd: KUN-MTC-001), duy nhất khi có giá trị.
+  /// Mã SKU hiển thị (vd: Ujcha-MTC-001), duy nhất khi có giá trị.
   sku         String?  @unique
   description String?
   price       Decimal  @db.Decimal(12, 2)

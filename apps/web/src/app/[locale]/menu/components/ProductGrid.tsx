@@ -5,6 +5,7 @@ import { ProductCard, ProductCardSkeleton } from "@/components/product/ProductCa
 import { motion } from "motion/react";
 import { easeOutSmooth } from "@/app/[locale]/(landing)/components/RevealSection";
 import { SearchX } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 type Props = {
   categorySlug?: string;
@@ -12,6 +13,7 @@ type Props = {
 };
 
 export function ProductGrid({ categorySlug, search }: Props) {
+  const t = useTranslations();
   const { data: products, isLoading } = useProductsQuery(
     categorySlug ? { categorySlug } : undefined,
   );
@@ -38,9 +40,9 @@ export function ProductGrid({ categorySlug, search }: Props) {
           <SearchX className="size-7 text-muted/50" />
         </div>
         <div className="space-y-1">
-          <p className="text-sm font-medium text-foreground">Không tìm thấy sản phẩm</p>
+          <p className="text-sm font-medium text-foreground">{t("no_products_found")}</p>
           <p className="text-xs text-muted">
-            {search ? `Thử từ khoá khác hoặc xoá bộ lọc.` : "Danh mục này chưa có sản phẩm."}
+            {search ? t("try_different_search") : t("no_products_in_category")}
           </p>
         </div>
       </motion.div>
@@ -57,10 +59,10 @@ export function ProductGrid({ categorySlug, search }: Props) {
           animate={{ opacity: 1 }}
           transition={{ duration: 0.25 }}
         >
-          {available.length} sản phẩm
+          {available.length} {t("products")}
           {search && (
             <span className="ml-1">
-              cho <span className="text-foreground">"{search}"</span>
+              {t("results_for")} <span className="text-foreground">"{search}"</span>
             </span>
           )}
         </motion.p>

@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { Button, Input, Label } from "@heroui/react";
+import { useTranslations } from "next-intl";
 import {
   useAddressesQuery,
   useCreateAddressMutation,
@@ -74,6 +75,7 @@ function AddressCard({
   settingDefault: boolean;
   deleting: boolean;
 }) {
+  const t = useTranslations();
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   return (
@@ -96,7 +98,7 @@ function AddressCard({
             {address.isDefault && (
               <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 ring-1 ring-amber-200 flex items-center gap-1">
                 <Star className="size-2.5 fill-amber-500 text-amber-500" />
-                Mặc định
+                {t("default")}
               </span>
             )}
           </div>
@@ -108,7 +110,7 @@ function AddressCard({
           type="button"
           onClick={() => onEdit(address)}
           className="shrink-0 flex size-7 items-center justify-center rounded-full hover:bg-black/5 text-foreground/40 hover:text-foreground/70 transition-colors"
-          aria-label="Chỉnh sửa"
+          aria-label={t("edit")}
         >
           <Pencil className="size-3.5" />
         </button>
@@ -127,10 +129,10 @@ function AddressCard({
             ) : (
               <CheckCircle2 className="size-3.5" />
             )}
-            Đặt làm mặc định
+            {t("set_as_default")}
           </button>
         ) : (
-          <span className="text-xs text-foreground/40">Địa chỉ mặc định</span>
+          <span className="text-xs text-foreground/40">{t("default_address")}</span>
         )}
 
         <div className="flex items-center gap-2">
@@ -141,7 +143,7 @@ function AddressCard({
                 onClick={() => setConfirmDelete(false)}
                 className="text-xs text-foreground/50 hover:text-foreground"
               >
-                Huỷ
+                {t("cancel")}
               </button>
               <button
                 type="button"
@@ -150,7 +152,7 @@ function AddressCard({
                 className="flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 ring-1 ring-red-200 hover:bg-red-100 disabled:opacity-50"
               >
                 {deleting ? <Loader2 className="size-3 animate-spin" /> : <Trash2 className="size-3" />}
-                Xác nhận xoá
+                {t("confirm_delete")}
               </button>
             </>
           ) : (
@@ -160,7 +162,7 @@ function AddressCard({
               className="flex items-center gap-1 text-xs text-foreground/40 hover:text-red-500"
             >
               <Trash2 className="size-3.5" />
-              Xoá
+              {t("delete")}
             </button>
           )}
         </div>
@@ -186,6 +188,7 @@ function AddressModal({
   onSubmit: (form: AddressForm) => void;
   submitting: boolean;
 }) {
+  const t = useTranslations();
   const [form, setForm] = useState<AddressForm>(initialForm);
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
@@ -203,7 +206,7 @@ function AddressModal({
 
   function handleGetLocation() {
     if (!navigator.geolocation) {
-      setGeoError("Trình duyệt không hỗ trợ định vị.");
+      setGeoError(t("browser_no_location"));
       return;
     }
     setGeoLoading(true);
@@ -215,7 +218,7 @@ function AddressModal({
       },
       () => {
         setGeoLoading(false);
-        setGeoError("Không thể lấy vị trí. Vui lòng cho phép truy cập định vị.");
+        setGeoError(t("location_permission_denied"));
       },
       { timeout: 10_000 },
     );
@@ -223,8 +226,8 @@ function AddressModal({
 
   function validate(): boolean {
     const next: typeof errors = {};
-    if (!form.fullAddress.trim()) next.fullAddress = "Vui lòng nhập địa chỉ.";
-    if (form.lat == null || form.lng == null) next.lat = "Vui lòng lấy vị trí GPS.";
+    if (!form.fullAddress.trim()) next.fullAddress = t("address_required");
+    if (form.lat == null || form.lng == null) next.lat = t("gps_required");
     setErrors(next);
     return Object.keys(next).length === 0;
   }
@@ -267,17 +270,16 @@ function AddressModal({
             type="button"
             onClick={handleClose}
             className="flex size-8 items-center justify-center rounded-full hover:bg-black/5 text-foreground/50"
-            aria-label="Đóng"
+            aria-label={t("close")}
           >
             <X className="size-4" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Full address */}
           <div>
             <div className="mb-1.5 flex items-center justify-between">
-              <Label className="text-xs font-medium text-foreground/70">Địa chỉ đầy đủ *</Label>
+              <Label className="text-xs font-medium text-foreground/70">{t("full_address")}</Label>
               <button
                 type="button"
                 onClick={handleGetLocation}
@@ -285,11 +287,11 @@ function AddressModal({
                 className="flex items-center gap-1 text-[11px] font-medium text-kun-products-forest hover:opacity-80 disabled:opacity-50"
               >
                 {geoLoading ? <Loader2 className="size-3 animate-spin" /> : <Navigation className="size-3" />}
-                Lấy vị trí hiện tại
+                {t("get_current_location")}
               </button>
             </div>
             <Input
-              placeholder="Số nhà, tên đường, phường/xã, quận/huyện, tỉnh/thành"
+              placeholder={t("address_placeholder")}
               value={form.fullAddress}
               onChange={(e) => patch({ fullAddress: e.target.value })}
               className={inputClass}
@@ -305,18 +307,16 @@ function AddressModal({
             {errors.lat && !geoError && <p className="mt-1 text-xs text-red-500">{errors.lat}</p>}
           </div>
 
-          {/* Note */}
           <div>
-            <Label className="mb-1.5 block text-xs font-medium text-foreground/70">Ghi chú (tuỳ chọn)</Label>
+            <Label className="mb-1.5 block text-xs font-medium text-foreground/70">{t("note_optional")}</Label>
             <Input
-              placeholder="Ví dụ: Nhà có cổng màu xanh"
+              placeholder={t("address_note_placeholder")}
               value={form.note}
               onChange={(e) => patch({ note: e.target.value })}
               className={inputClass}
             />
           </div>
 
-          {/* Set default */}
           <label className="flex cursor-pointer items-center gap-3">
             <div
               role="checkbox"
@@ -332,7 +332,7 @@ function AddressModal({
                 </svg>
               )}
             </div>
-            <span className="text-sm text-foreground/75">Đặt làm địa chỉ mặc định</span>
+            <span className="text-sm text-foreground/75">{t("set_as_default_address")}</span>
           </label>
 
           <Button
@@ -343,10 +343,10 @@ function AddressModal({
             {submitting ? (
               <span className="flex items-center gap-2">
                 <Loader2 className="size-4 animate-spin" />
-                Đang lưu...
+                {t("saving")}
               </span>
             ) : (
-              "Lưu địa chỉ"
+              t("save_address")
             )}
           </Button>
         </form>
@@ -358,6 +358,7 @@ function AddressModal({
 // ── Page Shell ────────────────────────────────────────────────────────────────
 
 export function AddressesPageShell() {
+  const t = useTranslations();
   const router = useRouter();
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingAddress, setEditingAddress] = useState<UserAddress | null>(null);
@@ -433,15 +434,15 @@ export function AddressesPageShell() {
             className="mb-4 flex items-center gap-1.5 text-sm text-foreground/55 hover:text-foreground transition-colors"
           >
             <ArrowLeft className="size-4" />
-            Quay lại
+            {t("back")}
           </button>
 
           <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-            Tài khoản
+            {t("account")}
           </p>
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold text-foreground sm:text-3xl">
-              Địa chỉ giao hàng
+              {t("shipping_addresses")}
             </h1>
             <div className="flex flex-col items-end gap-1">
               <Button
@@ -450,10 +451,10 @@ export function AddressesPageShell() {
                 className="flex items-center gap-1.5 rounded-full bg-kun-products-forest px-4 py-2 text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Plus className="size-4" />
-                Thêm mới
+                {t("add_new")}
               </Button>
               {isAtLimit && (
-                <p className="text-[11px] text-foreground/45">Tối đa 3 địa chỉ</p>
+                <p className="text-[11px] text-foreground/45">{t("max_3_addresses")}</p>
               )}
             </div>
           </div>
@@ -476,14 +477,14 @@ export function AddressesPageShell() {
             <div className="flex size-16 items-center justify-center rounded-full bg-white shadow-sm">
               <MapPin className="size-7 text-foreground/30" />
             </div>
-            <p className="mt-4 font-semibold text-foreground">Chưa có địa chỉ nào</p>
-            <p className="mt-1 text-sm text-foreground/50">Thêm địa chỉ để đặt hàng nhanh hơn.</p>
+            <p className="mt-4 font-semibold text-foreground">{t("no_address")}</p>
+            <p className="mt-1 text-sm text-foreground/50">{t("address_save_desc")}</p>
             <Button
               onPress={() => setShowAddModal(true)}
               className="mt-6 flex items-center gap-2 rounded-full bg-kun-products-forest px-5 py-2.5 text-sm font-semibold text-white"
             >
               <Plus className="size-4" />
-              Thêm địa chỉ đầu tiên
+              {t("add_first_address")}
             </Button>
           </motion.div>
         ) : (
@@ -510,7 +511,7 @@ export function AddressesPageShell() {
         {showAddModal && (
           <AddressModal
             open={showAddModal}
-            title="Thêm địa chỉ mới"
+            title={t("add_new_address")}
             initialForm={EMPTY_FORM}
             onClose={() => setShowAddModal(false)}
             onSubmit={handleCreate}
@@ -524,7 +525,7 @@ export function AddressesPageShell() {
         {editingAddress && (
           <AddressModal
             open={!!editingAddress}
-            title="Chỉnh sửa địa chỉ"
+            title={t("edit_address")}
             initialForm={addressToForm(editingAddress)}
             onClose={() => setEditingAddress(null)}
             onSubmit={handleUpdate}

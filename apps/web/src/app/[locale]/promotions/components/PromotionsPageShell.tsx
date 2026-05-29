@@ -1,210 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { motion, useMotionValue, useTransform, animate } from "motion/react";
-import {
-  ArrowLeft,
-  ArrowRight,
-  ChevronRight,
-  Coins,
-  Gift,
-  ShoppingBag,
-  Tag,
-  TrendingUp,
-  Zap,
-} from "lucide-react";
-import NumberFlow from "@number-flow/react";
-import { Button } from "@heroui/react";
+import { motion } from "motion/react";
+import { ArrowRight, ChevronRight, Coins, Gift, ShoppingBag, Tag, TrendingUp } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { ROUTES } from "@/lib/routes";
 import { usePromotionsQuery } from "@/services/promotions/hooks";
+import { useTranslations } from "next-intl";
 import { easeOutSmooth } from "@/app/[locale]/(landing)/components/RevealSection";
-import type { ActiveCampaign } from "@/services/promotions/api";
-
-const EXAMPLE_ORDER = 200_000;
-
-function fmt(n: number) {
-  return new Intl.NumberFormat("vi-VN").format(Math.round(n));
-}
-
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
-
-function useCountdown(endAt: string) {
-  const calc = () => {
-    const diff = Math.max(0, new Date(endAt).getTime() - Date.now());
-    return {
-      days: Math.floor(diff / 86_400_000),
-      hours: Math.floor((diff % 86_400_000) / 3_600_000),
-      minutes: Math.floor((diff % 3_600_000) / 60_000),
-      seconds: Math.floor((diff % 60_000) / 1_000),
-      expired: diff === 0,
-    };
-  };
-  const [cd, setCd] = useState(calc);
-  useEffect(() => {
-    const id = setInterval(() => setCd(calc()), 1_000);
-    return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [endAt]);
-  return cd;
-}
-
-function CountdownUnit({ value, label }: { value: number; label: string }) {
-  return (
-    <div className="flex flex-col items-center gap-0.5">
-      <NumberFlow
-        value={value}
-        format={{ minimumIntegerDigits: 2 }}
-        className="text-xl font-black tabular-nums text-white leading-none"
-        transformTiming={{ duration: 400, easing: "ease-out" }}
-        spinTiming={{ duration: 400, easing: "ease-in-out" }}
-      />
-      <span className="text-[9px] font-semibold uppercase tracking-widest text-white/45">{label}</span>
-    </div>
-  );
-}
-
-function AnimatedCount({ target, suffix = "" }: { target: number; suffix?: string }) {
-  const val = useMotionValue(0);
-  const display = useTransform(val, (v) => fmt(v) + suffix);
-  useEffect(() => {
-    const ctrl = animate(val, target, { duration: 1.6, ease: "easeOut", delay: 0.4 });
-    return ctrl.stop;
-  }, [val, target]);
-  return <motion.span>{display}</motion.span>;
-}
-
-function CampaignBanner({ campaign }: { campaign: ActiveCampaign }) {
-  const router = useRouter();
-  const countdown = useCountdown(campaign.endAt);
-  const campaignPct = parseFloat(campaign.earnPercent);
-  const basePct = parseFloat(campaign.baseEarnPercent);
-  const pointRate = campaign.pointRate;
-  const bonusPct = campaignPct - basePct;
-
-  const basePoints = Math.round(EXAMPLE_ORDER * basePct / 100 / pointRate);
-  const campaignPoints = Math.round(EXAMPLE_ORDER * campaignPct / 100 / pointRate);
-  const bonusPoints = campaignPoints - basePoints;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-32px" }}
-      transition={{ duration: 0.4, ease: easeOutSmooth }}
-      className="relative overflow-hidden rounded-3xl bg-[#1a3c34] shadow-[0_24px_80px_-24px_rgba(26,60,52,0.5)]"
-    >
-      <div className="pointer-events-none absolute -left-32 -top-32 size-[480px] rounded-full bg-[#2d6b5a]/40 blur-3xl" aria-hidden />
-      <div className="pointer-events-none absolute -bottom-20 right-12 size-72 rounded-full bg-[#99d6b3]/10 blur-3xl" aria-hidden />
-
-      <div className="relative flex flex-col gap-6 p-6 sm:p-8">
-        <div className="inline-flex w-fit items-center gap-2 rounded-full bg-[#99d6b3]/15 px-4 py-1.5 text-[11px] font-semibold text-[#99d6b3] ring-1 ring-[#99d6b3]/30">
-          <Zap className="size-3 fill-[#99d6b3] text-[#99d6b3]" />
-          Chiến dịch tích điểm · Giới hạn thời gian
-        </div>
-
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#5a8f7a]">
-            Ưu đãi điểm thưởng
-          </p>
-          <h2 className="mt-2 text-2xl font-bold leading-[1.15] tracking-tight text-white sm:text-[1.75rem]">
-            {campaign.name}
-          </h2>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex flex-col items-center rounded-2xl border border-white/10 bg-white/6 px-5 py-3.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-white/40">Thông thường</p>
-            <p className="mt-1 text-2xl font-black tabular-nums text-white/60">{basePct}%</p>
-            <p className="text-[10px] text-white/35">/ đơn hàng</p>
-          </div>
-
-          <div className="flex flex-col items-center gap-1">
-            <ChevronRight className="size-5 text-[#99d6b3]/60" />
-            <span className="rounded-full bg-[#99d6b3]/20 px-2.5 py-0.5 text-[10px] font-bold text-[#99d6b3]">
-              +{bonusPct}%
-            </span>
-          </div>
-
-          <div className="flex flex-col items-center rounded-2xl border border-[#99d6b3]/30 bg-[#99d6b3]/10 px-5 py-3.5 ring-1 ring-[#99d6b3]/20">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-[#99d6b3]/70">Trong chiến dịch</p>
-            <p className="mt-1 text-2xl font-black tabular-nums text-white">{campaignPct}%</p>
-            <p className="text-[10px] text-[#99d6b3]/60">/ đơn hàng</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {[
-            { icon: ShoppingBag, label: "Đặt hàng" },
-            { icon: TrendingUp, label: "Tích điểm" },
-            { icon: Coins, label: "Đổi voucher" },
-            { icon: Gift, label: "Giảm giá" },
-          ].map(({ icon: Icon, label }, i) => (
-            <div key={label} className="flex items-center gap-2">
-              <div className="flex flex-col items-center gap-1.5">
-                <div className="flex size-8 items-center justify-center rounded-full bg-white/10">
-                  <Icon className="size-3.5 text-[#99d6b3]" />
-                </div>
-                <span className="text-[9px] font-semibold text-white/50">{label}</span>
-              </div>
-              {i < 3 && <ChevronRight className="mb-3.5 size-3.5 shrink-0 text-white/20" />}
-            </div>
-          ))}
-        </div>
-
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              onClick={() => router.push(ROUTES.MENU)}
-              className="h-11 rounded-full bg-white px-6 font-semibold text-[#1a3c34] shadow-lg transition-opacity hover:opacity-90"
-            >
-              <ShoppingBag className="mr-1.5 size-4" />
-              Đặt hàng tích điểm
-            </Button>
-            <Button
-              onClick={() => router.push(ROUTES.REWARDS)}
-              className="h-11 rounded-full border border-[#99d6b3]/40 bg-[#99d6b3]/15 px-6 font-semibold text-[#99d6b3] transition-opacity hover:opacity-90"
-            >
-              <Coins className="mr-1.5 size-4" />
-              Đổi điểm lấy voucher
-              <ArrowRight className="ml-1 size-4" />
-            </Button>
-          </div>
-
-          {!countdown.expired && (
-            <div className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
-              <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-white/40">
-                Kết thúc sau
-              </span>
-              <div className="flex items-end gap-2.5">
-                {countdown.days > 0 && (
-                  <>
-                    <CountdownUnit value={countdown.days} label="ngày" />
-                    <span className="pb-4 text-base text-white/25">:</span>
-                  </>
-                )}
-                <CountdownUnit value={countdown.hours} label="giờ" />
-                <span className="pb-4 text-base text-white/25">:</span>
-                <CountdownUnit value={countdown.minutes} label="phút" />
-                <span className="pb-4 text-base text-white/25">:</span>
-                <CountdownUnit value={countdown.seconds} label="giây" />
-              </div>
-              <span className="hidden shrink-0 text-[10px] text-white/25 sm:ml-auto sm:block">
-                HSD: {fmtDate(campaign.endAt)}
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-    </motion.div>
-  );
-}
+import { CampaignBannerCard } from "@/components/campaign/CampaignBannerCard";
 
 function PointEarnStrip({
   earnPercent,
@@ -215,6 +18,7 @@ function PointEarnStrip({
   pointRate: number;
   onGoRewards: () => void;
 }) {
+  const t = useTranslations();
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -229,25 +33,23 @@ function PointEarnStrip({
         </div>
         <div className="flex-1">
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
-            Tích điểm thường xuyên
+            {t("earn_points_regularly")}
           </p>
           <p className="mt-0.5 text-sm font-semibold text-foreground">
-            Mỗi đơn hoàn thành tích{" "}
-            <span className="font-bold text-[#1a3c34]">{earnPercent}%</span>
-            {" "}giá trị đơn thành điểm UjCha
+            {t("earn_per_order", { pct: earnPercent })}
           </p>
           <p className="mt-0.5 text-xs text-muted">
-            1 điểm = {pointRate.toLocaleString("vi-VN")}đ giá trị voucher · đổi tại trang Phần thưởng
+            {t("point_value", { rate: pointRate.toLocaleString("vi-VN") })}
           </p>
         </div>
       </div>
 
       <div className="mt-4 flex items-center justify-between rounded-2xl bg-surface-soft px-4 py-3">
         {[
-          { icon: ShoppingBag, label: "Đặt hàng", sub: "Hoàn thành đơn" },
-          { icon: TrendingUp, label: "Tích điểm", sub: `${earnPercent}% giá trị` },
-          { icon: Coins, label: "Đổi voucher", sub: "Tại trang Phần thưởng" },
-          { icon: Gift, label: "Dùng voucher", sub: "Khi thanh toán" },
+          { icon: ShoppingBag, label: t("order"), sub: t("complete_order") },
+          { icon: TrendingUp, label: t("accumulate_points"), sub: `${earnPercent}%` },
+          { icon: Coins, label: t("exchange_vouchers"), sub: t("at_rewards_page") },
+          { icon: Gift, label: t("use_voucher_label"), sub: t("at_checkout") },
         ].map(({ icon: Icon, label, sub }, i) => (
           <div key={label} className="flex items-center gap-2">
             <div className="flex flex-col items-center gap-1 text-center">
@@ -268,7 +70,7 @@ function PointEarnStrip({
         className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-[#1a3c34] py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
       >
         <Coins className="size-4" />
-        Xem danh mục đổi điểm
+        {t("view_rewards_catalog")}
         <ArrowRight className="size-4" />
       </button>
     </motion.div>
@@ -276,6 +78,7 @@ function PointEarnStrip({
 }
 
 function EmptyState() {
+  const t = useTranslations();
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
       <motion.div
@@ -286,11 +89,9 @@ function EmptyState() {
       >
         <Tag className="size-9 text-foreground/25" />
       </motion.div>
-      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">Ưu đãi</p>
-      <p className="mt-2 text-xl font-bold text-foreground">Chưa có khuyến mãi</p>
-      <p className="mt-2 max-w-[260px] text-sm text-muted">
-        Không có chiến dịch nào đang chạy lúc này. Hãy quay lại sau!
-      </p>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{t("offers")}</p>
+      <p className="mt-2 text-xl font-bold text-foreground">{t("no_promotions")}</p>
+      <p className="mt-2 max-w-[260px] text-sm text-muted">{t("no_promotions_desc")}</p>
     </div>
   );
 }
@@ -313,6 +114,7 @@ function SkeletonStrip() {
 
 export function PromotionsPageShell() {
   const router = useRouter();
+  const t = useTranslations();
   const { data, isLoading } = usePromotionsQuery();
 
   const hasContent = !isLoading && data && (data.campaign !== null || data.pointConfig !== null);
@@ -320,7 +122,7 @@ export function PromotionsPageShell() {
 
   return (
     <div className="min-h-screen">
-      {/* ── Hero ── */}
+      {/* Hero */}
       <section className="relative overflow-hidden bg-gradient-to-br from-[#1a3c34] via-[#1e4438] to-[#112a21] px-5 pb-20 pt-16 sm:pb-24 sm:pt-20">
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <div className="absolute -right-24 -top-24 size-72 rounded-full bg-white/[0.03] blur-3xl" />
@@ -342,7 +144,7 @@ export function PromotionsPageShell() {
               transition={{ duration: 0.5 }}
               className="mb-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45"
             >
-              Ưu đãi
+              {t("offers")}
             </motion.p>
             <motion.h1
               initial={{ opacity: 0, y: 16 }}
@@ -350,7 +152,7 @@ export function PromotionsPageShell() {
               transition={{ delay: 0.08, duration: 0.5 }}
               className="text-4xl font-bold tracking-tight text-white sm:text-5xl"
             >
-              Khuyến mãi
+              {t("promotions")}
             </motion.h1>
             <motion.p
               initial={{ opacity: 0, y: 12 }}
@@ -358,7 +160,7 @@ export function PromotionsPageShell() {
               transition={{ delay: 0.15 }}
               className="mx-auto mt-4 max-w-md text-base leading-relaxed text-white/60"
             >
-              Chiến dịch tích điểm, ưu đãi giới hạn và các phần thưởng dành riêng cho bạn.
+              {t("promotions_desc")}
             </motion.p>
           </div>
         </div>
@@ -370,7 +172,7 @@ export function PromotionsPageShell() {
         </div>
       </section>
 
-      {/* ── Content ── */}
+      {/* Content */}
       <div className="bg-white px-5 pb-16">
         <div className="mx-auto max-w-[72rem] pt-8">
           {isLoading && (
@@ -384,7 +186,7 @@ export function PromotionsPageShell() {
 
           {hasContent && (
             <div className="space-y-4">
-              {data!.campaign && <CampaignBanner campaign={data!.campaign} />}
+              {data!.campaign && <CampaignBannerCard campaign={data!.campaign} />}
               {data!.pointConfig && (
                 <PointEarnStrip
                   earnPercent={data!.pointConfig.earnPercent}

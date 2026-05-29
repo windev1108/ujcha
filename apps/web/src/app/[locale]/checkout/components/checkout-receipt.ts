@@ -75,7 +75,7 @@ export function buildWebReceiptHtml(d: WebReceiptData): string {
   const contactLine = [d.contactName, d.contactPhone].filter(Boolean).join(" · ");
 
   const body = [
-    `<div style="text-align:center;font-size:22px;font-weight:bold;letter-spacing:4px;margin-bottom:2px;">KUN</div>`,
+    `<div style="text-align:center;font-size:22px;font-weight:bold;letter-spacing:4px;margin-bottom:2px;">Ujcha</div>`,
     `<div style="border-top:2px dashed #000;margin:5px 0;"></div>`,
     `<div style="font-size:12px;margin-bottom:1px;">Đơn: <b>${esc(ref)}</b></div>`,
     `<div style="font-size:11px;color:#444;margin-bottom:1px;">${esc(date)}</div>`,
@@ -90,7 +90,7 @@ export function buildWebReceiptHtml(d: WebReceiptData): string {
     `</div>`,
     `<div style="font-size:12px;margin-top:2px;">Thanh toán: <b>${esc(payLabel)}</b></div>`,
     `<div style="border-top:2px dashed #000;margin:8px 0 4px;"></div>`,
-    `<div style="text-align:center;font-size:11px;color:#555;">Cảm ơn bạn đã đến với KUN!</div>`,
+    `<div style="text-align:center;font-size:11px;color:#555;">Cảm ơn bạn đã đến với Ujcha!</div>`,
   ].join("");
 
   return (

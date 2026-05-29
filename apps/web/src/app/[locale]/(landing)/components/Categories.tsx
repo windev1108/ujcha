@@ -47,7 +47,7 @@ export function Categories() {
             href={ROUTES.PRODUCTS}
             className="hidden sm:inline-flex items-center gap-1 text-sm font-medium text-foreground hover:text-kun-primary transition-colors"
           >
-            Xem tất cả
+            {t('see_all')}
             <ChevronRight className="size-4" />
           </Link>
         </div>
@@ -135,7 +135,7 @@ export function Categories() {
             href={ROUTES.PRODUCTS}
             className="inline-flex items-center gap-1 text-sm font-medium text-foreground hover:text-kun-primary transition-colors"
           >
-            Xem tất cả
+            {t('see_all')}
             <ChevronRight className="size-4" />
           </Link>
         </div>

@@ -86,7 +86,7 @@ function isVirtualPrinter(name: string): boolean {
 // ─── Defaults ─────────────────────────────────────────────────────────────────
 const DEFAULT_BILL: BillConfig = {
     enabled: true, printerId: null, paperWidth: 58, autoPrint: true,
-    copies: 1, showLogo: true, headerText: 'KUN Matcha & Coffee',
+    copies: 1, showLogo: true, headerText: 'Ujcha Matcha & Coffee',
     footerText: 'Cảm ơn quý khách! Hẹn gặp lại.', showQr: true,
 }
 const DEFAULT_LABEL: LabelConfig = {
@@ -327,7 +327,7 @@ if (-not [RawPrint]::OpenPrinter('${printerEscaped}', [ref]\$h, [IntPtr]::Zero))
 }
 try {
     \$di = New-Object RawPrint+DOCINFOA
-    \$di.pDocName = 'KUN Receipt'
+    \$di.pDocName = 'Ujcha Receipt'
     \$di.pDataType = 'RAW'
     \$jobId = [RawPrint]::StartDocPrinter(\$h, 1, \$di)
     if (\$jobId -le 0) { throw "StartDocPrinter failed" }
@@ -753,7 +753,7 @@ export function registerPrinterHandlers(): void {
         console.log('[testPrintByAddress]', { address, type, printerName })
         const pw: 58 | 80 = 58
         const html = type === 'bill'
-            ? buildTestBillHtml('KUN Matcha & Coffee', 'Cam on quy khach!', pw)
+            ? buildTestBillHtml('Ujcha Matcha & Coffee', 'Cam on quy khach!', pw)
             : buildTestLabelHtml(50)
         return smartPrint(address, printerName || address, html, pw)
     })

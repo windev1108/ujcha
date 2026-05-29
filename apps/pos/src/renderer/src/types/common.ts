@@ -112,7 +112,7 @@ export const DEFAULT_BILL_CONFIG: BillConfig = {
   autoPrint: false,
   copies: 1,
   showLogo: true,
-  headerText: 'KUN Matcha & Coffee',
+  headerText: 'Ujcha Matcha & Coffee',
   footerText: 'Cảm ơn quý khách! Hẹn gặp lại.',
   showQr: true,
   address: '',

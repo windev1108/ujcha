@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import Image from "next/image";
 import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 type Props = {
   images: string[];
@@ -12,6 +13,7 @@ type Props = {
 };
 
 export function ProductImageGallery({ images, name, placeholderBg = "#1a3c34" }: Props) {
+  const t = useTranslations();
   const [active, setActive] = useState(0);
   const [direction, setDirection] = useState(0);
 
@@ -76,7 +78,7 @@ export function ProductImageGallery({ images, name, placeholderBg = "#1a3c34" }:
             <button
               type="button"
               onClick={prev}
-              aria-label="Ảnh trước"
+              aria-label={t("scroll_left")}
               className="absolute left-3 top-1/2 -translate-y-1/2 flex size-8 items-center justify-center rounded-full bg-white/80 backdrop-blur-sm shadow ring-1 ring-black/[0.06] transition hover:bg-white"
             >
               <ChevronLeft className="size-3.5 text-foreground" />
@@ -84,7 +86,7 @@ export function ProductImageGallery({ images, name, placeholderBg = "#1a3c34" }:
             <button
               type="button"
               onClick={next}
-              aria-label="Ảnh tiếp"
+              aria-label={t("scroll_right")}
               className="absolute right-3 top-1/2 -translate-y-1/2 flex size-8 items-center justify-center rounded-full bg-white/80 backdrop-blur-sm shadow ring-1 ring-black/[0.06] transition hover:bg-white"
             >
               <ChevronRight className="size-3.5 text-foreground" />

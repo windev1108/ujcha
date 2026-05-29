@@ -2,11 +2,13 @@
 
 import { motion } from "motion/react";
 import { UtensilsCrossed } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { revealTransition } from "@/app/[locale]/(landing)/components/RevealSection";
 
 const TABLE_NUMBER = "12";
 
 export function QuickOrderHeader() {
+  const t = useTranslations();
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -19,7 +21,7 @@ export function QuickOrderHeader() {
           Chào mừng đến bàn {TABLE_NUMBER}
         </p>
         <h1 className="mt-3 text-3xl font-bold uppercase leading-[1.15] tracking-tight text-foreground sm:text-4xl lg:text-[2.35rem]">
-          Đặt món nhanh tại bàn
+          {t("order_at_table")}
         </h1>
       </div>
 
@@ -29,10 +31,10 @@ export function QuickOrderHeader() {
         </div>
         <div className="min-w-0 space-y-1">
           <p className="text-sm font-semibold leading-snug text-foreground sm:text-[15px]">
-            Đặt món nhanh ngay tại bàn
+            {t("quick_order_desc")}
           </p>
           <p className="text-xs leading-relaxed text-foreground/55 sm:text-sm">
-            Trải nghiệm số liền mạch — gọi món không cần chờ nhân viên.
+            {t("quick_order_subtitle")}
           </p>
         </div>
       </div>

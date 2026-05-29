@@ -1,35 +1,27 @@
 import createMiddleware from 'next-intl/middleware';
 import { type NextRequest, NextResponse } from 'next/server';
 import { routing } from './i18n/routing';
-import { locales } from './i18n/config';
 
 const intlMiddleware = createMiddleware(routing);
 
-const PROTECTED = ['/cart', '/checkout', '/profile', '/orders', '/notifications', '/vouchers'];
-const localePattern = locales.join('|');
+const PROTECTED_PREFIXES = [
+  '/cart', '/checkout', '/profile', '/orders',
+  '/notifications', '/vouchers', '/rewards', '/addresses',
+];
+const AUTH_PAGES = ['/login', '/register', '/forgot-password'];
 
 export default function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isAuth = request.cookies.get('kun-auth-state')?.value === '1';
 
-  // Redirect authenticated users away from auth pages
-  const isAuthPage = new RegExp(`^/(${localePattern})/(login|register|forgot-password)(/.*)?$`).test(pathname);
+  const isAuthPage = AUTH_PAGES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
   if (isAuthPage && isAuth) {
-    const locale = pathname.split('/')[1];
-    const url = request.nextUrl.clone();
-    url.pathname = `/${locale}`;
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(new URL('/', request.url));
   }
 
-  // Redirect unauthenticated users away from protected pages
-  const isProtected = PROTECTED.some((p) =>
-    new RegExp(`^/(${localePattern})${p}(/.*)?$`).test(pathname),
-  );
+  const isProtected = PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
   if (isProtected && !isAuth) {
-    const locale = pathname.split('/')[1];
-    const url = request.nextUrl.clone();
-    url.pathname = `/${locale}`;
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(new URL('/login', request.url));
   }
 
   return intlMiddleware(request);
