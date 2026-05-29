@@ -19,7 +19,7 @@ interface SavedPrinter { id: string }
 export { readSubConfig, writeSubConfig }
 
 const iconPath = isDev
-  ? join(app.getAppPath(), 'src/assets/logo-cup.png')
+  ? join(app.getAppPath(), 'src/assets/favicon.png')
   : join(process.resourcesPath, 'icon.png')
 
 let staffWin: BrowserWindow | null = null

@@ -5,12 +5,13 @@ import dynamic from "next/dynamic";
 import { motion } from "motion/react";
 import Image from "next/image";
 import {
-  ArrowLeft, BadgeCheck, Ban, Box, CheckCircle2, ChevronRight, Circle, Clock,
+  ArrowLeft, BadgeCheck, Ban, Bike, Box, CheckCircle2, ChevronRight, Circle, Clock,
   CreditCard, ExternalLink, MapPin, Package, Phone, Printer, Star, Truck, Utensils, Users,
 } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useOrderDetailQuery, orderKeys } from "@/services/order/hooks";
+import { useOrderStatusSocket } from "@/hooks/useOrderStatusSocket";
 import { ROUTES } from "@/lib/routes";
 import { revealTransition, easeOutSmooth } from "@/app/[locale]/(landing)/components/RevealSection";
 import type { OrderDetail, OrderStatus, PaymentType } from "@/services/order/api";
@@ -177,6 +178,17 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
   const queryClient = useQueryClient();
   const { data: order, isLoading, isError } = useOrderDetailQuery(paymentCode);
 
+  const isTerminal = order?.status === "completed" || order?.status === "cancelled";
+
+  useOrderStatusSocket({
+    onStatusChange: ({ orderId }) => {
+      if (orderId === order?.id) {
+        queryClient.invalidateQueries({ queryKey: orderKeys.detail(paymentCode) });
+      }
+    },
+    enabled: !isTerminal,
+  });
+
   const handlePaid = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: orderKeys.detail(paymentCode) });
   }, [queryClient, paymentCode]);
@@ -308,13 +320,33 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                     Đơn nhóm
                   </span>
                 )}
-                {order.earnedPoints > 0 && (
-                  <span className="flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 ring-1 ring-amber-200">
-                    <Star className="size-3 fill-amber-500 text-amber-500" />
-                    +{order.earnedPoints} điểm tích lũy
+                {order.shipper && (
+                  <span className="flex items-center gap-1 rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 ring-1 ring-sky-200">
+                    <Bike className="size-3" />
+                    {order.shipper.name}
                   </span>
                 )}
               </div>
+
+              {/* Earned points banner */}
+              {order.earnedPoints > 0 && (
+                <div className="mt-4 flex items-center gap-3 rounded-2xl bg-amber-50 px-4 py-3 ring-1 ring-amber-200">
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-amber-100">
+                    <Star className="size-4 fill-amber-500 text-amber-500" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-amber-800">Điểm tích lũy từ đơn này</p>
+                    <p className="text-[11px] text-amber-600/80">
+                      {order.status === "completed"
+                        ? "Điểm đã được cộng vào tài khoản"
+                        : "Sẽ được cộng khi đơn hoàn thành"}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-lg font-bold tabular-nums text-amber-700">
+                    +{Number.isInteger(order.earnedPoints) ? order.earnedPoints : (order.earnedPoints as number).toFixed(1)}
+                  </span>
+                </div>
+              )}
             </div>
           </motion.div>
 
@@ -408,6 +440,82 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
               <div>
                 <p className="text-sm font-semibold text-red-700">Đơn hàng đã bị huỷ</p>
                 <p className="mt-0.5 text-xs text-red-500/80">Liên hệ quán nếu bạn cần hỗ trợ.</p>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ── Shipper info ──────────────────────────────────────── */}
+          {order.type === "delivery" && order.shipper && (
+            <motion.div
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ ...revealTransition, delay: 0.10 }}
+              className="overflow-hidden rounded-3xl border border-black/6 bg-white shadow-[0_4px_20px_-8px_rgba(0,0,0,0.1)]"
+            >
+              {/* Live stripe khi đang giao */}
+              {order.status === "delivering" && (
+                <div className="h-1 w-full bg-gradient-to-r from-sky-400 via-sky-500 to-sky-400 animate-pulse" />
+              )}
+
+              <div className="p-5 sm:p-6">
+                <p className="mb-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
+                  Shipper giao hàng
+                </p>
+
+                <div className="flex items-center gap-4">
+                  {/* Avatar */}
+                  <div className={`relative flex size-12 shrink-0 items-center justify-center rounded-full ring-1 ${
+                    order.status === "delivering"
+                      ? "bg-sky-50 ring-sky-200"
+                      : order.status === "completed"
+                        ? "bg-green-50 ring-green-200"
+                        : "bg-surface-soft ring-black/8"
+                  }`}>
+                    <Bike className={`size-5 ${
+                      order.status === "delivering"
+                        ? "text-sky-600"
+                        : order.status === "completed"
+                          ? "text-green-600"
+                          : "text-foreground/50"
+                    }`} />
+                    {order.status === "delivering" && (
+                      <span className="absolute -right-0.5 -top-0.5 flex size-3 items-center justify-center rounded-full bg-sky-500 ring-2 ring-white">
+                        <span className="size-1.5 animate-ping rounded-full bg-white opacity-80" />
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Info */}
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-foreground">{order.shipper.name}</p>
+                    {order.shipper.phone ? (
+                      <a
+                        href={`tel:${order.shipper.phone}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="mt-0.5 inline-flex items-center gap-1 text-sm text-foreground/55 transition-colors hover:text-kun-products-forest"
+                      >
+                        <Phone className="size-3.5" />
+                        {order.shipper.phone}
+                      </a>
+                    ) : (
+                      <p className="mt-0.5 text-sm text-foreground/40">Chưa có số điện thoại</p>
+                    )}
+                  </div>
+
+                  {/* Status badge */}
+                  {order.status === "delivering" && (
+                    <span className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-700 ring-1 ring-sky-200">
+                      <span className="size-1.5 animate-pulse rounded-full bg-sky-500" />
+                      Đang giao
+                    </span>
+                  )}
+                  {order.status === "completed" && (
+                    <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 ring-1 ring-green-200">
+                      <CheckCircle2 className="size-3.5" />
+                      Đã giao
+                    </span>
+                  )}
+                </div>
               </div>
             </motion.div>
           )}

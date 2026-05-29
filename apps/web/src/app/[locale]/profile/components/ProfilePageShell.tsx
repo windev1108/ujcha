@@ -8,19 +8,21 @@ import {
   Camera, Check, CheckCircle2, Coins, Copy, ImageOff, Link2,
   LogOut, Mail, Pencil, Phone, X,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { ROUTES } from "@/lib/routes";
 import { useAuthStore } from "@/store/auth-store";
 import { useProfileQuery, useUpdateProfileMutation, useUploadAvatarMutation } from "@/services/profile/hooks";
 
-function formatPhone(phone: string | null | undefined): string {
-  if (!phone?.trim()) return "Chưa cập nhật";
+function formatPhone(phone: string | null | undefined, notUpdated: string): string {
+  if (!phone?.trim()) return notUpdated;
   const d = phone.replace(/\D/g, "");
   if (d.startsWith("84")) return `+84 ${d.slice(2, 4)} ${d.slice(4, 7)} ${d.slice(7)}`;
   if (phone.startsWith("0")) return `+84 ${phone.slice(1, 3)} ${phone.slice(3, 6)} ${phone.slice(6)}`;
   return phone;
 }
 
-function CopyButton({ text, label = "Sao chép" }: { text: string; label?: string }) {
+function CopyButton({ text, label }: { text: string; label?: string }) {
+  const t = useTranslations();
   const [copied, setCopied] = useState(false);
   const copy = () => {
     void navigator.clipboard.writeText(text);
@@ -34,7 +36,7 @@ function CopyButton({ text, label = "Sao chép" }: { text: string; label?: strin
       className="flex items-center gap-1 text-xs font-medium text-kun-primary hover:opacity-70 transition"
     >
       {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-      {copied ? "Đã sao chép" : label}
+      {copied ? t("copied") : (label ?? t("copy"))}
     </button>
   );
 }
@@ -63,12 +65,13 @@ function compressImage(file: File, size = 400): Promise<string> {
   });
 }
 
-function axiosErrorMessage(e: unknown): string {
+function axiosErrorMessage(e: unknown, fallback: string): string {
   const err = e as { response?: { data?: { message?: string } }; message?: string };
-  return err.response?.data?.message ?? err.message ?? "Có lỗi xảy ra.";
+  return err.response?.data?.message ?? err.message ?? fallback;
 }
 
 export function ProfilePageShell() {
+  const t = useTranslations();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const clearSession = useAuthStore((s) => s.clearSession);
@@ -77,7 +80,7 @@ export function ProfilePageShell() {
   const uploadAvatarMutation = useUploadAvatarMutation();
 
   const displayUser = profile ?? user;
-  const name = displayUser?.name?.trim() || "Khách";
+  const name = displayUser?.name?.trim() || t("guest");
   const email = displayUser?.email ?? null;
   const phone = displayUser?.phone ?? null;
   const avatarUrl = displayUser?.avatar ?? null;
@@ -136,7 +139,7 @@ export function ProfilePageShell() {
       setAvatarPreviewUrl(null);
       setPendingFile(null);
     } catch (e) {
-      setAvatarError(axiosErrorMessage(e));
+      setAvatarError(axiosErrorMessage(e, t("generic_error")));
     }
   }, [pendingFile, avatarPreviewUrl, uploadAvatarMutation]);
 
@@ -256,7 +259,7 @@ export function ProfilePageShell() {
                 ) : (
                   <CheckCircle2 className="size-3.5" />
                 )}
-                Lưu ảnh
+                {t("save_photo")}
               </button>
               <button
                 type="button"
@@ -265,7 +268,7 @@ export function ProfilePageShell() {
                 className="flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-medium text-white/80 transition hover:bg-white/20 disabled:opacity-50"
               >
                 <ImageOff className="size-3.5" />
-                Huỷ
+                {t("cancel")}
               </button>
             </div>
           )}
@@ -318,7 +321,7 @@ export function ProfilePageShell() {
           {/* Points badge */}
           <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3.5 py-1 text-xs font-semibold text-white/80">
             <Coins className="size-3.5 text-[#99d6b3]" />
-            {pointBalance.toLocaleString("vi-VN")} điểm UjCha
+            {t("points_ujcha", { count: pointBalance.toLocaleString("vi-VN") })}
           </div>
         </motion.div>
 
@@ -341,7 +344,7 @@ export function ProfilePageShell() {
           {/* Contact info */}
           <div className="space-y-2">
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-              Thông tin liên hệ
+              {t("contact_info")}
             </p>
             <div className="divide-y divide-black/[0.05] rounded-3xl border border-black/[0.06] bg-white">
               {/* Phone — read-only */}
@@ -349,11 +352,11 @@ export function ProfilePageShell() {
                 <Phone className="size-4 shrink-0 text-kun-primary" />
                 <div className="min-w-0 flex-1">
                   <p className="text-[10px] font-medium uppercase tracking-wider text-muted">
-                    Số điện thoại
+                    {t("phone_number")}
                   </p>
                   <p className="text-sm font-medium text-foreground">
-                    {phone ? formatPhone(phone) : (
-                      <span className="text-muted">Chưa cập nhật</span>
+                    {phone ? formatPhone(phone, t("not_updated")) : (
+                      <span className="text-muted">{t("not_updated")}</span>
                     )}
                   </p>
                 </div>
@@ -403,7 +406,7 @@ export function ProfilePageShell() {
                         className="group flex items-center gap-1.5 text-left"
                       >
                         <p className="text-sm font-medium text-foreground">
-                          {email ?? <span className="text-muted">Thêm email</span>}
+                          {email ?? <span className="text-muted">{t("add_email")}</span>}
                         </p>
                         <Pencil className="size-3 text-muted opacity-0 transition group-hover:opacity-100" />
                       </button>
@@ -413,8 +416,8 @@ export function ProfilePageShell() {
                   {email && (
                     <div className="flex items-center justify-between rounded-2xl bg-surface-soft px-3 py-2.5">
                       <div>
-                        <p className="text-xs font-semibold text-foreground">Nhận ưu đãi qua email</p>
-                        <p className="text-[11px] text-muted">Khuyến mãi và chương trình đặc biệt</p>
+                        <p className="text-xs font-semibold text-foreground">{t("receive_email_offers")}</p>
+                        <p className="text-[11px] text-muted">{t("promotions_and_specials")}</p>
                       </div>
                       <button
                         type="button"
@@ -441,13 +444,13 @@ export function ProfilePageShell() {
           {referralCode && (
             <div className="space-y-2">
               <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-                Mã giới thiệu
+                {t("ref_code_label")}
               </p>
               <div className="space-y-3 rounded-3xl border border-black/[0.06] bg-white px-5 py-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-[10px] font-medium uppercase tracking-wider text-muted">
-                      Mã của bạn
+                      {t("your_code")}
                     </p>
                     <p className="mt-0.5 font-mono text-lg font-bold tracking-widest text-kun-primary">
                       {referralCode}
@@ -459,9 +462,9 @@ export function ProfilePageShell() {
                   <div className="flex items-center justify-between border-t border-black/5 pt-3">
                     <div className="flex min-w-0 items-center gap-2">
                       <Link2 className="size-3.5 shrink-0 text-muted" />
-                      <p className="truncate text-xs text-muted">Link đăng ký cho bạn bè</p>
+                      <p className="truncate text-xs text-muted">{t("register_link_for_friends")}</p>
                     </div>
-                    <CopyButton text={referralUrl} label="Copy link" />
+                    <CopyButton text={referralUrl} label={t("copy_link")} />
                   </div>
                 )}
               </div>
@@ -476,7 +479,7 @@ export function ProfilePageShell() {
               className="flex items-center gap-2 rounded-full border border-red-100 bg-white px-6 py-2.5 text-sm font-medium text-red-500 transition hover:bg-red-50"
             >
               <LogOut className="size-4" />
-              Đăng xuất
+              {t("logout")}
             </button>
           </div>
 

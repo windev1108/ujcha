@@ -1,12 +1,16 @@
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import { Loader2 } from "lucide-react";
 import { RewardsPageShell } from "./components/RewardsPageShell";
 
-export const metadata: Metadata = {
-  title: "Đổi điểm",
-  description: "Dùng điểm UjCha để đổi voucher giảm giá cho đơn hàng.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations();
+  return {
+    title: t("redeem_points"),
+    description: "Dùng điểm UjCha để đổi voucher giảm giá cho đơn hàng.",
+  };
+}
 
 function PageFallback() {
   return (

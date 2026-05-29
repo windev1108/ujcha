@@ -1,12 +1,16 @@
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import { Loader2 } from "lucide-react";
 import { GroupOrderPageShell } from "./components/GroupOrderPageShell";
 
-export const metadata: Metadata = {
-  title: "Đơn hàng nhóm",
-  description: "Cùng bạn bè đặt hàng nhóm và nhận ưu đãi giảm giá khi có nhiều người tham gia.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations();
+  return {
+    title: t("group_order_session_title"),
+    description: "Cùng bạn bè đặt hàng nhóm và nhận ưu đãi giảm giá khi có nhiều người tham gia.",
+  };
+}
 
 function PageFallback() {
   return (

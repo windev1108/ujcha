@@ -1,12 +1,16 @@
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import { CheckoutPageShell } from "./components/CheckoutPageShell";
 
-export const metadata: Metadata = {
-  title: "Thanh toán",
-  description:
-    "Hoàn tất đơn hàng — giao hàng, tại bàn hoặc nhận tại quán.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations();
+  return {
+    title: t("payment"),
+    description:
+      "Hoàn tất đơn hàng — giao hàng, tại bàn hoặc nhận tại quán.",
+  };
+}
 
 function CheckoutFallback() {
   return (

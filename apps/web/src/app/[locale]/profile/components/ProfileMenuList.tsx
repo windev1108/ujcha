@@ -1,6 +1,7 @@
 "use client";
 
 import { Bell, Coins, FileText, MapPin, Ticket } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { ROUTES } from "@/lib/routes";
 
@@ -12,40 +13,41 @@ type Props = {
 };
 
 export function ProfileMenuList({ onLogout }: Props) {
+  const t = useTranslations();
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-3">
       <ProfileMenuCard
         href={ROUTES.ORDERS}
         icon={FileText}
-        title="Lịch sử đơn hàng"
-        subtitle="Xem lại các món đã đặt"
+        title={t("order_history")}
+        subtitle={t("order_history_sub")}
       />
       <ProfileMenuCard
         href={ROUTES.ADDRESSES}
         icon={MapPin}
-        title="Địa chỉ giao hàng"
-        subtitle="Quản lý địa điểm nhận nước"
+        title={t("shipping_addresses")}
+        subtitle={t("manage_delivery_addresses")}
       />
       <ProfileMenuCard
         href={ROUTES.VOUCHERS}
         icon={Ticket}
         iconWrapClassName="bg-purple-50"
-        title="Túi voucher"
-        subtitle="Mã giảm giá của bạn"
+        title={t("voucher_bag")}
+        subtitle={t("your_discount_codes")}
       />
       <ProfileMenuCard
         href={ROUTES.REWARDS}
         icon={Coins}
         iconWrapClassName="bg-amber-50"
-        title="Đổi điểm"
-        subtitle="Dùng điểm UjCha đổi lấy ưu đãi"
+        title={t("redeem_points")}
+        subtitle={t("redeem_points_sub")}
       />
       <ProfileMenuCard
         href={ROUTES.NOTIFICATIONS}
         icon={Bell}
         iconWrapClassName="bg-kun-sage/15"
-        title="Thông báo"
-        subtitle="Khuyến mãi và cập nhật đơn hàng"
+        title={t("notifications")}
+        subtitle={t("notifications_sub")}
         showNotificationDot
       />
       <ProfileLogoutCard onLogout={onLogout} />

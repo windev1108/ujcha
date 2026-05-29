@@ -4,6 +4,7 @@ import { useState } from "react";
 import { motion } from "motion/react";
 import { ArrowLeft, CheckCircle2, Coins, Gift, Loader2, ShoppingBag, Ticket } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { ROUTES } from "@/lib/routes";
 import { useAuthStore } from "@/store/auth-store";
@@ -41,6 +42,7 @@ function RewardCard({
   onRedeem: (id: string) => void;
   isRedeeming: boolean;
 }) {
+  const t = useTranslations();
   const v = item.voucher;
   const canAfford = pointBalance >= item.pointCost;
   const isPercent = v.discountType === "percent";
@@ -74,19 +76,19 @@ function RewardCard({
 
         <div className="mt-4 rounded-2xl border border-black/6 bg-[#f7f7f7] px-4 py-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-foreground/40">
-            Voucher nhận được
+            {t("voucher_received")}
           </p>
           <p className="mt-1 text-base font-bold text-[#1a3c34]">{discountLabel}</p>
           {v.discountType === "percent" && v.maxDiscountAmount && (
-            <p className="text-xs text-foreground/50">Tối đa {formatVnd(v.maxDiscountAmount)}</p>
+            <p className="text-xs text-foreground/50">{t("max_discount", { amount: formatVnd(v.maxDiscountAmount) })}</p>
           )}
           {Number(v.minOrderAmount) > 0 && (
             <p className="text-xs text-foreground/50">
-              Đơn tối thiểu {formatVnd(v.minOrderAmount)}
+              {t("min_order_label", { amount: formatVnd(v.minOrderAmount) })}
             </p>
           )}
           {v.endsAt && (
-            <p className="mt-1 text-xs text-foreground/40">HSD: {formatDate(v.endsAt)}</p>
+            <p className="mt-1 text-xs text-foreground/40">{`${t("expiry_label")} ${formatDate(v.endsAt)}`}</p>
           )}
         </div>
 
@@ -94,7 +96,7 @@ function RewardCard({
           <div className="flex items-center gap-1.5">
             <Coins className="size-4 text-[#c9a227]" />
             <span className="text-sm font-bold tabular-nums text-[#1a1a1a]">
-              {item.pointCost.toLocaleString("vi-VN")} điểm
+              {`${item.pointCost.toLocaleString("vi-VN")} ${t("points_unit")}`}
             </span>
           </div>
           <button
@@ -111,7 +113,7 @@ function RewardCard({
             ) : (
               <Gift className="size-3.5" />
             )}
-            {canAfford ? "Đổi ngay" : "Không đủ điểm"}
+            {canAfford ? t("redeem_now") : t("insufficient_points")}
           </button>
         </div>
       </div>
@@ -137,6 +139,7 @@ function SuccessToast({ message, onClose }: { message: string; onClose: () => vo
 }
 
 export function RewardsPageShell() {
+  const t = useTranslations();
   const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
   const { data: profile, refetch: refetchProfile } = useProfileQuery();
@@ -162,7 +165,7 @@ export function RewardsPageShell() {
     },
     onError: (err: unknown) => {
       const raw = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setToast(raw ?? "Đổi điểm thất bại. Vui lòng thử lại.");
+      setToast(raw ?? t("redeem_failed"));
       setTimeout(() => setToast(null), 4000);
     },
     onSettled: () => setRedeemingId(null),
@@ -177,13 +180,13 @@ export function RewardsPageShell() {
   if (!accessToken) {
     return (
       <div className="min-h-screen bg-surface-soft px-4 py-16 text-center">
-        <p className="text-foreground/60">Vui lòng đăng nhập để xem phần thưởng.</p>
+        <p className="text-foreground/60">{t("login_to_view_rewards")}</p>
         <button
           type="button"
           onClick={() => router.push(ROUTES.LOGIN)}
           className="mt-4 rounded-full bg-[#1a3c34] px-6 py-2.5 text-sm font-semibold text-white"
         >
-          Đăng nhập
+          {t("login")}
         </button>
       </div>
     );
@@ -202,7 +205,7 @@ export function RewardsPageShell() {
           className="mb-6 flex items-center gap-1.5 text-sm font-medium text-foreground/60 hover:text-foreground"
         >
           <ArrowLeft className="size-4" />
-          Quay lại
+          {t("back")}
         </button>
 
         {/* Header */}
@@ -212,14 +215,13 @@ export function RewardsPageShell() {
           transition={{ ...revealTransition, ease: easeOutSmooth }}
         >
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#5a8f7a]">
-            Đặc quyền thành viên
+            {t("member_perks")}
           </p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-[#1a3c34] sm:text-3xl">
-            Ưu đãi dành riêng cho bạn
+            {t("rewards_for_you")}
           </h1>
           <p className="mt-2 text-sm text-foreground/55">
-            Dùng điểm UjCha tích lũy để đổi voucher giảm giá — voucher sẽ được thêm
-            ngay vào túi của bạn.
+            {t("rewards_desc")}
           </p>
         </motion.div>
 
@@ -234,11 +236,11 @@ export function RewardsPageShell() {
             <Coins className="size-6 text-[#c9a227]" />
           </div>
           <div>
-            <p className="text-xs font-medium text-white/60">Điểm UjCha của bạn</p>
+            <p className="text-xs font-medium text-white/60">{t("points_balance_label")}</p>
             <p className="text-3xl font-bold tabular-nums">
               {pointBalance.toLocaleString("vi-VN")}
             </p>
-            <p className="text-xs text-white/50">điểm</p>
+            <p className="text-xs text-white/50">{t("points_unit")}</p>
           </div>
           <div className="ml-auto">
             <button
@@ -247,7 +249,7 @@ export function RewardsPageShell() {
               className="flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/25 transition"
             >
               <Ticket className="size-3.5" />
-              Túi voucher
+              {t("voucher_bag")}
             </button>
           </div>
         </motion.div>
@@ -270,9 +272,9 @@ export function RewardsPageShell() {
                 <Gift className="size-8 text-foreground/30" />
               </div>
               <div>
-                <p className="font-semibold text-foreground/60">Chưa có phần thưởng nào</p>
+                <p className="font-semibold text-foreground/60">{t("no_rewards")}</p>
                 <p className="mt-1 text-sm text-foreground/40">
-                  UjCha sẽ sớm cập nhật danh mục đổi điểm.
+                  {t("no_rewards_desc")}
                 </p>
               </div>
               <button
@@ -281,13 +283,13 @@ export function RewardsPageShell() {
                 className="mt-2 flex items-center gap-1.5 rounded-full bg-[#1a3c34] px-5 py-2.5 text-sm font-semibold text-white"
               >
                 <ShoppingBag className="size-4" />
-                Mua thêm để tích điểm
+                {t("buy_more_to_earn")}
               </button>
             </motion.div>
           ) : (
             <>
               <p className="mb-4 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
-                Danh mục phần thưởng ({items.length})
+                {t("rewards_catalog_count", { count: items.length })}
               </p>
               <div className="grid gap-4 sm:grid-cols-2">
                 {items.map((item, i) => (

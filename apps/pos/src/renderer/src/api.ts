@@ -80,6 +80,12 @@ export const fetchShippers = () =>
     params: { activeOnly: 'true' },
   }).then((r) => r.data)
 
+export const fetchShippingEstimate = (lat: number, lng: number) =>
+  api.get<{ distanceKm: number; fee: number; isFree: boolean; isOutOfRange: boolean; isDisabled: boolean }>(
+    '/shipping/estimate',
+    { params: { lat, lng } },
+  ).then((r) => r.data)
+
 export const assignShipper = (orderId: string, shipperId: string) =>
   api.patch(`/admin/orders/${orderId}/assign-shipper`, { shipperId }).then((r) => r.data)
 

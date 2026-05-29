@@ -127,7 +127,7 @@ export const UserProfile = ({ onNavigate }: { onNavigate?: () => void } = {}) =>
             >
               <div className="flex items-center gap-2.5 py-0.5 text-sm text-foreground">
                 <StoreIcon className="size-4 shrink-0 text-foreground/50" />
-                Đổi ưu đãi
+                {t('redeem_points')}
               </div>
             </Dropdown.Item>
             <Dropdown.Item

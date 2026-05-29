@@ -29,6 +29,7 @@ export type OrderDetail = Prisma.OrderGetPayload<{
     items: { include: { product: { select: { id: true; name: true; imageUrls: true } } } };
     address: true;
     table: true;
+    shipper: { select: { id: true; name: true; phone: true } };
   };
 }>;
 
@@ -472,6 +473,7 @@ export class OrderService {
           },
           address: true,
           table: true,
+          shipper: { select: { id: true, name: true, phone: true } },
         },
       });
     });
@@ -544,6 +546,7 @@ export class OrderService {
             },
             address: true,
             table: true,
+            shipper: { select: { id: true, name: true, phone: true } },
           },
         });
       });
@@ -574,6 +577,7 @@ export class OrderService {
         },
         address: true,
         table: true,
+        shipper: { select: { id: true, name: true, phone: true } },
       },
     });
 
@@ -700,7 +704,7 @@ export class OrderService {
     };
   }
 
-  async getOrderDetail(userId: string, paymentCode: string): Promise<OrderDetail & { isGroupOrder: boolean; groupOrderToken: string | null }> {
+  async getOrderDetail(userId: string, paymentCode: string): Promise<OrderDetail & { isGroupOrder: boolean; groupOrderToken: string | null; earnedPoints: number }> {
     const order = await this.prisma.order.findFirst({
       where: { paymentCode },
       include: {
@@ -710,6 +714,7 @@ export class OrderService {
         },
         address: true,
         table: true,
+        shipper: { select: { id: true, name: true, phone: true } },
       },
     });
 
@@ -721,10 +726,21 @@ export class OrderService {
     }
 
     // Allow host (userId match) or any group order participant
-    const groupOrderLink = await this.prisma.groupOrder.findFirst({
-      where: { orderId: order.id },
-      select: { token: true },
-    });
+    const [groupOrderLink, earnedTxn] = await Promise.all([
+      this.prisma.groupOrder.findFirst({
+        where: { orderId: order.id },
+        select: { token: true },
+      }),
+      this.prisma.pointTransaction.findFirst({
+        where: {
+          userId,
+          type: PointTransactionType.earn,
+          source: PointSource.order,
+          referenceId: order.id,
+        },
+        select: { amount: true },
+      }),
+    ]);
 
     if (order.userId !== userId && !groupOrderLink) {
       throw new NotFoundException({ message: 'Không tìm thấy đơn.', code: 'ORDER_NOT_FOUND' });
@@ -744,6 +760,7 @@ export class OrderService {
       ...order,
       isGroupOrder: !!groupOrderLink,
       groupOrderToken: groupOrderLink?.token ?? null,
+      earnedPoints: earnedTxn?.amount ?? 0,
     };
   }
 

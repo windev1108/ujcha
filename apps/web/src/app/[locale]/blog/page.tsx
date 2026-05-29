@@ -1,12 +1,16 @@
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import { Loader2 } from "lucide-react";
 import { BlogPageShell } from "./components/BlogPageShell";
 
-export const metadata: Metadata = {
-  title: "Blog & Tin tức",
-  description: "Khám phá công thức matcha, câu chuyện thương hiệu và tin tức mới nhất từ UjCha.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations();
+  return {
+    title: t("blog_and_news"),
+    description: "Khám phá công thức matcha, câu chuyện thương hiệu và tin tức mới nhất từ UjCha.",
+  };
+}
 
 function PageFallback() {
   return (

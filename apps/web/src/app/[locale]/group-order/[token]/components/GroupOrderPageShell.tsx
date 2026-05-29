@@ -25,6 +25,7 @@ import {
   QrCode,
   Search,
   ShoppingBag,
+  SlidersHorizontal,
   Truck,
   Users,
   Utensils,
@@ -855,6 +856,100 @@ function LoginRequired({ token }: { token: string }) {
   );
 }
 
+// ── PaymentSheet ─────────────────────────────────────────────────────────────
+
+function PaymentSheet({
+  open,
+  current,
+  loading,
+  onSelect,
+  onClose,
+}: {
+  open: boolean;
+  current: "cash" | "bank_transfer";
+  loading: boolean;
+  onSelect: (t: "cash" | "bank_transfer") => void;
+  onClose: () => void;
+}) {
+  const opts = [
+    { id: "cash" as const, label: "Tiền mặt", desc: "Thanh toán khi nhận hàng hoặc tại quán", Icon: Banknote },
+    { id: "bank_transfer" as const, label: "Chuyển khoản", desc: "Chuyển khoản ngân hàng / quét QR", Icon: QrCode },
+  ];
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm sm:items-center sm:p-4"
+          onClick={(e) => e.target === e.currentTarget && onClose()}
+        >
+          <motion.div
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 30, stiffness: 350 }}
+            className="w-full rounded-t-3xl bg-white p-5 sm:max-w-sm sm:rounded-3xl"
+          >
+            {/* Handle */}
+            <div className="mb-4 flex justify-center sm:hidden">
+              <div className="h-1 w-10 rounded-full bg-black/12" />
+            </div>
+
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-foreground/40">
+              Phương thức thanh toán
+            </p>
+            <p className="mb-4 text-xs text-foreground/50">
+              Áp dụng cho toàn bộ đơn nhóm
+            </p>
+
+            <div className="space-y-2">
+              {opts.map(({ id, label, desc, Icon }) => {
+                const isSelected = current === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    disabled={loading}
+                    onClick={() => onSelect(id)}
+                    className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left transition-all disabled:opacity-50 ${
+                      isSelected
+                        ? "bg-[#1a3c34] text-white shadow-sm"
+                        : "bg-[#f7f7f7] text-foreground hover:bg-black/6"
+                    }`}
+                  >
+                    <div className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${isSelected ? "bg-white/15" : "bg-white"}`}>
+                      {loading && isSelected
+                        ? <Loader2 className="size-4 animate-spin" />
+                        : <Icon className="size-4" />
+                      }
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold">{label}</p>
+                      <p className={`text-xs leading-snug ${isSelected ? "text-white/65" : "text-foreground/50"}`}>{desc}</p>
+                    </div>
+                    {isSelected && <CheckCircle2 className="size-4 shrink-0 text-white/80" />}
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="mt-4 flex h-10 w-full items-center justify-center rounded-full border border-black/8 text-sm text-foreground/60 transition hover:bg-black/4"
+            >
+              Đóng
+            </button>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 // ── GroupOrderPageShell ───────────────────────────────────────────────────────
 
 export function GroupOrderPageShell() {
@@ -877,6 +972,7 @@ export function GroupOrderPageShell() {
   const [showPicker, setShowPicker] = useState(false);
   const [pickerSaving, setPickerSaving] = useState(false);
   const [showFulfillment, setShowFulfillment] = useState(false);
+  const [showPaymentPicker, setShowPaymentPicker] = useState(false);
   const [pendingCheckoutOrder, setPendingCheckoutOrder] = useState<{ id: string; paymentCode: string } | null>(null);
   const splitInitRef = useRef(false);
 
@@ -972,6 +1068,23 @@ export function GroupOrderPageShell() {
     };
   }, [token]);
 
+  // Polling fallback: socket có thể bị miss trên mobile/proxy — poll mỗi 5 giây
+  // khi vẫn còn người đang chờ xác nhận chuyển khoản trong đơn nhóm split.
+  const hasPendingBankTransfer =
+    state?.status === "locked" &&
+    state?.paymentMode === "split" &&
+    Boolean(state?.participants?.some(
+      (p) => p.paymentStatus === "pending" && p.paymentType === "bank_transfer",
+    ));
+
+  useEffect(() => {
+    if (!hasPendingBankTransfer) return;
+    const id = setInterval(() => {
+      fetchGroupOrder(token).then(setState).catch(() => {});
+    }, 5000);
+    return () => clearInterval(id);
+  }, [hasPendingBankTransfer, token]);
+
   useEffect(() => {
     if (state?.status === "completed" && state.order?.paymentCode && !pendingCheckoutOrder) {
       router.push(ROUTES.ORDER_DETAIL(state.order.paymentCode));
@@ -1064,12 +1177,35 @@ export function GroupOrderPageShell() {
     type: "delivery" | "pickup";
     addressId?: string;
     shippingFee?: number;
-    paymentType: "cash" | "bank_transfer";
   }) => {
     if (!sessionToken) throw new Error("Chưa đăng nhập.");
-    const newState = await setGroupOrderFulfillment(token, sessionToken, payload);
+    const newState = await setGroupOrderFulfillment(token, sessionToken, {
+      ...payload,
+      paymentType: state?.paymentType ?? "cash",
+    });
     setState(newState);
     setShowFulfillment(false);
+  };
+
+  const handleChangePaymentType = async (paymentType: "cash" | "bank_transfer") => {
+    if (!sessionToken || !state) return;
+    setActionLoading(true);
+    try {
+      const newState = await setGroupOrderFulfillment(token, sessionToken, {
+        type: state.type as "delivery" | "pickup",
+        addressId: state.address?.id,
+        shippingFee: state.shippingFee,
+        paymentType,
+      });
+      setState(newState);
+      setShowPaymentPicker(false);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string | string[] } } };
+      const msg = err?.response?.data?.message ?? "Có lỗi xảy ra.";
+      alert(typeof msg === "string" ? msg : msg.join(", "));
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   if (loading) {
@@ -1118,6 +1254,14 @@ export function GroupOrderPageShell() {
 
   return (
     <>
+      <PaymentSheet
+        open={showPaymentPicker}
+        current={state?.paymentType ?? "cash"}
+        loading={actionLoading}
+        onSelect={(t) => void handleChangePaymentType(t)}
+        onClose={() => setShowPaymentPicker(false)}
+      />
+
       {showPicker && me && (
         <ProductPickerDrawer
           open={showPicker}
@@ -1231,58 +1375,66 @@ export function GroupOrderPageShell() {
 
             {/* Fulfillment row for host (collecting only) */}
             {isHost && state.status === "collecting" && (
-              <motion.button
-                type="button"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.06 }}
-                onClick={() => setShowFulfillment(true)}
-                className={`flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition hover:shadow-sm ${needsAddress
-                  ? "border-amber-200 bg-amber-50 hover:border-amber-300"
-                  : "border-black/6 bg-white hover:border-[#1a3c34]/20"
-                  }`}
-              >
-                <div
-                  className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${needsAddress ? "bg-amber-100" : "bg-[#1a3c34]/8"
+              <>
+                <motion.button
+                  type="button"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.06 }}
+                  onClick={() => setShowFulfillment(true)}
+                  className={`flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition hover:shadow-sm ${needsAddress
+                    ? "border-amber-200 bg-amber-50 hover:border-amber-300"
+                    : "border-black/6 bg-white hover:border-[#1a3c34]/20"
                     }`}
                 >
-                  <FulfillmentIcon
-                    className={`size-4.5 ${needsAddress ? "text-amber-600" : "text-[#1a3c34]"}`}
-                  />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p
-                    className={`text-sm font-semibold ${needsAddress ? "text-amber-800" : "text-foreground"}`}
-                  >
-                    {FULFILLMENT_LABEL[state.type] ?? state.type}
-                    {needsAddress && (
-                      <span className="ml-1.5 text-amber-600">· Chưa chọn địa chỉ</span>
-                    )}
-                  </p>
-                  {state.address && (
-                    <p className="truncate text-xs text-foreground/55">{state.address.fullAddress}</p>
-                  )}
-                  {!state.address && state.type !== "delivery" && (
-                    <p className="text-xs text-foreground/45">Nhấn để thay đổi hình thức</p>
-                  )}
-                  {needsAddress && (
-                    <p className="text-xs text-amber-600/80">
-                      Thiết lập địa chỉ trước khi khóa đơn
+                  <div className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${needsAddress ? "bg-amber-100" : "bg-[#1a3c34]/8"}`}>
+                    <FulfillmentIcon className={`size-4.5 ${needsAddress ? "text-amber-600" : "text-[#1a3c34]"}`} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-sm font-semibold ${needsAddress ? "text-amber-800" : "text-foreground"}`}>
+                      {FULFILLMENT_LABEL[state.type] ?? state.type}
+                      {needsAddress && <span className="ml-1.5 text-amber-600">· Chưa chọn địa chỉ</span>}
                     </p>
-                  )}
-                  <p className="mt-1 flex items-center gap-1 text-xs text-foreground/50">
-                    {state.paymentType === "cash" ? (
-                      <Banknote className="size-3 shrink-0" />
-                    ) : (
-                      <QrCode className="size-3 shrink-0" />
+                    {state.address && (
+                      <p className="truncate text-xs text-foreground/55">{state.address.fullAddress}</p>
                     )}
-                    {state.paymentType === "cash" ? "Tiền mặt" : "Chuyển khoản"}
-                  </p>
-                </div>
-                <ChevronRight
-                  className={`size-4 shrink-0 ${needsAddress ? "text-amber-400" : "text-foreground/25"}`}
-                />
-              </motion.button>
+                    {!state.address && state.type !== "delivery" && (
+                      <p className="text-xs text-foreground/45">Nhấn để thay đổi hình thức</p>
+                    )}
+                    {needsAddress && (
+                      <p className="text-xs text-amber-600/80">Thiết lập địa chỉ trước khi khóa đơn</p>
+                    )}
+                  </div>
+                  <ChevronRight className={`size-4 shrink-0 ${needsAddress ? "text-amber-400" : "text-foreground/25"}`} />
+                </motion.button>
+
+                {/* Payment type — separate row */}
+                <motion.button
+                  type="button"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.08 }}
+                  onClick={() => setShowPaymentPicker(true)}
+                  className="flex w-full items-center gap-3 rounded-2xl border border-black/6 bg-white p-4 text-left transition hover:border-[#1a3c34]/20 hover:shadow-sm"
+                >
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#1a3c34]/8">
+                    {state.paymentType === "cash"
+                      ? <Banknote className="size-4.5 text-[#1a3c34]" />
+                      : <QrCode className="size-4.5 text-[#1a3c34]" />
+                    }
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-foreground">Phương thức thanh toán</p>
+                    <p className="text-xs text-foreground/55">
+                      {state.paymentType === "cash" ? "Tiền mặt" : "Chuyển khoản ngân hàng"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <SlidersHorizontal className="size-3.5 text-foreground/30" />
+                    <span className="text-[11px] font-semibold text-[#1a3c34]">Thay đổi</span>
+                  </div>
+                </motion.button>
+              </>
             )}
 
             {/* Fulfilled info (read-only, locked/completed) */}
@@ -1533,7 +1685,7 @@ export function GroupOrderPageShell() {
                     {state.status === "collecting" && (
                       <button
                         type="button"
-                        onClick={() => setShowFulfillment(true)}
+                        onClick={() => setShowPaymentPicker(true)}
                         className="text-[11px] font-semibold text-[#1a3c34] hover:underline"
                       >
                         Thay đổi

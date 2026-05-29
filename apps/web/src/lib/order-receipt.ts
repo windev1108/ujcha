@@ -1,5 +1,7 @@
 "use client";
 
+import { env } from "@/config/env";
+
 function esc(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -137,11 +139,11 @@ export function buildReceiptHtml(order: ReceiptOrder): string {
     `<div style="display:flex;justify-content:space-between;font-weight:bold;font-size:15px;margin-top:3px;color:#000;"><span>Tổng cộng</span><span style="white-space:nowrap;">${esc(vnd(total))}</span></div>`,
     `<div style="font-size:12px;margin-top:2px;color:#000;">Thanh toán: <b>${esc(payLabel(order.paymentType))}</b></div>`,
     order.paymentStatus === "paid"
-      ? `<div style="font-size:12px;font-weight:bold;color:green;margin-top:1px;">✓ Đã thanh toán</div>`
-      : `<div style="font-size:12px;color:#888;margin-top:1px;">Chờ thanh toán</div>`,
+      ? `<div style="font-size:12px;font-weight:bold;color:#000;margin-top:1px;">✓ Đã thanh toán</div>`
+      : `<div style="font-size:12px;color:#000;margin-top:1px;">Chờ thanh toán</div>`,
 
-    `<div style="border-top:1px dashed #ccc;margin:4px 0;"></div>`,
-    `<div style="text-align:center;font-size:10px;color:#999;">kunrituals.com</div>`,
+    `<div style="border-top:1px dashed #000;margin:4px 0;"></div>`,
+    `<div style="text-align:center;font-size:10px;color:#000;">${env.SITE_URL}</div>`,
   ].join("");
 
   return (

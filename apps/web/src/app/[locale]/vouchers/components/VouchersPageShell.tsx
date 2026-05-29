@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { motion } from "motion/react";
 import { ArrowLeft, Check, Copy, Gift, Lock, ShoppingBag, Ticket } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { ROUTES } from "@/lib/routes";
 import { useMyVouchersQuery } from "@/services/voucher/hooks";
@@ -23,13 +24,8 @@ function formatDate(iso: string) {
   });
 }
 
-const SOURCE_LABEL: Record<string, string> = {
-  welcome: "Chào mừng",
-  referral: "Giới thiệu",
-  admin_grant: "Từ UjCha",
-};
-
 function VoucherCard({ item, index }: { item: MyVoucherItem; index: number }) {
+  const t = useTranslations();
   const [copied, setCopied] = useState(false);
   const router = useRouter();
   const v = item.voucher;
@@ -42,9 +38,15 @@ function VoucherCard({ item, index }: { item: MyVoucherItem; index: number }) {
     ? `Giảm ${v.discountValue}%`
     : `Giảm ${formatVnd(v.discountValue)}`;
 
+  const sourceLabel: Record<string, string> = {
+    welcome: t("source_welcome"),
+    referral: t("source_referral"),
+    admin_grant: t("source_admin_grant"),
+  };
+
   const maxLabel =
     isPercent && v.maxDiscountAmount
-      ? `Tối đa ${formatVnd(v.maxDiscountAmount)}`
+      ? t("max_discount", { amount: formatVnd(v.maxDiscountAmount) })
       : null;
 
   async function handleCopy() {
@@ -83,16 +85,16 @@ function VoucherCard({ item, index }: { item: MyVoucherItem; index: number }) {
               <div>
                 <div className="flex items-center gap-1.5">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
-                    {SOURCE_LABEL[item.source] ?? "Voucher"}
+                    {sourceLabel[item.source] ?? "Voucher"}
                   </p>
                   {isUsed && (
                     <span className="rounded-full bg-surface-card px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-muted">
-                      Đã dùng
+                      {t("used")}
                     </span>
                   )}
                   {!isUsed && isExpired && (
                     <span className="rounded-full bg-red-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-red-500">
-                      Hết hạn
+                      {t("expired")}
                     </span>
                   )}
                 </div>
@@ -119,7 +121,7 @@ function VoucherCard({ item, index }: { item: MyVoucherItem; index: number }) {
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-widest text-muted">
-                Mã voucher
+                {t("voucher_code_label")}
               </p>
               <p
                 className={`mt-0.5 font-mono text-lg font-bold tracking-widest ${isInactive ? "text-muted line-through" : "text-[#1a3c34]"
@@ -139,12 +141,12 @@ function VoucherCard({ item, index }: { item: MyVoucherItem; index: number }) {
                   {copied ? (
                     <>
                       <Check className="size-3.5" />
-                      Đã sao chép
+                      {t("copied")}
                     </>
                   ) : (
                     <>
                       <Copy className="size-3.5" />
-                      Sao chép
+                      {t("copy")}
                     </>
                   )}
                 </button>
@@ -154,13 +156,13 @@ function VoucherCard({ item, index }: { item: MyVoucherItem; index: number }) {
                   className="flex items-center gap-1.5 rounded-full border border-black/10 bg-white px-4 py-2 text-xs font-semibold text-foreground/70 transition-colors hover:border-[#1a3c34]/30 hover:text-[#1a3c34]"
                 >
                   <ShoppingBag className="size-3.5" />
-                  Đặt hàng
+                  {t("order")}
                 </button>
               </div>
             ) : (
               <div className="flex items-center gap-1.5 text-xs text-muted">
                 <Lock className="size-3.5" />
-                {isUsed ? `Đã dùng ${formatDate(item.usedAt!)}` : "Không thể sử dụng"}
+                {isUsed ? t("voucher_used_on", { date: formatDate(item.usedAt!) }) : t("cannot_use")}
               </div>
             )}
           </div>
@@ -168,7 +170,7 @@ function VoucherCard({ item, index }: { item: MyVoucherItem; index: number }) {
           {/* Meta */}
           <div className="mt-3.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
             <span className="text-[11px] text-muted">
-              Đơn tối thiểu {formatVnd(v.minOrderAmount)}
+              {t("min_order_label", { amount: formatVnd(v.minOrderAmount) })}
             </span>
             {maxLabel && (
               <>
@@ -180,7 +182,7 @@ function VoucherCard({ item, index }: { item: MyVoucherItem; index: number }) {
               <>
                 <span className="text-muted/40">·</span>
                 <span className={`text-[11px] ${isExpired ? "text-red-400" : "text-muted"}`}>
-                  HSD: {formatDate(v.endsAt)}
+                  {t("expiry_label")} {formatDate(v.endsAt)}
                 </span>
               </>
             )}
@@ -192,6 +194,7 @@ function VoucherCard({ item, index }: { item: MyVoucherItem; index: number }) {
 }
 
 function EmptyState() {
+  const t = useTranslations();
   const router = useRouter();
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -204,11 +207,11 @@ function EmptyState() {
         <Gift className="size-9 text-foreground/25" />
       </motion.div>
       <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-        Túi voucher
+        {t("voucher_bag")}
       </p>
-      <p className="mt-2 text-xl font-bold text-foreground">Chưa có voucher nào</p>
+      <p className="mt-2 text-xl font-bold text-foreground">{t("no_vouchers")}</p>
       <p className="mt-2 max-w-[260px] text-sm text-muted">
-        Đặt hàng, tham gia giới thiệu bạn bè để nhận voucher giảm giá.
+        {t("no_vouchers_desc")}
       </p>
       <button
         type="button"
@@ -216,13 +219,14 @@ function EmptyState() {
         className="mt-6 flex items-center gap-2 rounded-full bg-[#1a3c34] px-6 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
       >
         <ShoppingBag className="size-4" />
-        Xem thực đơn
+        {t("view_menu")}
       </button>
     </div>
   );
 }
 
 function LoginPrompt() {
+  const t = useTranslations();
   const router = useRouter();
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -234,16 +238,16 @@ function LoginPrompt() {
       >
         <Lock className="size-9 text-foreground/25" />
       </motion.div>
-      <p className="mt-2 text-xl font-bold text-foreground">Đăng nhập để xem voucher</p>
+      <p className="mt-2 text-xl font-bold text-foreground">{t("login_to_view_vouchers")}</p>
       <p className="mt-2 max-w-[260px] text-sm text-muted">
-        Túi voucher cá nhân chỉ hiển thị khi bạn đã đăng nhập.
+        {t("voucher_login_desc")}
       </p>
       <button
         type="button"
         onClick={() => router.push(ROUTES.LOGIN)}
         className="mt-6 rounded-full bg-[#1a3c34] px-6 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
       >
-        Đăng nhập
+        {t("login")}
       </button>
     </div>
   );
@@ -278,6 +282,7 @@ function SkeletonCard() {
 }
 
 export function VouchersPageShell() {
+  const t = useTranslations();
   const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
   const { data, isLoading } = useMyVouchersQuery();
@@ -302,18 +307,18 @@ export function VouchersPageShell() {
             className="mb-4 flex items-center gap-1.5 text-sm text-foreground/50 transition-colors hover:text-foreground"
           >
             <ArrowLeft className="size-4" />
-            Quay lại
+            {t("back")}
           </button>
           <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-            Cá nhân
+            {t("personal_eyebrow")}
           </p>
           <div className="flex items-center justify-between gap-3">
             <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-              Ưu đãi của tôi
+              {t("my_vouchers")}
             </h1>
             {data && data.length > 0 && (
               <span className="rounded-full bg-[#1a3c34]/8 px-3 py-1.5 text-sm font-semibold text-[#1a3c34]">
-                {available.length} khả dụng
+                {t("available_count", { count: available.length })}
               </span>
             )}
           </div>
@@ -335,7 +340,7 @@ export function VouchersPageShell() {
             {available.length > 0 && (
               <div className="space-y-4">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-                  Có thể sử dụng ({available.length})
+                  {t("available_count", { count: available.length })}
                 </p>
                 {available.map((item, i) => (
                   <VoucherCard key={item.id} item={item} index={i} />
@@ -346,7 +351,7 @@ export function VouchersPageShell() {
             {used.length > 0 && (
               <div className="space-y-4">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-                  Đã dùng / hết hạn ({used.length})
+                  {t("used_expired_count", { count: used.length })}
                 </p>
                 {used.map((item, i) => (
                   <VoucherCard key={item.id} item={item} index={i} />

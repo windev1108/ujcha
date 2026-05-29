@@ -13,6 +13,7 @@ import logoUrl from '../assets/logo.png'
 import grabFoodLogo from '../assets/grab-food.png'
 import shopeeFoodLogo from '../assets/shopee-food.png'
 import grfVoiceUrl from '../assets/mp3/grf-voice.mp3'
+import newOrderMp3 from '../assets/mp3/new-order.mp3'
 import spfVoiceUrl from '../assets/mp3/spf-voice.mp3'
 import { LoginScreen } from './LoginScreen'
 import { CategoryBar } from '../components/CategoryBar'
@@ -110,6 +111,13 @@ export function StaffApp() {
   alertHandlerRef.current = (platform: string) => {
     const url = platform.includes('GRAB') ? grfVoiceUrl : platform.includes('SHOPEE') ? spfVoiceUrl : grfVoiceUrl
     startAlert(url)
+  }
+
+  // New-order handler ref: play alert only when the orders modal is not open
+  const newOrderHandlerRef = useRef<() => void>(() => { })
+  newOrderHandlerRef.current = () => {
+    setNewOrderBadge((n) => n + 1)
+    if (!ordersOpen) startAlert(newOrderMp3)
   }
 
   // ── Boot: restore saved session ─────────────────────────────────────────────
@@ -238,7 +246,7 @@ export function StaffApp() {
     if (!isLoggedIn) return
     const socket = io(API_URL, { transports: ['websocket', 'polling'], reconnectionAttempts: 5 })
 
-    socket.on('order:new', () => setNewOrderBadge((n) => n + 1))
+    socket.on('order:new', () => newOrderHandlerRef.current())
     socket.on('order:external', (data?: { platform?: string }) => {
       const p = (data?.platform ?? '').toUpperCase()
       if (p.includes('GRAB')) setNewGrabBadge((n) => n + 1)
@@ -313,14 +321,12 @@ export function StaffApp() {
       {/* ── Header ── */}
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-gray-100 bg-white px-4 shadow-sm">
         {/* Logo */}
-        <img src={logoUrl} alt="UjCha" className="h-8 w-8 object-contain" />
-        <span className="text-base font-black text-brand">UjCha POS</span>
-
+        <img src={logoUrl} alt="UjCha" className="h-20 w-24 object-contain" />
         <div className="mx-3 h-6 w-px bg-gray-200" />
 
         {/* Nav */}
         <button
-          onClick={() => { setOrdersOpen(true); setNewOrderBadge(0) }}
+          onClick={() => { setOrdersOpen(true); setNewOrderBadge(0); stopAlert() }}
           className="relative flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-semibold text-gray-600 hover:bg-gray-100 hover:text-gray-900"
         >
           <ClipboardList className="size-4" />

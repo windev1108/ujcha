@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  ArrowLeft, Clock, CheckCircle2, XCircle, RefreshCw,
+  ArrowLeft, Bell, Clock, CheckCircle2, XCircle, RefreshCw,
   ShoppingBag, CreditCard, ChevronRight, Search,
-  Loader2, Calendar, Check, ListChecks, X, Bike,
+  Loader2, Calendar, Check, ListChecks, X, Bike, Truck, Utensils,
 } from 'lucide-react'
 import { io } from 'socket.io-client'
 import { fetchOrders, updateOrderStatus, bulkUpdateOrderStatus, fetchShippers, assignShipper, API_URL } from '../api'
@@ -71,10 +71,10 @@ const STATUS_DOT: Record<OrderStatus, string> = {
   completed: 'bg-teal-500',
 }
 
-const ORDER_TYPE_LABEL: Record<string, { label: string; icon: string }> = {
-  table: { label: 'Tại bàn', icon: '🍽️' },
-  delivery: { label: 'Giao hàng', icon: '🛵' },
-  pickup: { label: 'Mang về', icon: '🛍️' },
+const ORDER_TYPE_LABEL: Record<string, { label: string; Icon: React.ElementType }> = {
+  table:    { label: 'Tại bàn',   Icon: Utensils },
+  delivery: { label: 'Giao hàng', Icon: Truck },
+  pickup:   { label: 'Mang về',   Icon: ShoppingBag },
 }
 
 const PAYMENT_TYPE_LABEL: Record<string, string> = {
@@ -396,7 +396,8 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
               className="relative flex items-center gap-1.5 rounded-full bg-emerald-500 px-3.5 py-1.5 text-xs font-bold text-white shadow-lg hover:bg-emerald-600 transition-colors"
             >
               <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-40" />
-              🔔 Đơn mới!
+              <Bell className="size-3.5" />
+              Đơn mới!
             </button>
           )}
           <div className="ml-auto">
@@ -626,7 +627,7 @@ function OrderCard({
   isSelected: boolean
   onToggleSelect: () => void
 }) {
-  const typeInfo = ORDER_TYPE_LABEL[order.type] ?? { label: order.type, icon: '📦' }
+  const typeInfo = ORDER_TYPE_LABEL[order.type] ?? { label: order.type, Icon: ShoppingBag }
   const totalQty = order.items.reduce((s, i) => s + i.quantity, 0)
   const paymentCode = order.paymentCode ?? order.orderRef ?? order.id.slice(0, 8).toUpperCase()
   const orderTotal = order.items.reduce((s, i) => s + Number(i.price) * i.quantity, 0)
@@ -685,8 +686,9 @@ function OrderCard({
               <span className={`size-1.5 rounded-full ${STATUS_DOT[order.status]}`} />
               {STATUS_LABEL[order.status]}
             </span>
-            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">
-              {typeInfo.icon} {typeInfo.label}
+            <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">
+              <typeInfo.Icon className="size-3 shrink-0" />
+              {typeInfo.label}
             </span>
             {order.type === 'delivery' && order.shipper && (
               <span className="inline-flex items-center gap-0.5 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">

@@ -4,6 +4,7 @@ import { Button } from "@heroui/react";
 import { Mail, Pencil, Phone } from "lucide-react";
 import Image from "next/image";
 import { motion } from "motion/react";
+import { useTranslations } from "next-intl";
 
 import { easeOutSmooth, revealTransition } from "@/app/[locale]/(landing)/components/RevealSection";
 import type { AuthUser } from "@/services/auth/types";
@@ -31,7 +32,8 @@ export function ProfileHeroSection({
   onEditPress,
   onAvatarEditPress,
 }: Props) {
-  const name = user?.name?.trim() || "Khách";
+  const t = useTranslations();
+  const name = user?.name?.trim() || t("guest");
   const email = user?.email?.trim() || "—";
   const phone = displayPhone(user?.phone);
   const avatarUrl = user?.avatar;
@@ -64,7 +66,7 @@ export function ProfileHeroSection({
           type="button"
           onClick={onAvatarEditPress}
           className="absolute bottom-0 right-0 flex size-9 items-center justify-center rounded-full bg-kun-sage text-white shadow-md ring-2 ring-white transition-transform hover:scale-105 active:scale-95"
-          aria-label="Đổi ảnh đại diện"
+          aria-label={t("change_avatar")}
         >
           <Pencil className="size-4" strokeWidth={2} />
         </button>
@@ -91,7 +93,7 @@ export function ProfileHeroSection({
         className="mt-6 min-w-[12rem] rounded-full border-border font-medium"
         onPress={onEditPress}
       >
-        Chỉnh sửa thông tin
+        {t("edit_profile")}
       </Button>
     </motion.div>
   );

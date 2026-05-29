@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { Fragment, useState, useEffect } from 'react'
 import { DEFAULT_BILL_CONFIG, DEFAULT_LABEL_CONFIG, type AdminOrder, type OrderStatus } from '../types/common'
-import { fetchShippers, assignShipper, updateOrderStatus } from '../api'
+import { fetchShippers, assignShipper, updateOrderStatus, fetchShippingEstimate } from '../api'
 import { buildOrderLabels, buildReceiptDocumentHtml, buildKunLoyaltyQrUrl } from '@/lib/receipt-shared'
 import { KEYS, loadLocal } from '@/lib/local-storage'
 import { formatDate } from '@/lib/utils'
@@ -196,6 +196,7 @@ export function OrderDetailModal({ order, onClose }: { order: AdminOrder; onClos
     const [selectedShipperId, setSelectedShipperId] = useState(order.shipperId ?? '')
     const [assignBusy, setAssignBusy] = useState(false)
     const [assignDone, setAssignDone] = useState(false)
+    const [distanceKm, setDistanceKm] = useState<number | null>(null)
 
     useEffect(() => {
         setBillCfg(loadLocal<BillConfig>(KEYS.bill, DEFAULT_BILL_CONFIG))
@@ -206,6 +207,15 @@ export function OrderDetailModal({ order, onClose }: { order: AdminOrder; onClos
         if (order.type !== 'delivery') return
         void fetchShippers().then(setShippers).catch(() => { })
     }, [order.type])
+
+    useEffect(() => {
+        const lat = order.address?.lat
+        const lng = order.address?.lng
+        if (order.type !== 'delivery' || typeof lat !== 'number' || typeof lng !== 'number') return
+        void fetchShippingEstimate(lat, lng)
+            .then((r) => setDistanceKm(r.distanceKm))
+            .catch(() => { })
+    }, [order.type, order.address?.lat, order.address?.lng])
 
     const handleAssignShipper = async () => {
         if (!selectedShipperId) return
@@ -484,7 +494,7 @@ export function OrderDetailModal({ order, onClose }: { order: AdminOrder; onClos
                             )}
                             {order.type === 'delivery' && (
                                 <PriceRow
-                                    label="Phí vận chuyển"
+                                    label={distanceKm !== null ? `Phí giao hàng · ${distanceKm.toFixed(1)} km` : 'Phí giao hàng'}
                                     value={shippingFee > 0 ? fmt(shippingFee) : 'Miễn phí'}
                                     valueClass={shippingFee > 0 ? 'text-gray-700' : 'text-brand font-semibold'}
                                 />

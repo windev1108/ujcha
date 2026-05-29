@@ -4,10 +4,13 @@ import { useState } from "react";
 import { motion } from "motion/react";
 import Image from "next/image";
 import { useRouter } from "@/i18n/navigation";
-import { ArrowLeft, ChevronLeft, ChevronRight, Package, ShoppingBag, Star, Users } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { ArrowLeft, ChevronLeft, ChevronRight, MapPin, Package, ShoppingBag, Star, Truck, Utensils, Users } from "lucide-react";
 import { Button } from "@heroui/react";
-import { useMyOrdersQuery } from "@/services/order/hooks";
+import { useMyOrdersQuery, orderKeys } from "@/services/order/hooks";
+import { useOrderStatusSocket } from "@/hooks/useOrderStatusSocket";
 import { useProfileQuery } from "@/services/profile/hooks";
+import { useQueryClient } from "@tanstack/react-query";
 import { revealTransition, easeOutSmooth } from "@/app/[locale]/(landing)/components/RevealSection";
 import { ROUTES } from "@/lib/routes";
 import type { UserOrder, UserOrderItem, OrderStatus } from "@/services/order/api";
@@ -17,32 +20,18 @@ function formatVnd(s: string | number) {
   return new Intl.NumberFormat("vi-VN").format(Math.round(n)) + "đ";
 }
 
-function formatDateCompact(iso: string) {
+type TFunction = ReturnType<typeof useTranslations>;
+
+function formatDateCompact(iso: string, t: TFunction) {
   const d = new Date(iso);
   const today = new Date();
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
   const time = d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
-  if (d.toDateString() === today.toDateString()) return `Hôm nay, ${time}`;
-  if (d.toDateString() === yesterday.toDateString()) return `Hôm qua, ${time}`;
+  if (d.toDateString() === today.toDateString()) return t("today_at", { time });
+  if (d.toDateString() === yesterday.toDateString()) return t("yesterday_at", { time });
   return d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" }) + `, ${time}`;
 }
-
-const STATUS_CONFIG: Record<OrderStatus, { label: string; className: string }> = {
-  pending:    { label: "Chờ xác nhận", className: "bg-amber-50 text-amber-700 ring-amber-200" },
-  confirmed:  { label: "Đã xác nhận",  className: "bg-blue-50 text-blue-700 ring-blue-200" },
-  preparing:  { label: "Đang pha chế", className: "bg-purple-50 text-purple-700 ring-purple-200" },
-  ready:      { label: "Sẵn sàng",     className: "bg-teal-50 text-teal-700 ring-teal-200" },
-  delivering: { label: "Đang giao",    className: "bg-sky-50 text-sky-700 ring-sky-200" },
-  completed:  { label: "Hoàn thành",   className: "bg-green-50 text-green-700 ring-green-200" },
-  cancelled:  { label: "Đã huỷ",       className: "bg-red-50 text-red-600 ring-red-200" },
-};
-
-const TYPE_LABEL: Record<string, string> = {
-  delivery: "Giao hàng",
-  pickup:   "Mang đi",
-  table:    "Tại bàn",
-};
 
 function ProductImageStack({ items }: { items: UserOrderItem[] }) {
   const maxShow = 3;
@@ -89,75 +78,131 @@ function ProductImageStack({ items }: { items: UserOrderItem[] }) {
   );
 }
 
+const STATUS_STRIP: Record<OrderStatus, string> = {
+  pending:    "bg-amber-400",
+  confirmed:  "bg-blue-500",
+  preparing:  "bg-purple-500",
+  ready:      "bg-teal-500",
+  delivering: "bg-sky-500",
+  completed:  "bg-green-500",
+  cancelled:  "bg-red-400",
+};
+
+const STATUS_ACTIVE: OrderStatus[] = ["pending", "confirmed", "preparing", "ready", "delivering"];
+
 function OrderCard({ order, index = 0 }: { order: UserOrder; index?: number }) {
+  const t = useTranslations();
   const router = useRouter();
+
+  const STATUS_CONFIG: Record<OrderStatus, { label: string; badge: string }> = {
+    pending:    { label: t("status_pending"),    badge: "bg-amber-50 text-amber-700 ring-amber-200" },
+    confirmed:  { label: t("status_confirmed"),  badge: "bg-blue-50 text-blue-700 ring-blue-200" },
+    preparing:  { label: t("status_preparing"),  badge: "bg-purple-50 text-purple-700 ring-purple-200" },
+    ready:      { label: t("status_ready"),      badge: "bg-teal-50 text-teal-700 ring-teal-200" },
+    delivering: { label: t("status_delivering"), badge: "bg-sky-50 text-sky-700 ring-sky-200" },
+    completed:  { label: t("status_completed"),  badge: "bg-green-50 text-green-700 ring-green-200" },
+    cancelled:  { label: t("status_cancelled"),  badge: "bg-red-50 text-red-600 ring-red-200" },
+  };
+
+  const TYPE_META: Record<string, { label: string; Icon: React.ElementType }> = {
+    delivery: { label: t("type_delivery"), Icon: Truck },
+    pickup:   { label: t("type_pickup"),   Icon: ShoppingBag },
+    table:    { label: t("type_table"),    Icon: Utensils },
+  };
+
   const statusCfg = STATUS_CONFIG[order.status] ?? STATUS_CONFIG.pending;
+  const isActive = STATUS_ACTIVE.includes(order.status);
   const displayItems = order.items.slice(0, 2);
   const moreCount = order.items.length - 2;
   const fmtPoints = Number.isInteger(order.earnedPoints)
     ? order.earnedPoints
     : (order.earnedPoints as number).toFixed(1);
-  const isGroupOrder = order.isGroupOrder;
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.32, ease: easeOutSmooth, delay: index * 0.055 }}
+      transition={{ duration: 0.3, ease: easeOutSmooth, delay: index * 0.05 }}
       onClick={() => router.push(ROUTES.ORDER_DETAIL(order.paymentCode))}
-      className="group cursor-pointer rounded-3xl border border-black/6 bg-white p-5 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.10)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_36px_-10px_rgba(0,0,0,0.18)]"
+      className="group relative cursor-pointer overflow-hidden rounded-3xl border border-black/6 bg-white shadow-[0_4px_20px_-8px_rgba(0,0,0,0.08)] transition-all duration-200 hover:-translate-y-0.5 hover:border-black/10 hover:shadow-[0_12px_36px_-10px_rgba(0,0,0,0.16)]"
     >
-      {/* Top: image stack + badges */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex flex-col gap-2">
-          <ProductImageStack items={order.items} />
-          {isGroupOrder && (
-            <span className="inline-flex w-fit items-center gap-1 rounded-full bg-[#1a3c34]/8 px-2.5 py-1 text-[11px] font-semibold text-[#1a3c34]">
-              <Users className="size-3" />
-              Đơn nhóm
-            </span>
-          )}
-        </div>
-        <span
-          className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${statusCfg.className}`}
-        >
-          {statusCfg.label}
-        </span>
-      </div>
+      {/* Status color strip */}
+      <div className={`h-1 w-full ${STATUS_STRIP[order.status]}`} />
 
-      {/* Item names */}
-      <div className="mt-3.5 space-y-1">
-        {displayItems.map((item, i) => (
-          <p key={i} className="truncate text-sm leading-snug text-foreground">
-            <span className="font-normal text-foreground/40">{item.quantity}×</span>
-            {" "}
-            <span className="font-semibold">{item.product.name}</span>
-          </p>
-        ))}
-        {moreCount > 0 && (
-          <p className="text-xs text-muted">+{moreCount} món khác</p>
-        )}
-      </div>
-
-      {/* Footer: type + date / amount + points */}
-      <div className="mt-4 flex items-end justify-between gap-3 border-t border-black/5 pt-3.5">
-        <div className="space-y-1.5">
-          <span className="rounded-full bg-surface-card px-2.5 py-1 text-[11px] font-semibold text-foreground/60">
-            {TYPE_LABEL[order.type] ?? order.type}
+      <div className="p-4 sm:p-5">
+        {/* Row 1: Image stack + Status badge */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <ProductImageStack items={order.items} />
+            {order.isGroupOrder && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#1a3c34]/8 px-2 py-0.5 text-[10px] font-semibold text-[#1a3c34]">
+                <Users className="size-3" />
+                {t("group_order_badge")}
+              </span>
+            )}
+          </div>
+          <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${statusCfg.badge} ${isActive ? "animate-pulse" : ""}`}>
+            {statusCfg.label}
           </span>
-          <p className="text-[11px] text-muted">{formatDateCompact(order.createdAt)}</p>
         </div>
 
-        <div className="text-right">
-          <p className="text-base font-bold tabular-nums text-[#1a3c34]">
-            {formatVnd(order.finalAmount)}
-          </p>
-          {order.earnedPoints > 0 && (
-            <div className="mt-1 flex items-center justify-end gap-1 text-[11px] font-semibold text-amber-600">
-              <Star className="size-3 fill-amber-500 text-amber-500" />
-              +{fmtPoints} điểm
-            </div>
+        {/* Row 2: Item names */}
+        <div className="mt-3 space-y-1">
+          {displayItems.map((item, i) => (
+            <p key={i} className="truncate text-sm leading-snug">
+              <span className="tabular-nums text-foreground/40 text-xs">{item.quantity}×</span>
+              {" "}
+              <span className="font-semibold text-foreground">{item.product.name}</span>
+            </p>
+          ))}
+          {moreCount > 0 && (
+            <p className="text-[11px] text-muted">
+              {t("n_more_items", { count: moreCount })}
+            </p>
           )}
+        </div>
+
+        {/* Row 3: delivery address preview */}
+        {order.type === "delivery" && order.address && (
+          <div className="mt-2.5 flex items-start gap-1.5 rounded-xl bg-surface-soft px-2.5 py-1.5">
+            <MapPin className="mt-0.5 size-3 shrink-0 text-foreground/35" />
+            <p className="truncate text-[11px] text-foreground/55 leading-snug">
+              {order.address.fullAddress}
+            </p>
+          </div>
+        )}
+
+        {/* Row 4: Footer */}
+        <div className="mt-3.5 flex items-center justify-between gap-3 border-t border-black/5 pt-3">
+          {/* Type + date */}
+          <div className="flex items-center gap-2 min-w-0">
+            {(() => {
+              const meta = TYPE_META[order.type];
+              const TypeIcon = meta?.Icon ?? ShoppingBag;
+              return (
+                <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-surface-card px-2 py-0.5 text-[11px] font-semibold text-foreground/55">
+                  <TypeIcon className="size-3 shrink-0" />
+                  {meta?.label ?? order.type}
+                </span>
+              );
+            })()}
+            <p className="truncate text-[11px] text-muted">{formatDateCompact(order.createdAt, t)}</p>
+          </div>
+
+          {/* Amount + points */}
+          <div className="shrink-0 text-right">
+            <p className="text-sm font-bold tabular-nums text-[#1a3c34]">
+              {formatVnd(order.finalAmount)}
+            </p>
+            {order.earnedPoints > 0 && (
+              <div className="mt-0.5 flex items-center justify-end gap-1">
+                <Star className="size-3 fill-amber-400 text-amber-400" />
+                <span className="text-[11px] font-semibold tabular-nums text-amber-600">
+                  +{fmtPoints}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </motion.div>
@@ -165,6 +210,7 @@ function OrderCard({ order, index = 0 }: { order: UserOrder; index?: number }) {
 }
 
 function EmptyOrders() {
+  const t = useTranslations();
   const router = useRouter();
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
@@ -177,11 +223,11 @@ function EmptyOrders() {
         <Package className="size-9 text-foreground/25" />
       </motion.div>
       <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-        Chưa có đơn nào
+        {t("no_orders")}
       </p>
-      <p className="mt-2 text-lg font-bold text-foreground">Hãy đặt món đầu tiên</p>
+      <p className="mt-2 text-lg font-bold text-foreground">{t("no_orders_headline")}</p>
       <p className="mt-1.5 max-w-[260px] text-sm text-muted">
-        Khám phá thực đơn và đặt món — đơn hàng của bạn sẽ hiện ngay tại đây.
+        {t("no_orders_desc")}
       </p>
       <button
         type="button"
@@ -189,7 +235,7 @@ function EmptyOrders() {
         className="mt-6 flex items-center gap-2 rounded-full bg-[#1a3c34] px-6 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
       >
         <ShoppingBag className="size-4" />
-        Xem thực đơn
+        {t("view_menu")}
       </button>
     </div>
   );
@@ -226,10 +272,18 @@ function SkeletonCard() {
 }
 
 export function OrdersPageShell() {
+  const t = useTranslations();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const { data, isLoading } = useMyOrdersQuery(page);
   const { data: profile } = useProfileQuery();
+
+  useOrderStatusSocket({
+    onStatusChange: () => {
+      queryClient.invalidateQueries({ queryKey: orderKeys.myOrders(page) });
+    },
+  });
 
   const fmtBalance = profile
     ? Number.isInteger(profile.pointBalance)
@@ -254,22 +308,22 @@ export function OrdersPageShell() {
             className="mb-4 flex items-center gap-1.5 text-sm text-foreground/50 transition-colors hover:text-foreground"
           >
             <ArrowLeft className="size-4" />
-            Quay lại
+            {t("back")}
           </button>
 
           <div className="flex items-end justify-between gap-3">
             <div>
               <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-                Đơn hàng của bạn
+                {t("orders_eyebrow")}
               </p>
               <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-                Lịch sử đơn hàng
+                {t("order_history")}
               </h1>
             </div>
             {profile && fmtBalance !== null && (
               <div className="flex shrink-0 items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-700 ring-1 ring-amber-200">
                 <Star className="size-4 fill-amber-500 text-amber-500" />
-                {fmtBalance} điểm
+                {fmtBalance} {t("points_unit")}
               </div>
             )}
           </div>
@@ -301,12 +355,12 @@ export function OrdersPageShell() {
               isDisabled={page <= 1}
               onPress={() => setPage((p) => Math.max(1, p - 1))}
               className="size-9 rounded-full"
-              aria-label="Trang trước"
+              aria-label={t("previous_page")}
             >
               <ChevronLeft className="size-4" />
             </Button>
             <span className="text-sm text-foreground/70">
-              Trang {data.page} / {data.totalPages}
+              {t("page_simple_indicator", { page: data.page, total: data.totalPages })}
             </span>
             <Button
               isIconOnly
@@ -314,7 +368,7 @@ export function OrdersPageShell() {
               isDisabled={page >= data.totalPages}
               onPress={() => setPage((p) => p + 1)}
               className="size-9 rounded-full"
-              aria-label="Trang sau"
+              aria-label={t("next_page")}
             >
               <ChevronRight className="size-4" />
             </Button>

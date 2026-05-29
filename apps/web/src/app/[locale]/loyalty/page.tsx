@@ -1,12 +1,16 @@
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import { Loader2 } from "lucide-react";
 import { LoyaltyPageShell } from "./components/LoyaltyPageShell";
 
-export const metadata: Metadata = {
-  title: "Tích điểm thưởng",
-  description: "Tích điểm từ đơn hàng để nhận ưu đãi từ UjCha.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations();
+  return {
+    title: t("loyalty_title"),
+    description: "Tích điểm từ đơn hàng để nhận ưu đãi từ UjCha.",
+  };
+}
 
 function PageFallback() {
   return (

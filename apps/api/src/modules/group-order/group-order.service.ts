@@ -9,6 +9,7 @@ import {
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { GroupOrderStatus, OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
+import { OrdersGateway } from '../events/orders.gateway';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import type {
@@ -31,6 +32,7 @@ export class GroupOrderService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    private readonly ordersGateway: OrdersGateway,
   ) { }
 
   private fullInclude() {
@@ -649,6 +651,8 @@ export class GroupOrderService {
         items: { createMany: { data: orderItemsData } },
       },
     });
+
+    this.ordersGateway.emitOrderCreated({ orderId: order.id, type: order.type });
 
     return { ...order, discountPercent };
   }

@@ -218,6 +218,7 @@ export interface OrderDetail extends Omit<UserOrder, 'items' | 'address'> {
   address: { id: string; fullAddress: string; lat?: number; lng?: number } | null
   guestDeliveryName: string | null
   guestDeliveryPhone: string | null
+  shipper: { id: string; name: string; phone: string | null } | null
 }
 
 export async function fetchOrderDetail(paymentCode: string): Promise<OrderDetail> {

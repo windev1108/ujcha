@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
 import { Shield } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 
-export const metadata: Metadata = {
-  title: "Chính sách bảo mật",
-  description: "Chính sách bảo mật của UjCha — cách chúng tôi thu thập, sử dụng và bảo vệ thông tin cá nhân của bạn.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations();
+  return {
+    title: t("privacy_policy"),
+    description: "Chính sách bảo mật của UjCha — cách chúng tôi thu thập, sử dụng và bảo vệ thông tin cá nhân của bạn.",
+  };
+}
 
 const SECTIONS = [
   {
@@ -123,7 +127,8 @@ const SECTIONS = [
   },
 ];
 
-export default function PrivacyPage() {
+export default async function PrivacyPage() {
+  const t = await getTranslations();
   return (
     <div className="min-h-screen bg-surface-soft">
       {/* Hero */}
@@ -140,8 +145,8 @@ export default function PrivacyPage() {
           <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/10">
             <Shield className="size-7 text-white" />
           </div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">Pháp lý · UjCha</p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-white sm:text-4xl">Chính sách bảo mật</h1>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">{t("legal_eyebrow")}</p>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight text-white sm:text-4xl">{t("privacy_policy")}</h1>
           <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-white/55">
             Cập nhật lần cuối: tháng 5 năm 2026
           </p>
@@ -160,7 +165,7 @@ export default function PrivacyPage() {
           {/* TOC sidebar */}
           <aside className="w-full shrink-0 lg:sticky lg:top-20 lg:w-56">
             <div className="rounded-3xl border border-black/6 bg-white p-5 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.07)]">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">Nội dung</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{t("table_of_contents")}</p>
               <nav className="mt-3 flex flex-col gap-1">
                 {SECTIONS.map((s) => (
                   <a
