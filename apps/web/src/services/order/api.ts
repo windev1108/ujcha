@@ -101,7 +101,7 @@ export async function createOrder(payload: CreateOrderPayload): Promise<CreatedO
   return data
 }
 
-export type OrderStatus = 'pending' | 'confirmed' | 'preparing' | 'ready' | 'delivering' | 'completed' | 'cancelled'
+export type OrderStatus = 'pending' | 'confirmed' | 'preparing' | 'ready' | 'delivering' | 'picked_up' | 'arrived' | 'completed' | 'cancelled'
 export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'refunded'
 export type PaymentType = 'cash' | 'bank_transfer'
 export type OrderType = 'delivery' | 'pickup' | 'table'
@@ -219,6 +219,15 @@ export interface OrderDetail extends Omit<UserOrder, 'items' | 'address'> {
   guestDeliveryName: string | null
   guestDeliveryPhone: string | null
   shipper: { id: string; name: string; phone: string | null } | null
+  // Per-status timestamps (null for statuses not yet reached or pre-migration orders)
+  confirmedAt: string | null
+  preparingAt: string | null
+  readyAt: string | null
+  deliveringAt: string | null
+  pickedUpAt: string | null
+  arrivedAt: string | null
+  completedAt: string | null
+  cancelledAt: string | null
 }
 
 export async function fetchOrderDetail(paymentCode: string): Promise<OrderDetail> {

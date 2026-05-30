@@ -37,6 +37,43 @@ Parent owns final output and cross-spawn synthesis. User instructions override.
 
 Use 'pdftotext', not the 'Read' tool. Use 'Read' only when the user directly asks to analyze images or charts inside the document. Read loads PDFs as images.
 
+## App Roster
+
+| App | Folder | Package | Port / Target |
+|---|---|---|---|
+| Customer web | `apps/web` | `web` | :3000 |
+| Admin panel | `apps/web-admin` | `web-admin` | :3001 |
+| NestJS API | `apps/api` | `api` | :5000 |
+| Shipper mobile | `apps/mobile-delivery` | `ujcha-delivery` | Expo / RN |
+| POS desktop | `apps/pos` | `kun-pos` | Electron |
+
+### Shipper Mobile (apps/mobile-delivery)
+
+Expo SDK 56, expo-router file-based routing. Package name: **`ujcha-delivery`**.
+
+- **Run**: `pnpm dev:delivery` (Expo dev server), `pnpm dev:delivery:android`, `pnpm dev:delivery:ios`
+- **Auth**: Shippers log in via their Admin email+password. JWT separate from user/admin tokens. Secrets: `SHIPPER_JWT_ACCESS_SECRET`, `SHIPPER_JWT_REFRESH_SECRET`.
+- **Location tracking**: Background via `expo-task-manager` task `ujcha-background-location`. Smart throttle: ≥10m OR ≥3s, high-speed mode at 1.5s. Anti-cheat on server: >150 km/h rejected.
+- **Socket**: Connects to `/tracking` namespace (not the default `/`). Shipper authenticates via `shipper:auth` event with JWT.
+- **Offline queue**: `@react-native-async-storage/async-storage` — queued updates flushed on reconnect.
+- **Key files**:
+  - `src/services/location.service.ts` — GPS + background task
+  - `src/services/socket.service.ts` — socket.io with reconnect + auth buffering
+  - `src/store/auth.store.ts` — Zustand + SecureStore JWT persistence
+  - `src/app/(shipper)/delivery/[id].tsx` — active delivery screen (Leaflet WebView map)
+
+### Tracking Backend (apps/api/src/modules/)
+
+- `shipper-auth/` — `POST /shipper-auth/login`, `POST /shipper-auth/refresh`, `GET /shipper-auth/me`
+- `shipper/` — `GET /shipper/orders`, `PATCH /shipper/orders/:id/start`, `PATCH /shipper/orders/:id/complete`
+- `tracking/` — `POST /tracking/location` (HTTP fallback), `TrackingGateway` at WS `/tracking`
+
+Redis keys: `shipper:{id}:location` (TTL 60s), `shipper:{id}:status` (TTL 90s). **No location writes to PostgreSQL.**
+
+### Customer Tracking UI (apps/web)
+
+Route: `/[locale]/track/[orderId]` — react-leaflet map, subscribes to `order:{orderId}` room via `order:watch` socket event. Smooth `panTo` animation on each location update.
+
 ## Dedicated Tools
 
 <!-- List project-specific tools here. For each, link to its skill or script file (e.g. `tools/reddit_fetch.py`). The orchestration logic lives in those files, not here. -->

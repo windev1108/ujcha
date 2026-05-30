@@ -316,6 +316,13 @@ export class AdminOrderService {
             referenceId: orderId,
           },
         );
+        const spendTs: Prisma.OrderUpdateInput = {};
+        if (dto.status === OrderStatus.confirmed)  spendTs.confirmedAt  = new Date();
+        if (dto.status === OrderStatus.preparing)  spendTs.preparingAt  = new Date();
+        if (dto.status === OrderStatus.ready)      spendTs.readyAt      = new Date();
+        if (dto.status === OrderStatus.completed)  spendTs.completedAt  = new Date();
+        if (dto.status === OrderStatus.cancelled)  spendTs.cancelledAt  = new Date();
+
         return tx.order.update({
           where: { id: orderId },
           data: {
@@ -325,6 +332,7 @@ export class AdminOrderService {
             }),
             pointsConsumed: existing.pointsReserved,
             pointsReserved: 0,
+            ...spendTs,
           },
           include: adminOrderInclude,
         });
@@ -344,11 +352,20 @@ export class AdminOrderService {
 
       return this.withTypeDisplay(updated);
     }
+    const statusTs: Prisma.OrderUpdateInput = {};
+    if (dto.status === OrderStatus.confirmed)  statusTs.confirmedAt  = new Date();
+    if (dto.status === OrderStatus.preparing)  statusTs.preparingAt  = new Date();
+    if (dto.status === OrderStatus.ready)      statusTs.readyAt      = new Date();
+    if (dto.status === OrderStatus.delivering) statusTs.deliveringAt = new Date();
+    if (dto.status === OrderStatus.completed)  statusTs.completedAt  = new Date();
+    if (dto.status === OrderStatus.cancelled)  statusTs.cancelledAt  = new Date();
+
     const dataUpdate: Prisma.OrderUpdateInput = {
       ...(dto.status !== undefined && { status: dto.status }),
       ...(dto.paymentStatus !== undefined && {
         paymentStatus: dto.paymentStatus,
       }),
+      ...statusTs,
     };
 
     if (dto.paymentStatus) {
@@ -370,6 +387,46 @@ export class AdminOrderService {
 
     if (dto.status !== undefined) {
       this.ordersGateway.emitOrderStatusUpdated({ orderId, status: dto.status });
+
+      if (
+        dto.status === OrderStatus.confirmed &&
+        existing.type === OrderType.delivery &&
+        !existing.shipperId
+      ) {
+        this.ordersGateway.emitNewDeliveryOrder({
+          orderId: updated.id,
+          paymentCode: updated.paymentCode,
+          customerName: updated.user?.name ?? (updated as any).guestDeliveryName ?? 'Khách',
+          customerPhone: updated.user?.phone ?? (updated as any).guestDeliveryPhone ?? '',
+          address: updated.address?.fullAddress ?? '',
+          addressNote: updated.address?.note ?? null,
+          lat: updated.address ? (updated.address as any).lat ?? null : null,
+          lng: updated.address ? (updated.address as any).lng ?? null : null,
+          items: updated.items.map((i) => ({
+            name: i.product?.name ?? '',
+            quantity: i.quantity,
+            price: Number(i.price),
+            imageUrl: i.product?.imageUrls?.[0] ?? null,
+            optionsJson: (i.optionsJson ?? {}) as Record<string, string>,
+            extrasJson: (i.extrasJson ?? []) as Array<{ name: string; price: number }>,
+            note: i.note ?? null,
+          })),
+          totalAmount: Number(updated.finalAmount),
+          shippingFee: Number(updated.shippingFee),
+          paymentType: updated.paymentType,
+        });
+      }
+
+      if (updated.shipperId) {
+        this.ordersGateway.emitShipperOrderStatusUpdated({
+          orderId,
+          status: dto.status,
+          shipperId: updated.shipperId,
+        });
+      } else if (updated.type === OrderType.delivery && dto.status !== undefined) {
+        // No shipper yet — broadcast to all shippers so their available-orders list stays current
+        this.ordersGateway.emitAvailableOrderStatus({ orderId, status: dto.status });
+      }
     }
 
     return this.withTypeDisplay(updated);
@@ -389,9 +446,17 @@ export class AdminOrderService {
   }
 
   async bulkUpdateStatus(dto: BulkUpdateOrderStatusDto) {
+    const bulkTs: Record<string, Date> = {};
+    if (dto.status === OrderStatus.confirmed)  bulkTs.confirmedAt  = new Date();
+    if (dto.status === OrderStatus.preparing)  bulkTs.preparingAt  = new Date();
+    if (dto.status === OrderStatus.ready)      bulkTs.readyAt      = new Date();
+    if (dto.status === OrderStatus.delivering) bulkTs.deliveringAt = new Date();
+    if (dto.status === OrderStatus.completed)  bulkTs.completedAt  = new Date();
+    if (dto.status === OrderStatus.cancelled)  bulkTs.cancelledAt  = new Date();
+
     const updated = await this.prisma.order.updateMany({
       where: { id: { in: dto.orderIds } },
-      data: { status: dto.status },
+      data: { status: dto.status, ...bulkTs },
     });
 
     if (dto.status === OrderStatus.completed) {

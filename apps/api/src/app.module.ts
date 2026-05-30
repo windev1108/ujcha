@@ -28,6 +28,9 @@ import { ShippingModule } from './modules/shipping/shipping.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { GroupOrderModule } from './modules/group-order/group-order.module';
 import { RedisModule } from './modules/redis/redis.module';
+import { ShipperAuthModule } from './modules/shipper-auth/shipper-auth.module';
+import { ShipperModule } from './modules/shipper/shipper.module';
+import { TrackingModule } from './modules/tracking/tracking.module';
 
 @Module({
   imports: [
@@ -64,6 +67,9 @@ import { RedisModule } from './modules/redis/redis.module';
     ReferralModule,
     ShippingModule,
     GroupOrderModule,
+    ShipperAuthModule,
+    ShipperModule,
+    TrackingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

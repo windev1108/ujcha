@@ -1,0 +1,10 @@
+-- AlterTable: per-status timestamps for order timeline
+ALTER TABLE "Order"
+ADD COLUMN IF NOT EXISTS "confirmedAt"  TIMESTAMP(3),
+ADD COLUMN IF NOT EXISTS "preparingAt"  TIMESTAMP(3),
+ADD COLUMN IF NOT EXISTS "readyAt"      TIMESTAMP(3),
+ADD COLUMN IF NOT EXISTS "deliveringAt" TIMESTAMP(3),
+ADD COLUMN IF NOT EXISTS "pickedUpAt"   TIMESTAMP(3),
+ADD COLUMN IF NOT EXISTS "arrivedAt"    TIMESTAMP(3),
+ADD COLUMN IF NOT EXISTS "completedAt"  TIMESTAMP(3),
+ADD COLUMN IF NOT EXISTS "cancelledAt"  TIMESTAMP(3);

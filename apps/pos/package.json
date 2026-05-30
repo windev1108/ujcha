@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "gen-icon": "node scripts/gen-icon.js",
+    "predist": "node scripts/gen-icon.js",
     "dist": "electron-vite build && electron-builder --win --x64",
     "dist:dir": "electron-vite build && electron-builder --win --x64 --dir",
     "start": "electron-vite preview",

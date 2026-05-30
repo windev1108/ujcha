@@ -320,6 +320,8 @@ enum OrderStatus {
   preparing
   ready
   delivering
+  picked_up
+  arrived
   completed
   cancelled
 }
@@ -417,7 +419,17 @@ model Order {
   referralRewards ReferralReward[]
   groupOrder     GroupOrder?
 
-  paidAt         DateTime? 
+  paidAt         DateTime?
+
+  /// Timestamps for each status transition (set when status changes)
+  confirmedAt    DateTime?
+  preparingAt    DateTime?
+  readyAt        DateTime?
+  deliveringAt   DateTime?
+  pickedUpAt     DateTime?
+  arrivedAt      DateTime?
+  completedAt    DateTime?
+  cancelledAt    DateTime?
 
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt

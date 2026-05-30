@@ -5,9 +5,10 @@ import dynamic from "next/dynamic";
 import { motion } from "motion/react";
 import Image from "next/image";
 import {
-  ArrowLeft, BadgeCheck, Ban, Bike, Box, CheckCircle2, ChevronRight, Circle, Clock,
+  ArrowLeft, BadgeCheck, Ban, Bike, Box, CheckCircle2, Circle, Clock,
   CreditCard, ExternalLink, MapPin, Package, Phone, Printer, Star, Truck, Utensils, Users,
 } from "lucide-react";
+import { ShipperLiveMap } from "./ShipperLiveMap";
 import { useRouter } from "@/i18n/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useOrderDetailQuery, orderKeys } from "@/services/order/hooks";
@@ -47,10 +48,31 @@ function fmtDate(iso: string) {
   });
 }
 
+function fmtStepTime(iso: string) {
+  return new Date(iso).toLocaleString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+const STEP_TIMESTAMP_KEY: Partial<Record<OrderStatus, keyof OrderDetail>> = {
+  pending:   "createdAt",
+  confirmed: "confirmedAt",
+  preparing: "preparingAt",
+  ready:     "readyAt",
+  delivering:"deliveringAt",
+  picked_up: "pickedUpAt",
+  arrived:   "arrivedAt",
+  completed: "completedAt",
+  cancelled: "cancelledAt",
+};
+
 // ── status config ──────────────────────────────────────────────────────────────
 
 const STATUS_STEPS_DELIVERY: OrderStatus[] = [
-  "pending", "confirmed", "preparing", "ready", "delivering", "completed",
+  "pending", "confirmed", "preparing", "ready", "picked_up", "arrived", "completed",
 ];
 const STATUS_STEPS_NO_DELIVERY: OrderStatus[] = [
   "pending", "confirmed", "preparing", "ready", "completed",
@@ -64,13 +86,15 @@ const STATUS_META: Record<OrderStatus, {
   bg: string;
   ring: string;
 }> = {
-  pending: { label: "Chờ xác nhận", desc: "Đơn vừa được đặt", icon: Clock, color: "text-amber-700", bg: "bg-amber-50", ring: "ring-amber-200" },
-  confirmed: { label: "Đã xác nhận", desc: "Quán đã nhận đơn", icon: BadgeCheck, color: "text-blue-700", bg: "bg-blue-50", ring: "ring-blue-200" },
-  preparing: { label: "Đang pha chế", desc: "Đang chuẩn bị đơn", icon: Box, color: "text-purple-700", bg: "bg-purple-50", ring: "ring-purple-200" },
-  ready: { label: "Sẵn sàng", desc: "Đơn đã sẵn sàng", icon: CheckCircle2, color: "text-teal-700", bg: "bg-teal-50", ring: "ring-teal-200" },
-  delivering: { label: "Đang giao", desc: "Shipper đang trên đường", icon: Truck, color: "text-sky-700", bg: "bg-sky-50", ring: "ring-sky-200" },
-  completed: { label: "Hoàn thành", desc: "Đơn đã được giao thành công", icon: CheckCircle2, color: "text-green-700", bg: "bg-green-50", ring: "ring-green-200" },
-  cancelled: { label: "Đã huỷ", desc: "Đơn đã bị huỷ", icon: Ban, color: "text-red-600", bg: "bg-red-50", ring: "ring-red-200" },
+  pending:   { label: "Chờ xác nhận", desc: "Đơn vừa được đặt",             icon: Clock,        color: "text-amber-700",  bg: "bg-amber-50",  ring: "ring-amber-200" },
+  confirmed: { label: "Đã xác nhận",  desc: "Quán đã nhận đơn",             icon: BadgeCheck,   color: "text-blue-700",   bg: "bg-blue-50",   ring: "ring-blue-200" },
+  preparing: { label: "Đang pha chế", desc: "Đang chuẩn bị đơn",            icon: Box,          color: "text-purple-700", bg: "bg-purple-50", ring: "ring-purple-200" },
+  ready:     { label: "Sẵn sàng",     desc: "Đơn đã sẵn sàng",              icon: CheckCircle2, color: "text-teal-700",   bg: "bg-teal-50",   ring: "ring-teal-200" },
+  delivering:{ label: "Đang giao",    desc: "Shipper đang trên đường",       icon: Truck,        color: "text-sky-700",    bg: "bg-sky-50",    ring: "ring-sky-200" },
+  picked_up: { label: "Đã lấy hàng", desc: "Shipper đã lấy hàng, đang giao",icon: Truck,        color: "text-orange-700", bg: "bg-orange-50", ring: "ring-orange-200" },
+  arrived:   { label: "Đã đến nơi",  desc: "Shipper đã đến địa chỉ của bạn",icon: MapPin,       color: "text-sky-700",    bg: "bg-sky-50",    ring: "ring-sky-200" },
+  completed: { label: "Hoàn thành",   desc: "Đơn đã được giao thành công",   icon: CheckCircle2, color: "text-green-700",  bg: "bg-green-50",  ring: "ring-green-200" },
+  cancelled: { label: "Đã huỷ",       desc: "Đơn đã bị huỷ",                icon: Ban,          color: "text-red-600",    bg: "bg-red-50",    ring: "ring-red-200" },
 };
 
 const PAYMENT_LABEL: Record<PaymentType, string> = {
@@ -179,6 +203,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
   const { data: order, isLoading, isError } = useOrderDetailQuery(paymentCode);
 
   const isTerminal = order?.status === "completed" || order?.status === "cancelled";
+  const isShipperActive = ["picked_up", "arrived", "delivering"].includes(order?.status ?? "");
 
   useOrderStatusSocket({
     onStatusChange: ({ orderId }) => {
@@ -400,7 +425,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                           )}
                         </div>
 
-                        {/* Label */}
+                        {/* Label + timestamp */}
                         <div className={`pt-1.5 sm:pt-0 sm:text-center ${isLast ? "" : "pb-6 sm:pb-0"}`}>
                           <p className={`text-sm font-semibold leading-tight sm:text-[11px] transition-colors ${active ? "text-kun-products-forest"
                             : done ? "text-foreground"
@@ -413,6 +438,16 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                               {STATUS_META[step].desc}
                             </p>
                           )}
+                          {done && (() => {
+                            const tsKey = STEP_TIMESTAMP_KEY[step];
+                            const ts = tsKey ? (order as Record<string, unknown>)[tsKey] as string | null : null;
+                            if (!ts) return null;
+                            return (
+                              <p className="mt-0.5 text-[10px] tabular-nums text-foreground/40 sm:text-[9px]">
+                                {fmtStepTime(ts)}
+                              </p>
+                            );
+                          })()}
                         </div>
                       </div>
 
@@ -453,7 +488,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
               className="overflow-hidden rounded-3xl border border-black/6 bg-white shadow-[0_4px_20px_-8px_rgba(0,0,0,0.1)]"
             >
               {/* Live stripe khi đang giao */}
-              {order.status === "delivering" && (
+              {isShipperActive && (
                 <div className="h-1 w-full bg-gradient-to-r from-sky-400 via-sky-500 to-sky-400 animate-pulse" />
               )}
 
@@ -503,10 +538,10 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                   </div>
 
                   {/* Status badge */}
-                  {order.status === "delivering" && (
+                  {isShipperActive && (
                     <span className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-700 ring-1 ring-sky-200">
                       <span className="size-1.5 animate-pulse rounded-full bg-sky-500" />
-                      Đang giao
+                      {STATUS_META[order.status]?.label ?? "Đang giao"}
                     </span>
                   )}
                   {order.status === "completed" && (
@@ -516,6 +551,16 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                     </span>
                   )}
                 </div>
+
+                {/* Live tracking map — shown while delivery is active */}
+                {isShipperActive && (
+                  <ShipperLiveMap
+                    orderId={order.id}
+                    destLat={order.address?.lat}
+                    destLng={order.address?.lng}
+                    orderStatus={order.status}
+                  />
+                )}
               </div>
             </motion.div>
           )}

@@ -216,10 +216,10 @@ function IdleScreen({ time }: { time: Date }) {
           transition={{ duration: 0.6 }}
           className="flex flex-col items-center"
         >
-          <div className="relative h-52 w-96 overflow-hidden rounded-full bg-white p-1.5">
+          <div className="relative h-40 w-96 overflow-hidden rounded-full bg-white p-1.5">
             <img src={logoUrl} alt="UjCha" className="h-full w-full object-contain" />
           </div>
-          <h1 className="text-3xl font-black tracking-tight text-[#1a3c2e]">UjCha Matcha & Coffee</h1>
+          <h1 className="text-3xl font-black tracking-tight text-[#1a3c2e]">Chill with matcha</h1>
         </motion.div>
 
         {/* Clock */}
