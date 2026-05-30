@@ -50,6 +50,8 @@
   "source_referral": "Referral",
   "source_welcome": "Welcome",
   "status_cancelled": "Cancelled",
+  "picked_up": "Picked Up",
+  "arrived": "Arrived",
   "status_completed": "Completed",
   "status_confirmed": "Confirmed",
   "status_delivering": "Out for delivery",

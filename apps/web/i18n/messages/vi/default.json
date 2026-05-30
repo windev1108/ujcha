@@ -50,6 +50,8 @@
   "source_referral": "Giới thiệu",
   "source_welcome": "Chào mừng",
   "status_cancelled": "Đã huỷ",
+  "picked_up": "Đã lấy hàng",
+  "arrived": "Đã đến điểm giao",
   "status_completed": "Hoàn thành",
   "status_confirmed": "Đã xác nhận",
   "status_delivering": "Đang giao",

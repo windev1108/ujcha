@@ -79,13 +79,15 @@ function ProductImageStack({ items }: { items: UserOrderItem[] }) {
 }
 
 const STATUS_STRIP: Record<OrderStatus, string> = {
-  pending:    "bg-amber-400",
-  confirmed:  "bg-blue-500",
-  preparing:  "bg-purple-500",
-  ready:      "bg-teal-500",
+  pending: "bg-amber-400",
+  confirmed: "bg-blue-500",
+  preparing: "bg-purple-500",
+  ready: "bg-teal-500",
   delivering: "bg-sky-500",
-  completed:  "bg-green-500",
-  cancelled:  "bg-red-400",
+  completed: "bg-green-500",
+  cancelled: "bg-red-400",
+  picked_up: "bg-slate-500",
+  arrived: "bg-indigo-500",
 };
 
 const STATUS_ACTIVE: OrderStatus[] = ["pending", "confirmed", "preparing", "ready", "delivering"];
@@ -95,19 +97,27 @@ function OrderCard({ order, index = 0 }: { order: UserOrder; index?: number }) {
   const router = useRouter();
 
   const STATUS_CONFIG: Record<OrderStatus, { label: string; badge: string }> = {
-    pending:    { label: t("status_pending"),    badge: "bg-amber-50 text-amber-700 ring-amber-200" },
-    confirmed:  { label: t("status_confirmed"),  badge: "bg-blue-50 text-blue-700 ring-blue-200" },
-    preparing:  { label: t("status_preparing"),  badge: "bg-purple-50 text-purple-700 ring-purple-200" },
-    ready:      { label: t("status_ready"),      badge: "bg-teal-50 text-teal-700 ring-teal-200" },
+    pending: { label: t("status_pending"), badge: "bg-amber-50 text-amber-700 ring-amber-200" },
+    confirmed: { label: t("status_confirmed"), badge: "bg-blue-50 text-blue-700 ring-blue-200" },
+    preparing: { label: t("status_preparing"), badge: "bg-purple-50 text-purple-700 ring-purple-200" },
+    ready: { label: t("status_ready"), badge: "bg-teal-50 text-teal-700 ring-teal-200" },
     delivering: { label: t("status_delivering"), badge: "bg-sky-50 text-sky-700 ring-sky-200" },
-    completed:  { label: t("status_completed"),  badge: "bg-green-50 text-green-700 ring-green-200" },
-    cancelled:  { label: t("status_cancelled"),  badge: "bg-red-50 text-red-600 ring-red-200" },
+    completed: { label: t("status_completed"), badge: "bg-green-50 text-green-700 ring-green-200" },
+    cancelled: { label: t("status_cancelled"), badge: "bg-red-50 text-red-600 ring-red-200" },
+    picked_up: {
+      label: t("picked_up"),
+      badge: "bg-orange-50 text-orange-600 ring-orange-200"
+    },
+    arrived: {
+      label: t("arrived"),
+      badge: "bg-cyan-50 text-cyan-600 ring-cyan-200"
+    }
   };
 
   const TYPE_META: Record<string, { label: string; Icon: React.ElementType }> = {
     delivery: { label: t("type_delivery"), Icon: Truck },
-    pickup:   { label: t("type_pickup"),   Icon: ShoppingBag },
-    table:    { label: t("type_table"),    Icon: Utensils },
+    pickup: { label: t("type_pickup"), Icon: ShoppingBag },
+    table: { label: t("type_table"), Icon: Utensils },
   };
 
   const statusCfg = STATUS_CONFIG[order.status] ?? STATUS_CONFIG.pending;
