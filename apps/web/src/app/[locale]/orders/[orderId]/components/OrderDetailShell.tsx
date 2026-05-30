@@ -58,13 +58,13 @@ function fmtStepTime(iso: string) {
 }
 
 const STEP_TIMESTAMP_KEY: Partial<Record<OrderStatus, keyof OrderDetail>> = {
-  pending:   "createdAt",
+  pending: "createdAt",
   confirmed: "confirmedAt",
   preparing: "preparingAt",
-  ready:     "readyAt",
-  delivering:"deliveringAt",
+  ready: "readyAt",
+  delivering: "deliveringAt",
   picked_up: "pickedUpAt",
-  arrived:   "arrivedAt",
+  arrived: "arrivedAt",
   completed: "completedAt",
   cancelled: "cancelledAt",
 };
@@ -86,15 +86,15 @@ const STATUS_META: Record<OrderStatus, {
   bg: string;
   ring: string;
 }> = {
-  pending:   { label: "Chờ xác nhận", desc: "Đơn vừa được đặt",             icon: Clock,        color: "text-amber-700",  bg: "bg-amber-50",  ring: "ring-amber-200" },
-  confirmed: { label: "Đã xác nhận",  desc: "Quán đã nhận đơn",             icon: BadgeCheck,   color: "text-blue-700",   bg: "bg-blue-50",   ring: "ring-blue-200" },
-  preparing: { label: "Đang pha chế", desc: "Đang chuẩn bị đơn",            icon: Box,          color: "text-purple-700", bg: "bg-purple-50", ring: "ring-purple-200" },
-  ready:     { label: "Sẵn sàng",     desc: "Đơn đã sẵn sàng",              icon: CheckCircle2, color: "text-teal-700",   bg: "bg-teal-50",   ring: "ring-teal-200" },
-  delivering:{ label: "Đang giao",    desc: "Shipper đang trên đường",       icon: Truck,        color: "text-sky-700",    bg: "bg-sky-50",    ring: "ring-sky-200" },
-  picked_up: { label: "Đã lấy hàng", desc: "Shipper đã lấy hàng, đang giao",icon: Truck,        color: "text-orange-700", bg: "bg-orange-50", ring: "ring-orange-200" },
-  arrived:   { label: "Đã đến nơi",  desc: "Shipper đã đến địa chỉ của bạn",icon: MapPin,       color: "text-sky-700",    bg: "bg-sky-50",    ring: "ring-sky-200" },
-  completed: { label: "Hoàn thành",   desc: "Đơn đã được giao thành công",   icon: CheckCircle2, color: "text-green-700",  bg: "bg-green-50",  ring: "ring-green-200" },
-  cancelled: { label: "Đã huỷ",       desc: "Đơn đã bị huỷ",                icon: Ban,          color: "text-red-600",    bg: "bg-red-50",    ring: "ring-red-200" },
+  pending: { label: "Chờ xác nhận", desc: "Đơn vừa được đặt", icon: Clock, color: "text-amber-700", bg: "bg-amber-50", ring: "ring-amber-200" },
+  confirmed: { label: "Đã xác nhận", desc: "Quán đã nhận đơn", icon: BadgeCheck, color: "text-blue-700", bg: "bg-blue-50", ring: "ring-blue-200" },
+  preparing: { label: "Đang pha chế", desc: "Đang chuẩn bị đơn", icon: Box, color: "text-purple-700", bg: "bg-purple-50", ring: "ring-purple-200" },
+  ready: { label: "Sẵn sàng", desc: "Đơn đã sẵn sàng", icon: CheckCircle2, color: "text-teal-700", bg: "bg-teal-50", ring: "ring-teal-200" },
+  delivering: { label: "Đang giao", desc: "Shipper đang trên đường", icon: Truck, color: "text-sky-700", bg: "bg-sky-50", ring: "ring-sky-200" },
+  picked_up: { label: "Đã lấy hàng", desc: "Shipper đã lấy hàng, đang giao", icon: Truck, color: "text-orange-700", bg: "bg-orange-50", ring: "ring-orange-200" },
+  arrived: { label: "Đã đến nơi", desc: "Shipper đã đến địa chỉ của bạn", icon: MapPin, color: "text-sky-700", bg: "bg-sky-50", ring: "ring-sky-200" },
+  completed: { label: "Hoàn thành", desc: "Đơn đã được giao thành công", icon: CheckCircle2, color: "text-green-700", bg: "bg-green-50", ring: "ring-green-200" },
+  cancelled: { label: "Đã huỷ", desc: "Đơn đã bị huỷ", icon: Ban, color: "text-red-600", bg: "bg-red-50", ring: "ring-red-200" },
 };
 
 const PAYMENT_LABEL: Record<PaymentType, string> = {
@@ -440,7 +440,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                           )}
                           {done && (() => {
                             const tsKey = STEP_TIMESTAMP_KEY[step];
-                            const ts = tsKey ? (order as Record<string, unknown>)[tsKey] as string | null : null;
+                            const ts = tsKey ? (order as unknown as Record<string, unknown>)[tsKey] as string | null : null;
                             if (!ts) return null;
                             return (
                               <p className="mt-0.5 text-[10px] tabular-nums text-foreground/40 sm:text-[9px]">
@@ -499,20 +499,18 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
 
                 <div className="flex items-center gap-4">
                   {/* Avatar */}
-                  <div className={`relative flex size-12 shrink-0 items-center justify-center rounded-full ring-1 ${
-                    order.status === "delivering"
+                  <div className={`relative flex size-12 shrink-0 items-center justify-center rounded-full ring-1 ${order.status === "delivering"
                       ? "bg-sky-50 ring-sky-200"
                       : order.status === "completed"
                         ? "bg-green-50 ring-green-200"
                         : "bg-surface-soft ring-black/8"
-                  }`}>
-                    <Bike className={`size-5 ${
-                      order.status === "delivering"
+                    }`}>
+                    <Bike className={`size-5 ${order.status === "delivering"
                         ? "text-sky-600"
                         : order.status === "completed"
                           ? "text-green-600"
                           : "text-foreground/50"
-                    }`} />
+                      }`} />
                     {order.status === "delivering" && (
                       <span className="absolute -right-0.5 -top-0.5 flex size-3 items-center justify-center rounded-full bg-sky-500 ring-2 ring-white">
                         <span className="size-1.5 animate-ping rounded-full bg-white opacity-80" />
