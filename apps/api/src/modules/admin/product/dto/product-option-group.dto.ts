@@ -4,6 +4,7 @@ import {
   ArrayMaxSize,
   IsArray,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   MaxLength,
@@ -11,6 +12,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
+
 
 export class ProductOptionValueDto {
   @ApiProperty({ example: 'L' })
@@ -28,6 +30,16 @@ export class ProductOptionValueDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   priceDelta?: number;
+
+  @ApiPropertyOptional({ description: 'Bản dịch nhãn giá trị: { "en": "..." }' })
+  @IsOptional()
+  @IsObject()
+  nameTranslation?: Record<string, string>;
+
+  @ApiPropertyOptional({ description: 'Bản dịch mô tả giá trị: { "en": "..." }' })
+  @IsOptional()
+  @IsObject()
+  descriptionTranslation?: Record<string, string>;
 }
 
 /**
@@ -56,8 +68,15 @@ function transformOptionValues({ value }: { value: unknown }): ProductOptionValu
         const n = Number(raw);
         if (Number.isFinite(n) && n >= 0) priceDelta = Math.round(n * 100) / 100;
       }
+      const nt = (item as { nameTranslation?: unknown }).nameTranslation;
+      const dt = (item as { descriptionTranslation?: unknown }).descriptionTranslation;
       out.push(
-        plainToInstance(ProductOptionValueDto, { label, priceDelta }),
+        plainToInstance(ProductOptionValueDto, {
+          label,
+          priceDelta,
+          ...(nt && typeof nt === 'object' ? { nameTranslation: nt } : {}),
+          ...(dt && typeof dt === 'object' ? { descriptionTranslation: dt } : {}),
+        }),
       );
     }
   }
@@ -65,17 +84,36 @@ function transformOptionValues({ value }: { value: unknown }): ProductOptionValu
 }
 
 export class ProductOptionGroupDto {
-  @ApiProperty({ example: 'grp-size-1' })
+  @ApiPropertyOptional({ example: 'grp-size-1', description: 'Client-generated ID; server generates uuid if omitted' })
+  @IsOptional()
   @IsString()
-  @MinLength(1)
   @MaxLength(64)
-  id!: string;
+  id?: string;
 
   @ApiProperty({ example: 'Kích thước' })
   @IsString()
   @MinLength(1)
   @MaxLength(120)
   name!: string;
+
+  @ApiPropertyOptional({ example: 1, description: 'Số lựa chọn tối thiểu (0 = tùy chọn, ≥1 = bắt buộc)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  selectionMin?: number;
+
+  @ApiPropertyOptional({ example: 1, description: 'Số lựa chọn tối đa' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  selectionMax?: number;
+
+  @ApiPropertyOptional({ description: 'Bản dịch tên nhóm: { "en": "..." }' })
+  @IsOptional()
+  @IsObject()
+  nameTranslation?: Record<string, string>;
 
   @ApiProperty({
     example: [

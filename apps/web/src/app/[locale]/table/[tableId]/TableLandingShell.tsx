@@ -20,7 +20,7 @@ import {
 import { Button } from "@heroui/react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRouter } from "@/i18n/navigation";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { api } from "@/config/server";
 import { fetchPublicTable, type CreatedOrder, type PublicTableInfo } from "@/services/order/api";
 import { fetchProducts } from "@/services/product/api";
@@ -29,6 +29,7 @@ import type { ApiProduct, ApiTopping } from "@/services/product/types";
 import type { ApiCategory } from "@/services/category/types";
 import { normalizeOptionGroups, computeOptionSurcharge, formatVnd } from "@/lib/product-options";
 import { ROUTES } from "@/lib/routes";
+import { getDisplayName, getValueLabel, getDisplayDescription } from "@/lib/product-name";
 
 const TABLE_STORAGE_KEY = "kun_table_id";
 
@@ -240,6 +241,7 @@ function ProductCard({
   onPick: (p: ApiProduct) => void;
 }) {
   const t = useTranslations();
+  const locale = useLocale();
   const img = product.imageUrls[0];
   const sold = product.isSoldOut || !product.isAvailable;
   const disc = product.discountPercent > 0;
@@ -261,7 +263,7 @@ function ProductCard({
       <div className="relative aspect-square w-full bg-surface-card">
         {img ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={img} alt={product.name} className="h-full w-full object-cover" loading="lazy" />
+          <img src={img} alt={getDisplayName(product, locale)} className="h-full w-full object-cover" loading="lazy" />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
             <Utensils className="size-8 text-black/20" />
@@ -287,7 +289,7 @@ function ProductCard({
       </div>
       <div className="flex flex-1 flex-col gap-1 p-2.5">
         <p className="line-clamp-2 text-xs font-semibold leading-tight text-kun-primary">
-          {product.name}
+          {getDisplayName(product, locale)}
         </p>
         <div className="mt-auto flex items-center gap-1.5">
           {discPrice ? (
@@ -320,6 +322,7 @@ function ProductPickModal({
   onClose: () => void;
 }) {
   const t = useTranslations();
+  const locale = useLocale();
   const groups = normalizeOptionGroups(product.optionGroups);
   const base = parseFloat(product.price);
   const disc = product.discountPercent > 0;
@@ -383,16 +386,16 @@ function ProductPickModal({
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={product.imageUrls[0]}
-                  alt={product.name}
+                  alt={getDisplayName(product, locale)}
                   className="h-full w-full object-cover"
                   loading="lazy"
                 />
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <h3 className="font-bold leading-snug text-kun-primary">{product.name}</h3>
-              {product.description && (
-                <p className="mt-1 line-clamp-3 text-xs text-foreground/55">{product.description}</p>
+              <h3 className="font-bold leading-snug text-kun-primary">{getDisplayName(product, locale)}</h3>
+              {getDisplayDescription(product, locale) && (
+                <p className="mt-1 line-clamp-3 text-xs text-foreground/55">{getDisplayDescription(product, locale)}</p>
               )}
               <p className="mt-2 text-base font-bold text-kun-primary">{formatVnd(unitPrice)}</p>
             </div>
@@ -400,7 +403,7 @@ function ProductPickModal({
 
           {groups.map((g) => (
             <div key={g.id} className="mt-5">
-              <p className="mb-2 text-sm font-bold text-kun-primary">{g.name}</p>
+              <p className="mb-2 text-sm font-bold text-kun-primary">{getDisplayName(g, locale)}</p>
               <div className="flex flex-wrap gap-2">
                 {g.values.map((v) => (
                   <button
@@ -413,7 +416,7 @@ function ProductPickModal({
                         : "border-black/12 text-foreground/70 hover:border-kun-primary/40"
                     }`}
                   >
-                    {v.label}
+                    {getValueLabel(v, locale)}
                     {v.priceDelta > 0 && (
                       <span className="ml-1 opacity-75">+{formatVnd(v.priceDelta)}</span>
                     )}
@@ -453,7 +456,7 @@ function ProductPickModal({
                             </svg>
                           )}
                         </div>
-                        <span className="text-sm text-foreground/80">{tp.name}</span>
+                        <span className="text-sm text-foreground/80">{getDisplayName(tp, locale)}</span>
                       </div>
                       <span className="text-sm font-semibold text-foreground/60">
                         +{formatVnd(tp.price)}
@@ -539,6 +542,7 @@ function OrderBasketSheet({
   onOrderSuccess: (order: CreatedOrder) => void;
 }) {
   const t = useTranslations();
+  const locale = useLocale();
   const [paymentType, setPaymentType] = useState<"cash" | "bank_transfer">("cash");
   const total = basket.reduce((s, b) => s + b.unitPrice * b.quantity, 0);
 
@@ -595,14 +599,14 @@ function OrderBasketSheet({
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={b.product.imageUrls[0]}
-                      alt={b.product.name}
+                      alt={getDisplayName(b.product, locale)}
                       className="size-14 shrink-0 rounded-xl object-cover"
                       loading="lazy"
                     />
                   )}
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-kun-primary">
-                      {b.product.name}
+                      {getDisplayName(b.product, locale)}
                     </p>
                     {subtext && (
                       <p className="truncate text-xs text-foreground/50">{subtext}</p>
@@ -841,9 +845,10 @@ export function TableLandingShell({ tableId }: { tableId: string }) {
   // React Query — only enabled after geo passes
   const menuEnabled = geoPhase === "ok" && !!table?.isActive;
 
+  const locale = useLocale()
   const productsQuery = useQuery({
-    queryKey: ["products", selectedCategoryId],
-    queryFn: () => fetchProducts(selectedCategoryId ? { categoryId: selectedCategoryId } : undefined),
+    queryKey: ["products", selectedCategoryId, locale],
+    queryFn: () => fetchProducts({ ...(selectedCategoryId ? { categoryId: selectedCategoryId } : {}), locale }),
     staleTime: 3 * 60_000,
     enabled: menuEnabled,
   });

@@ -25,7 +25,7 @@ export function normalizeProductOptionGroups(raw: unknown): ProductOptionGroup[]
   if (!Array.isArray(raw)) return [];
   return raw.map((item, i) => {
     if (!item || typeof item !== "object") {
-      return { id: `g-${i}`, name: "", values: [] };
+      return { id: `g-${i}`, name: "", selectionMin: 0, selectionMax: 1, values: [] };
     }
     const o = item as Record<string, unknown>;
     const values: ProductOptionValue[] = [];
@@ -47,9 +47,13 @@ export function normalizeProductOptionGroups(raw: unknown): ProductOptionGroup[]
         }
       }
     }
+    const selectionMin = typeof o.selectionMin === "number" ? o.selectionMin : 0;
+    const selectionMax = typeof o.selectionMax === "number" ? o.selectionMax : 1;
     return {
       id: typeof o.id === "string" ? o.id : `g-${i}`,
       name: typeof o.name === "string" ? o.name : "",
+      selectionMin,
+      selectionMax,
       values: sortOptionValues(values),
     };
   });

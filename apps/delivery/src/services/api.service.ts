@@ -31,7 +31,7 @@ apiClient.interceptors.response.use(
           const { data } = await axios.post<{
             accessToken: string;
             refreshToken: string;
-            shipper: { id: string; name: string; phone: string | null; email: string | null };
+            shipper: { id: string; name: string; phone: string | null };
           }>(`${API_BASE_URL}/shipper-auth/refresh`, { refreshToken });
           await setTokens(data.accessToken, data.refreshToken, data.shipper);
           return data.accessToken;
@@ -53,15 +53,15 @@ apiClient.interceptors.response.use(
 );
 
 export const shipperApi = {
-  login: (email: string, password: string) =>
+  login: (phone: string, password: string) =>
     apiClient.post<{
       accessToken: string;
       refreshToken: string;
-      shipper: { id: string; name: string; phone: string | null; email: string | null };
-    }>('/shipper-auth/login', { email, password }),
+      shipper: { id: string; name: string; phone: string | null };
+    }>('/shipper-auth/login', { phone, password }),
 
   getMe: () =>
-    apiClient.get<{ id: string; name: string; phone: string | null; email: string | null; imageUrl: string | null }>(
+    apiClient.get<{ id: string; name: string; phone: string | null; imageUrl: string | null }>(
       '/shipper-auth/me',
     ),
   updatePhone: (phone: string) =>

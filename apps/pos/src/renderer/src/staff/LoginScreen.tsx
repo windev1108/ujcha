@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { AlertCircle, Loader2, Mail, Lock, Eye, EyeOff } from 'lucide-react'
+import { AlertCircle, Loader2, Phone, Lock, Eye, EyeOff } from 'lucide-react'
 import { usePosStore } from '../store/pos-store'
 import type { PosConfig, AdminUser } from '../types/common'
 import { DEFAULT_CONFIG } from '../types/common'
@@ -17,15 +17,15 @@ const ALLOWED_ROLES: AdminUser['role'][] = ['super_admin', 'staff']
 
 export function LoginScreen() {
   const { setPosConfig } = usePosStore()
-  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      setError('Vui lòng nhập email và mật khẩu.')
+    if (!phone.trim() || !password.trim()) {
+      setError('Vui lòng nhập số điện thoại và mật khẩu.')
       return
     }
 
@@ -33,8 +33,8 @@ export function LoginScreen() {
     setError('')
     try {
       const { data } = await axios.post<{ admin: AdminUser; accessToken: string; refreshToken: string }>(
-        `${API_URL}/admin/auth/email`,
-        { email: email.trim().toLowerCase(), password },
+        `${API_URL}/admin/auth/phone`,
+        { phone: phone.trim(), password },
       )
 
       const { admin, accessToken, refreshToken } = data
@@ -57,7 +57,7 @@ export function LoginScreen() {
       if (axios.isAxiosError(err)) {
         const code = err.response?.data?.code
         if (code === 'ADMIN_INVALID_CREDENTIALS') {
-          setError('Email hoặc mật khẩu không đúng.')
+          setError('Số điện thoại hoặc mật khẩu không đúng.')
         } else {
           setError(err.response?.data?.message ?? 'Đăng nhập thất bại. Kiểm tra lại kết nối.')
         }
@@ -84,14 +84,14 @@ export function LoginScreen() {
         </div>
 
         <div className="flex flex-col gap-3">
-          {/* Email */}
+          {/* Phone */}
           <div className="relative">
-            <Mail className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-400" />
+            <Phone className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-400" />
             <input
-              type="email"
-              placeholder="Email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
+              type="tel"
+              placeholder="Số điện thoại"
+              value={phone}
+              onChange={e => setPhone(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={loading}
               className="w-full rounded-xl border border-gray-200 py-3 pl-10 pr-4 text-sm text-gray-700 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20 disabled:bg-gray-50"

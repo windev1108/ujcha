@@ -189,46 +189,28 @@ export class OrderService {
       // ── Base price từ DB ─────────────────────────────────────────────────
       let unit = new Prisma.Decimal(product.price);
 
-      // ── Extras (toppings) ────────────────────────────────────────────────
-      const extrasSnap: { toppingId: string; name: string; price: number }[] =
-        [];
+      // ── Extras (toppings) — validated against product's inline toppings ───
+      const extrasSnap: { toppingId: string; name: string; price: number }[] = [];
+      const productToppings = Array.isArray(product.toppings) ? product.toppings as any[] : [];
 
       for (const ex of item.extras ?? []) {
-        const t = await this.prisma.topping.findFirst({
-          where: { id: ex.toppingId, isActive: true },
-        });
+        const t = productToppings.find(
+          (pt: any) => pt.id === ex.toppingId && pt.isActive !== false,
+        );
         if (!t) {
           throw new BadRequestException({
             message: 'Topping không tồn tại hoặc đã tắt.',
             code: 'ORDER_TOPPING_INVALID',
           });
         }
-        unit = unit.add(t.price);
-        extrasSnap.push({
-          toppingId: t.id,
-          name: t.name,
-          price: Number(t.price),
-        });
+        unit = unit.add(new Prisma.Decimal(Number(t.price)));
+        extrasSnap.push({ toppingId: t.id, name: t.name, price: Number(t.price) });
       }
 
-      const rawGroups = Array.isArray(product.optionGroups)
-        ? (product.optionGroups as { variantGroupId: string }[])
+      // optionGroups is now fully inline — no DB lookup needed
+      const optionGroupsResolved = Array.isArray(product.optionGroups)
+        ? product.optionGroups as any[]
         : [];
-
-      const resolvedGroups = await Promise.all(
-        rawGroups.map(async (ref) => {
-          const vg = await this.prisma.variantGroup.findUnique({
-            where: { id: ref.variantGroupId },
-          });
-          if (!vg) return null;
-          return {
-            name: vg.name,
-            values: vg.values,
-          };
-        }),
-      );
-
-      const optionGroupsResolved = resolvedGroups.filter(Boolean);
 
       // ── Options — BE tự tính priceDelta, lưu snapshot đầy đủ ────────────
       const {

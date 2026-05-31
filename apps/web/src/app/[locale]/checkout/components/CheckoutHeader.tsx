@@ -67,7 +67,7 @@ function CheckoutHeader({ tab, onTabChange }: Props) {
               id={opt.id}
               className="h-auto! w-full! rounded-full px-3 py-2.5 text-center text-sm font-semibold text-foreground/60 transition-colors data-[selected=true]:bg-white data-[selected=true]:text-kun-products-forest data-[selected=true]:shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
             >
-              {opt.label}
+              {t(opt.labelKey)}
             </Tab>
           ))}
         </Tabs.List>

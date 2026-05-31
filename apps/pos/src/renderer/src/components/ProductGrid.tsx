@@ -57,7 +57,6 @@ function ProductCard({ product, onPress }: { product: Product; onPress: (p: Prod
 
 export function ProductGrid() {
   const products = usePosStore((s) => s.products)
-  const toppings = usePosStore((s) => s.toppings)
   const selectedCategoryId = usePosStore((s) => s.selectedCategoryId)
   const searchQuery = usePosStore((s) => s.searchQuery)
   const setSearchQuery = usePosStore((s) => s.setSearchQuery)
@@ -128,7 +127,6 @@ export function ProductGrid() {
 
       <ProductConfigModal
         product={configProduct}
-        toppings={toppings}
         onClose={() => setConfigProduct(null)}
         onConfirm={handleAdd}
       />

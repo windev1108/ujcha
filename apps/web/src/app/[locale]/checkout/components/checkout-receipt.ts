@@ -44,7 +44,7 @@ export function buildWebReceiptHtml(d: WebReceiptData): string {
       const v = sel ? g.values.find((vv) => vv.label === sel) : null;
       if (v) unitPrice += v.priceDelta;
     }
-    for (const t of item.toppings) {
+    for (const t of (item.toppings ?? [])) {
       unitPrice += parseFloat(t.topping.price);
     }
     const lineTotal = unitPrice * item.quantity;
@@ -62,7 +62,7 @@ export function buildWebReceiptHtml(d: WebReceiptData): string {
       itemLines += `<div style="margin-left:26px;font-size:11px;color:#333;">+ ${esc(k)}: ${esc(v)}${pd > 0 ? ` (+${esc(vnd(pd))})` : ""}</div>`;
     }
 
-    for (const t of item.toppings) {
+    for (const t of (item.toppings ?? [])) {
       const tp = parseFloat(t.topping.price);
       itemLines += `<div style="margin-left:26px;font-size:11px;color:#333;display:flex;justify-content:space-between;">`;
       itemLines += `<span>+ ${esc(t.topping.name)}</span><span>${esc(vnd(tp))}</span>`;

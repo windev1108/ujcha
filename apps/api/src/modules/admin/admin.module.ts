@@ -16,10 +16,8 @@ import { AdminReferralModule } from './referral/admin-referral.module';
 import { AdminShipperModule } from './shipper/admin-shipper.module';
 import { AdminShopSettingsModule } from './shop-settings/admin-shop-settings.module';
 import { AdminTableModule } from './table/admin-table.module';
-import { AdminToppingModule } from './topping/admin-topping.module';
 import { AdminUserModule } from './user/admin-user.module';
 import { AdminPaymentConfigModule } from './payment-config/admin-payment-config.module';
-import { AdminVariantGroupModule } from './variant-group/admin-variant-group.module';
 import { AdminVoucherModule } from './voucher/admin-voucher.module';
 import { AdminTaxModule } from './tax/admin-tax.module';
 import { AdminFeedbackModule } from './feedback/admin-feedback.module';
@@ -39,7 +37,6 @@ import { AdminGroupOrderModule } from './group-order/admin-group-order.module';
     AdminShopSettingsModule,
     AdminOrderModule,
     AdminTableModule,
-    AdminToppingModule,
     AdminShipperModule,
     AdminPaymentModule,
     AdminReferralModule,
@@ -51,7 +48,6 @@ import { AdminGroupOrderModule } from './group-order/admin-group-order.module';
     AdminMetricsModule,
     AdminOverviewModule,
     AdminPaymentConfigModule,
-    AdminVariantGroupModule,
     AdminTaxModule,
     AdminFeedbackModule,
     AdminSmsModule,
@@ -79,7 +75,6 @@ import { AdminGroupOrderModule } from './group-order/admin-group-order.module';
     AdminUserModule,
     AdminManagementModule,
     AdminPaymentConfigModule,
-    AdminVariantGroupModule,
   ],
 })
 export class AdminModule { }

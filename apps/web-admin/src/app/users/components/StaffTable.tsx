@@ -15,9 +15,9 @@ function roleLabel(role: AdminRole) {
   return role === "super_admin" ? "Super Admin" : "Staff";
 }
 
-function initialsFromEmail(email: string) {
-  const local = email.split("@")[0] ?? "A";
-  return local.slice(0, 2).toUpperCase();
+function initialsFromName(nameOrPhone: string | null | undefined) {
+  if (!nameOrPhone) return "AD";
+  return nameOrPhone.replace(/\s+/g, "").slice(0, 2).toUpperCase();
 }
 
 function formatRelativeTime(dateStr: string) {
@@ -112,21 +112,18 @@ export function StaffTable({
                               // eslint-disable-next-line @next/next/no-img-element
                               <img
                                 src={faceProfile.imageUrl}
-                                alt={admin.name ?? admin.email}
+                                alt={admin.name ?? admin.phone ?? "Staff"}
                                 className="size-10 rounded-full object-cover object-center ring-1 ring-black/8"
                               />
                             ) : (
                               <div className="flex size-10 items-center justify-center rounded-full bg-[color-mix(in_oklab,#1a3c34_10%,white)] font-bold text-sm text-[#1a3c34] ring-1 ring-black/8">
-                                {initialsFromEmail(admin.email)}
+                                {initialsFromName(admin.name ?? admin.phone)}
                               </div>
-                            )}
-                            {admin.googleId && (
-                              <span className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full bg-emerald-500 ring-2 ring-white" />
                             )}
                           </div>
                           <div className="min-w-0">
                             <p className="font-semibold text-foreground">
-                              {admin.name ?? admin.email.split("@")[0]}
+                              {admin.name ?? admin.phone ?? "—"}
                               {isSelf && (
                                 <span className="ml-2 text-xs font-normal text-foreground/45">
                                   (Bạn)
@@ -134,7 +131,7 @@ export function StaffTable({
                               )}
                             </p>
                             <p className="text-xs text-foreground/50">
-                              {admin.email}
+                              {admin.phone ?? admin.email ?? "—"}
                             </p>
                           </div>
                         </div>
@@ -151,9 +148,9 @@ export function StaffTable({
                       <Table.Cell className="px-5 py-4 align-middle">
                         <span className="inline-flex items-center gap-2 text-xs font-medium">
                           <span
-                            className={`size-2 shrink-0 rounded-full ${admin.googleId ? "bg-emerald-500" : "bg-zinc-400"}`}
+                            className={`size-2 shrink-0 rounded-full ${admin.isActive ? "bg-emerald-500" : "bg-zinc-400"}`}
                           />
-                          {admin.googleId ? "Google" : "Chưa liên kết"}
+                          {admin.isActive ? "Đang hoạt động" : "Vô hiệu hóa"}
                         </span>
                       </Table.Cell>
                       {faceProfilesMap && (

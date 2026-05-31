@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { CheckoutTabId } from "./checkout-tab";
 import { CHECKOUT_TAB } from "./checkout-tab";
 import { easeOutSmooth } from "@/app/[locale]/(landing)/components/RevealSection";
@@ -149,6 +150,7 @@ function ContactModeToggle({
   mode: ContactMode;
   onModeChange: (m: ContactMode) => void;
 }) {
+  const t = useTranslations();
   return (
     <div className="flex gap-1 rounded-full bg-surface-card p-1">
       <button
@@ -160,7 +162,7 @@ function ContactModeToggle({
           }`}
       >
         <User className="size-3.5" />
-        Tài khoản của tôi
+        {t("my_account")}
       </button>
       <button
         type="button"
@@ -170,7 +172,7 @@ function ContactModeToggle({
           : "text-muted hover:text-foreground"
           }`}
       >
-        Người nhận khác
+        {t("other_recipient")}
       </button>
     </div>
   );
@@ -211,6 +213,7 @@ function DeliveryFulfillmentCard({
   profileName?: string | null;
   profilePhone?: string | null;
 }) {
+  const t = useTranslations();
   const router = useRouter();
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
@@ -241,7 +244,7 @@ function DeliveryFulfillmentCard({
 
   function handleGetLocation() {
     if (!navigator.geolocation) {
-      setGeoError("Trình duyệt không hỗ trợ định vị.");
+      setGeoError(t("browser_no_location"));
       return;
     }
     setGeoLoading(true);
@@ -253,7 +256,7 @@ function DeliveryFulfillmentCard({
       },
       () => {
         setGeoLoading(false);
-        setGeoError("Không thể lấy vị trí. Vui lòng cho phép truy cập định vị.");
+        setGeoError(t("location_permission_denied"));
       },
       { timeout: 10_000 },
     );
@@ -275,12 +278,12 @@ function DeliveryFulfillmentCard({
       )}
 
       <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-        Hình thức nhận hàng
+        {t("delivery_type")}
       </p>
 
       <div className="flex items-center gap-2 text-foreground">
         <MapPin className="size-5 shrink-0 text-kun-products-forest" aria-hidden />
-        <h2 className="text-lg font-semibold sm:text-xl">Địa chỉ giao hàng</h2>
+        <h2 className="text-lg font-semibold sm:text-xl">{t("delivery_address_title")}</h2>
       </div>
 
       {/* Saved address list */}
@@ -314,7 +317,7 @@ function DeliveryFulfillmentCard({
                     )}
                     {addr.isDefault && (
                       <span className="mt-1 inline-block rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200">
-                        Mặc định
+                        {t("default")}
                       </span>
                     )}
                   </div>
@@ -344,7 +347,7 @@ function DeliveryFulfillmentCard({
               </div>
               <div className="flex items-center gap-1.5 text-sm font-medium text-foreground/70">
                 <Plus className="size-3.5" />
-                Nhập địa chỉ mới
+                {t("add_new_address_option")}
               </div>
             </div>
           </button>
@@ -355,7 +358,7 @@ function DeliveryFulfillmentCard({
             className="mt-1 flex items-center gap-1 text-xs text-foreground/40 transition-colors hover:text-foreground/70"
           >
             <ExternalLink className="size-3" />
-            Quản lý địa chỉ
+            {t("manage_addresses")}
           </button>
         </div>
       )}
@@ -381,7 +384,7 @@ function DeliveryFulfillmentCard({
               <div>
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                   <label className="text-xs font-medium text-foreground/70">
-                    Địa chỉ đầy đủ *
+                    {t("full_address")}
                   </label>
                   <div className="flex items-center gap-3">
                     <button
@@ -390,7 +393,7 @@ function DeliveryFulfillmentCard({
                       className="flex items-center gap-1 text-[11px] font-medium text-kun-products-forest hover:opacity-80"
                     >
                       <Map className="size-3" />
-                      Chọn trên bản đồ
+                      {t("select_on_map")}
                     </button>
                     <button
                       type="button"
@@ -403,13 +406,13 @@ function DeliveryFulfillmentCard({
                       ) : (
                         <Navigation className="size-3" />
                       )}
-                      GPS
+                      {t("gps")}
                     </button>
                   </div>
                 </div>
                 <input
                   type="text"
-                  placeholder="Số nhà, tên đường, phường/xã, quận/huyện, tỉnh/thành"
+                  placeholder={t("address_placeholder")}
                   value={form.fullAddress}
                   onChange={(e) => onChange({ fullAddress: e.target.value })}
                   className={inputCls}
@@ -430,7 +433,7 @@ function DeliveryFulfillmentCard({
               {/* Recipient info — toggle between account and custom */}
               <div className="space-y-3">
                 <label className="block text-xs font-medium text-foreground/70">
-                  Người nhận *
+                  {t("recipient_label")} *
                 </label>
                 {canUseAccount && (
                   <ContactModeToggle mode={contactMode} onModeChange={handleContactModeChange} />
@@ -441,11 +444,11 @@ function DeliveryFulfillmentCard({
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
                       <label className="mb-1.5 block text-xs font-medium text-foreground/70">
-                        Tên người nhận *
+                        {t("recipient_name_label")} *
                       </label>
                       <input
                         type="text"
-                        placeholder="Họ và tên"
+                        placeholder={t("full_name")}
                         value={form.name}
                         onChange={(e) => onChange({ name: e.target.value })}
                         className={inputCls}
@@ -455,7 +458,7 @@ function DeliveryFulfillmentCard({
                     </div>
                     <div>
                       <label className="mb-1.5 block text-xs font-medium text-foreground/70">
-                        Số điện thoại *
+                        {t("phone_number")} *
                       </label>
                       <input
                         type="tel"
@@ -474,11 +477,11 @@ function DeliveryFulfillmentCard({
               {/* Note */}
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-foreground/70">
-                  Ghi chú giao hàng (tuỳ chọn)
+                  {t("delivery_note_label")}
                 </label>
                 <input
                   type="text"
-                  placeholder="Ví dụ: Gọi điện trước khi giao"
+                  placeholder={t("delivery_note_placeholder")}
                   value={form.note}
                   onChange={(e) => onChange({ note: e.target.value })}
                   className={inputCls}
@@ -502,11 +505,12 @@ function TableOrderCard({
   tableName?: string | null;
   tableArea?: string | null;
 }) {
+  const t = useTranslations();
   const area = (tableArea ?? "").trim() || "Tầng 1";
   return (
     <SectionCard>
       <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-        Hình thức nhận hàng
+        {t("delivery_type")}
       </p>
       <div className="flex gap-4">
         <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-kun-filter-pill-bg text-kun-products-forest ring-1 ring-black/6">
@@ -514,10 +518,10 @@ function TableOrderCard({
         </div>
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-semibold text-foreground sm:text-xl">
-            {tableName ?? "Tại bàn"}
+            {tableName ?? t("type_table")}
           </h2>
           <p className="mt-1 text-sm leading-relaxed text-foreground/65">
-            Khu vực {area} — nhân viên sẽ mang đến tận bàn.
+            {t("table_area_service", { area })}
           </p>
         </div>
       </div>
@@ -528,6 +532,7 @@ function TableOrderCard({
 // ── Pickup store info ─────────────────────────────────────────────────────────
 
 function PickupStoreCard({ storeLocation }: { storeLocation?: StoreLocationInfo | null }) {
+  const t = useTranslations();
   const hasCoords = storeLocation && storeLocation.lat !== 0 && storeLocation.lng !== 0;
   const mapsUrl = hasCoords
     ? `https://www.google.com/maps?q=${storeLocation.lat},${storeLocation.lng}`
@@ -537,7 +542,7 @@ function PickupStoreCard({ storeLocation }: { storeLocation?: StoreLocationInfo 
   return (
     <SectionCard>
       <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-        Điểm nhận hàng
+        {t("pickup_point")}
       </p>
       <div className="flex gap-4">
         <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-kun-filter-pill-bg text-kun-products-forest ring-1 ring-black/6">
@@ -550,7 +555,7 @@ function PickupStoreCard({ storeLocation }: { storeLocation?: StoreLocationInfo 
             <p className="mt-1 text-sm leading-relaxed text-foreground/65">{address}</p>
           ) : (
             <p className="mt-1 text-sm italic leading-relaxed text-foreground/40">
-              Chưa cấu hình địa chỉ
+              {t("address_not_set")}
             </p>
           )}
 
@@ -568,7 +573,7 @@ function PickupStoreCard({ storeLocation }: { storeLocation?: StoreLocationInfo 
               className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-kun-filter-pill-bg px-3 py-1.5 text-xs font-medium text-kun-products-forest ring-1 ring-black/6 transition-colors hover:ring-black/10"
             >
               <MapPin className="size-3.5" aria-hidden />
-              Xem trên bản đồ
+              {t("view_on_map")}
               <ExternalLink className="size-3" aria-hidden />
             </a>
           ) : null}
@@ -591,6 +596,7 @@ function PickupDetailsCard({
   profileName?: string | null;
   profilePhone?: string | null;
 }) {
+  const t = useTranslations();
   const [contactMode, setContactMode] = useState<ContactMode>("custom");
   const canUseAccount = !!(profileName && profilePhone);
 
@@ -615,14 +621,14 @@ function PickupDetailsCard({
   return (
     <SectionCard>
       <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-        Chi tiết nhận hàng
+        {t("pickup_details")}
       </p>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:gap-8">
         {/* Pickup time */}
         <div>
           <label className="mb-3 block text-xs font-medium text-foreground/70">
-            Thời gian lấy
+            {t("pickup_time")}
           </label>
           <div className="flex flex-col gap-2">
             <button
@@ -633,7 +639,7 @@ function PickupDetailsCard({
                 : "border-transparent bg-kun-filter-pill-bg text-foreground/80 ring-1 ring-black/6"
                 }`}
             >
-              Ngay (15–20 phút)
+              {t("pickup_asap")}
             </button>
             <button
               type="button"
@@ -643,7 +649,7 @@ function PickupDetailsCard({
                 : "border-transparent bg-kun-filter-pill-bg text-foreground/80 ring-1 ring-black/6"
                 }`}
             >
-              Đặt giờ
+              {t("pickup_schedule")}
             </button>
           </div>
 
@@ -658,7 +664,7 @@ function PickupDetailsCard({
         {/* Contact info */}
         <div className="space-y-3">
           <label className="block text-xs font-medium text-foreground/70">
-            Thông tin liên hệ *
+            {t("contact_info")} *
           </label>
           {canUseAccount && (
             <ContactModeToggle mode={contactMode} onModeChange={handleContactModeChange} />
@@ -669,11 +675,11 @@ function PickupDetailsCard({
             <div className="space-y-3">
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-foreground/70">
-                  Tên liên hệ *
+                  {t("contact_name_label")} *
                 </label>
                 <input
                   type="text"
-                  placeholder="Họ và tên"
+                  placeholder={t("full_name")}
                   value={form.name}
                   onChange={(e) => onChange({ name: e.target.value })}
                   className={inputCls}

@@ -151,7 +151,7 @@ export function StaffAccountTab() {
   const handleDelete = async (admin: AdminRow) => {
     const ok = await confirm({
       title: "Xóa nhân viên?",
-      description: `Xóa tài khoản "${admin.email}"? Hành động không thể hoàn tác.`,
+      description: `Xóa tài khoản "${admin.name ?? admin.phone ?? admin.id}"? Hành động không thể hoàn tác.`,
       tone: "danger",
       confirmLabel: "Xóa",
     });

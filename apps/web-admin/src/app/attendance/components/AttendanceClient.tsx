@@ -139,7 +139,7 @@ export function AttendanceClient() {
     });
   };
 
-  const displayName = admin?.name ?? admin?.email?.split("@")[0];
+  const displayName = admin?.name ?? admin?.phone ?? "Admin";
 
   return (
     <div className="flex flex-col gap-5 pb-16">

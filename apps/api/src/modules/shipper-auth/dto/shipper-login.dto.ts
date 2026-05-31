@@ -1,8 +1,9 @@
-import { IsEmail, IsString, MinLength } from 'class-validator';
+import { IsString, Matches, MinLength } from 'class-validator';
 
 export class ShipperLoginDto {
-  @IsEmail()
-  email!: string;
+  @IsString()
+  @Matches(/^\+?[0-9]{9,15}$/, { message: 'Số điện thoại không hợp lệ.' })
+  phone!: string;
 
   @IsString()
   @MinLength(1)

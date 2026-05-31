@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { useAuthStore } from "@/store/auth-store";
 
-import { getAdminMe, postAdminGoogleLogin } from "./api";
+import { getAdminMe, postAdminPhoneLogin } from "./api";
 import { authKeys } from "./keys";
 
 export function useAdminMeQuery() {
@@ -24,13 +24,14 @@ export function useAdminMeQuery() {
   });
 }
 
-export function useAdminGoogleAuthMutation() {
+export function useAdminPhoneAuthMutation() {
   const queryClient = useQueryClient();
   const router = useRouter();
   const setSession = useAuthStore((s) => s.setSession);
 
   return useMutation({
-    mutationFn: async (idToken: string) => postAdminGoogleLogin({ idToken }),
+    mutationFn: (payload: { phone: string; password: string }) =>
+      postAdminPhoneLogin(payload),
     onSuccess: (data) => {
       setSession({
         admin: data.admin,

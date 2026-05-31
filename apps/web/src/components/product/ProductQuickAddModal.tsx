@@ -10,16 +10,14 @@ import { X, ShoppingCart, Check, Loader2, Minus, Plus, ArrowRight, StickyNote } 
 import { useAddToCartMutation } from "@/services/cart/hooks";
 import { useAuthStore } from "@/store/auth-store";
 import { useRouter } from "@/i18n/navigation";
-import { useToppingsQuery } from "@/services/topping/hooks";
 import {
   normalizeOptionGroups,
   computeOptionSurcharge,
   formatVnd,
 } from "@/lib/product-options";
 import type { ApiProduct } from "@/services/product/types";
-import { useTranslations } from "next-intl";
-
-const MAX_TOPPINGS = 2;
+import { useTranslations, useLocale } from "next-intl";
+import { getDisplayName, getValueLabel, getDisplayDescription } from "@/lib/product-name";
 
 const PLACEHOLDER_BG = [
   "#1a3c34", "#2d1a0a", "#0d2035", "#1a0d2e",
@@ -35,9 +33,10 @@ type Props = {
 
 export function ProductQuickAddModal({ product, productIndex = 0, open, onClose }: Props) {
   const t = useTranslations();
+  const locale = useLocale();
   const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
-  const { data: toppings = [] } = useToppingsQuery();
+  const toppings = (product.toppings ?? []).filter((t) => t.isActive !== false);
 
   const optionGroups = useMemo(
     () => normalizeOptionGroups(product.optionGroups),
@@ -101,7 +100,7 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose 
     () =>
       toppings
         .filter((t) => selectedToppings.has(t.id))
-        .reduce((s, t) => s + parseFloat(t.price), 0),
+        .reduce((s, t) => s + t.price, 0),
     [toppings, selectedToppings],
   );
 
@@ -110,7 +109,6 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose 
 
   function toggleTopping(id: string, checked: boolean) {
     setSelectedToppings((prev) => {
-      if (checked && prev.size >= MAX_TOPPINGS) return prev;
       const next = new Set(prev);
       checked ? next.add(id) : next.delete(id);
       return next;
@@ -142,7 +140,7 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose 
         },
         toppingSnapshots: toppings
           .filter((t) => selectedToppings.has(t.id))
-          .map((t) => ({ toppingId: t.id, topping: { id: t.id, name: t.name, price: t.price } })),
+          .map((t) => ({ toppingId: t.id, topping: { id: t.id, name: t.name, price: String(t.price), nameTranslation: t.nameTranslation ?? {} } })),
       },
       {
         onSuccess: () => {
@@ -325,9 +323,9 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose 
                         <p className="text-sm text-muted line-through">{formatVnd(basePrice)}</p>
                       )}
                     </div>
-                    {product.description && (
+                    {getDisplayDescription(product, locale) && (
                       <p className="text-[13px] leading-relaxed text-foreground/60 line-clamp-2">
-                        {product.description}
+                        {getDisplayDescription(product, locale)}
                       </p>
                     )}
                   </div>
@@ -340,7 +338,7 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose 
                       {optionGroups.map((grp) => (
                         <div key={grp.id} className="space-y-2">
                           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted">
-                            {grp.name}
+                            {getDisplayName(grp, locale)}
                           </p>
                           <div className="flex flex-wrap gap-2">
                             {grp.values.map((v) => {
@@ -358,7 +356,7 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose 
                                       : "border-black/10 bg-white text-foreground hover:border-black/20"
                                   }`}
                                 >
-                                  {v.label}
+                                  {getValueLabel(v, locale)}
                                   {v.priceDelta > 0 && (
                                     <span className={`text-xs tabular-nums ${isSelected ? "text-kun-products-forest/70" : "text-muted"}`}>
                                       +{formatVnd(v.priceDelta)}
@@ -381,32 +379,28 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose 
                         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted">
                           {t("extra_toppings")}
                         </p>
-                        <span className={`text-[11px] font-semibold tabular-nums ${
-                          selectedToppings.size >= MAX_TOPPINGS ? "text-kun-products-forest" : "text-muted"
-                        }`}>
-                          {selectedToppings.size}/{MAX_TOPPINGS}
-                        </span>
+                        {selectedToppings.size > 0 && (
+                          <span className="text-[11px] font-semibold tabular-nums text-kun-products-forest">
+                            {selectedToppings.size} đã chọn
+                          </span>
+                        )}
                       </div>
                       <div className="grid grid-cols-2 gap-1.5">
                         {toppings.map((top) => {
                           const isActive = selectedToppings.has(top.id);
-                          const isDisabled = !isActive && selectedToppings.size >= MAX_TOPPINGS;
                           return (
                             <button
                               key={top.id}
                               type="button"
-                              disabled={isDisabled}
                               onClick={() => toggleTopping(top.id, !isActive)}
                               className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left transition-all ${
                                 isActive
                                   ? "border-kun-products-forest/40 bg-kun-products-forest/8 text-kun-products-forest"
-                                  : isDisabled
-                                  ? "cursor-not-allowed border-transparent bg-surface-card/50 opacity-40"
                                   : "border-black/[0.07] bg-surface-card/40 text-foreground hover:border-black/15"
                               }`}
                             >
                               <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
-                                {top.name}
+                                {getDisplayName(top, locale)}
                               </span>
                               <span className={`shrink-0 text-[12px] tabular-nums font-semibold ${isActive ? "text-kun-products-forest" : "text-muted"}`}>
                                 +{formatVnd(top.price)}

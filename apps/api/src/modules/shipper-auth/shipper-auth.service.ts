@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import * as bcrypt from 'bcrypt';
 import type { SignOptions } from 'jsonwebtoken';
 import { PrismaService } from '../prisma/prisma.service';
 import { SHIPPER_JWT_ENV, SHIPPER_JWT_DEFAULTS } from './config/shipper-jwt.config';
@@ -35,23 +36,32 @@ export class ShipperAuthService {
   }
 
   async login(dto: ShipperLoginDto) {
-    const email = dto.email.trim().toLowerCase();
+    const phone = dto.phone.trim();
 
     const admin = await this.prisma.admin.findUnique({
-      where: { email },
+      where: { phone },
       select: {
         id: true,
         name: true,
         email: true,
         phone: true,
         password: true,
+        isActive: true,
         shipper: { select: { id: true, isActive: true, name: true, phone: true } },
       },
     });
 
-    if (!admin || !admin.password || admin.password !== dto.password) {
+    if (!admin || !admin.password) {
       throw new UnauthorizedException({
-        message: 'Email hoặc mật khẩu không đúng.',
+        message: 'Số điện thoại hoặc mật khẩu không đúng.',
+        code: 'SHIPPER_INVALID_CREDENTIALS',
+      });
+    }
+
+    const isMatch = await bcrypt.compare(dto.password, admin.password);
+    if (!isMatch || !admin.isActive) {
+      throw new UnauthorizedException({
+        message: 'Số điện thoại hoặc mật khẩu không đúng.',
         code: 'SHIPPER_INVALID_CREDENTIALS',
       });
     }
@@ -106,7 +116,7 @@ export class ShipperAuthService {
 
     const shipper = await this.prisma.shipper.findUnique({
       where: { id: payload.shipperId },
-      select: { id: true, isActive: true, name: true, phone: true, admin: { select: { email: true } } },
+      select: { id: true, isActive: true, name: true, phone: true, admin: { select: { phone: true } } },
     });
 
     if (!shipper || !shipper.isActive) {
@@ -125,7 +135,6 @@ export class ShipperAuthService {
         id: shipper.id,
         name: shipper.name,
         phone: shipper.phone,
-        email: shipper.admin?.email ?? null,
       },
     };
   }
@@ -147,7 +156,7 @@ export class ShipperAuthService {
         name: true,
         phone: true,
         isActive: true,
-        admin: { select: { email: true, faceProfile: { select: { imageUrl: true } } } },
+        admin: { select: { phone: true, faceProfile: { select: { imageUrl: true } } } },
       },
     });
     if (!shipper) throw new UnauthorizedException({ message: 'Không tìm thấy shipper.', code: 'SHIPPER_NOT_FOUND' });
@@ -155,7 +164,6 @@ export class ShipperAuthService {
       id: shipper.id,
       name: shipper.name,
       phone: shipper.phone,
-      email: shipper.admin?.email ?? null,
       imageUrl: shipper.admin?.faceProfile?.imageUrl ?? null,
     };
   }

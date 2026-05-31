@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { CartItem, Category, PosConfig, Product, Table, PaymentConfig, Topping } from '../types/common'
+import type { CartItem, Category, PosConfig, Product, Table, PaymentConfig } from '../types/common'
 import { DEFAULT_CONFIG } from '../types/common'
 
 interface PosState {
@@ -13,14 +13,12 @@ interface PosState {
   // Data cache
   categories: Category[]
   products: Product[]
-  toppings: Topping[]
   tables: Table[]
   paymentConfig: PaymentConfig | null
   setCategories: (v: Category[]) => void
   setProducts: (v: Product[]) => void
   setIsFetching: (v: boolean) => void
   setTables: (v: Table[]) => void
-  setToppings: (v: Topping[]) => void
   setPaymentConfig: (v: PaymentConfig) => void
 
   // POS Session
@@ -62,7 +60,6 @@ export const usePosStore = create<PosState>((set, get) => ({
   categories: [],
   products: [],
   tables: [],
-  toppings: [],
   paymentConfig: null,
   isFetching: false,
   setCategories: (categories) => set({ categories }),
@@ -70,7 +67,6 @@ export const usePosStore = create<PosState>((set, get) => ({
   setIsFetching: (isFetching) => set({ isFetching }),
   setTables: (tables) => set({ tables }),
   setPaymentConfig: (paymentConfig) => set({ paymentConfig }),
-  setToppings: (toppings) => set({ toppings }),
 
   // ── POS Session ───────────────────────────────────────────────────────────
   selectedCategoryId: null,

@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Check, Loader2, Minus, Plus } from "lucide-react";
 import { Button, Checkbox, ListBox, Select } from "@heroui/react";
-import { useToppingsQuery } from "@/services/topping/hooks";
 import { useUpdateCartItemMutation } from "@/services/cart/hooks";
 import type { ApiCartItem } from "@/services/cart/types";
 import {
@@ -21,8 +20,8 @@ type Props = {
 
 export function CartEditModal({ item, onClose }: Props) {
   const t = useTranslations();
-  const { data: toppings = [] } = useToppingsQuery();
   const { mutate: updateItem, isPending } = useUpdateCartItemMutation();
+  const toppings = (item?.product.toppings ?? []).filter((t) => t.isActive !== false);
 
   const optionGroups = useMemo(
     () => (item ? normalizeOptionGroups(item.product.optionGroups) : []),
@@ -36,7 +35,7 @@ export function CartEditModal({ item, onClose }: Props) {
   useEffect(() => {
     if (!item) return;
     setQuantity(item.quantity);
-    setSelectedToppings(new Set(item.toppings.map((t) => t.toppingId)));
+    setSelectedToppings(new Set((item.toppings ?? []).map((t) => t.toppingId)));
 
     // Pre-fill options: try group name key first, then group id key (legacy)
     const opts: Record<string, string> = {};
@@ -73,7 +72,7 @@ export function CartEditModal({ item, onClose }: Props) {
     () =>
       toppings
         .filter((t) => selectedToppings.has(t.id))
-        .reduce((s, t) => s + parseFloat(t.price), 0),
+        .reduce((s, t) => s + t.price, 0),
     [toppings, selectedToppings],
   );
 
@@ -89,7 +88,7 @@ export function CartEditModal({ item, onClose }: Props) {
         toppingIds: Array.from(selectedToppings),
         toppingSnapshots: toppings
           .filter((t) => selectedToppings.has(t.id))
-          .map((t) => ({ toppingId: t.id, topping: { id: t.id, name: t.name, price: t.price } })),
+          .map((t) => ({ toppingId: t.id, topping: { id: t.id, name: t.name, price: String(t.price), nameTranslation: t.nameTranslation ?? {} } })),
       },
       { onSuccess: onClose },
     );

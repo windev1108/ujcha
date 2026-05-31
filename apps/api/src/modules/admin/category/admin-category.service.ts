@@ -3,7 +3,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { normalizeTranslation } from '../../../helper/utils';
 import { slugify, uniqueSlugSuffix } from '../slug.util';
 import type { CreateCategoryDto } from './dto/create-category.dto';
 import type { UpdateCategoryDto } from './dto/update-category.dto';
@@ -43,6 +45,7 @@ export class AdminCategoryService {
         slug,
         sortOrder: dto.sortOrder ?? 0,
         thumbnail: dto.thumbnail ?? null,
+        nameTranslation: normalizeTranslation(dto.nameTranslation) as unknown as Prisma.InputJsonValue,
       },
       include: { _count: { select: { products: true } } },
     });
@@ -64,6 +67,9 @@ export class AdminCategoryService {
         ...(slug !== undefined && { slug }),
         ...(dto.sortOrder !== undefined && { sortOrder: dto.sortOrder }),
         ...(dto.thumbnail !== undefined && { thumbnail: dto.thumbnail || null }),
+        ...(dto.nameTranslation !== undefined && {
+          nameTranslation: normalizeTranslation(dto.nameTranslation) as unknown as Prisma.InputJsonValue,
+        }),
       },
       include: { _count: { select: { products: true } } },
     });

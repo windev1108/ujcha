@@ -1,6 +1,7 @@
 "use client";
 
 import { Coins } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 type Props = {
   pointBalance: number;
@@ -15,6 +16,7 @@ function formatVnd(n: number) {
 }
 
 export function PointsSection({ pointBalance, pointRate, usePoints, pointDiscount, onToggle }: Props) {
+  const t = useTranslations();
   if (pointBalance < 1) return null;
 
   const estimatedDiscount = pointBalance * pointRate;
@@ -37,14 +39,14 @@ export function PointsSection({ pointBalance, pointRate, usePoints, pointDiscoun
         </div>
         <div>
           <p className={`text-sm font-semibold ${usePoints ? "text-kun-primary" : "text-foreground"}`}>
-            Điểm UjCha
+            {t("points_label")}
           </p>
           <p className="text-xs text-foreground/55">
-            {pointBalance.toLocaleString("vi-VN")} điểm
+            {t("points_count", { count: pointBalance.toLocaleString("vi-VN") })}
             {" · "}
             {usePoints
-              ? `Tiết kiệm -${formatVnd(pointDiscount)}`
-              : `≈ ${formatVnd(estimatedDiscount)}`}
+              ? t("points_saving", { amount: formatVnd(pointDiscount) })
+              : t("points_est_value", { amount: formatVnd(estimatedDiscount) })}
           </p>
         </div>
       </div>

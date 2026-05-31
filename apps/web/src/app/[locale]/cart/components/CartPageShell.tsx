@@ -85,7 +85,7 @@ export function CartPageShell() {
               : base;
           const groups = normalizeOptionGroups(item.product.optionGroups);
           const optionSurcharge = computeOptionSurcharge(groups, item.selectedOptions);
-          const toppingTotal = item.toppings.reduce(
+          const toppingTotal = (item.toppings ?? []).reduce(
             (s, t) => s + parseFloat(t.topping.price),
             0,
           );

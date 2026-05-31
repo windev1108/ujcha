@@ -13,7 +13,7 @@ const adminSelect = {
   id: true,
   email: true,
   role: true,
-  googleId: true,
+  isActive: true,
   name: true,
   phone: true,
   address: true,

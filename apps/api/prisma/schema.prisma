@@ -191,57 +191,34 @@ model Cart {
 }
 
 model CartItem {
-  id              String           @id @default(uuid()) @db.Uuid
-  cartId          String           @db.Uuid
-  cart            Cart             @relation(fields: [cartId], references: [id], onDelete: Cascade)
-  productId       String           @db.Uuid
-  product         Product          @relation(fields: [productId], references: [id], onDelete: Restrict)
+  id              String   @id @default(uuid()) @db.Uuid
+  cartId          String   @db.Uuid
+  cart            Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId       String   @db.Uuid
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
   quantity        Int
-  /// Lựa chọn người dùng đã chọn: { [groupId]: value }
-  selectedOptions Json             @default("{}")
-  toppings        CartItemTopping[]
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  /// Lựa chọn người dùng đã chọn: { [groupName]: label }
+  selectedOptions Json     @default("{}")
+  /// Topping đã chọn (snapshot từ Product.toppings): [{ id, name, price }]
+  toppingsJson    Json     @default("[]")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@index([cartId])
 }
 
-model CartItemTopping {
-  id         String   @id @default(uuid()) @db.Uuid
-  cartItemId String   @db.Uuid
-  cartItem   CartItem @relation(fields: [cartItemId], references: [id], onDelete: Cascade)
-  toppingId  String   @db.Uuid
-  topping    Topping  @relation(fields: [toppingId], references: [id], onDelete: Restrict)
-
-  @@unique([cartItemId, toppingId])
-  @@index([cartItemId])
-}
-
 model Category {
-  id        String    @id @default(uuid()) @db.Uuid
-  name      String
-  slug      String    @unique
-  sortOrder Int       @default(0)
-  thumbnail String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  products  Product[]
+  id              String    @id @default(uuid()) @db.Uuid
+  name            String
+  slug            String    @unique
+  sortOrder       Int       @default(0)
+  thumbnail       String?
+  /// Bản dịch tên danh mục: { "en": "...", "ko": "..." }
+  nameTranslation Json      @default("{}")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  products        Product[]
 
-  @@index([sortOrder])
-}
-
-/// Topping / thêm (trân châu, kem muối, thạch…) — giá cố định, dùng chung POS & web order.
-model Topping {
-  id        String            @id @default(uuid()) @db.Uuid
-  name      String
-  price     Decimal           @db.Decimal(12, 2)
-  isActive  Boolean           @default(true)
-  sortOrder Int               @default(0)
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
-  cartItems CartItemTopping[]
-
-  @@index([isActive])
   @@index([sortOrder])
 }
 
@@ -257,8 +234,14 @@ model Product {
   price       Decimal  @db.Decimal(12, 2)
   /// Danh sách URL ảnh (CDN / link ngoài); ảnh đầu dùng làm đại diện.
   imageUrls   Json     @default("[]")
-  /// Nhóm tuỳ chọn (size, nhiệt độ, …): `[{ id, name, values: string[] }]`
-  optionGroups Json    @default("[]")
+  /// Nhóm biến thể per-product: [{ id, name, selectionMin, selectionMax, values: [{label, priceDelta}] }]
+  optionGroups    Json @default("[]")
+  /// Topping per-product: [{ id, name, price, isActive }]
+  toppings        Json @default("[]")
+  /// Bản dịch tên món: { "en": "...", "ko": "...", "zh": "..." }
+  nameTranslation Json @default("{}")
+  /// Bản dịch mô tả món: { "en": "...", "ko": "...", "zh": "..." }
+  descriptionTranslation Json @default("{}")
   isAvailable Boolean  @default(true)
   /// Đánh dấu hết hàng (hiển thị cho khách khi vẫn `isAvailable`).
   isSoldOut   Boolean  @default(false)
@@ -357,7 +340,7 @@ model Shipper {
   id        String   @id @default(uuid()) @db.Uuid
   /// Liên kết với tài khoản staff (tuỳ chọn, mỗi staff chỉ là 1 shipper).
   adminId   String?  @unique @db.Uuid
-  admin     Admin?   @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  admin     Admin?   @relation(fields: [adminId], references: [id], onDelete: Cascade)
   name      String
   phone     String?
   isActive  Boolean  @default(true)
@@ -651,14 +634,16 @@ enum AdminRole {
 
 model Admin {
   id          String    @id @default(uuid()) @db.Uuid
-  email       String    @unique
-  /// Legacy — đăng nhập admin chỉ còn Google; có thể null sau khi chuyển.
+  /// Số điện thoại — định danh đăng nhập chính.
+  phone       String?   @unique
+  /// Email tuỳ chọn (thông báo, phục hồi tài khoản).
+  email       String?   @unique
+  /// bcrypt hash của mật khẩu.
   password    String?
-  googleId    String?   @unique
-  role        AdminRole
   name        String?
-  phone       String?
+  role        AdminRole
   address     String?
+  isActive    Boolean   @default(true)
   /// Danh sách quyền trang được cấp cho staff (bỏ qua với super_admin).
   permissions String[]  @default([])
   createdAt   DateTime  @default(now())
@@ -730,19 +715,6 @@ model StaffAttendance {
   @@index([createdAt])
 }
 
-model VariantGroup {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String
-  /// Array of {label, priceDelta} — same structure as Product.optionGroups values
-  values    Json     @default("[]")
-  sortOrder Int      @default(0)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([sortOrder])
-  @@index([isActive])
-}
 
 /// Cấu hình thanh toán SePay QR — một dòng cố định id = "default".
 model PaymentConfig {

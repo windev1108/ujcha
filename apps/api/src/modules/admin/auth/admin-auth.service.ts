@@ -1,9 +1,9 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import * as bcrypt from 'bcrypt';
 import type { SignOptions } from 'jsonwebtoken';
 import { PrismaService } from '../../prisma/prisma.service';
-import { GoogleAuthService } from '../../google-auth/google-auth.service';
 import { ADMIN_JWT_ENV, ADMIN_JWT_DEFAULTS } from './config/admin-jwt.config';
 import {
   ADMIN_JWT_REFRESH_TYPE,
@@ -11,11 +11,16 @@ import {
   type AdminJwtPayload,
   type AdminRefreshJwtPayload,
 } from './admin-jwt.types';
-import type { AdminGoogleLoginDto } from './dto/admin-google-login.dto';
+import type { AdminPhoneLoginDto } from './dto/admin-phone-login.dto';
 import type { AdminRefreshDto } from './dto/admin-refresh.dto';
-import { AdminEmailLoginDto } from './dto/admin-email-login.dto';
 
-type AdminTokenRow = { id: string; email: string; role: AdminJwtPayload['role']; permissions: string[] };
+type AdminRow = {
+  id: string;
+  phone: string | null;
+  name: string | null;
+  role: AdminJwtPayload['role'];
+  permissions: string[];
+};
 
 @Injectable()
 export class AdminAuthService {
@@ -23,10 +28,9 @@ export class AdminAuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
-    private readonly googleAuthService: GoogleAuthService,
-  ) { }
+  ) {}
 
-  private async signAccessToken(admin: Pick<AdminTokenRow, 'id' | 'role' | 'permissions'>): Promise<string> {
+  private async signAccessToken(admin: Pick<AdminRow, 'id' | 'role' | 'permissions'>): Promise<string> {
     const payload: AdminJwtPayload = {
       sub: admin.id,
       role: admin.role,
@@ -36,7 +40,7 @@ export class AdminAuthService {
     return this.jwtService.signAsync(payload);
   }
 
-  private async signRefreshToken(admin: Pick<AdminTokenRow, 'id' | 'role'>): Promise<string> {
+  private async signRefreshToken(admin: Pick<AdminRow, 'id' | 'role'>): Promise<string> {
     const payload: AdminRefreshJwtPayload = {
       sub: admin.id,
       role: admin.role,
@@ -48,33 +52,37 @@ export class AdminAuthService {
     return this.jwtService.signAsync(payload, { secret, expiresIn });
   }
 
-  async loginWithGoogle(dto: AdminGoogleLoginDto) {
-    const profile = await this.googleAuthService.verifyGoogleIdToken(dto.idToken);
-    const email = profile.email.trim().toLowerCase();
+  private dto(admin: AdminRow) {
+    return { id: admin.id, phone: admin.phone, name: admin.name, role: admin.role, permissions: admin.permissions };
+  }
+
+  async loginWithPhone(dto: AdminPhoneLoginDto) {
+    const phone = dto.phone.trim();
 
     const admin = await this.prisma.admin.findUnique({
-      where: { email },
-      select: { id: true, email: true, role: true, googleId: true, permissions: true },
+      where: { phone },
+      select: { id: true, phone: true, name: true, role: true, password: true, permissions: true, isActive: true },
     });
 
-    if (!admin) {
+    if (!admin || !admin.password) {
       throw new UnauthorizedException({
-        message: 'Tài khoản Google chưa được cấp quyền admin.',
-        code: 'ADMIN_GOOGLE_NOT_ALLOWED',
+        message: 'Số điện thoại hoặc mật khẩu không đúng.',
+        code: 'ADMIN_INVALID_CREDENTIALS',
       });
     }
 
-    if (admin.googleId && admin.googleId !== profile.googleId) {
+    if (!admin.isActive) {
       throw new UnauthorizedException({
-        message: 'Tài khoản Google không khớp với hồ sơ admin.',
-        code: 'ADMIN_GOOGLE_MISMATCH',
+        message: 'Tài khoản đã bị vô hiệu hoá.',
+        code: 'ADMIN_INACTIVE',
       });
     }
 
-    if (!admin.googleId) {
-      await this.prisma.admin.update({
-        where: { id: admin.id },
-        data: { googleId: profile.googleId },
+    const isMatch = await bcrypt.compare(dto.password, admin.password);
+    if (!isMatch) {
+      throw new UnauthorizedException({
+        message: 'Số điện thoại hoặc mật khẩu không đúng.',
+        code: 'ADMIN_INVALID_CREDENTIALS',
       });
     }
 
@@ -83,16 +91,7 @@ export class AdminAuthService {
       this.signRefreshToken(admin),
     ]);
 
-    return {
-      accessToken,
-      refreshToken,
-      admin: {
-        id: admin.id,
-        email: admin.email,
-        role: admin.role,
-        permissions: admin.permissions,
-      },
-    };
+    return { accessToken, refreshToken, admin: this.dto(admin) };
   }
 
   async refreshTokens(dto: AdminRefreshDto) {
@@ -117,14 +116,11 @@ export class AdminAuthService {
 
     const admin = await this.prisma.admin.findUnique({
       where: { id: payload.sub },
-      select: { id: true, email: true, role: true, permissions: true },
+      select: { id: true, phone: true, name: true, role: true, permissions: true, isActive: true },
     });
 
-    if (!admin) {
-      throw new UnauthorizedException({
-        message: 'Không tìm thấy tài khoản admin.',
-        code: 'ADMIN_NOT_FOUND',
-      });
+    if (!admin || !admin.isActive) {
+      throw new UnauthorizedException({ message: 'Không tìm thấy tài khoản admin.', code: 'ADMIN_NOT_FOUND' });
     }
 
     const [accessToken, refreshToken] = await Promise.all([
@@ -132,78 +128,17 @@ export class AdminAuthService {
       this.signRefreshToken(admin),
     ]);
 
-    return {
-      accessToken,
-      refreshToken,
-      admin: {
-        id: admin.id,
-        email: admin.email,
-        role: admin.role,
-        permissions: admin.permissions,
-      },
-    };
-  }
-
-  async loginWithEmail(dto: AdminEmailLoginDto) {
-    const email = dto.email.trim().toLowerCase();
-
-    const admin = await this.prisma.admin.findUnique({
-      where: { email },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        password: true,
-        permissions: true,
-      },
-    });
-
-    if (!admin || !admin.password) {
-      throw new UnauthorizedException({
-        message: 'Email hoặc mật khẩu không đúng.',
-        code: 'ADMIN_INVALID_CREDENTIALS',
-      });
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
-    const isMatch = dto.password === admin.password;
-    if (!isMatch) {
-      throw new UnauthorizedException({
-        message: 'Email hoặc mật khẩu không đúng.',
-        code: 'ADMIN_INVALID_CREDENTIALS',
-      });
-    }
-
-    const [accessToken, refreshToken] = await Promise.all([
-      this.signAccessToken(admin),
-      this.signRefreshToken(admin),
-    ]);
-
-    return {
-      accessToken,
-      refreshToken,
-      admin: {
-        id: admin.id,
-        email: admin.email,
-        role: admin.role,
-        permissions: admin.permissions,
-      },
-    };
+    return { accessToken, refreshToken, admin: this.dto(admin) };
   }
 
   async getMe(adminId: string) {
     const admin = await this.prisma.admin.findUnique({
       where: { id: adminId },
-      select: { id: true, email: true, role: true, permissions: true },
+      select: { id: true, phone: true, name: true, role: true, permissions: true },
     });
-
     if (!admin) {
-      throw new UnauthorizedException({
-        message: 'Không tìm thấy tài khoản admin.',
-        code: 'ADMIN_NOT_FOUND',
-      });
+      throw new UnauthorizedException({ message: 'Không tìm thấy tài khoản admin.', code: 'ADMIN_NOT_FOUND' });
     }
-
     return { admin };
   }
 }

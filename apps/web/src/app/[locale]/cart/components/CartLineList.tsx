@@ -10,7 +10,8 @@ import { Link } from "@/i18n/navigation";
 import { ROUTES } from "@/lib/routes";
 import { normalizeOptionGroups, computeOptionSurcharge } from "@/lib/product-options";
 import { ItemOptionsDisplay } from "@/components/cart/ItemOptionsDisplay";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
+import { getDisplayName } from "@/lib/product-name";
 
 type Props = {
   items: ApiCartItem[];
@@ -53,7 +54,8 @@ export function CartLineList({
 }: Props) {
   const selectedCount = selectedIds.size;
   const isIndeterminate = selectedCount > 0 && selectedCount < items.length;
-  const t = useTranslations()
+  const t = useTranslations();
+  const locale = useLocale();
   return (
     <div className="min-w-0 flex-1">
       {/* Header */}
@@ -108,6 +110,7 @@ export function CartLineList({
         animate="show"
       >
         {items.map(({ id, product, quantity, selectedOptions, toppings }, index) => {
+          const productDisplayName = getDisplayName(product, locale);
           const imageUrl = product.imageUrls[0] ?? null;
           const bgColor = PLACEHOLDER_BG[index % PLACEHOLDER_BG.length];
           const basePrice = parseFloat(product.price);
@@ -117,7 +120,7 @@ export function CartLineList({
               : basePrice;
           const groups = normalizeOptionGroups(product.optionGroups);
           const optionSurcharge = computeOptionSurcharge(groups, selectedOptions);
-          const toppingTotal = toppings.reduce(
+          const toppingTotal = (toppings ?? []).reduce(
             (sum, t) => sum + parseFloat(t.topping.price),
             0,
           );
@@ -142,7 +145,7 @@ export function CartLineList({
                     isSelected={isSelected}
                     onChange={() => onToggleSelect(id)}
                     variant="primary"
-                    aria-label={`Chọn ${product.name}`}
+                    aria-label={`Chọn ${productDisplayName}`}
                   >
                     <Checkbox.Control className="size-6 rounded-lg border-2 border-black/25">
                       <Checkbox.Indicator className="size-4" />
@@ -164,7 +167,7 @@ export function CartLineList({
                       {imageUrl ? (
                         <Image
                           src={imageUrl}
-                          alt={product.name}
+                          alt={productDisplayName}
                           fill
                           className="object-cover"
                           sizes="112px"
@@ -172,7 +175,7 @@ export function CartLineList({
                       ) : (
                         <div className="absolute inset-0 flex items-center justify-center">
                           <span className="text-2xl font-black text-white/20 select-none">
-                            {product.name.charAt(0).toUpperCase()}
+                            {productDisplayName.charAt(0).toUpperCase()}
                           </span>
                         </div>
                       )}
@@ -184,11 +187,11 @@ export function CartLineList({
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0 flex-1">
                         <p className="text-[10px] font-medium uppercase tracking-wider text-muted">
-                          {product.category.name}
+                          {getDisplayName(product.category, locale)}
                         </p>
                         <Link href={`${ROUTES.PRODUCTS}/${product.slug}`}>
                           <h2 className="mt-0.5 text-base font-semibold text-foreground hover:text-kun-primary transition-colors sm:text-lg">
-                            {product.name}
+                            {productDisplayName}
                           </h2>
                         </Link>
 
@@ -231,9 +234,7 @@ export function CartLineList({
                             size="sm"
                             isDisabled={isUpdating}
                             className="h-8 gap-1.5 rounded-full px-3 text-xs font-medium text-muted hover:text-foreground"
-                            onPress={() =>
-                              onEdit({ id, product, quantity, selectedOptions, toppings } as ApiCartItem)
-                            }
+                            onPress={() => onEdit({ id, product, quantity, selectedOptions, toppings } as ApiCartItem)}
                           >
                             <Pencil className="size-3" />
                             {t("edit")}

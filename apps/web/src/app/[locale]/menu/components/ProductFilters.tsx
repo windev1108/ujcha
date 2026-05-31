@@ -3,8 +3,8 @@
 import { useCategoriesQuery } from "@/services/category/hooks";
 import { AnimatePresence, motion } from "motion/react";
 import { easeOutSmooth } from "@/app/[locale]/(landing)/components/RevealSection";
-import { Search, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 type Props = {
@@ -19,6 +19,29 @@ export function ProductFilters({ activeCategory, onCategoryChange, search, onSea
   const { data: categories } = useCategoriesQuery();
   const [showSearch, setShowSearch] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const pillsRef = useRef<HTMLDivElement>(null);
+  const [fadeLeft, setFadeLeft] = useState(false);
+  const [fadeRight, setFadeRight] = useState(false);
+
+  const syncFade = () => {
+    const el = pillsRef.current;
+    if (!el) return;
+    setFadeLeft(el.scrollLeft > 1);
+    setFadeRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+  };
+
+  useEffect(() => {
+    const el = pillsRef.current;
+    if (!el) return;
+    syncFade();
+    el.addEventListener("scroll", syncFade, { passive: true });
+    const ro = new ResizeObserver(syncFade);
+    ro.observe(el);
+    return () => { el.removeEventListener("scroll", syncFade); ro.disconnect(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => { syncFade(); }, [categories]);
 
   const openSearch = () => {
     setShowSearch(true);
@@ -35,32 +58,67 @@ export function ProductFilters({ activeCategory, onCategoryChange, search, onSea
       {/* Row 1: category pills + search toggle */}
       <div className="flex items-center gap-2">
         {/* Horizontal-scroll pills */}
-        <div className="flex-1 overflow-x-auto scrollbar-hide">
-          <div className="flex gap-1.5 flex-nowrap pb-px">
-            <button
-              type="button"
-              onClick={() => onCategoryChange("")}
-              className={`shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors ${activeCategory === ""
-                  ? "bg-kun-products-forest text-white shadow-sm"
-                  : "bg-kun-filter-pill-bg text-foreground/80 hover:bg-black/[0.07]"
-                }`}
-            >
-              {t("all")}
-            </button>
-            {categories?.map((cat) => (
+        <div className="relative min-w-0 flex-1">
+          {/* Left fade + arrow */}
+          {fadeLeft && (
+            <>
+              <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-10 bg-gradient-to-r from-white to-transparent" />
               <button
-                key={cat.id}
                 type="button"
-                onClick={() => onCategoryChange(cat.slug)}
-                className={`shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors ${activeCategory === cat.slug
+                aria-label="Cuộn trái"
+                onClick={() => pillsRef.current?.scrollBy({ left: -180, behavior: "smooth" })}
+                className="absolute left-0 top-1/2 z-20 flex size-6 -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white shadow-sm transition-colors hover:bg-black/[0.04]"
+              >
+                <ChevronLeft className="size-3.5 text-foreground/55" />
+              </button>
+            </>
+          )}
+
+          <div
+            ref={pillsRef}
+            className="overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            <div className="flex w-max min-w-full items-center gap-1.5 pb-px">
+              <button
+                type="button"
+                onClick={() => onCategoryChange("")}
+                className={`shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors ${activeCategory === ""
                     ? "bg-kun-products-forest text-white shadow-sm"
                     : "bg-kun-filter-pill-bg text-foreground/80 hover:bg-black/[0.07]"
                   }`}
               >
-                {cat.name}
+                {t("all")}
               </button>
-            ))}
+              {categories?.map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => onCategoryChange(cat.slug)}
+                  className={`shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors ${activeCategory === cat.slug
+                      ? "bg-kun-products-forest text-white shadow-sm"
+                      : "bg-kun-filter-pill-bg text-foreground/80 hover:bg-black/[0.07]"
+                    }`}
+                >
+                  {cat.name}
+                </button>
+              ))}
+            </div>
           </div>
+
+          {/* Right fade + arrow */}
+          {fadeRight && (
+            <>
+              <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-white to-transparent" />
+              <button
+                type="button"
+                aria-label="Cuộn phải"
+                onClick={() => pillsRef.current?.scrollBy({ left: 180, behavior: "smooth" })}
+                className="absolute right-0 top-1/2 z-20 flex size-6 -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white shadow-sm transition-colors hover:bg-black/[0.04]"
+              >
+                <ChevronRight className="size-3.5 text-foreground/55" />
+              </button>
+            </>
+          )}
         </div>
 
         {/* Vertical divider */}

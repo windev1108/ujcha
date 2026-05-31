@@ -6,18 +6,21 @@ import {
   IsBoolean,
   IsInt,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
-  IsUUID,
   Max,
   MaxLength,
   Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
+import { ProductOptionGroupDto } from './product-option-group.dto';
+import { ProductToppingDto } from './product-topping.dto';
 
 export class CreateProductDto {
   @ApiProperty({ format: 'uuid' })
-  @IsUUID('4')
+  @IsString()
   categoryId!: string;
 
   @ApiPropertyOptional({
@@ -66,14 +69,41 @@ export class CreateProductDto {
   imageUrls?: string[];
 
   @ApiPropertyOptional({
-    type: [String],
-    description: 'IDs của VariantGroup áp dụng cho sản phẩm này',
+    description: 'Nhóm biến thể per-product (bắt buộc chọn ≥1 hoặc tuỳ chọn)',
+    type: [ProductOptionGroupDto],
   })
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(20)
-  @IsUUID('4', { each: true })
-  variantGroupIds?: string[];
+  @Type(() => ProductOptionGroupDto)
+  @ValidateNested({ each: true })
+  optionGroups?: ProductOptionGroupDto[];
+
+  @ApiPropertyOptional({
+    description: 'Bản dịch tên món: { "en": "...", "ko": "..." }',
+    example: { en: 'Matcha Latte', ko: '말차 라떼' },
+  })
+  @IsOptional()
+  @IsObject()
+  nameTranslation?: Record<string, string>;
+
+  @ApiPropertyOptional({
+    description: 'Bản dịch mô tả món: { "en": "...", "ko": "..." }',
+  })
+  @IsOptional()
+  @IsObject()
+  descriptionTranslation?: Record<string, string>;
+
+  @ApiPropertyOptional({
+    description: 'Topping per-product (tuỳ chọn thêm vào món)',
+    type: [ProductToppingDto],
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @Type(() => ProductToppingDto)
+  @ValidateNested({ each: true })
+  toppings?: ProductToppingDto[];
 
   @ApiPropertyOptional({ default: true })
   @IsOptional()

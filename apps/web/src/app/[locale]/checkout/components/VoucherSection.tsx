@@ -20,14 +20,17 @@ function formatVnd(n: number) {
   return new Intl.NumberFormat("vi-VN").format(Math.round(n)) + "đ";
 }
 
-function voucherLabel(v: MyVoucherItem["voucher"]) {
+type TFn = ReturnType<typeof useTranslations>;
+
+function voucherLabel(v: MyVoucherItem["voucher"], t: TFn, fmt: (n: number) => string) {
   if (v.discountType === "percent") {
-    const cap = v.maxDiscountAmount
-      ? ` (tối đa ${formatVnd(parseFloat(v.maxDiscountAmount))})`
-      : "";
-    return `Giảm ${parseFloat(v.discountValue).toFixed(0)}%${cap}`;
+    const percent = parseFloat(v.discountValue).toFixed(0);
+    if (v.maxDiscountAmount) {
+      return t("voucher_percent_off_capped", { percent, max: fmt(parseFloat(v.maxDiscountAmount)) });
+    }
+    return t("voucher_percent_off", { percent });
   }
-  return `Giảm ${formatVnd(parseFloat(v.discountValue))}`;
+  return t("voucher_fixed_off", { amount: fmt(parseFloat(v.discountValue)) });
 }
 
 function isVoucherAvailable(item: MyVoucherItem, subtotal: number) {
@@ -55,7 +58,7 @@ export function VoucherSection({ subtotal, applied, onApply, onRemove }: Props) 
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        "Không thể áp dụng voucher.";
+        t("voucher_apply_failed");
       setErrorMsg(msg);
     }
   }
@@ -197,12 +200,12 @@ function VoucherCard({
           {voucher.code}
         </p>
         <p className="mt-0.5 truncate text-[11px] text-muted">
-          {voucherLabel(voucher)}
-          {minOrder > 0 && ` · Đơn tối thiểu ${formatVnd(minOrder)}`}
+          {voucherLabel(voucher, t, formatVnd)}
+          {minOrder > 0 && ` · ${t("min_order_label", { amount: formatVnd(minOrder) })}`}
         </p>
         {!available && shortfall > 0 && (
           <p className="mt-0.5 text-[10px] font-medium text-amber-600">
-            Cần thêm {formatVnd(shortfall)}
+            {t("voucher_shortfall", { amount: formatVnd(shortfall) })}
           </p>
         )}
       </div>

@@ -6,8 +6,9 @@ import { X, Search } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { useProductsQuery } from "@/services/product/hooks";
 import type { ApiProduct } from "@/services/product/types";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { ROUTES } from "@/lib/routes";
+import { getDisplayName } from "@/lib/product-name";
 
 function normalizeVi(s: string) {
   return s
@@ -89,49 +90,52 @@ export default function SearchSection() {
     inputRef.current?.focus();
   }
 
-  const ResultList = ({ onSelect }: { onSelect: (p: ApiProduct) => void }) => (
-    <>
-      {results.length === 0 ? (
-        <p className="px-4 py-5 text-center text-sm text-foreground/45">
-          Không tìm thấy sản phẩm nào
-        </p>
-      ) : (
-        <ul>
-          {results.map((product) => (
-            <li key={product.id}>
-              <button
-                type="button"
-                onClick={() => onSelect(product)}
-                className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-surface-secondary"
-              >
-                <div className="relative size-10 shrink-0 overflow-hidden rounded-xl ring-1 ring-black/6">
-                  {product.imageUrls[0] ? (
-                    <Image
-                      src={product.imageUrls[0]}
-                      alt={product.name}
-                      fill
-                      className="object-cover"
-                      sizes="40px"
-                    />
-                  ) : (
-                    <div className="size-full bg-surface-secondary" />
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-foreground">
-                    {product.name}
-                  </p>
-                  <p className="text-xs text-foreground/50">
-                    {product.category.name} · {fmtPrice(product.price)}
-                  </p>
-                </div>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </>
-  );
+  const ResultList = ({ onSelect }: { onSelect: (p: ApiProduct) => void }) => {
+    const locale = useLocale();
+    return (
+      <>
+        {results.length === 0 ? (
+          <p className="px-4 py-5 text-center text-sm text-foreground/45">
+            Không tìm thấy sản phẩm nào
+          </p>
+        ) : (
+          <ul>
+            {results.map((product) => (
+              <li key={product.id}>
+                <button
+                  type="button"
+                  onClick={() => onSelect(product)}
+                  className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-surface-secondary"
+                >
+                  <div className="relative size-10 shrink-0 overflow-hidden rounded-xl ring-1 ring-black/6">
+                    {product.imageUrls[0] ? (
+                      <Image
+                        src={product.imageUrls[0]}
+                        alt={getDisplayName(product, locale)}
+                        fill
+                        className="object-cover"
+                        sizes="40px"
+                      />
+                    ) : (
+                      <div className="size-full bg-surface-secondary" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {getDisplayName(product, locale)}
+                    </p>
+                    <p className="text-xs text-foreground/50">
+                      {product.category.name} · {fmtPrice(product.price)}
+                    </p>
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </>
+    );
+  };
 
   return (
     <>

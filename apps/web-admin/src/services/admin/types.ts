@@ -25,6 +25,7 @@ export type AdminFeedbackStats = {
 export type AdminCategory = {
   id: string;
   name: string;
+  nameTranslation?: Record<string, string>;
   slug: string;
   thumbnail: string | null;
   sortOrder: number;
@@ -33,14 +34,26 @@ export type AdminCategory = {
 
 export type ProductOptionValue = {
   label: string;
-  /** Phụ phí cộng thêm (VNĐ), mặc định 0 — ví dụ size L +5000. */
   priceDelta: number;
+  nameTranslation?: Record<string, string>;
+  descriptionTranslation?: Record<string, string>;
 };
 
 export type ProductOptionGroup = {
   id: string;
   name: string;
+  nameTranslation?: Record<string, string>;
+  selectionMin: number;
+  selectionMax: number;
   values: ProductOptionValue[];
+};
+
+export type ProductTopping = {
+  id: string;
+  name: string;
+  nameTranslation?: Record<string, string>;
+  price: number;
+  isActive: boolean;
 };
 
 export type VariantGroup = {
@@ -72,8 +85,14 @@ export type AdminProduct = {
   /** JSON decimal string */
   price: string;
   imageUrls: string[];
-  /** Expanded variant groups — each group's id is the variantGroupId. */
+  /** Inline option groups per product. */
   optionGroups: ProductOptionGroup[];
+  /** Inline toppings per product. */
+  toppings: ProductTopping[];
+  /** Bản dịch tên món: { "en": "...", "ko": "..." } */
+  nameTranslation: Record<string, string>;
+  /** Bản dịch mô tả món: { "en": "...", "ko": "..." } */
+  descriptionTranslation: Record<string, string>;
   isAvailable: boolean;
   isSoldOut: boolean;
   /** Giảm giá theo sản phẩm 0–100 (cộng với giảm giá toàn shop). */
@@ -116,7 +135,10 @@ export type CreateProductBody = {
   description?: string;
   price: number;
   imageUrls?: string[];
-  variantGroupIds?: string[];
+  nameTranslation?: Record<string, string>;
+  descriptionTranslation?: Record<string, string>;
+  optionGroups?: Array<{ id?: string; name: string; nameTranslation?: Record<string, string>; selectionMin?: number; selectionMax?: number; values: Array<{ label: string; priceDelta?: number; nameTranslation?: Record<string, string>; descriptionTranslation?: Record<string, string> }> }>;
+  toppings?: Array<{ id?: string; name: string; price: number; isActive?: boolean; nameTranslation?: Record<string, string>; descriptionTranslation?: Record<string, string> }>;
   isAvailable?: boolean;
   isSoldOut?: boolean;
   discountPercent?: number;
@@ -129,6 +151,7 @@ export type CreateCategoryBody = {
   slug?: string;
   sortOrder?: number;
   thumbnail?: string | null;
+  nameTranslation?: Record<string, string>;
 };
 
 export type UpdateCategoryBody = Partial<CreateCategoryBody>;
@@ -753,7 +776,7 @@ export type AdminPostContentFormat = "markdown" | "html";
 
 export type AdminPostAuthor = {
   id: string;
-  email: string;
+  email: string | null;
   role: string;
 };
 
@@ -796,9 +819,9 @@ export type AdminRole = 'super_admin' | 'staff';
 
 export type AdminRow = {
   id: string;
-  email: string;
+  email: string | null;
   role: AdminRole;
-  googleId: string | null;
+  isActive: boolean;
   name: string | null;
   phone: string | null;
   address: string | null;
@@ -820,7 +843,7 @@ export type AdminStats = {
 };
 
 export type CreateAdminBody = {
-  email: string;
+  email?: string;
   role: AdminRole;
   name?: string;
   phone?: string;
@@ -892,7 +915,7 @@ export type AttendanceRecord = {
   distanceMeters: number | null;
   faceDistance: number | null;
   createdAt: string;
-  admin: { id: string; email: string; role: AdminRole; name: string | null };
+  admin: { id: string; email: string | null; role: AdminRole; name: string | null };
 };
 
 export type AttendanceTodayRecord = {
@@ -916,7 +939,7 @@ export type DailySummaryPair = {
 export type DailySummaryItem = {
   adminId: string;
   date: string;
-  admin: { id: string; email: string; role: AdminRole; name: string | null; faceImageUrl: string | null };
+  admin: { id: string; email: string | null; role: AdminRole; name: string | null; faceImageUrl: string | null };
   pairs: DailySummaryPair[];
   totalMinutes: number;
 };
@@ -928,7 +951,7 @@ export type AttendanceDailySummaryResponse = {
   pageSize: number;
 };
 
-export type StaffWithFaceProfile = Pick<AdminRow, "id" | "email" | "role" | "name" | "phone" | "address" | "createdAt"> & {
+export type StaffWithFaceProfile = Pick<AdminRow, "id" | "email" | "role" | "isActive" | "name" | "phone" | "address" | "createdAt"> & {
   permissions: string[];
   faceProfile: Pick<StaffFaceProfile, "adminId" | "imageUrl" | "updatedAt"> | null;
 };

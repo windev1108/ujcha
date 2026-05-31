@@ -97,7 +97,7 @@ function ShiftBadge({ status }: { status: ShiftStatus }) {
 }
 
 function StaffRow({ item, shiftConfig }: { item: DailySummaryItem; shiftConfig: ShiftConfig | undefined }) {
-  const displayName = item.admin.name ?? item.admin.email.split("@")[0];
+  const displayName = item.admin.name ?? "Staff";
   const role = item.admin.role === "super_admin" ? "Super" : "Staff";
   const allDone = item.pairs.every((p) => p.checkout !== null);
 
@@ -126,7 +126,7 @@ function StaffRow({ item, shiftConfig }: { item: DailySummaryItem; shiftConfig: 
           )}
           <div className="flex flex-col gap-0.5">
             <span className="text-sm font-semibold">{displayName}</span>
-            <span className="text-[11px] text-foreground/40">{item.admin.email.split("@")[0]} · {role}</span>
+            <span className="text-[11px] text-foreground/40">{item.admin.name ?? "Staff"} · {role}</span>
           </div>
         </div>
       </td>

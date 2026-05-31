@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, IsUrl, MaxLength, Min, MinLength } from 'class-validator';
+import { IsInt, IsObject, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
 
 export class CreateCategoryDto {
   @ApiProperty({ example: 'Đồ uống' })
@@ -31,4 +31,9 @@ export class CreateCategoryDto {
   @IsString()
   @MaxLength(2048)
   thumbnail?: string | null;
+
+  @ApiPropertyOptional({ description: 'Bản dịch tên danh mục: { "en": "...", "ko": "..." }' })
+  @IsOptional()
+  @IsObject()
+  nameTranslation?: Record<string, string>;
 }

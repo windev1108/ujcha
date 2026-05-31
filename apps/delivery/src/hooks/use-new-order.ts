@@ -75,8 +75,8 @@ export function useNewOrder() {
     socketService.on<{ orderId: string }>('order:delivery-taken', takenHandler);
 
     return () => {
-      socketService.off('order:new-delivery');
-      socketService.off('order:delivery-taken');
+      socketService.off('order:new-delivery', handler as (...args: unknown[]) => void);
+      socketService.off('order:delivery-taken', takenHandler as (...args: unknown[]) => void);
     };
   }, [accessToken]); // eslint-disable-line react-hooks/exhaustive-deps
 

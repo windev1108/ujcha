@@ -15,6 +15,9 @@ let lastSentAt = 0;
 // Foreground subscription used as fallback when background task is unavailable (Expo Go)
 let foregroundSub: Location.LocationSubscription | null = null;
 
+// Standby: shipper manually enabled GPS from settings (not tied to any specific order)
+let standbyEnabled = false;
+
 function shouldSend(lat: number, lng: number, speed: number, now: number): boolean {
   if (!lastSentLocation) return true;
   const dist = haversineMeters(lastSentLocation.lat, lastSentLocation.lng, lat, lng);
@@ -166,6 +169,47 @@ export const locationService = {
 
   isForegroundTracking() {
     return foregroundSub !== null;
+  },
+
+  isGpsActive(): boolean {
+    return standbyEnabled || useTrackingStore.getState().isTracking;
+  },
+
+  async enableGps(): Promise<boolean> {
+    const granted = await locationService.requestPermissions();
+    if (!granted) return false;
+    standbyEnabled = true;
+    if (!foregroundSub) {
+      try {
+        const bgRunning = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
+        if (!bgRunning) {
+          foregroundSub = await Location.watchPositionAsync(
+            {
+              accuracy: Location.Accuracy.High,
+              distanceInterval: TRACKING.DISTANCE_FILTER_METERS,
+              timeInterval: TRACKING.TIME_THROTTLE_MS,
+            },
+            (loc) => {
+              const { latitude: lat, longitude: lng, speed } = loc.coords;
+              sendLocationUpdate(lat, lng, speed, loc.timestamp);
+            },
+          );
+        }
+      } catch { /* GPS start failed — standbyEnabled still set */ }
+    }
+    return true;
+  },
+
+  async disableGps(): Promise<void> {
+    standbyEnabled = false;
+    const { activeOrderIds } = useTrackingStore.getState();
+    if (activeOrderIds.length > 0) return;
+    foregroundSub?.remove();
+    foregroundSub = null;
+    try {
+      const isRunning = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
+      if (isRunning) await Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME);
+    } catch { /* no-op */ }
   },
 };
 

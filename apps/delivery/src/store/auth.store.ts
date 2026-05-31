@@ -11,7 +11,6 @@ export type ShipperProfile = {
   id: string;
   name: string;
   phone: string | null;
-  email: string | null;
 };
 
 type AuthState = {

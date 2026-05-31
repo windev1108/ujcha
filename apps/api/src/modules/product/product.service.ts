@@ -1,12 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import {
-    expandOptionGroupsWithMap,
-    extractVariantGroupIds,
-} from '../../helper/utils';
+import { normalizeInlineOptionGroups, normalizeInlineToppings } from '../../helper/utils';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 
-const PRODUCT_LIST_TTL = 300; // 5 minutes
+const PRODUCT_LIST_TTL = 300;
 const PRODUCT_LIST_KEY = (categoryId?: string, categorySlug?: string, q?: string) =>
     `kun:products:list:${categoryId ?? ''}:${categorySlug ?? ''}:${q ?? ''}`;
 
@@ -17,39 +14,7 @@ export class ProductService {
         private readonly redis: RedisService,
     ) { }
 
-    // ── helpers ──────────────────────────────────────────────────────────
-
-    private async buildVgMap(rows: { optionGroups: unknown }[]) {
-        const allIds = new Set<string>();
-        for (const row of rows) {
-            for (const id of extractVariantGroupIds(row.optionGroups)) allIds.add(id);
-        }
-        const vgMap = new Map<string, { id: string; name: string; values: unknown }>();
-        if (allIds.size > 0) {
-            const vgs = await this.prisma.variantGroup.findMany({
-                where: { id: { in: [...allIds] } },
-            });
-            for (const vg of vgs) vgMap.set(vg.id, vg);
-        }
-        return vgMap;
-    }
-
-    private async expandRows<T extends { optionGroups: unknown }>(rows: T[]): Promise<(T & { optionGroups: { id: string; name: string; values: { label: string; priceDelta: number }[] }[] })[]> {
-        const vgMap = await this.buildVgMap(rows);
-        return rows.map((row) => ({
-            ...row,
-            optionGroups: expandOptionGroupsWithMap(row.optionGroups, vgMap),
-        }));
-    }
-
-    private async expandRow<T extends { optionGroups: unknown }>(row: T) {
-        const [result] = await this.expandRows([row]);
-        return result!;
-    }
-
-    // ── public methods ────────────────────────────────────────────────────
-
-    async list(categoryId?: string, categorySlug?: string, q?: string) {
+    async list(categoryId?: string, categorySlug?: string, q?: string, locale?: string) {
         const qx = q?.trim();
         const cacheKey = PRODUCT_LIST_KEY(categoryId, categorySlug, qx);
         const cached = await this.redis.get(cacheKey);
@@ -76,21 +41,21 @@ export class ProductService {
                 ],
             },
             orderBy: [{ name: 'asc' }],
-            include: { category: { select: { id: true, name: true, slug: true, thumbnail: true } } },
+            include: { category: { select: { id: true, name: true, nameTranslation: true, slug: true, thumbnail: true } } },
         });
-        const result = await this.expandRows(rows);
+        const result = rows.map(normalizeProductRow);
         await this.redis.set(cacheKey, result, PRODUCT_LIST_TTL);
-        return result;
+        return result.map(p => applyLocale(p, locale));
     }
 
     async invalidateListCache() {
         await this.redis.delByPattern('kun:products:list:*');
     }
 
-    async getById(id: string) {
+    async getById(id: string, locale?: string) {
         const row = await this.prisma.product.findUnique({
             where: { id },
-            include: { category: { select: { id: true, name: true, slug: true, thumbnail: true } } },
+            include: { category: { select: { id: true, name: true, nameTranslation: true, slug: true, thumbnail: true } } },
         });
         if (!row) {
             throw new NotFoundException({
@@ -98,13 +63,13 @@ export class ProductService {
                 code: 'PRODUCT_NOT_FOUND',
             });
         }
-        return this.expandRow(row);
+        return applyLocale(normalizeProductRow(row), locale);
     }
 
-    async getBySlug(slug: string) {
+    async getBySlug(slug: string, locale?: string) {
         const row = await this.prisma.product.findUnique({
             where: { slug },
-            include: { category: { select: { id: true, name: true, slug: true, thumbnail: true } } },
+            include: { category: { select: { id: true, name: true, nameTranslation: true, slug: true, thumbnail: true } } },
         });
         if (!row) {
             throw new NotFoundException({
@@ -112,6 +77,27 @@ export class ProductService {
                 code: 'PRODUCT_NOT_FOUND',
             });
         }
-        return this.expandRow(row);
+        return applyLocale(normalizeProductRow(row), locale);
     }
+}
+
+/** Override `name` with the translation for the given locale (non-vi only). */
+function applyLocale<T extends { name: string; nameTranslation: Record<string, string> }>(
+    product: T,
+    locale: string | undefined,
+): T {
+    if (!locale || locale === 'vi') return product;
+    const translated = product.nameTranslation?.[locale]?.trim();
+    if (!translated) return product;
+    return { ...product, name: translated };
+}
+
+function normalizeProductRow<T extends { optionGroups: unknown; toppings: unknown; nameTranslation: unknown; descriptionTranslation: unknown }>(row: T) {
+    return {
+        ...row,
+        optionGroups: normalizeInlineOptionGroups(row.optionGroups as any),
+        toppings: normalizeInlineToppings(row.toppings as any),
+        nameTranslation: (row.nameTranslation && typeof row.nameTranslation === 'object' ? row.nameTranslation : {}) as Record<string, string>,
+        descriptionTranslation: (row.descriptionTranslation && typeof row.descriptionTranslation === 'object' ? row.descriptionTranslation : {}) as Record<string, string>,
+    };
 }

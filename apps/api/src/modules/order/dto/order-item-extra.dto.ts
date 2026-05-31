@@ -1,8 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsUUID } from 'class-validator';
+import { IsString, MaxLength } from 'class-validator';
 
 export class OrderItemExtraDto {
-  @ApiProperty({ format: 'uuid' })
-  @IsUUID('4')
+  @ApiProperty({ description: 'ID of the product-local topping' })
+  @IsString()
+  @MaxLength(64)
   toppingId!: string;
 }

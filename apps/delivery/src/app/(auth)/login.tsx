@@ -15,22 +15,22 @@ import { useAuth } from '@/hooks/use-auth';
 
 export default function LoginScreen() {
   const { login } = useAuth();
-  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [focused, setFocused] = useState<'email' | 'password' | null>(null);
+  const [focused, setFocused] = useState<'phone' | 'password' | null>(null);
 
-  const isValid = email.trim().length > 0 && password.length > 0;
+  const isValid = phone.trim().length > 0 && password.length > 0;
 
   async function handleLogin() {
     if (!isValid) return;
     setLoading(true);
     try {
-      await login(email.trim().toLowerCase(), password);
+      await login(phone.trim(), password);
     } catch {
       Alert.alert(
         'Đăng nhập thất bại',
-        'Email hoặc mật khẩu không đúng, hoặc tài khoản chưa được đăng ký làm shipper.',
+        'Số điện thoại hoặc mật khẩu không đúng, hoặc tài khoản chưa được đăng ký làm shipper.',
       );
     } finally {
       setLoading(false);
@@ -59,17 +59,17 @@ export default function LoginScreen() {
 
         <View style={s.card}>
           <View style={s.fieldWrap}>
-            <Text style={s.label}>Email</Text>
+            <Text style={s.label}>Số điện thoại</Text>
             <TextInput
-              style={[s.input, focused === 'email' && s.inputActive]}
-              placeholder="shipper@ujcha.vn"
+              style={[s.input, focused === 'phone' && s.inputActive]}
+              placeholder="0901234567"
               placeholderTextColor="#b8b8b8"
-              keyboardType="email-address"
+              keyboardType="phone-pad"
               autoCapitalize="none"
               autoCorrect={false}
-              value={email}
-              onChangeText={setEmail}
-              onFocus={() => setFocused('email')}
+              value={phone}
+              onChangeText={setPhone}
+              onFocus={() => setFocused('phone')}
               onBlur={() => setFocused(null)}
             />
           </View>

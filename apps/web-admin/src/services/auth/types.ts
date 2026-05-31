@@ -1,7 +1,7 @@
-/** Admin từ API (đăng nhập Google). */
+/** Admin từ API (đăng nhập bằng số điện thoại). */
 export type AdminUser = {
   id: string;
-  email: string;
+  phone: string;
   role: "super_admin" | "staff";
   name?: string | null;
   permissions: string[];

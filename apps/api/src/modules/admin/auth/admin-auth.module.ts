@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { GoogleAuthModule } from '../../google-auth/google-auth.module';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { createAdminJwtOptions } from './config/admin-jwt.config';
 import { AdminAuthController } from './admin-auth.controller';
@@ -13,7 +12,6 @@ import { RolesGuard } from './guards/roles.guard';
 
 @Module({
   imports: [
-    GoogleAuthModule,
     PrismaModule,
     PassportModule,
     JwtModule.registerAsync({

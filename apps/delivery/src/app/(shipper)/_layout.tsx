@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { View } from 'react-native';
-import { Package, Wallet, Navigation, User } from '@/components/icons';
+import { Package, Wallet, User, Settings } from '@/components/icons';
 
 const FOREST = '#1a3c34';
 const MUTED = '#b0b0b0';
@@ -54,20 +54,22 @@ export default function ShipperLayout() {
         }}
       />
       <Tabs.Screen
-        name="delivery/[id]"
-        options={{
-          title: 'Đang giao',
-          tabBarIcon: ({ focused }) => <TabIcon Icon={Navigation} active={focused} />,
-          href: null,
-        }}
-      />
-      <Tabs.Screen
         name="profile"
         options={{
-          title: 'Tài khoản',
+          title: 'Hồ sơ',
           tabBarIcon: ({ focused }) => <TabIcon Icon={User} active={focused} />,
         }}
       />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'Cài đặt',
+          tabBarIcon: ({ focused }) => <TabIcon Icon={Settings} active={focused} />,
+        }}
+      />
+      {/* Hidden screens — not shown in tab bar */}
+      <Tabs.Screen name="delivery/[id]" options={{ href: null }} />
+      <Tabs.Screen name="history/[id]" options={{ href: null }} />
     </Tabs>
   );
 }

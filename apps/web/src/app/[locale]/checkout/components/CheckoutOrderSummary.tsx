@@ -6,7 +6,9 @@ import { AlertCircle, ArrowRight, CheckCircle2, Loader2, Navigation, Printer } f
 import Image from "next/image";
 import Link from "next/link";
 import { easeOutSmooth, revealTransition } from "@/app/[locale]/(landing)/components/RevealSection";
+import { useTranslations, useLocale } from "next-intl";
 import { useLocalizedHref } from "../../../../i18n/use-localized-href";
+import { getDisplayName } from "@/lib/product-name";
 import type { ApiCartItem } from "@/services/cart/types";
 import { normalizeOptionGroups, computeOptionSurcharge } from "@/lib/product-options";
 import { ItemOptionsDisplay } from "@/components/cart/ItemOptionsDisplay";
@@ -30,6 +32,7 @@ type Props = {
   isSubmitting: boolean;
   isSuccess: boolean;
   isExpired?: boolean;
+  isAddressInvalid?: boolean;
   errorMessage?: string | null;
   onSubmit: () => void;
   onPrint?: () => void;
@@ -60,10 +63,13 @@ export function CheckoutOrderSummary({
   isSubmitting,
   isSuccess,
   isExpired,
+  isAddressInvalid,
   errorMessage,
   onSubmit,
   onPrint,
 }: Props) {
+  const t = useTranslations();
+  const locale = useLocale();
   const { route } = useLocalizedHref();
 
   return (
@@ -76,7 +82,7 @@ export function CheckoutOrderSummary({
       <Card className="overflow-hidden rounded-3xl border border-black/6 bg-white shadow-[0_12px_40px_-20px_rgba(0,0,0,0.12)]">
         <CardContent className="space-y-5 p-5 sm:p-6">
           <h2 className="text-lg font-semibold text-foreground sm:text-xl">
-            Tóm tắt đơn hàng
+            {t("order_summary")}
           </h2>
 
           <motion.ul
@@ -94,7 +100,7 @@ export function CheckoutOrderSummary({
                   : base;
               const groups = normalizeOptionGroups(item.product.optionGroups);
               const optionSurcharge = computeOptionSurcharge(groups, item.selectedOptions);
-              const toppingTotal = item.toppings.reduce(
+              const toppingTotal = (item.toppings ?? []).reduce(
                 (s, t) => s + parseFloat(t.topping.price),
                 0,
               );
@@ -123,7 +129,7 @@ export function CheckoutOrderSummary({
                       ) : (
                         <div className="absolute inset-0 flex items-center justify-center">
                           <span className="text-xl font-black text-white/20 select-none">
-                            {item.product.name.charAt(0).toUpperCase()}
+                            {getDisplayName(item.product, locale).charAt(0).toUpperCase()}
                           </span>
                         </div>
                       )}
@@ -135,14 +141,14 @@ export function CheckoutOrderSummary({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
                       <p className="font-medium leading-snug text-foreground">
-                        {item.product.name}
+                        {getDisplayName(item.product, locale)}
                       </p>
                       <p className="shrink-0 text-sm font-bold tabular-nums text-kun-primary">
                         {formatVnd(lineTotal)}
                       </p>
                     </div>
                     <p className="mt-0.5 text-xs text-foreground/50">
-                      {item.product.category.name}
+                      {getDisplayName(item.product.category, locale)}
                     </p>
                     <ItemOptionsDisplay item={item} />
                   </div>
@@ -153,46 +159,45 @@ export function CheckoutOrderSummary({
 
           <div className="space-y-2.5 border-t border-black/6 pt-4 text-sm">
             <div className="flex justify-between text-foreground/70">
-              <span>Tạm tính</span>
+              <span>{t("temporarily_calculated")}</span>
               <span className="tabular-nums font-medium text-foreground">{formatVnd(subtotal)}</span>
             </div>
             {isDelivery && (
               <div className="space-y-1">
                 <div className="flex justify-between text-foreground/70">
-                  <span>Phí vận chuyển</span>
+                  <span>{t("shipping_fee")}</span>
                   {shippingIsDisabled || !isDelivery ? (
-                    <span className="text-xs font-medium text-muted">Chưa xác định</span>
+                    <span className="text-xs font-medium text-muted">{t("shipping_undetermined")}</span>
                   ) : shippingIsOutOfRange ? (
-                    <span className="text-xs font-medium text-danger">Ngoài vùng giao hàng</span>
+                    <span className="text-xs font-medium text-danger">{t("out_of_delivery_range")}</span>
                   ) : shippingIsFree || shippingFee === 0 ? (
-                    <span className="font-medium uppercase text-kun-products-forest">Miễn phí</span>
+                    <span className="font-medium uppercase text-kun-products-forest">{t("free")}</span>
                   ) : (
                     <span className="tabular-nums font-medium text-foreground">{formatVnd(shippingFee)}</span>
                   )}
                 </div>
-                {/* Distance badge — shown once location is set and estimate is ready */}
                 {!shippingIsDisabled && distanceKm !== undefined && distanceKm > 0 && (
                   <div className="flex items-center justify-end gap-1 text-[11px] tabular-nums text-muted">
                     <Navigation className="size-3 shrink-0" />
-                    {distanceKm.toFixed(1)} km từ cửa hàng
+                    {t("distance_from_store", { distance: distanceKm.toFixed(1) })}
                   </div>
                 )}
               </div>
             )}
             {discount > 0 && (
               <div className="flex justify-between text-kun-products-forest">
-                <span>Voucher</span>
+                <span>{t("voucher_code_label")}</span>
                 <span className="tabular-nums font-medium">-{formatVnd(discount)}</span>
               </div>
             )}
             {pointDiscount > 0 && (
               <div className="flex justify-between text-kun-products-forest">
-                <span>Điểm UjCha</span>
+                <span>{t("points_label")}</span>
                 <span className="tabular-nums font-medium">-{formatVnd(pointDiscount)}</span>
               </div>
             )}
             <div className="flex items-baseline justify-between border-t border-black/6 pt-3">
-              <span className="text-sm font-medium text-foreground/70">Thành tiền</span>
+              <span className="text-sm font-medium text-foreground/70">{t("order_total")}</span>
               <span className="text-xl font-bold tabular-nums text-kun-primary sm:text-2xl">
                 {formatVnd(total)}
               </span>
@@ -209,13 +214,13 @@ export function CheckoutOrderSummary({
           {isExpired ? (
             <div className="flex items-start gap-2 rounded-2xl bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
               <AlertCircle className="size-4 mt-0.5 shrink-0" />
-              Đơn đã hết hạn thanh toán và bị huỷ.
+              {t("order_expired_cancelled")}
             </div>
           ) : isSuccess ? (
             <div className="space-y-2">
               <div className="flex items-center gap-2 rounded-2xl bg-kun-mint/20 px-4 py-3 text-sm font-medium text-kun-products-forest">
                 <CheckCircle2 className="size-5 shrink-0" />
-                Đặt hàng thành công!
+                {t("order_placed_success")}
               </div>
               {onPrint && (
                 <Button
@@ -225,25 +230,25 @@ export function CheckoutOrderSummary({
                   onPress={onPrint}
                 >
                   <Printer className="size-4" />
-                  Xuất hóa đơn
+                  {t("print_invoice")}
                 </Button>
               )}
             </div>
           ) : (
             <Button
               size="lg"
-              isDisabled={isSubmitting || items.length === 0 || (isDelivery && shippingIsOutOfRange)}
+              isDisabled={isSubmitting || items.length === 0 || (isDelivery && shippingIsOutOfRange) || !!isAddressInvalid}
               className="flex h-14 w-full items-center justify-center gap-2 rounded-full bg-kun-primary text-base font-semibold text-white hover:opacity-90 disabled:opacity-60"
               onPress={onSubmit}
             >
               {isSubmitting ? (
                 <>
                   <Loader2 className="size-5 animate-spin" />
-                  Đang đặt...
+                  {t("placing_order")}
                 </>
               ) : (
                 <>
-                  {isDelivery ? "Đặt hàng" : "Xác nhận đơn nhận tại quán"}
+                  {isDelivery ? t("confirm_delivery_order") : t("confirm_store_order")}
                   <ArrowRight className="size-5" />
                 </>
               )}
@@ -251,13 +256,13 @@ export function CheckoutOrderSummary({
           )}
 
           <p className="text-center text-[10px] leading-relaxed text-foreground/55 sm:text-[11px]">
-            Bằng việc đặt hàng, bạn đồng ý với{" "}
+            {t("order_terms_prefix")}{" "}
             <Link href={route("TERMS")} className="underline underline-offset-2 hover:text-foreground">
-              Điều khoản dịch vụ
+              {t("terms_of_service")}
             </Link>{" "}
-            và{" "}
+            {t("or")}{" "}
             <Link href={route("PRIVACY")} className="underline underline-offset-2 hover:text-foreground">
-              Chính sách bảo mật
+              {t("privacy_policy")}
             </Link>
             .
           </p>

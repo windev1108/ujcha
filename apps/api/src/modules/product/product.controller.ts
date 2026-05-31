@@ -22,23 +22,33 @@ export class ProductController {
     @ApiQuery({ name: 'categoryId', required: false, format: 'uuid' })
     @ApiQuery({ name: 'categorySlug', required: false })
     @ApiQuery({ name: 'q', required: false, description: 'Tìm theo tên / SKU / mô tả' })
+    @ApiQuery({ name: 'locale', required: false, description: 'vi | en — trả về tên theo ngôn ngữ' })
     list(
         @Query('categoryId', new ParseUUIDPipe({ optional: true })) categoryId?: string,
         @Query('categorySlug') categorySlug?: string,
         @Query('q') q?: string,
+        @Query('locale') locale?: string,
     ) {
-        return this.productService.list(categoryId, categorySlug, q);
+        return this.productService.list(categoryId, categorySlug, q, locale);
     }
 
     @Get('by-slug/:slug')
     @ApiOperation({ summary: 'Tìm sản phẩm theo slug' })
-    getBySlug(@Param('slug') slug: string) {
-        return this.productService.getBySlug(slug);
+    @ApiQuery({ name: 'locale', required: false })
+    getBySlug(
+        @Param('slug') slug: string,
+        @Query('locale') locale?: string,
+    ) {
+        return this.productService.getBySlug(slug, locale);
     }
 
     @Get(':id')
     @ApiOperation({ summary: 'Chi tiết sản phẩm' })
-    getById(@Param('id', ParseUUIDPipe) id: string) {
-        return this.productService.getById(id);
+    @ApiQuery({ name: 'locale', required: false })
+    getById(
+        @Param('id', ParseUUIDPipe) id: string,
+        @Query('locale') locale?: string,
+    ) {
+        return this.productService.getById(id, locale);
     }
 }

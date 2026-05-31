@@ -28,6 +28,9 @@ export type Order = {
   address: OrderAddress | null;
   items: OrderItem[];
   createdAt: string;
+  updatedAt?: string;
+  completedAt?: string | null;
+  cancelledAt?: string | null;
   user?: { name: string; phone: string } | null;
   guestDeliveryName?: string | null;
   guestDeliveryPhone?: string | null;

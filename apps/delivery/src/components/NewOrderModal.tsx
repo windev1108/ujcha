@@ -4,6 +4,7 @@ import {
   Animated,
   Dimensions,
   Image,
+  Linking,
   Modal,
   PanResponder,
   Pressable,
@@ -12,10 +13,12 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Bike, Coffee } from '@/components/icons';
+import { Bike, Coffee, MapPin, Phone, Wallet } from '@/components/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { shipperApi } from '@/services/api.service';
+import { locationService } from '@/services/location.service';
+import { haversineMeters } from '@/utils/distance';
 import type { NewDeliveryOrderPayload } from '@/services/socket.service';
 
 const COUNTDOWN_SEC = 60;
@@ -41,6 +44,18 @@ L.marker([${lat},${lng}],{icon}).addTo(map).bindPopup('Địa chỉ giao').openP
 }
 
 function fmt(n: number) { return Number(n).toLocaleString('vi-VN') + 'đ'; }
+
+function fmtDist(m: number) {
+  return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`;
+}
+
+function callPhone(phone: string) {
+  const cleaned = phone.replace(/\s/g, '');
+  if (!cleaned) return;
+  Linking.openURL(`tel:${cleaned}`).catch(() =>
+    Alert.alert('Lỗi', 'Không thể thực hiện cuộc gọi.'),
+  );
+}
 
 const PAYMENT_LABELS: Record<string, string> = {
   cash: 'Tiền mặt',
@@ -128,8 +143,18 @@ export function NewOrderModal({
   const insets = useSafeAreaInsets();
   const [seconds, setSeconds] = useState(COUNTDOWN_SEC);
   const [accepting, setAccepting] = useState(false);
+  const [distM, setDistM] = useState<number | null>(null);
   const soundRef = useRef<any>(null);
   const slideAnim = useRef(new Animated.Value(600)).current;
+
+  // Fetch current location to compute delivery distance
+  useEffect(() => {
+    if (order.lat == null || order.lng == null) return;
+    void locationService.getCurrentLocation().then((loc) => {
+      if (!loc) return;
+      setDistM(haversineMeters(loc.coords.latitude, loc.coords.longitude, order.lat!, order.lng!));
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 60, friction: 10 }).start();
@@ -205,7 +230,8 @@ export function NewOrderModal({
               <Text style={s.headerTitle}>Giao hàng mới!</Text>
               <Text style={s.headerSub}>
                 <Text style={s.paymentCodeText}>#{order.paymentCode}</Text>
-                {'  '}·{'  '}{totalItems} món · {fmt(order.shippingFee)} phí ship
+                {'  '}·{'  '}{totalItems} món
+                {distM != null ? `  ·  ${fmtDist(distM)}` : ''}
               </Text>
             </View>
             <CountdownBadge seconds={seconds} />
@@ -224,6 +250,34 @@ export function NewOrderModal({
                 />
               </View>
             )}
+
+            {/* Info bar: distance + ship fee + total */}
+            <View style={s.infoBar}>
+              <View style={s.infoBarItem}>
+                <MapPin size={14} color={PRIMARY} />
+                <View style={s.infoBarText}>
+                  <Text style={s.infoBarLabel}>KHOẢNG CÁCH</Text>
+                  <Text style={s.infoBarValue}>
+                    {distM != null ? fmtDist(distM) : '—'}
+                  </Text>
+                </View>
+              </View>
+              <View style={s.infoBarSep} />
+              <View style={s.infoBarItem}>
+                <Wallet size={14} color={PRIMARY} />
+                <View style={s.infoBarText}>
+                  <Text style={s.infoBarLabel}>PHÍ SHIP</Text>
+                  <Text style={s.infoBarValue}>{fmt(order.shippingFee)}</Text>
+                </View>
+              </View>
+              <View style={s.infoBarSep} />
+              <View style={s.infoBarItem}>
+                <View style={s.infoBarText}>
+                  <Text style={s.infoBarLabel}>TỔNG ĐƠN</Text>
+                  <Text style={s.infoBarValue}>{fmt(order.totalAmount)}</Text>
+                </View>
+              </View>
+            </View>
 
             {/* Address */}
             <View style={s.section}>
@@ -246,15 +300,22 @@ export function NewOrderModal({
               </View>
               <View style={s.cell}>
                 <Text style={s.cellLabel}>SĐT</Text>
-                <Text style={[s.cellValue, { color: PRIMARY }]}>{order.customerPhone || '—'}</Text>
+                {order.customerPhone ? (
+                  <Pressable
+                    style={s.phoneBtn}
+                    onPress={() => callPhone(order.customerPhone)}
+                    hitSlop={8}
+                  >
+                    <Phone size={13} color={PRIMARY} />
+                    <Text style={s.phoneTxt}>{order.customerPhone}</Text>
+                  </Pressable>
+                ) : (
+                  <Text style={s.cellValue}>—</Text>
+                )}
               </View>
             </View>
 
             <View style={s.row2}>
-              <View style={s.cell}>
-                <Text style={s.cellLabel}>Tổng đơn</Text>
-                <Text style={[s.cellValue, { color: PRIMARY }]}>{fmt(order.totalAmount)}</Text>
-              </View>
               <View style={s.cell}>
                 <Text style={s.cellLabel}>Thanh toán</Text>
                 <Text style={s.cellValue}>{PAYMENT_LABELS[order.paymentType] ?? order.paymentType}</Text>
@@ -263,7 +324,7 @@ export function NewOrderModal({
 
             <View style={s.divider} />
 
-            {/* Items with image + options */}
+            {/* Items */}
             <View style={s.section}>
               <Text style={s.sectionLabel}>SẢN PHẨM ({order.items.length} loại)</Text>
               <View style={s.itemsList}>
@@ -342,6 +403,18 @@ const s = StyleSheet.create({
   mapWrap: { height: 160 },
   map: { flex: 1 },
 
+  // Info bar (distance / ship fee / total)
+  infoBar: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#f0fdf4', paddingHorizontal: 20, paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: 'rgba(26,26,26,0.06)',
+  },
+  infoBarItem: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  infoBarSep: { width: 1, height: 28, backgroundColor: 'rgba(26,60,52,0.15)', marginHorizontal: 4 },
+  infoBarText: { gap: 1 },
+  infoBarLabel: { fontSize: 9, fontWeight: '700', color: '#5a8f7a', textTransform: 'uppercase', letterSpacing: 0.8 },
+  infoBarValue: { fontSize: 14, fontWeight: '800', color: PRIMARY },
+
   section: { paddingHorizontal: 20, paddingVertical: 14, gap: 6 },
   sectionLabel: { fontSize: 10, fontWeight: '700', color: '#717171', textTransform: 'uppercase', letterSpacing: 1.5 },
   addressText: { fontSize: 15, fontWeight: '500', color: '#1a1a1a', lineHeight: 22 },
@@ -354,6 +427,9 @@ const s = StyleSheet.create({
   cell: { flex: 1, gap: 3 },
   cellLabel: { fontSize: 10, fontWeight: '600', color: '#717171', textTransform: 'uppercase', letterSpacing: 0.8 },
   cellValue: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
+
+  phoneBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', backgroundColor: 'rgba(26,60,52,0.08)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 100 },
+  phoneTxt: { fontSize: 13, fontWeight: '700', color: PRIMARY },
 
   itemsList: { gap: 8, marginTop: 4 },
   itemRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: '#f7f7f7', borderRadius: 12, padding: 10 },

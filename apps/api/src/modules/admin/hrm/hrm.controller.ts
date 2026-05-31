@@ -1,10 +1,12 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Put,
   Query,
@@ -24,6 +26,7 @@ import { CheckinDto } from './dto/checkin.dto';
 import { AttendanceQueryDto } from './dto/attendance-query.dto';
 import { UpdatePermissionsDto } from './dto/update-permissions.dto';
 import { UpdateShiftConfigDto } from './dto/update-shift-config.dto';
+import { CreateStaffDto } from './dto/create-staff.dto';
 
 @ApiTags('admin-hrm')
 @ApiBearerAuth('admin-access-token')
@@ -64,14 +67,52 @@ export class HrmController {
     return this.hrmService.updateStoreLocation(dto);
   }
 
-  // ─── Face profile ──────────────────────────────────────────────────
+  // ─── Staff CRUD (super_admin only) ────────────────────────────────
 
   @Get('staff')
   @Roles(AdminRole.super_admin)
-  @ApiOperation({ summary: 'Danh sách nhân viên kèm trạng thái khuôn mặt (super_admin)' })
+  @ApiOperation({ summary: 'Danh sách nhân viên (super_admin)' })
   listStaff() {
-    return this.hrmService.listStaffWithProfiles();
+    return this.hrmService.listStaff();
   }
+
+  @Post('staff')
+  @HttpCode(201)
+  @Roles(AdminRole.super_admin)
+  @ApiOperation({ summary: 'Tạo tài khoản nhân viên/admin mới (super_admin)' })
+  createStaff(@Body() dto: CreateStaffDto) {
+    return this.hrmService.createStaff(dto);
+  }
+
+  @Patch('staff/:staffId')
+  @Roles(AdminRole.super_admin)
+  @ApiOperation({ summary: 'Cập nhật thông tin nhân viên (super_admin)' })
+  updateStaff(
+    @Param('staffId', ParseUUIDPipe) staffId: string,
+    @Body() body: { name?: string; phone?: string; email?: string; isActive?: boolean },
+  ) {
+    return this.hrmService.updateStaff(staffId, body);
+  }
+
+  @Post('staff/:staffId/reset-password')
+  @HttpCode(200)
+  @Roles(AdminRole.super_admin)
+  @ApiOperation({ summary: 'Đặt lại mật khẩu nhân viên (super_admin)' })
+  resetPassword(
+    @Param('staffId', ParseUUIDPipe) staffId: string,
+    @Body() body: { password?: string },
+  ) {
+    return this.hrmService.resetStaffPassword(staffId, body.password);
+  }
+
+  @Delete('staff/:staffId')
+  @Roles(AdminRole.super_admin)
+  @ApiOperation({ summary: 'Xoá tài khoản nhân viên (super_admin)' })
+  deleteStaff(@Param('staffId', ParseUUIDPipe) staffId: string) {
+    return this.hrmService.deleteStaff(staffId);
+  }
+
+  // ─── Face profile ──────────────────────────────────────────────────
 
   @Get('staff/:staffId/face-profile')
   @Roles(AdminRole.super_admin)

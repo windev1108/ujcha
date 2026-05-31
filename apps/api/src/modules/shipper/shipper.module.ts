@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { EventsModule } from '../events/events.module';
+import { PointModule } from '../point/point.module';
 import { ShipperAuthModule } from '../shipper-auth/shipper-auth.module';
 import { ShipperController } from './shipper.controller';
 import { ShipperService } from './shipper.service';
 
 @Module({
-  imports: [PrismaModule, EventsModule, ShipperAuthModule],
+  imports: [PrismaModule, EventsModule, PointModule, ShipperAuthModule],
   controllers: [ShipperController],
   providers: [ShipperService],
 })

@@ -24,7 +24,7 @@ function consolidate(items: ApiCartItem[]): ApiCartItem[] {
     const key = itemKey(
       item.productId,
       item.selectedOptions,
-      item.toppings.map((t) => t.toppingId),
+      (item.toppings ?? []).map((t) => t.toppingId),
     );
     const existing = map.get(key);
     if (existing) {
@@ -71,7 +71,7 @@ export const useCartStore = create<CartStoreState>()(
           const key = itemKey(productId, selectedOptions, toppingIds);
           const existing = s.items.find(
             (item) =>
-              itemKey(item.productId, item.selectedOptions, item.toppings.map((t) => t.toppingId)) === key,
+              itemKey(item.productId, item.selectedOptions, (item.toppings ?? []).map((t) => t.toppingId)) === key,
           );
           if (existing) {
             return {

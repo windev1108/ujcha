@@ -6,6 +6,7 @@ import {
   IsBoolean,
   IsInt,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -13,7 +14,10 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
+import { ProductOptionGroupDto } from './product-option-group.dto';
+import { ProductToppingDto } from './product-topping.dto';
 
 export class UpdateProductDto {
   @ApiPropertyOptional({ format: 'uuid' })
@@ -21,10 +25,7 @@ export class UpdateProductDto {
   @IsUUID('4')
   categoryId?: string;
 
-  @ApiPropertyOptional({
-    example: 'Ujcha-MTC-001',
-    description: 'Để chuỗi rỗng để tự sinh lại SKU từ tên',
-  })
+  @ApiPropertyOptional({ description: 'Để chuỗi rỗng để tự sinh lại SKU từ tên' })
   @IsOptional()
   @IsString()
   @MaxLength(80)
@@ -65,15 +66,31 @@ export class UpdateProductDto {
   @MaxLength(2000, { each: true })
   imageUrls?: string[];
 
-  @ApiPropertyOptional({
-    type: [String],
-    description: 'IDs của VariantGroup áp dụng cho sản phẩm này',
-  })
+  @ApiPropertyOptional({ description: 'Bản dịch tên món: { "en": "...", "ko": "..." }' })
+  @IsOptional()
+  @IsObject()
+  nameTranslation?: Record<string, string>;
+
+  @ApiPropertyOptional({ description: 'Bản dịch mô tả món: { "en": "...", "ko": "..." }' })
+  @IsOptional()
+  @IsObject()
+  descriptionTranslation?: Record<string, string>;
+
+  @ApiPropertyOptional({ type: [ProductOptionGroupDto] })
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(20)
-  @IsUUID('4', { each: true })
-  variantGroupIds?: string[];
+  @Type(() => ProductOptionGroupDto)
+  @ValidateNested({ each: true })
+  optionGroups?: ProductOptionGroupDto[];
+
+  @ApiPropertyOptional({ type: [ProductToppingDto] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @Type(() => ProductToppingDto)
+  @ValidateNested({ each: true })
+  toppings?: ProductToppingDto[];
 
   @ApiPropertyOptional()
   @IsOptional()

@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
+import { IsInt, IsObject, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
 
 export class UpdateCategoryDto {
   @ApiPropertyOptional()
@@ -29,4 +29,9 @@ export class UpdateCategoryDto {
   @IsString()
   @MaxLength(2048)
   thumbnail?: string | null;
+
+  @ApiPropertyOptional({ description: 'Bản dịch tên danh mục: { "en": "...", "ko": "..." }' })
+  @IsOptional()
+  @IsObject()
+  nameTranslation?: Record<string, string>;
 }

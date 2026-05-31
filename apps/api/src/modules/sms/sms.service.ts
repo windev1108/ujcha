@@ -14,15 +14,24 @@ export class SmsService {
   ) { }
 
   async sendOtp(phone: string, code: string): Promise<void> {
-    const message = `[UjCha] Mã OTP của bạn là: ${code}. Có hiệu lực trong 2 phút. Không chia sẻ mã này.`;
+    // ASCII-only to stay in 1 segment (160 chars)
+    const message = `[UjCha] OTP code: ${code}.`;
+    await this.sendRaw(phone, message);
+  }
+
+  async sendCredentials(phone: string, password: string): Promise<void> {
+    // ASCII-only → 160 chars/segment, keeps cost at 1 segment
+    const message = `[UjCha] Phone: ${phone} | Password: ${password}`;
+    await this.sendRaw(phone, message);
+  }
+
+  private async sendRaw(phone: string, message: string): Promise<void> {
     const apiKey = this.config.get<string>('TEXTBEE_API_KEY');
     const deviceId = this.config.get<string>('TEXTBEE_DEVICE_ID');
 
     if (!apiKey || !deviceId) {
-      this.logger.warn(`[SMS-MOCK] → ${phone} | OTP: ${code}`);
-      await this.prisma.smsLog.create({
-        data: { phone, message, status: 'mock' },
-      });
+      this.logger.warn(`[SMS-MOCK] → ${phone} | ${message}`);
+      await this.prisma.smsLog.create({ data: { phone, message, status: 'mock' } });
       return;
     }
 
@@ -45,12 +54,10 @@ export class SmsService {
     } catch (err: unknown) {
       status = 'failed';
       error = err instanceof Error ? err.message : String(err);
-      this.logger.error(`[SMS] Gửi thất bại → ${phone}: ${error}`);
+      this.logger.error(`[SMS] Failed → ${phone}: ${error}`);
     }
 
-    await this.prisma.smsLog.create({
-      data: { phone, message, textbeeId, status, error },
-    });
+    await this.prisma.smsLog.create({ data: { phone, message, textbeeId, status, error } });
   }
 
   async listLogs(page: number, limit: number, phone?: string) {

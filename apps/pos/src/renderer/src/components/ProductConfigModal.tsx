@@ -4,22 +4,13 @@ import type { Product, CartItem } from '../types/common'
 
 function fmt(n: number) { return n.toLocaleString('vi-VN') + 'đ' }
 
-// ─── Topping type (phù hợp với AdminTopping từ backend) ───────────────────────
-export interface Topping {
-    id: string
-    name: string
-    price: string | number
-    isAvailable?: boolean
-}
-
 type Props = {
     product: Product | null
-    toppings?: Topping[]          // Danh sách topping từ API
     onClose: () => void
     onConfirm: (item: Omit<CartItem, 'cartId'>) => void
 }
 
-export function ProductConfigModal({ product, toppings = [], onClose, onConfirm }: Props) {
+export function ProductConfigModal({ product, onClose, onConfirm }: Props) {
     const [options, setOptions] = useState<Record<string, string>>({})
     const [selectedToppingIds, setSelectedToppingIds] = useState<string[]>([])
     const [note, setNote] = useState('')
@@ -48,11 +39,10 @@ export function ProductConfigModal({ product, toppings = [], onClose, onConfirm 
         return sum + (selected?.priceDelta ?? 0)
     }, 0)
 
-    // Tổng topping delta
-    const availableToppings = toppings.filter(t => t.isAvailable !== false)
+    const availableToppings = (product.toppings ?? []).filter(t => t.isActive !== false)
     const toppingDelta = selectedToppingIds.reduce((sum, id) => {
         const t = availableToppings.find(t => t.id === id)
-        return sum + (t ? Number(t.price) : 0)
+        return sum + (t ? t.price : 0)
     }, 0)
 
     const unitPrice = base + optionDelta + toppingDelta
@@ -87,7 +77,7 @@ export function ProductConfigModal({ product, toppings = [], onClose, onConfirm 
             note,
             extras: selectedToppingIds.map(id => {
                 const t = availableToppings.find(t => t.id === id)
-                return { id, name: t?.name ?? id, price: Number(t?.price ?? 0) }
+                return { id, name: t?.name ?? id, price: t?.price ?? 0 }
             }),
         })
         onClose()

@@ -12,12 +12,24 @@ export interface Category {
 export interface ProductOptionValue {
   label: string
   priceDelta: number
+  nameTranslation?: Record<string, string>
 }
 
 export interface ProductOptionGroup {
   id: string
   name: string
+  nameTranslation?: Record<string, string>
+  selectionMin?: number
+  selectionMax?: number
   values: ProductOptionValue[]
+}
+
+export type ProductTopping = {
+  id: string
+  name: string
+  nameTranslation?: Record<string, string>
+  price: number
+  isActive?: boolean
 }
 
 export interface Product {
@@ -27,6 +39,7 @@ export interface Product {
   price: string          // decimal string
   imageUrls: string[]
   optionGroups: ProductOptionGroup[]
+  toppings: ProductTopping[]
   isAvailable: boolean
   isSoldOut: boolean
   discountPercent: number
@@ -82,7 +95,7 @@ export type AdminRole = 'super_admin' | 'staff'
 
 export interface AdminUser {
   id: string
-  email: string
+  phone: string
   role: AdminRole
   name?: string | null
   permissions: string[]

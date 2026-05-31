@@ -1,5 +1,7 @@
 import type { ApiCartItem } from "@/services/cart/types";
 import { normalizeOptionGroups } from "@/lib/product-options";
+import { useLocale } from "next-intl";
+import { getDisplayName, getValueLabel } from "@/lib/product-name";
 
 function fmt(n: number) {
   return new Intl.NumberFormat("vi-VN").format(Math.round(n)) + "đ";
@@ -10,6 +12,7 @@ type Props = {
 };
 
 export function ItemOptionsDisplay({ item }: Props) {
+  const locale = useLocale();
   const groups = normalizeOptionGroups(item.product.optionGroups);
 
   const optionPills = groups
@@ -17,12 +20,16 @@ export function ItemOptionsDisplay({ item }: Props) {
       const val = item.selectedOptions[g.name] ?? item.selectedOptions[g.id];
       if (!val) return null;
       const v = g.values.find((vv) => vv.label === val);
-      return { label: val, delta: v?.priceDelta ?? 0 };
+      return {
+        key: val,
+        label: v ? getValueLabel(v, locale) : val,
+        delta: v?.priceDelta ?? 0,
+      };
     })
-    .filter(Boolean) as { label: string; delta: number }[];
+    .filter(Boolean) as { key: string; label: string; delta: number }[];
 
-  const toppingPills = item.toppings.map((t) => ({
-    name: t.topping.name,
+  const toppingPills = (item.toppings ?? []).map((t) => ({
+    name: getDisplayName(t.topping, locale),
     price: parseFloat(t.topping.price),
   }));
 
@@ -32,7 +39,7 @@ export function ItemOptionsDisplay({ item }: Props) {
     <div className="mt-1.5 flex flex-wrap gap-1.5">
       {optionPills.map((p) => (
         <span
-          key={p.label}
+          key={p.key}
           className="inline-flex items-center gap-1 rounded-full bg-surface-secondary px-2.5 py-0.5 text-[11px] font-medium text-foreground/70"
         >
           {p.label}

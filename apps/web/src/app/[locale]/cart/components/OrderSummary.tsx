@@ -5,6 +5,7 @@ import { motion } from "motion/react";
 import { ShoppingBag, Tag, Users } from "lucide-react";
 import { revealTransition } from "@/app/[locale]/(landing)/components/RevealSection";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { CHECKOUT_TAB } from "@/app/[locale]/checkout/components/checkout-tab";
 import { ROUTES } from "@/lib/routes";
 
@@ -20,6 +21,7 @@ type Props = {
 };
 
 export function OrderSummary({ subtotal, total, selectedCount, selectedIds }: Props) {
+  const t = useTranslations();
   const checkoutDisabled = selectedCount === 0;
 
   return (
@@ -33,16 +35,16 @@ export function OrderSummary({ subtotal, total, selectedCount, selectedIds }: Pr
         <Card className="overflow-hidden rounded-3xl border border-black/6 bg-white shadow-[0_12px_40px_-20px_rgba(0,0,0,0.12)]">
           <CardContent className="space-y-4 p-6 sm:p-7">
             <div className="flex justify-between text-sm text-foreground/70">
-              <span>Tạm tính</span>
+              <span>{t("temporarily_calculated")}</span>
               <span className="tabular-nums font-medium text-foreground">{formatVnd(subtotal)}</span>
             </div>
             <div className="flex justify-between text-sm text-foreground/70">
-              <span>Phí vận chuyển</span>
-              <span className="font-medium text-kun-products-forest">Chưa xác định</span>
+              <span>{t("shipping_fee")}</span>
+              <span className="font-medium text-kun-products-forest">{t("shipping_undetermined")}</span>
             </div>
             <div className="border-t border-black/6 pt-4">
               <div className="flex items-baseline justify-between gap-4">
-                <span className="text-sm font-medium text-foreground/70">Thành tiền</span>
+                <span className="text-sm font-medium text-foreground/70">{t("order_total")}</span>
                 <span className="text-2xl font-bold tabular-nums text-kun-primary">
                   {formatVnd(total)}
                 </span>
@@ -55,7 +57,7 @@ export function OrderSummary({ subtotal, total, selectedCount, selectedIds }: Pr
                 isDisabled
                 className="mt-2 flex h-14 w-full items-center justify-center gap-2 rounded-full bg-black/10 text-base font-semibold text-foreground/40 cursor-not-allowed"
               >
-                Chọn ít nhất 1 sản phẩm
+                {t("select_at_least_1_product")}
               </Button>
             ) : (
               <Link
@@ -66,7 +68,7 @@ export function OrderSummary({ subtotal, total, selectedCount, selectedIds }: Pr
                   className="mt-2 flex h-14 w-full items-center justify-center gap-2 rounded-full bg-kun-primary text-base font-semibold text-white hover:opacity-90"
                   onPress={() => { }}
                 >
-                  Tiếp tục thanh toán ({selectedCount})
+                  {t("continue_checkout")} ({selectedCount})
                   <ShoppingBag className="size-5" />
                 </Button>
               </Link>
@@ -76,7 +78,7 @@ export function OrderSummary({ subtotal, total, selectedCount, selectedIds }: Pr
 
         <div className="flex items-center gap-2 rounded-2xl border border-dashed border-black/10 px-4 py-3 text-xs text-foreground/50">
           <Tag className="size-3.5 shrink-0" />
-          Mã voucher và điểm UjCha được áp dụng ở bước thanh toán
+          {t("voucher_and_points_info")}
         </div>
 
         <Link
@@ -87,8 +89,8 @@ export function OrderSummary({ subtotal, total, selectedCount, selectedIds }: Pr
             <Users className="size-4.5 text-[#1a3c34]" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-[#1a3c34]">Đặt hàng nhóm</p>
-            <p className="text-[11px] text-[#1a3c34]/60">Mời bạn bè cùng chọn món — càng đông càng giảm</p>
+            <p className="text-sm font-semibold text-[#1a3c34]">{t("group_orders")}</p>
+            <p className="text-[11px] text-[#1a3c34]/60">{t("group_order_cart_desc")}</p>
           </div>
         </Link>
       </div>

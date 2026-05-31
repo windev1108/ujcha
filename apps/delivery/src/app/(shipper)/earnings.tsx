@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Inbox, CheckCircle, XCircle } from '@/components/icons';
+import { Inbox } from '@/components/icons';
 import {
   ActivityIndicator,
   RefreshControl,
@@ -11,6 +11,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { shipperApi } from '@/services/api.service';
+import { DateFilter, isInRange } from '@/components/date-filter';
+import type { DateRange } from '@/components/date-filter';
 
 type HistoryOrder = {
   id: string;
@@ -31,6 +33,7 @@ export default function EarningsScreen() {
   const insets = useSafeAreaInsets();
   const [history, setHistory] = useState<HistoryOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dateRange, setDateRange] = useState<DateRange | null>(null);
 
   const fetchHistory = useCallback(async () => {
     setLoading(true);
@@ -46,17 +49,19 @@ export default function EarningsScreen() {
     void fetchHistory();
   }, [fetchHistory]));
 
-  const completed = history.filter((o) => o.status === 'completed');
-  const cancelled = history.filter((o) => o.status === 'cancelled');
+  // Apply date filter (by completedAt / updatedAt)
+  const filtered = history.filter((o) => isInRange(o.updatedAt, dateRange));
+  const completed = filtered.filter((o) => o.status === 'completed');
+  const cancelled = filtered.filter((o) => o.status === 'cancelled');
   const totalEarnings = completed.reduce((s, o) => s + Number(o.shippingFee), 0);
 
-  // Group completed earnings by month
+  // Group completed earnings by month within filtered range
   const byMonth: Record<string, number> = {};
   for (const o of completed) {
     const m = monthLabel(o.updatedAt);
     byMonth[m] = (byMonth[m] ?? 0) + Number(o.shippingFee);
   }
-  const monthEntries = Object.entries(byMonth).slice(0, 6);
+  const monthEntries = Object.entries(byMonth).slice(0, 12);
 
   return (
     <View style={s.root}>
@@ -64,6 +69,8 @@ export default function EarningsScreen() {
         <Text style={s.eyebrow}>THU NHẬP</Text>
         <Text style={s.headerTitle}>Thu nhập của tôi</Text>
       </View>
+
+      <DateFilter value={dateRange} onChange={setDateRange} />
 
       <ScrollView
         contentContainerStyle={s.content}
@@ -73,13 +80,17 @@ export default function EarningsScreen() {
       >
         {/* Total earnings card */}
         <View style={s.earningsCard}>
-          <Text style={s.cardLabel}>TỔNG THU NHẬP</Text>
+          <Text style={s.cardLabel}>
+            {dateRange ? 'THU NHẬP TRONG KỲ' : 'TỔNG THU NHẬP'}
+          </Text>
           {loading ? (
             <ActivityIndicator color="#99d6b3" size="large" style={{ marginVertical: 12 }} />
           ) : (
             <Text style={s.earningsAmount}>{fmt(totalEarnings)}</Text>
           )}
-          <Text style={s.earningsSub}>Tổng phí ship nhận được</Text>
+          <Text style={s.earningsSub}>
+            {dateRange ? 'Phí ship trong khoảng đã chọn' : 'Tổng phí ship nhận được'}
+          </Text>
 
           <View style={s.statRow}>
             <View style={s.statItem}>
@@ -93,16 +104,18 @@ export default function EarningsScreen() {
             </View>
             <View style={s.statSep} />
             <View style={s.statItem}>
-              <Text style={s.statNum}>{history.length}</Text>
+              <Text style={s.statNum}>{filtered.length}</Text>
               <Text style={s.statLabel}>Tổng đơn</Text>
             </View>
           </View>
         </View>
 
-        {/* Monthly breakdown */}
+        {/* Monthly/period breakdown */}
         {monthEntries.length > 0 && (
           <View style={s.section}>
-            <Text style={s.sectionLabel}>THEO THÁNG</Text>
+            <Text style={s.sectionLabel}>
+              {dateRange ? 'THEO THÁNG (ĐÃ LỌC)' : 'THEO THÁNG'}
+            </Text>
             <View style={s.monthCard}>
               {monthEntries.map(([month, amount], i) => (
                 <View key={month}>
@@ -117,11 +130,15 @@ export default function EarningsScreen() {
           </View>
         )}
 
-        {!loading && history.length === 0 && (
+        {!loading && filtered.length === 0 && (
           <View style={s.emptyBox}>
             <View style={s.emptyIconBox}><Inbox size={40} color="#b0b0b0" /></View>
-            <Text style={s.emptyTitle}>Chưa có dữ liệu</Text>
-            <Text style={s.emptyDesc}>Hoàn thành đơn đầu tiên để xem thu nhập</Text>
+            <Text style={s.emptyTitle}>
+              {history.length > 0 ? 'Không có dữ liệu trong khoảng này' : 'Chưa có dữ liệu'}
+            </Text>
+            <Text style={s.emptyDesc}>
+              {history.length > 0 ? 'Thử chọn khoảng thời gian khác' : 'Hoàn thành đơn đầu tiên để xem thu nhập'}
+            </Text>
           </View>
         )}
       </ScrollView>
@@ -132,17 +149,14 @@ export default function EarningsScreen() {
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#f7f7f7' },
 
-  header: {
-    backgroundColor: '#1a3c34', paddingHorizontal: 20,
-    paddingTop: 4, paddingBottom: 20, gap: 3,
-  },
+  header: { backgroundColor: '#1a3c34', paddingHorizontal: 20, paddingBottom: 16, gap: 2 },
   eyebrow: { fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.5)', letterSpacing: 2, textTransform: 'uppercase' },
   headerTitle: { fontSize: 22, fontWeight: '700', color: '#fff', letterSpacing: -0.3 },
 
   content: { padding: 16, gap: 16, paddingBottom: 40 },
 
   earningsCard: {
-    backgroundColor: '#1a3c34', borderRadius: 24, padding: 20, gap: 4, marginTop: -14,
+    backgroundColor: '#1a3c34', borderRadius: 24, padding: 20, gap: 4,
     shadowColor: '#1a3c34', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 12, elevation: 4,
   },
   cardLabel: { fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.5)', letterSpacing: 1.5, textTransform: 'uppercase' },

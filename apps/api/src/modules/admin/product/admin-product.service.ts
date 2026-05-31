@@ -4,12 +4,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { skuFromProductName, slugify, uniqueSlugSuffix } from '../slug.util';
 import type { CreateProductDto } from './dto/create-product.dto';
 import type { ToggleProductAvailabilityDto } from './dto/toggle-product-availability.dto';
 import type { UpdateProductDto } from './dto/update-product.dto';
-import { clampDiscountPercent, expandOptionGroupsWithMap, extractVariantGroupIds, normalizeImageUrls, normalizeOptionGroupsFromDb } from '../../../helper/utils';
+import { clampDiscountPercent, normalizeImageUrls, normalizeInlineOptionGroups, normalizeInlineToppings, normalizeTranslation } from '../../../helper/utils';
 import { RedisService } from '../../redis/redis.service';
 
 @Injectable()
@@ -39,7 +40,7 @@ export class AdminProductService {
       orderBy: [{ name: 'asc' }],
       include: { category: { select: { id: true, name: true, slug: true } } },
     });
-    return this.expandProducts(rows);
+    return rows.map(normalizeProductRow);
   }
 
   async getById(id: string) {
@@ -53,7 +54,7 @@ export class AdminProductService {
         code: 'PRODUCT_NOT_FOUND',
       });
     }
-    return this.expandProduct(row);
+    return normalizeProductRow(row);
   }
 
   async create(dto: CreateProductDto) {
@@ -69,12 +70,14 @@ export class AdminProductService {
 
     const nameTrim = dto.name.trim();
     const skuNorm = await this.resolveSkuForCreate(dto.sku, nameTrim);
-
     let base = dto.slug?.trim() ? slugify(dto.slug) : slugify(nameTrim);
     const slug = await this.allocProductSlug(base);
 
     const imageUrls = normalizeImageUrls(dto.imageUrls);
-    const optionGroupsJson = (dto.variantGroupIds ?? []).map(id => ({ variantGroupId: id }));
+    const optionGroups = normalizeInlineOptionGroups(dto.optionGroups);
+    const toppings = normalizeInlineToppings(dto.toppings);
+    const nameTranslation = normalizeTranslation(dto.nameTranslation);
+    const descriptionTranslation = normalizeTranslation(dto.descriptionTranslation);
 
     const created = await this.prisma.product.create({
       data: {
@@ -85,7 +88,10 @@ export class AdminProductService {
         description: dto.description?.trim() ?? null,
         price: new Prisma.Decimal(dto.price),
         imageUrls,
-        optionGroups: optionGroupsJson as unknown as Prisma.InputJsonValue,
+        optionGroups: optionGroups as unknown as Prisma.InputJsonValue,
+        toppings: toppings as unknown as Prisma.InputJsonValue,
+        nameTranslation: nameTranslation as unknown as Prisma.InputJsonValue,
+        descriptionTranslation: descriptionTranslation as unknown as Prisma.InputJsonValue,
         isAvailable: dto.isAvailable ?? true,
         isSoldOut: dto.isSoldOut ?? false,
         discountPercent: clampDiscountPercent(dto.discountPercent, 0),
@@ -93,7 +99,7 @@ export class AdminProductService {
       include: { category: { select: { id: true, name: true, slug: true } } },
     });
     await this.redis.delByPattern('kun:products:list:*');
-    return this.expandProduct(created);
+    return normalizeProductRow(created);
   }
 
   async update(id: string, dto: UpdateProductDto) {
@@ -152,8 +158,17 @@ export class AdminProductService {
         ...(dto.imageUrls !== undefined && {
           imageUrls: normalizeImageUrls(dto.imageUrls),
         }),
-        ...(dto.variantGroupIds !== undefined && {
-          optionGroups: dto.variantGroupIds.map(vid => ({ variantGroupId: vid })) as unknown as Prisma.InputJsonValue,
+        ...(dto.optionGroups !== undefined && {
+          optionGroups: normalizeInlineOptionGroups(dto.optionGroups) as unknown as Prisma.InputJsonValue,
+        }),
+        ...(dto.toppings !== undefined && {
+          toppings: normalizeInlineToppings(dto.toppings) as unknown as Prisma.InputJsonValue,
+        }),
+        ...(dto.nameTranslation !== undefined && {
+          nameTranslation: normalizeTranslation(dto.nameTranslation) as unknown as Prisma.InputJsonValue,
+        }),
+        ...(dto.descriptionTranslation !== undefined && {
+          descriptionTranslation: normalizeTranslation(dto.descriptionTranslation) as unknown as Prisma.InputJsonValue,
         }),
         ...(dto.isAvailable !== undefined && { isAvailable: dto.isAvailable }),
         ...(dto.isSoldOut !== undefined && { isSoldOut: dto.isSoldOut }),
@@ -164,7 +179,7 @@ export class AdminProductService {
       include: { category: { select: { id: true, name: true, slug: true } } },
     });
     await this.redis.delByPattern('kun:products:list:*');
-    return this.expandProduct(updated);
+    return normalizeProductRow(updated);
   }
 
   async toggleAvailability(id: string, dto: ToggleProductAvailabilityDto) {
@@ -175,7 +190,7 @@ export class AdminProductService {
       include: { category: { select: { id: true, name: true, slug: true } } },
     });
     await this.redis.delByPattern('kun:products:list:*');
-    return this.expandProduct(row);
+    return normalizeProductRow(row);
   }
 
   async remove(id: string) {
@@ -198,35 +213,6 @@ export class AdminProductService {
     }
   }
 
-  private async expandProducts<T extends { optionGroups: unknown }>(
-    rows: T[],
-  ): Promise<(T & { optionGroups: any[]; variantGroupIds: string[] })[]> {
-    // Collect all unique variantGroupIds from all products
-    const allIds = new Set<string>();
-    for (const row of rows) {
-      for (const id of extractVariantGroupIds(row.optionGroups)) allIds.add(id);
-    }
-    // Fetch in one query
-    const vgMap = new Map<string, any>();
-    if (allIds.size > 0) {
-      const vgs = await this.prisma.variantGroup.findMany({ where: { id: { in: [...allIds] } } });
-      for (const vg of vgs) vgMap.set(vg.id, vg);
-    }
-    return rows.map(row => ({
-      ...row,
-      optionGroups: expandOptionGroupsWithMap(row.optionGroups, vgMap),
-      variantGroupIds: extractVariantGroupIds(row.optionGroups),
-    }));
-  }
-
-  private async expandProduct<T extends { optionGroups: unknown }>(
-    row: T,
-  ): Promise<T & { optionGroups: any[]; variantGroupIds: string[] }> {
-    const [result] = await this.expandProducts([row]);
-    return result!;
-  }
-
-  /** SKU có nhập: kiểm tra trùng; không nhập: sinh từ tên + đảm bảo unique. */
   private async resolveSkuForCreate(
     explicit: string | undefined,
     productName: string,
@@ -291,4 +277,14 @@ export class AdminProductService {
       code: 'PRODUCT_SLUG_COLLISION',
     });
   }
+}
+
+function normalizeProductRow<T extends { optionGroups: unknown; toppings: unknown; nameTranslation: unknown; descriptionTranslation: unknown }>(row: T) {
+  return {
+    ...row,
+    optionGroups: normalizeInlineOptionGroups(row.optionGroups as any),
+    toppings: normalizeInlineToppings(row.toppings as any),
+    nameTranslation: (row.nameTranslation && typeof row.nameTranslation === 'object' ? row.nameTranslation : {}) as Record<string, string>,
+    descriptionTranslation: (row.descriptionTranslation && typeof row.descriptionTranslation === 'object' ? row.descriptionTranslation : {}) as Record<string, string>,
+  };
 }

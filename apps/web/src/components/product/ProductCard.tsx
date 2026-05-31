@@ -8,8 +8,10 @@ import { Link } from "@/i18n/navigation";
 import { revealTransition } from "@/app/[locale]/(landing)/components/RevealSection";
 import { ShoppingBag, ExternalLink } from "lucide-react";
 import { useState } from "react";
+import { useLocale } from "next-intl";
 import { ProductQuickAddModal } from "./ProductQuickAddModal";
 import { useAuth } from "@/hooks";
+import { getDisplayName } from "@/lib/product-name";
 
 const PLACEHOLDER_BG = [
   "#1a3c34", "#2d1a0a", "#0d2035", "#1a0d2e",
@@ -28,6 +30,8 @@ type Props = {
 };
 
 export function ProductCard({ product, index = 0, eager = false }: Props) {
+  const locale = useLocale();
+  const displayName = getDisplayName(product, locale);
   const imageUrl = product.imageUrls[0] ?? null;
   const bgColor = PLACEHOLDER_BG[index % PLACEHOLDER_BG.length];
   const hasDiscount = product.discountPercent > 0;
@@ -60,9 +64,9 @@ export function ProductCard({ product, index = 0, eager = false }: Props) {
               disabled={product.isSoldOut}
               className="relative aspect-[4/3] w-full overflow-hidden text-left disabled:cursor-not-allowed"
               style={{ backgroundColor: imageUrl ? undefined : bgColor }}
-              aria-label={`Xem tuỳ chọn cho ${product.name}`}
+              aria-label={`Xem tuỳ chọn cho ${displayName}`}
             >
-              <ProductCardImage imageUrl={imageUrl} name={product.name} bgColor={bgColor} />
+              <ProductCardImage imageUrl={imageUrl} name={displayName} bgColor={bgColor} />
 
               {/* Hover overlay */}
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/55 via-black/5 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
@@ -91,9 +95,9 @@ export function ProductCard({ product, index = 0, eager = false }: Props) {
               href={`${ROUTES.MENU}/${product.slug}`}
               className="relative block aspect-[4/3] w-full overflow-hidden"
               style={{ backgroundColor: imageUrl ? undefined : bgColor }}
-              aria-label={`Xem ${product.name}`}
+              aria-label={`Xem ${displayName}`}
             >
-              <ProductCardImage imageUrl={imageUrl} name={product.name} bgColor={bgColor} />
+              <ProductCardImage imageUrl={imageUrl} name={displayName} bgColor={bgColor} />
               <ProductCardBadges hasDiscount={hasDiscount} discountPercent={product.discountPercent} isSoldOut={product.isSoldOut} />
             </Link>
           )}
@@ -101,7 +105,7 @@ export function ProductCard({ product, index = 0, eager = false }: Props) {
           {/* Info */}
           <div className="flex flex-1 flex-col px-3 pb-3.5 pt-2.5 sm:px-4 sm:pb-4 sm:pt-3">
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
-              {product.category.name}
+              {getDisplayName(product.category, locale)}
             </p>
 
             {/* Name — click opens detail page */}
@@ -110,7 +114,7 @@ export function ProductCard({ product, index = 0, eager = false }: Props) {
               className="mt-1 flex-1 hover:underline hover:underline-offset-2"
             >
               <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-foreground sm:text-[15px]">
-                {product.name}
+                {displayName}
               </h3>
             </Link>
 
@@ -130,7 +134,7 @@ export function ProductCard({ product, index = 0, eager = false }: Props) {
               <Link
                 href={`${ROUTES.MENU}/${product.slug}`}
                 className="shrink-0 rounded-full p-1 text-muted opacity-0 transition-all group-hover:opacity-100 hover:bg-black/[0.05] hover:text-foreground"
-                aria-label={`Xem chi tiết ${product.name}`}
+                aria-label={`Xem chi tiết ${displayName}`}
                 title="Xem chi tiết"
               >
                 <ExternalLink className="size-3.5" />

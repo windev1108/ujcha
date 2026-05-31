@@ -1,15 +1,19 @@
 export interface ProductOptionValue {
   label: string
   priceDelta: number
+  nameTranslation?: Record<string, string>
 }
 
 export interface ProductOptionGroup {
   id: string
   name: string
+  nameTranslation?: Record<string, string>
+  selectionMin?: number
+  selectionMax?: number
   values: ProductOptionValue[]
 }
 
-/** Normalise raw JSON (string[] or {label,priceDelta}[]) → ProductOptionGroup[]. */
+/** Normalise raw JSON from API → ProductOptionGroup[], preserving nameTranslation. */
 export function normalizeOptionGroups(raw: unknown): ProductOptionGroup[] {
   if (!Array.isArray(raw)) return []
   return raw.map((item, i) => {
@@ -23,20 +27,30 @@ export function normalizeOptionGroups(raw: unknown): ProductOptionGroup[] {
         if (typeof x === 'string') {
           if (x.trim()) values.push({ label: x.trim(), priceDelta: 0 })
         } else if (x && typeof x === 'object' && 'label' in x) {
-          const label = String((x as { label: unknown }).label).trim()
+          const v = x as Record<string, unknown>
+          const label = String(v.label ?? '').trim()
           if (!label) continue
-          const pd = (x as { priceDelta?: unknown }).priceDelta
+          const pd = v.priceDelta
           const priceDelta =
             pd !== undefined && pd !== null && pd !== ''
               ? Math.max(0, Math.round(Number(pd) * 100) / 100)
               : 0
-          values.push({ label, priceDelta: Number.isFinite(priceDelta) ? priceDelta : 0 })
+          const nt = v.nameTranslation && typeof v.nameTranslation === 'object'
+            ? (v.nameTranslation as Record<string, string>)
+            : undefined
+          values.push({ label, priceDelta: Number.isFinite(priceDelta) ? priceDelta : 0, ...(nt ? { nameTranslation: nt } : {}) })
         }
       }
     }
+    const nt = o.nameTranslation && typeof o.nameTranslation === 'object'
+      ? (o.nameTranslation as Record<string, string>)
+      : undefined
     return {
       id: typeof o.id === 'string' ? o.id : `g-${i}`,
       name: typeof o.name === 'string' ? o.name : '',
+      ...(nt ? { nameTranslation: nt } : {}),
+      ...(typeof o.selectionMin === 'number' ? { selectionMin: o.selectionMin } : {}),
+      ...(typeof o.selectionMax === 'number' ? { selectionMax: o.selectionMax } : {}),
       values,
     }
   })

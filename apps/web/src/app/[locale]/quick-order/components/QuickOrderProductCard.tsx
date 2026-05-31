@@ -4,9 +4,10 @@ import { Badge, Button, Card, CardContent } from "@heroui/react";
 import { motion } from "motion/react";
 import { Plus } from "lucide-react";
 import Image from "next/image";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import type { QuickProduct } from "./quick-order-data";
 import { formatVnd } from "./quick-order-data";
+import { getDisplayName } from "@/lib/product-name";
 import { easeOutSmooth } from "@/app/[locale]/(landing)/components/RevealSection";
 
 type Props = {
@@ -16,6 +17,7 @@ type Props = {
 
 export function QuickOrderProductCard({ product, onAdd }: Props) {
   const t = useTranslations();
+  const locale = useLocale();
   return (
     <motion.div
       layout
@@ -48,7 +50,7 @@ export function QuickOrderProductCard({ product, onAdd }: Props) {
               ) : null}
               <Image
                 src={product.image}
-                alt={product.name}
+                alt={getDisplayName(product, locale)}
                 fill
                 className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.03]"
                 sizes="(min-width: 1280px) 22vw, (min-width: 1024px) 28vw, (min-width: 640px) 42vw, 50vw"
@@ -58,7 +60,7 @@ export function QuickOrderProductCard({ product, onAdd }: Props) {
           <div className="flex flex-1 flex-col gap-3 px-5 pb-5 pt-4 sm:px-6 sm:pb-6 sm:pt-5">
             <div className="min-h-0 flex-1">
               <h3 className="text-[1.05rem] font-bold leading-snug tracking-tight text-foreground sm:text-lg">
-                {product.name}
+                {getDisplayName(product, locale)}
               </h3>
               <p className="mt-2 line-clamp-2 text-[13px] leading-relaxed text-foreground/55 sm:text-sm">
                 {product.description}
@@ -71,7 +73,7 @@ export function QuickOrderProductCard({ product, onAdd }: Props) {
               <Button
                 isIconOnly
                 variant="primary"
-                aria-label={`${t("add_to_cart")} ${product.name}`}
+                aria-label={`${t("add_to_cart")} ${getDisplayName(product, locale)}`}
                 className="size-12 shrink-0 rounded-full bg-kun-products-forest text-white shadow-[0_4px_14px_-4px_rgba(38,99,77,0.55)] hover:opacity-95"
                 onPress={onAdd}
               >

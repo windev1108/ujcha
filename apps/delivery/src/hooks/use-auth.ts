@@ -8,8 +8,8 @@ export function useAuth() {
   const { accessToken, shipper, hydrated, setTokens, clearAuth } = useAuthStore();
   const router = useRouter();
 
-  const login = useCallback(async (email: string, password: string) => {
-    const { data } = await shipperApi.login(email, password);
+  const login = useCallback(async (phone: string, password: string) => {
+    const { data } = await shipperApi.login(phone, password);
     await setTokens(data.accessToken, data.refreshToken, data.shipper);
     socketService.connect();
     router.replace('/(shipper)/');

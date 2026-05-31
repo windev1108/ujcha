@@ -38,7 +38,6 @@ import { useAuthStore } from "@/store/auth-store";
 import { useProductsQuery } from "@/services/product/hooks";
 import type { ApiProduct } from "@/services/product/types";
 import { useCategoriesQuery } from "@/services/category/hooks";
-import { useToppingsQuery } from "@/services/topping/hooks";
 import { normalizeOptionGroups, computeOptionSurcharge, formatVnd } from "@/lib/product-options";
 import { useAddressesQuery } from "@/services/order/hooks";
 import { useShippingEstimateQuery } from "@/services/shipping/hooks";
@@ -60,6 +59,8 @@ import {
   type GroupOrderItem,
   type GroupDiscountTier,
 } from "@/services/group-order/api";
+import { useLocale } from "next-intl";
+import { getDisplayName } from "@/lib/product-name";
 
 const SESSION_KEY = (token: string) => `group_order_session_${token}`;
 const PARTICIPANT_KEY = (token: string) => `group_order_participant_${token}`;
@@ -102,18 +103,18 @@ type DraftItem = DraftValue & { productId: string };
 
 function ProductCustomizeSheet({
   product,
-  toppings,
   initial,
   onConfirm,
   onClose,
 }: {
   product: ApiProduct;
-  toppings: { id: string; name: string; price: string }[];
   initial?: DraftValue;
   onConfirm: (value: DraftValue) => void;
   onClose: () => void;
 }) {
+  const locale = useLocale();
   const optionGroups = normalizeOptionGroups(product.optionGroups);
+  const toppings = (product.toppings ?? []).filter((t) => t.isActive !== false);
   const basePrice = parseFloat(product.price) * (1 - (product.discountPercent ?? 0) / 100);
 
   const [quantity, setQuantity] = useState(initial?.quantity ?? 1);
@@ -131,14 +132,11 @@ function ProductCustomizeSheet({
   const optionSurcharge = computeOptionSurcharge(optionGroups, selectedOptions);
   const toppingTotal = toppings
     .filter((t) => selectedToppings.has(t.id))
-    .reduce((s, t) => s + parseFloat(t.price), 0);
+    .reduce((s, t) => s + t.price, 0);
   const unitPrice = basePrice + optionSurcharge + toppingTotal;
-
-  const MAX_TOPPINGS = 2;
 
   const toggleTopping = (id: string, checked: boolean) => {
     setSelectedToppings((prev) => {
-      if (checked && prev.size >= MAX_TOPPINGS) return prev;
       const next = new Set(prev);
       checked ? next.add(id) : next.delete(id);
       return next;
@@ -151,7 +149,7 @@ function ProductCustomizeSheet({
       selectedOptions,
       toppings: toppings
         .filter((t) => selectedToppings.has(t.id))
-        .map((t) => ({ toppingId: t.id, name: t.name, price: parseFloat(t.price) })),
+        .map((t) => ({ toppingId: t.id, name: t.name, price: t.price })),
     });
   };
 
@@ -172,7 +170,7 @@ function ProductCustomizeSheet({
         </button>
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-foreground/40">Tuỳ chọn</p>
-          <h3 className="truncate text-sm font-bold text-foreground">{product.name}</h3>
+          <h3 className="truncate text-sm font-bold text-foreground">{getDisplayName(product, locale)}</h3>
         </div>
       </div>
 
@@ -215,28 +213,26 @@ function ProductCustomizeSheet({
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/40">Topping</p>
-              <p className="text-[10px] font-semibold text-foreground/40">
-                {selectedToppings.size}/{MAX_TOPPINGS} đã chọn
-              </p>
+              {selectedToppings.size > 0 && (
+                <p className="text-[10px] font-semibold text-foreground/40">
+                  {selectedToppings.size} đã chọn
+                </p>
+              )}
             </div>
             <div className="max-h-52 space-y-1.5 overflow-y-auto rounded-2xl border border-black/6 bg-[#f9fafb] p-2">
               {toppings.map((top) => {
                 const active = selectedToppings.has(top.id);
-                const disabled = !active && selectedToppings.size >= MAX_TOPPINGS;
                 return (
                   <label
                     key={top.id}
-                    className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors ${
+                    className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors cursor-pointer ${
                       active
-                        ? "cursor-pointer border-[#1a3c34]/30 bg-[#f0faf6]"
-                        : disabled
-                        ? "cursor-not-allowed border-transparent bg-white opacity-40"
-                        : "cursor-pointer border-transparent bg-white hover:border-black/8"
+                        ? "border-[#1a3c34]/30 bg-[#f0faf6]"
+                        : "border-transparent bg-white hover:border-black/8"
                     }`}
                   >
                     <Checkbox
                       isSelected={active}
-                      isDisabled={disabled}
                       onChange={(v) => toggleTopping(top.id, v)}
                       aria-label={top.name}
                     />
@@ -250,11 +246,6 @@ function ProductCustomizeSheet({
                 );
               })}
             </div>
-            {selectedToppings.size >= MAX_TOPPINGS && (
-              <p className="text-[11px] text-foreground/45">
-                Đã đạt giới hạn {MAX_TOPPINGS} topping. Bỏ chọn để thay đổi.
-              </p>
-            )}
           </div>
         )}
 
@@ -314,6 +305,7 @@ function ProductPickerDrawer({
   onSave: (items: DraftItem[]) => Promise<void>;
   saving: boolean;
 }) {
+  const locale = useLocale();
   const [draft, setDraft] = useState<Map<string, DraftValue>>(() => {
     const m = new Map<string, DraftValue>();
     initialItems.forEach((item) =>
@@ -333,8 +325,6 @@ function ProductPickerDrawer({
   const { data: allProducts = [], isLoading: productsLoading } = useProductsQuery({
     categoryId: activeCategoryId,
   });
-  const { data: toppings = [] } = useToppingsQuery();
-
   const products = search.trim()
     ? allProducts.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()))
     : allProducts;
@@ -400,7 +390,6 @@ function ProductPickerDrawer({
               {customizeTarget && (
                 <ProductCustomizeSheet
                   product={customizeTarget}
-                  toppings={toppings}
                   initial={draft.get(customizeTarget.id)}
                   onConfirm={(value) => {
                     setDraft((prev) => new Map(prev).set(customizeTarget.id, value));
@@ -505,7 +494,7 @@ function ProductPickerDrawer({
                           {thumb ? (
                             <Image
                               src={thumb}
-                              alt={product.name}
+                              alt={getDisplayName(product, locale)}
                               fill
                               className="object-cover"
                               sizes="(min-width: 640px) 200px, 160px"
@@ -529,7 +518,7 @@ function ProductPickerDrawer({
 
                         <div className="flex flex-1 flex-col justify-between gap-2 p-2.5">
                           <p className="line-clamp-2 text-xs font-semibold leading-snug text-foreground">
-                            {product.name}
+                            {getDisplayName(product, locale)}
                           </p>
                           <div className="flex items-center justify-between gap-1">
                             <span className="text-xs font-bold tabular-nums text-[#26634d]">
@@ -615,6 +604,7 @@ function ParticipantRow({
   onConfirmPaid?: (participantId: string) => void;
   onOpenPicker?: () => void;
 }) {
+  const locale = useLocale();
   const canConfirm =
     groupStatus === "locked" &&
     paymentMode === "split" &&
@@ -704,7 +694,7 @@ function ParticipantRow({
                   <span className="flex items-start gap-1.5">
                     <ChevronRight className="mt-0.5 size-3 shrink-0 text-foreground/25" />
                     <span className="font-medium text-foreground/80">
-                      {item.product?.name ?? "Sản phẩm"} ×{item.quantity}
+                      {item.product ? getDisplayName(item.product, locale) : "Sản phẩm"} ×{item.quantity}
                     </span>
                   </span>
                   {optionValues.length > 0 && (

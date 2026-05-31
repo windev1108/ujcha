@@ -1,14 +1,19 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
+import { randomBytes } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SmsService } from '../../sms/sms.service';
 import type { UpdateStoreLocationDto } from './dto/update-store-location.dto';
 import type { UpdateFaceProfileDto } from './dto/update-face-profile.dto';
 import type { CheckinDto } from './dto/checkin.dto';
 import type { AttendanceQueryDto } from './dto/attendance-query.dto';
 import type { UpdateShiftConfigDto } from './dto/update-shift-config.dto';
+import type { CreateStaffDto } from './dto/create-staff.dto';
 import { AttendanceType } from '@prisma/client';
 
 const VN_TZ = '+07:00';
@@ -59,7 +64,10 @@ function calcTotalMinutes(records: { type: AttendanceType; createdAt: Date }[]):
 
 @Injectable()
 export class HrmService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sms: SmsService,
+  ) {}
 
   // ─── Shift config ──────────────────────────────────────────────────
 
@@ -260,7 +268,7 @@ export class HrmService {
     const groupMap = new Map<string, {
       adminId: string;
       date: string;
-      admin: { id: string; email: string; role: string; name: string | null };
+      admin: { id: string; email: string | null; role: string; name: string | null };
       records: typeof records;
     }>();
 
@@ -275,7 +283,7 @@ export class HrmService {
 
     // Sort: date desc, then staff email asc
     const sorted = [...groupMap.values()].sort(
-      (a, b) => b.date.localeCompare(a.date) || a.admin.email.localeCompare(b.admin.email),
+      (a, b) => b.date.localeCompare(a.date) || (a.admin.name ?? '').localeCompare(b.admin.name ?? ''),
     );
 
     const total = sorted.length;
@@ -328,5 +336,87 @@ export class HrmService {
     if (!admin) throw new NotFoundException({ message: 'Không tìm thấy nhân viên.', code: 'ADMIN_NOT_FOUND' });
     const updated = await this.prisma.admin.update({ where: { id: staffId }, data: { permissions }, select: { id: true, permissions: true } });
     return { permissions: updated.permissions };
+  }
+
+  // ── Staff CRUD ────────────────────────────────────────────────────────────
+
+  async listStaff() {
+    return this.prisma.admin.findMany({
+      select: {
+        id: true, phone: true, email: true, name: true,
+        role: true, isActive: true, permissions: true, createdAt: true,
+        faceProfile: { select: { id: true, imageUrl: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async createStaff(dto: CreateStaffDto): Promise<{ staff: Record<string, unknown>; plainPassword: string }> {
+    const existing = await this.prisma.admin.findUnique({ where: { phone: dto.phone }, select: { id: true } });
+    if (existing) {
+      throw new ConflictException({ message: 'Số điện thoại đã được sử dụng.', code: 'ADMIN_PHONE_TAKEN' });
+    }
+
+    const plainPassword = dto.password?.trim() || randomBytes(5).toString('hex');
+    const passwordHash = await bcrypt.hash(plainPassword, 12);
+
+    const staff = await this.prisma.admin.create({
+      data: {
+        phone: dto.phone.trim(),
+        name: dto.name.trim(),
+        role: dto.role,
+        email: dto.email?.trim() || null,
+        password: passwordHash,
+        isActive: true,
+      },
+      select: { id: true, phone: true, email: true, name: true, role: true, isActive: true, permissions: true, createdAt: true },
+    });
+
+    // Fire-and-forget — SMS failure must not block account creation
+    void this.sms.sendCredentials(dto.phone.trim(), plainPassword).catch((e: unknown) =>
+      console.error('[HRM] SMS credentials failed:', e),
+    );
+
+    return { staff, plainPassword };
+  }
+
+  async updateStaff(staffId: string, data: { name?: string; phone?: string; email?: string; isActive?: boolean }) {
+    const existing = await this.prisma.admin.findUnique({ where: { id: staffId }, select: { id: true } });
+    if (!existing) throw new NotFoundException({ message: 'Không tìm thấy nhân viên.', code: 'ADMIN_NOT_FOUND' });
+
+    if (data.phone) {
+      const clash = await this.prisma.admin.findUnique({ where: { phone: data.phone }, select: { id: true } });
+      if (clash && clash.id !== staffId) {
+        throw new ConflictException({ message: 'Số điện thoại đã được sử dụng.', code: 'ADMIN_PHONE_TAKEN' });
+      }
+    }
+
+    return this.prisma.admin.update({
+      where: { id: staffId },
+      data: {
+        ...(data.name !== undefined && { name: data.name.trim() }),
+        ...(data.phone !== undefined && { phone: data.phone.trim() }),
+        ...(data.email !== undefined && { email: data.email.trim() || null }),
+        ...(data.isActive !== undefined && { isActive: data.isActive }),
+      },
+      select: { id: true, phone: true, email: true, name: true, role: true, isActive: true, permissions: true, createdAt: true },
+    });
+  }
+
+  async resetStaffPassword(staffId: string, newPassword?: string): Promise<{ plainPassword: string }> {
+    const existing = await this.prisma.admin.findUnique({ where: { id: staffId }, select: { id: true } });
+    if (!existing) throw new NotFoundException({ message: 'Không tìm thấy nhân viên.', code: 'ADMIN_NOT_FOUND' });
+
+    const plain = newPassword?.trim() || randomBytes(5).toString('hex');
+    const hash = await bcrypt.hash(plain, 12);
+    await this.prisma.admin.update({ where: { id: staffId }, data: { password: hash } });
+    return { plainPassword: plain };
+  }
+
+  async deleteStaff(staffId: string) {
+    const existing = await this.prisma.admin.findUnique({ where: { id: staffId }, select: { id: true, role: true } });
+    if (!existing) throw new NotFoundException({ message: 'Không tìm thấy nhân viên.', code: 'ADMIN_NOT_FOUND' });
+    await this.prisma.admin.delete({ where: { id: staffId } });
+    return { deleted: staffId };
   }
 }

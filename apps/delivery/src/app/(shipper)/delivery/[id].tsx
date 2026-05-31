@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Animated,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,13 +11,15 @@ import {
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
 import {
   Package, MapPin, CheckCircle2, Radio, User, FileText,
-  Clock, CreditCard, Coffee, ChevronLeft,
+  Clock, CreditCard, Coffee, ChevronLeft, Phone,
 } from '@/components/icons';
+import { SwipeSlider } from '@/components/swipe-slider';
 import { useTracking } from '@/hooks/use-tracking';
 import { useOrders } from '@/hooks/use-orders';
 import { useOrdersStore } from '@/store/orders.store';
@@ -79,6 +82,7 @@ const STATUS_LABEL: Record<string, { label: string; color: string; bg: string }>
 export default function DeliveryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { markPickedUp, markArrived, completeDelivery } = useOrders();
   const { isTracking, start, stop, lastLocation } = useTracking(id);
   const webviewRef = useRef<WebView>(null);
@@ -112,6 +116,10 @@ export default function DeliveryScreen() {
     return () => socketService.off('order:status', handler as (...args: unknown[]) => void);
   }, [id]);
 
+  const [pickupLoading,   setPickupLoading]   = useState(false);
+  const [arrivedLoading,  setArrivedLoading]  = useState(false);
+  const [completeLoading, setCompleteLoading] = useState(false);
+
   const scrollY = useRef(new Animated.Value(0)).current;
   const mapHeight = scrollY.interpolate({
     inputRange: [0, SCROLL_THRESHOLD],
@@ -132,37 +140,39 @@ export default function DeliveryScreen() {
   }, [lastLocation]);
 
   async function handlePickup() {
+    setPickupLoading(true);
     try {
       await markPickedUp(id);
       const ok = await start();
       if (!ok) Alert.alert('GPS', 'Không thể bật GPS. Vui lòng kiểm tra quyền vị trí trong cài đặt.');
     } catch {
       Alert.alert('Lỗi', 'Không thể cập nhật trạng thái.');
+    } finally {
+      setPickupLoading(false);
     }
   }
 
   async function handleArrived() {
-    try { await markArrived(id); }
-    catch { Alert.alert('Lỗi', 'Không thể cập nhật trạng thái.'); }
+    setArrivedLoading(true);
+    try {
+      await markArrived(id);
+    } catch {
+      Alert.alert('Lỗi', 'Không thể cập nhật trạng thái.');
+    } finally {
+      setArrivedLoading(false);
+    }
   }
 
   async function handleComplete() {
-    Alert.alert('Xác nhận hoàn thành', 'Bạn đã giao hàng thành công?', [
-      { text: 'Huỷ', style: 'cancel' },
-      {
-        text: 'Hoàn thành',
-        style: 'default',
-        onPress: async () => {
-          try {
-            await completeDelivery(id);
-            await stop();
-            router.back();
-          } catch {
-            Alert.alert('Lỗi', 'Không thể cập nhật trạng thái.');
-          }
-        },
-      },
-    ]);
+    setCompleteLoading(true);
+    try {
+      await completeDelivery(id);
+      await stop();
+      router.back();
+    } catch {
+      Alert.alert('Lỗi', 'Không thể cập nhật trạng thái.');
+      setCompleteLoading(false);
+    }
   }
 
   async function handleRestartGps() {
@@ -172,9 +182,9 @@ export default function DeliveryScreen() {
 
   if (!order) {
     return (
-      <SafeAreaView style={s.loadWrap}>
+      <View style={[s.loadWrap, { paddingTop: insets.top }]}>
         <ActivityIndicator color={PRIMARY} size="large" />
-      </SafeAreaView>
+      </View>
     );
   }
 
@@ -195,7 +205,8 @@ export default function DeliveryScreen() {
   const isPaid = order.paymentStatus === 'paid';
 
   return (
-    <SafeAreaView style={s.root} edges={['top']}>
+    <View style={[s.root, { paddingTop: insets.top }]}>
+      <StatusBar style="light" />
       {/* Top bar */}
       <View style={s.topBar}>
         <Pressable style={s.backBtn} onPress={() => router.back()} hitSlop={12}>
@@ -243,7 +254,7 @@ export default function DeliveryScreen() {
           { useNativeDriver: false },
         )}
       >
-        {/* ── Action buttons ── */}
+        {/* ── Action sliders ── */}
         <View style={s.actionsCard}>
           {isActiveDelivery && !isTracking && (
             <Pressable style={[s.actionBtn, s.btnOutline]} onPress={handleRestartGps}>
@@ -263,24 +274,33 @@ export default function DeliveryScreen() {
           )}
 
           {canPickup && (
-            <Pressable style={[s.actionBtn, s.btnPrimary]} onPress={handlePickup}>
-              <Package size={18} color="#fff" />
-              <Text style={s.btnText}>Đã lấy hàng</Text>
-            </Pressable>
+            <SwipeSlider
+              label="Đã lấy hàng"
+              icon={<Package size={22} color="#fff" />}
+              color={PRIMARY}
+              onConfirm={handlePickup}
+              loading={pickupLoading}
+            />
           )}
 
           {canArrived && (
-            <Pressable style={[s.actionBtn, s.btnOrange]} onPress={handleArrived}>
-              <MapPin size={18} color="#fff" />
-              <Text style={s.btnText}>Đã đến điểm giao</Text>
-            </Pressable>
+            <SwipeSlider
+              label="Đã đến điểm giao"
+              icon={<MapPin size={22} color="#fff" />}
+              color="#c2410c"
+              onConfirm={handleArrived}
+              loading={arrivedLoading}
+            />
           )}
 
           {canComplete && (
-            <Pressable style={[s.actionBtn, s.btnGreen]} onPress={handleComplete}>
-              <CheckCircle2 size={18} color="#fff" />
-              <Text style={s.btnText}>Giao xong</Text>
-            </Pressable>
+            <SwipeSlider
+              label="Giao hàng xong"
+              icon={<CheckCircle2 size={22} color="#fff" />}
+              color="#15803d"
+              onConfirm={handleComplete}
+              loading={completeLoading}
+            />
           )}
         </View>
 
@@ -338,7 +358,18 @@ export default function DeliveryScreen() {
             </View>
             <View style={s.customerInfo}>
               <Text style={s.customerName}>{name}</Text>
-              <Text style={s.customerPhone}>{phone}</Text>
+              {phone !== '—' ? (
+                <Pressable
+                  style={s.phoneChip}
+                  onPress={() => Linking.openURL(`tel:${phone.replace(/\s/g, '')}`)}
+                  hitSlop={6}
+                >
+                  <Phone size={13} color="#0369a1" />
+                  <Text style={s.customerPhone}>{phone}</Text>
+                </Pressable>
+              ) : (
+                <Text style={s.customerPhone}>{phone}</Text>
+              )}
             </View>
             <View style={s.amountBadge}>
               <Text style={s.amountLabel}>Phí ship</Text>
@@ -397,7 +428,7 @@ export default function DeliveryScreen() {
           </View>
         )}
       </Animated.ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -435,9 +466,6 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(26,26,26,0.05)',
   },
   actionBtn: { height: 50, borderRadius: 100, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  btnPrimary: { backgroundColor: PRIMARY },
-  btnOrange: { backgroundColor: '#c2410c' },
-  btnGreen: { backgroundColor: '#15803d' },
   btnOutline: { borderWidth: 1.5, borderColor: PRIMARY, backgroundColor: '#fff' },
   btnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
 
@@ -489,7 +517,8 @@ const s = StyleSheet.create({
   customerAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#f0f0f0', alignItems: 'center', justifyContent: 'center' },
   customerInfo: { flex: 1, gap: 2 },
   customerName: { fontSize: 15, fontWeight: '600', color: '#1a1a1a' },
-  customerPhone: { fontSize: 13, color: '#717171' },
+  phoneChip: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' },
+  customerPhone: { fontSize: 13, color: '#0369a1', fontWeight: '500' },
   amountBadge: { alignItems: 'flex-end', gap: 2 },
   amountLabel: { fontSize: 10, color: '#b0b0b0', fontWeight: '600', textTransform: 'uppercase' },
   amountValue: { fontSize: 15, fontWeight: '700', color: PRIMARY },

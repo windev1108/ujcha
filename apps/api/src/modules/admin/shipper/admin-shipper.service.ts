@@ -178,7 +178,7 @@ export class AdminShipperService {
     const shipper = await this.prisma.shipper.create({
       data: {
         adminId: dto.adminId,
-        name: admin.name?.trim() || admin.email.split('@')[0],
+        name: admin.name?.trim() || admin.phone?.trim() || admin.id.slice(0, 8),
         phone: admin.phone?.trim() ?? null,
       },
     });

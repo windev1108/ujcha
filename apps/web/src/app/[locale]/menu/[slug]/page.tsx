@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { fetchProductBySlug } from '@/services/product/api'
 import { ProductDetailPageShell } from './components/ProductDetailPageShell'
+import { getDisplayName, getDisplayDescription } from '@/lib/product-name'
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://kun.vn'
 
@@ -9,34 +10,35 @@ export async function generateMetadata({
 }: {
   params: Promise<{ locale: string; slug: string }>
 }): Promise<Metadata> {
-  const { slug } = await params
+  const { slug, locale } = await params
 
   try {
-    const product = await fetchProductBySlug(slug)
+    const product = await fetchProductBySlug(slug, locale)
     const image = product.imageUrls?.[0]
     const price = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
       Number(product.price),
     )
+    const displayName = getDisplayName(product, locale)
     const description =
-      product.description?.trim() ||
-      `${product.name} — ${price}. Đặt hàng tại UjCha, matcha & đồ uống thủ công chất lượng cao.`
+      getDisplayDescription(product, locale) ||
+      `${displayName} — ${price}. Đặt hàng tại UjCha, matcha & đồ uống thủ công chất lượng cao.`
 
     return {
-      title: product.name,
+      title: displayName,
       description,
       openGraph: {
         type: 'website',
         url: `${SITE_URL}/menu/${slug}`,
-        title: `${product.name} | UjCha`,
+        title: `${displayName} | UjCha`,
         description,
         siteName: 'UjCha',
         ...(image && {
-          images: [{ url: image, width: 800, height: 800, alt: product.name }],
+          images: [{ url: image, width: 800, height: 800, alt: displayName }],
         }),
       },
       twitter: {
         card: 'summary_large_image',
-        title: `${product.name} | UjCha`,
+        title: `${displayName} | UjCha`,
         description,
         ...(image && { images: [image] }),
       },

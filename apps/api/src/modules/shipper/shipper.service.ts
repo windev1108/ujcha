@@ -1,13 +1,17 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { OrderStatus, OrderType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrdersGateway } from '../events/orders.gateway';
+import { PointOrderRewardService } from '../point/point-order-reward.service';
 
 @Injectable()
 export class ShipperService {
+  private readonly logger = new Logger(ShipperService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly ordersGateway: OrdersGateway,
+    private readonly pointOrderReward: PointOrderRewardService,
   ) {}
 
   async getAvailableOrders() {
@@ -211,6 +215,11 @@ export class ShipperService {
 
     this.ordersGateway.emitOrderStatusUpdated({ orderId, status: OrderStatus.completed });
     this.ordersGateway.emitShipperOrderStatusUpdated({ orderId, status: OrderStatus.completed, shipperId });
+
+    void this.pointOrderReward.tryRewardOrderCompletion(orderId).catch((err: unknown) => {
+      this.logger.error(`Point reward failed for order ${orderId}: ${err instanceof Error ? err.message : err}`);
+    });
+
     return updated;
   }
 

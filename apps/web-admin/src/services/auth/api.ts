@@ -4,10 +4,11 @@ import { env } from "@/config/env";
 import { server } from "@/config/server";
 import type { AdminAuthResponse, AdminRefreshResponse, AdminUser } from "./types";
 
-export async function postAdminGoogleLogin(body: {
-  idToken: string;
+export async function postAdminPhoneLogin(body: {
+  phone: string;
+  password: string;
 }): Promise<AdminAuthResponse> {
-  const { data } = await server.post<AdminAuthResponse>("/admin/auth/google", body);
+  const { data } = await server.post<AdminAuthResponse>("/admin/auth/phone", body);
   return data;
 }
 

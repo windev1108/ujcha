@@ -1,5 +1,6 @@
 import { api } from "@/config/server";
 import type {
+  AdminRole,
   AttendanceListResponse,
   AttendanceTodayRecord,
   AttendanceDailySummaryResponse,
@@ -9,6 +10,59 @@ import type {
   StoreLocation,
   AttendanceRecord,
 } from "./types";
+
+export type CreateHrmStaffBody = {
+  phone: string;
+  name: string;
+  role: AdminRole;
+  password?: string;
+  email?: string;
+};
+
+export type HrmStaffRow = {
+  id: string;
+  phone: string | null;
+  email: string | null;
+  name: string | null;
+  role: AdminRole;
+  isActive: boolean;
+  permissions: string[];
+  createdAt: string;
+  faceProfile: { id: string; imageUrl: string | null } | null;
+};
+
+export async function createHrmStaff(
+  body: CreateHrmStaffBody,
+): Promise<{ staff: HrmStaffRow; plainPassword: string }> {
+  const { data } = await api.post<{ staff: HrmStaffRow; plainPassword: string }>(
+    "/admin/hrm/staff",
+    body,
+  );
+  return data;
+}
+
+export async function updateHrmStaff(
+  staffId: string,
+  body: { name?: string; phone?: string; email?: string; isActive?: boolean },
+): Promise<HrmStaffRow> {
+  const { data } = await api.patch<HrmStaffRow>(`/admin/hrm/staff/${staffId}`, body);
+  return data;
+}
+
+export async function resetHrmStaffPassword(
+  staffId: string,
+  password?: string,
+): Promise<{ plainPassword: string }> {
+  const { data } = await api.post<{ plainPassword: string }>(
+    `/admin/hrm/staff/${staffId}/reset-password`,
+    { password },
+  );
+  return data;
+}
+
+export async function deleteHrmStaff(staffId: string): Promise<void> {
+  await api.delete(`/admin/hrm/staff/${staffId}`);
+}
 
 export async function fetchShiftConfig(): Promise<ShiftConfig> {
   const { data } = await api.get<ShiftConfig>("/admin/hrm/shift-config");

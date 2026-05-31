@@ -13,8 +13,7 @@ import {
   TextArea,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, ImagePlus, Save, Trash2 } from "lucide-react";
-import Link from "next/link";
+import { ArrowLeft, ImagePlus, Plus, Save, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -34,8 +33,7 @@ import {
   fetchAdminProduct,
   updateAdminProduct,
 } from "@/services/admin/products-api";
-import { fetchVariantGroups } from "@/services/admin/variant-groups-api";
-import type { AdminProduct } from "@/services/admin/types";
+import type { AdminProduct, ProductOptionGroup, ProductTopping } from "@/services/admin/types";
 
 function parseApiMessage(err: unknown): string {
   if (err && typeof err === "object" && "response" in err) {
@@ -62,7 +60,8 @@ function serializeProductFormSnapshot(input: {
   discountPercent: string;
   description: string;
   imageUrls: string[];
-  variantGroupIds: string[];
+  optionGroups: ProductOptionGroup[];
+  toppings: ProductTopping[];
   isAvailable: boolean;
   isSoldOut: boolean;
 }): string {
@@ -81,7 +80,8 @@ function serializeProductFormSnapshot(input: {
     discountPercent: discountRounded,
     description: input.description.trim(),
     imageUrls: urls,
-    variantGroupIds: [...input.variantGroupIds].sort(),
+    optionGroups: input.optionGroups,
+    toppings: input.toppings,
     isAvailable: input.isAvailable,
     isSoldOut: input.isSoldOut,
   });
@@ -97,7 +97,8 @@ function snapshotFromAdminProduct(existing: AdminProduct): string {
     discountPercent: String(existing.discountPercent ?? 0),
     description: existing.description ?? "",
     imageUrls: imgs.length ? imgs : [""],
-    variantGroupIds: existing.optionGroups.map((g) => g.id),
+    optionGroups: existing.optionGroups ?? [],
+    toppings: existing.toppings ?? [],
     isAvailable: existing.isAvailable,
     isSoldOut: existing.isSoldOut ?? false,
   });
@@ -114,12 +115,6 @@ export function ProductEditorClient({ mode, productId }: Props) {
     queryFn: fetchAdminCategories,
   });
 
-  const { data: variantGroups = [], isLoading: variantGroupsLoading } =
-    useQuery({
-      queryKey: adminKeys.variantGroups,
-      queryFn: fetchVariantGroups,
-    });
-
   const { data: existing, isLoading: loadingProduct } = useQuery({
     queryKey: productId
       ? adminKeys.product(productId)
@@ -135,7 +130,8 @@ export function ProductEditorClient({ mode, productId }: Props) {
   const [discountPercent, setDiscountPercent] = useState("0");
   const [description, setDescription] = useState("");
   const [imageUrls, setImageUrls] = useState<string[]>([""]);
-  const [variantGroupIds, setVariantGroupIds] = useState<string[]>([]);
+  const [optionGroups, setOptionGroups] = useState<ProductOptionGroup[]>([]);
+  const [toppings, setToppings] = useState<ProductTopping[]>([]);
   const [isAvailable, setIsAvailable] = useState(true);
   const [isSoldOut, setIsSoldOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -153,7 +149,8 @@ export function ProductEditorClient({ mode, productId }: Props) {
       setDescription(existing.description ?? "");
       const imgs = asStringArray(existing.imageUrls);
       setImageUrls(imgs.length ? imgs : [""]);
-      setVariantGroupIds(existing.optionGroups.map((g) => g.id));
+      setOptionGroups(existing.optionGroups ?? []);
+      setToppings(existing.toppings ?? []);
       setIsAvailable(existing.isAvailable);
       setIsSoldOut(existing.isSoldOut ?? false);
       setBaselineSnapshot(snapshotFromAdminProduct(existing));
@@ -170,7 +167,8 @@ export function ProductEditorClient({ mode, productId }: Props) {
             discountPercent: "0",
             description: "",
             imageUrls: [""],
-            variantGroupIds: [],
+            optionGroups: [],
+            toppings: [],
             isAvailable: true,
             isSoldOut: false,
           }),
@@ -199,7 +197,8 @@ export function ProductEditorClient({ mode, productId }: Props) {
         price: p,
         discountPercent: disc,
         imageUrls: urls,
-        variantGroupIds,
+        optionGroups: optionGroups.length > 0 ? optionGroups : undefined,
+        toppings: toppings.length > 0 ? toppings : undefined,
         isAvailable,
         isSoldOut,
       };
@@ -239,7 +238,8 @@ export function ProductEditorClient({ mode, productId }: Props) {
         discountPercent,
         description,
         imageUrls,
-        variantGroupIds,
+        optionGroups,
+        toppings,
         isAvailable,
         isSoldOut,
       }),
@@ -251,7 +251,8 @@ export function ProductEditorClient({ mode, productId }: Props) {
       discountPercent,
       description,
       imageUrls,
-      variantGroupIds,
+      optionGroups,
+      toppings,
       isAvailable,
       isSoldOut,
     ],
@@ -272,33 +273,20 @@ export function ProductEditorClient({ mode, productId }: Props) {
       prev.length <= 1 ? [""] : prev.filter((_, j) => j !== i),
     );
 
-  const toggleVariantGroup = (id: string) => {
-    if (pending) return;
-    setVariantGroupIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
-  };
-
   const previews = useMemo(
     () => imageUrls.map((u) => u.trim()).filter(Boolean),
     [imageUrls],
   );
 
-  const activeVariantGroups = useMemo(
-    () => variantGroups.filter((vg) => vg.isActive),
-    [variantGroups],
-  );
-
   const priceRange = useMemo(() => {
     const base = Number.parseFloat(price);
     if (!Number.isFinite(base) || base <= 0) return null;
-    const selected = variantGroups.filter((vg) => variantGroupIds.includes(vg.id));
-    if (!selected.length) return null;
+    if (!optionGroups.length) return null;
     let minExtra = 0;
     let maxExtra = 0;
-    for (const vg of selected) {
-      if (!vg.values.length) continue;
-      const deltas = vg.values.map((v) =>
+    for (const og of optionGroups) {
+      if (!og.values.length) continue;
+      const deltas = og.values.map((v) =>
         Number.isFinite(v.priceDelta) ? v.priceDelta : 0,
       );
       minExtra += Math.min(...deltas);
@@ -306,7 +294,66 @@ export function ProductEditorClient({ mode, productId }: Props) {
     }
     if (maxExtra === 0) return null;
     return { min: base + minExtra, max: base + maxExtra };
-  }, [price, variantGroups, variantGroupIds]);
+  }, [price, optionGroups]);
+
+  // ── Option Groups helpers ──────────────────────────────────────────────────
+
+  const addOptionGroup = () =>
+    setOptionGroups((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), name: "", selectionMin: 1, selectionMax: 1, values: [{ label: "", priceDelta: 0 }] },
+    ]);
+
+  const removeOptionGroup = (idx: number) =>
+    setOptionGroups((prev) => prev.filter((_, i) => i !== idx));
+
+  const updateOptionGroup = (idx: number, patch: Partial<ProductOptionGroup>) =>
+    setOptionGroups((prev) =>
+      prev.map((g, i) => (i === idx ? { ...g, ...patch } : g)),
+    );
+
+  const addOptionValue = (gIdx: number) =>
+    setOptionGroups((prev) =>
+      prev.map((g, i) =>
+        i === gIdx
+          ? { ...g, values: [...g.values, { label: "", priceDelta: 0 }] }
+          : g,
+      ),
+    );
+
+  const removeOptionValue = (gIdx: number, vIdx: number) =>
+    setOptionGroups((prev) =>
+      prev.map((g, i) =>
+        i === gIdx
+          ? { ...g, values: g.values.length <= 1 ? g.values : g.values.filter((_, j) => j !== vIdx) }
+          : g,
+      ),
+    );
+
+  const updateOptionValue = (gIdx: number, vIdx: number, patch: Partial<{ label: string; priceDelta: number }>) =>
+    setOptionGroups((prev) =>
+      prev.map((g, i) =>
+        i === gIdx
+          ? { ...g, values: g.values.map((v, j) => (j === vIdx ? { ...v, ...patch } : v)) }
+          : g,
+      ),
+    );
+
+  // ── Toppings helpers ──────────────────────────────────────────────────────
+
+  const addTopping = () =>
+    setToppings((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), name: "", price: 0, isActive: true },
+    ]);
+
+  const removeTopping = (idx: number) =>
+    setToppings((prev) => prev.filter((_, i) => i !== idx));
+
+  const updateTopping = (idx: number, patch: Partial<ProductTopping>) =>
+    setToppings((prev) =>
+      prev.map((t, i) => (i === idx ? { ...t, ...patch } : t)),
+    );
 
   if (mode === "edit" && loadingProduct) {
     return <p className="text-sm text-foreground/50">Đang tải sản phẩm…</p>;
@@ -482,63 +529,212 @@ export function ProductEditorClient({ mode, productId }: Props) {
             </CardContent>
           </Card>
 
-          {/* Variant groups selector */}
+          {/* Option Groups inline editor */}
           <Card className="rounded-2xl border border-black/6 shadow-sm">
             <CardContent className="flex flex-col gap-4 p-6">
-              <h2 className="text-sm font-bold uppercase tracking-wide text-[#1a3c34]">
-                Biến thể
-              </h2>
-              <p className="text-xs text-foreground/50">
-                Chọn các nhóm biến thể áp dụng cho sản phẩm (Size, Đá, Độ
-                ngọt…). Quản lý danh sách tại{" "}
-                <Link
-                  href={ROUTES.CATEGORIES}
-                  className="underline hover:text-foreground/80"
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-bold uppercase tracking-wide text-[#1a3c34]">
+                  Nhóm tùy chọn
+                </h2>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="rounded-xl"
+                  onPress={addOptionGroup}
+                  isDisabled={pending}
                 >
-                  Danh mục → Biến thể
-                </Link>
-                .
+                  <Plus className="mr-1.5 size-3.5" />
+                  Thêm nhóm
+                </Button>
+              </div>
+              <p className="text-xs text-foreground/50">
+                Ví dụ: Size, Độ đá, Độ ngọt — khách phải chọn (selectionMin ≥ 1).
               </p>
-              {variantGroupsLoading ? (
-                <p className="text-sm text-foreground/40">Đang tải…</p>
-              ) : activeVariantGroups.length === 0 ? (
-                <p className="text-sm text-foreground/40">
-                  Chưa có biến thể nào — hãy tạo biến thể tại tab Biến thể
-                  trong trang Danh mục.
-                </p>
+              {optionGroups.length === 0 ? (
+                <p className="text-sm text-foreground/40">Chưa có nhóm tùy chọn.</p>
               ) : (
-                <ul className="flex flex-col gap-2">
-                  {activeVariantGroups.map((vg) => {
-                    const checked = variantGroupIds.includes(vg.id);
-                    return (
-                      <li
-                        key={vg.id}
-                        className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 transition-colors ${
-                          checked
-                            ? "border-[#71b394]/60 bg-[color-mix(in_oklab,#71b394_8%,white)]"
-                            : "border-black/8 hover:bg-black/[0.02]"
-                        }`}
-                        onClick={() => toggleVariantGroup(vg.id)}
-                      >
-                        <div
-                          className={`mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border-2 ${
-                            checked
-                              ? "border-[#1a3c34] bg-[#1a3c34]"
-                              : "border-black/25"
-                          }`}
+                <div className="flex flex-col gap-4">
+                  {optionGroups.map((og, gIdx) => (
+                    <div key={og.id} className="rounded-xl border border-black/8 p-4">
+                      <div className="flex items-start gap-2">
+                        <div className="flex min-w-0 flex-1 flex-col gap-3">
+                          <div className={adminFieldStack}>
+                            <Label className={adminLabelClassProduct}>Tên nhóm</Label>
+                            <Input
+                              fullWidth
+                              value={og.name}
+                              onChange={(e) => updateOptionGroup(gIdx, { name: e.target.value })}
+                              placeholder="Ví dụ: Size"
+                              className={`w-full ${adminInputClass}`}
+                              disabled={pending}
+                            />
+                          </div>
+                          <div className="flex gap-3">
+                            <div className={`flex-1 ${adminFieldStack}`}>
+                              <Label className={adminLabelClassProduct}>Chọn tối thiểu</Label>
+                              <Input
+                                fullWidth
+                                type="number"
+                                min={0}
+                                step={1}
+                                value={String(og.selectionMin)}
+                                onChange={(e) => updateOptionGroup(gIdx, { selectionMin: Number(e.target.value) || 0 })}
+                                className={`w-full ${adminInputClass}`}
+                                disabled={pending}
+                              />
+                            </div>
+                            <div className={`flex-1 ${adminFieldStack}`}>
+                              <Label className={adminLabelClassProduct}>Chọn tối đa</Label>
+                              <Input
+                                fullWidth
+                                type="number"
+                                min={1}
+                                step={1}
+                                value={String(og.selectionMax)}
+                                onChange={(e) => updateOptionGroup(gIdx, { selectionMax: Number(e.target.value) || 1 })}
+                                className={`w-full ${adminInputClass}`}
+                                disabled={pending}
+                              />
+                            </div>
+                          </div>
+                          <div className="flex flex-col gap-2">
+                            <Label className={adminLabelClassProduct}>Giá trị</Label>
+                            {og.values.map((val, vIdx) => (
+                              <div key={vIdx} className="flex items-center gap-2">
+                                <Input
+                                  fullWidth
+                                  value={val.label}
+                                  onChange={(e) => updateOptionValue(gIdx, vIdx, { label: e.target.value })}
+                                  placeholder="Nhãn (vd. Size L)"
+                                  className={`flex-1 ${adminInputClass}`}
+                                  disabled={pending}
+                                />
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  step={1000}
+                                  value={String(val.priceDelta)}
+                                  onChange={(e) => updateOptionValue(gIdx, vIdx, { priceDelta: Number(e.target.value) || 0 })}
+                                  placeholder="+0"
+                                  className={`w-28 ${adminInputClass}`}
+                                  disabled={pending}
+                                />
+                                {og.values.length > 1 ? (
+                                  <Button
+                                    isIconOnly
+                                    variant="ghost"
+                                    size="sm"
+                                    onPress={() => removeOptionValue(gIdx, vIdx)}
+                                    isDisabled={pending}
+                                  >
+                                    <Trash2 className="size-3.5" />
+                                  </Button>
+                                ) : null}
+                              </div>
+                            ))}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="w-fit rounded-xl"
+                              onPress={() => addOptionValue(gIdx)}
+                              isDisabled={pending}
+                            >
+                              <Plus className="mr-1.5 size-3.5" />
+                              Thêm giá trị
+                            </Button>
+                          </div>
+                        </div>
+                        <Button
+                          isIconOnly
+                          variant="ghost"
+                          size="sm"
+                          className="shrink-0 text-red-500 hover:bg-red-50"
+                          onPress={() => removeOptionGroup(gIdx)}
+                          isDisabled={pending}
                         >
-                          {checked && <Check className="size-3 text-white" />}
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold">{vg.name}</p>
-                          <p className="text-xs text-foreground/50">
-                            {vg.values.map((v) => v.label).join(" · ")}
-                          </p>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Toppings inline editor */}
+          <Card className="rounded-2xl border border-black/6 shadow-sm">
+            <CardContent className="flex flex-col gap-4 p-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-bold uppercase tracking-wide text-[#1a3c34]">
+                  Topping
+                </h2>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="rounded-xl"
+                  onPress={addTopping}
+                  isDisabled={pending}
+                >
+                  <Plus className="mr-1.5 size-3.5" />
+                  Thêm topping
+                </Button>
+              </div>
+              <p className="text-xs text-foreground/50">
+                Topping khách có thể thêm tuỳ ý (tùy chọn không bắt buộc).
+              </p>
+              {toppings.length === 0 ? (
+                <p className="text-sm text-foreground/40">Chưa có topping.</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {toppings.map((t, tIdx) => (
+                    <div key={t.id} className="flex items-center gap-2 rounded-xl border border-black/8 px-3 py-2">
+                      <Input
+                        fullWidth
+                        value={t.name}
+                        onChange={(e) => updateTopping(tIdx, { name: e.target.value })}
+                        placeholder="Tên topping"
+                        className={`flex-1 ${adminInputClass}`}
+                        disabled={pending}
+                      />
+                      <Input
+                        type="number"
+                        min={0}
+                        step={1000}
+                        value={String(t.price)}
+                        onChange={(e) => updateTopping(tIdx, { price: Number(e.target.value) || 0 })}
+                        placeholder="Giá"
+                        className={`w-28 ${adminInputClass}`}
+                        disabled={pending}
+                      />
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Switch
+                          isSelected={t.isActive}
+                          onChange={(v) => updateTopping(tIdx, { isActive: v })}
+                          isDisabled={pending}
+                          aria-label="Đang bán"
+                        >
+                          <Switch.Control>
+                            <Switch.Thumb />
+                          </Switch.Control>
+                        </Switch>
+                        <span className="text-xs text-foreground/50">
+                          {t.isActive ? "Bật" : "Tắt"}
+                        </span>
+                      </div>
+                      <Button
+                        isIconOnly
+                        variant="ghost"
+                        size="sm"
+                        className="shrink-0 text-red-500 hover:bg-red-50"
+                        onPress={() => removeTopping(tIdx)}
+                        isDisabled={pending}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
               )}
             </CardContent>
           </Card>

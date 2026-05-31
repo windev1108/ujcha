@@ -3,6 +3,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '@/store/auth.store';
 import { socketService } from '@/services/socket.service';
+import { locationService } from '@/services/location.service';
 import { useNewOrder, enqueueAvailableOrders } from '@/hooks/use-new-order';
 import { useOrders } from '@/hooks/use-orders';
 import { useOrdersStore } from '@/store/orders.store';
@@ -53,6 +54,8 @@ export default function RootLayout() {
 
     if (isAuthed) {
       socketService.connect();
+      // Always enable GPS when logged in so customers can always track the shipper
+      void locationService.enableGps().catch(() => {});
     } else {
       socketService.disconnect();
     }

@@ -76,10 +76,9 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { href: ROUTES.SHIPPING, label: "Phí vận chuyển", icon: MapPin, permission: "payment" },
 ];
 
-function initialsFromEmail(email: string | undefined) {
-  if (!email) return "AD";
-  const local = email.split("@")[0] ?? "A";
-  return local.slice(0, 2).toUpperCase();
+function initialsFromName(nameOrPhone: string | null | undefined) {
+  if (!nameOrPhone) return "AD";
+  return nameOrPhone.replace(/\s+/g, "").slice(0, 2).toUpperCase();
 }
 
 type SidebarPanelProps = {
@@ -90,8 +89,7 @@ type SidebarPanelProps = {
 function SidebarNavPanel({ pathname, onNavigate }: SidebarPanelProps) {
   const admin = useAuthStore((s) => s.admin);
 
-  const displayName =
-    admin?.email?.split("@")[0]?.replace(/\./g, " ") ?? "Admin";
+  const displayName = admin?.name?.split(" ")[0] ?? admin?.phone ?? "Admin";
   const roleLabel =
     admin?.role === "super_admin"
       ? "Super Admin"
@@ -181,7 +179,7 @@ function SidebarNavPanel({ pathname, onNavigate }: SidebarPanelProps) {
         <div className="flex items-center gap-3 rounded-2xl bg-[#f9fafb] p-3 ring-1 ring-black/4">
           <Avatar className="shrink-0" size="sm" {...({} as any)}>
             <Avatar.Fallback className="text-xs font-bold" {...({} as any)}>
-              {initialsFromEmail(admin?.email)}
+              {initialsFromName(admin?.name ?? admin?.phone)}
             </Avatar.Fallback>
           </Avatar>
           <div className="min-w-0 flex flex-1 flex-col gap-0.5">

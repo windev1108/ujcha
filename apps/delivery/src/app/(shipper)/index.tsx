@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Linking,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -12,9 +13,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { Bike, MapPin, Package, Inbox, CheckCircle, XCircle, ChevronRight } from '@/components/icons';
+import { Bike, MapPin, Package, Inbox, CheckCircle, XCircle, ChevronRight, Phone } from '@/components/icons';
+import { DateFilter, isInRange } from '@/components/date-filter';
+import type { DateRange } from '@/components/date-filter';
 import { useOrders } from '@/hooks/use-orders';
-import { useAuthStore } from '@/store/auth.store';
 import { locationService } from '@/services/location.service';
 import { shipperApi } from '@/services/api.service';
 import { haversineMeters } from '@/utils/distance';
@@ -42,12 +44,12 @@ const PRIMARY = '#1a3c34';
 const ACTIVE_STATUSES = ['confirmed', 'preparing', 'ready', 'picked_up', 'arrived', 'delivering'];
 
 const STATUS: Record<string, { label: string; color: string; bg: string; dot: string }> = {
-  confirmed:  { label: 'Đã xác nhận',   color: '#1d4ed8', bg: '#eff6ff', dot: '#3b82f6' },
-  preparing:  { label: 'Đang pha chế',  color: '#7e22ce', bg: '#faf5ff', dot: '#a855f7' },
-  ready:      { label: 'Sẵn sàng giao', color: '#0f766e', bg: '#f0fdfa', dot: '#14b8a6' },
-  picked_up:  { label: 'Đã lấy hàng',  color: '#c2410c', bg: '#fff7ed', dot: '#f97316' },
-  arrived:    { label: 'Đến điểm giao', color: '#0369a1', bg: '#f0f9ff', dot: '#0ea5e9' },
-  delivering: { label: 'Đang giao',     color: '#0369a1', bg: '#f0f9ff', dot: '#0ea5e9' },
+  confirmed: { label: 'Đã xác nhận', color: '#1d4ed8', bg: '#eff6ff', dot: '#3b82f6' },
+  preparing: { label: 'Đang pha chế', color: '#7e22ce', bg: '#faf5ff', dot: '#a855f7' },
+  ready: { label: 'Sẵn sàng giao', color: '#0f766e', bg: '#f0fdfa', dot: '#14b8a6' },
+  picked_up: { label: 'Đã lấy hàng', color: '#c2410c', bg: '#fff7ed', dot: '#f97316' },
+  arrived: { label: 'Đến điểm giao', color: '#0369a1', bg: '#f0f9ff', dot: '#0ea5e9' },
+  delivering: { label: 'Đang giao', color: '#0369a1', bg: '#f0f9ff', dot: '#0ea5e9' },
 };
 
 const STATUS_PRIORITY: Record<string, number> = {
@@ -118,7 +120,16 @@ function OrderCard({ order, onPress, distM }: { order: Order; onPress: () => voi
       <View style={s.cardRow2}>
         <View style={s.customerCol}>
           <Text style={s.customerName} numberOfLines={1}>{name}</Text>
-          {phone ? <Text style={s.customerPhone}>{phone}</Text> : null}
+          {phone ? (
+            <Pressable
+              style={s.phoneChip}
+              onPress={(e) => { e.stopPropagation?.(); Linking.openURL(`tel:${phone.replace(/\s/g, '')}`); }}
+              hitSlop={6}
+            >
+              <Phone size={11} color="#0369a1" />
+              <Text style={s.customerPhone}>{phone}</Text>
+            </Pressable>
+          ) : null}
         </View>
         <View style={s.amountCol}>
           <Text style={s.amount}>{Number(order.finalAmount).toLocaleString('vi-VN')}đ</Text>
@@ -136,8 +147,8 @@ function OrderCard({ order, onPress, distM }: { order: Order; onPress: () => voi
             {order.status === 'arrived' && <MapPin size={13} color="#0f766e" />}
             <Text style={s.actionStripText}>
               {order.status === 'ready' ? 'Đến lấy hàng' :
-               order.status === 'picked_up' ? 'Đang trên đường' :
-               'Đã đến điểm giao'}
+                order.status === 'picked_up' ? 'Đang trên đường' :
+                  'Đã đến điểm giao'}
             </Text>
             <ChevronRight size={13} color="#0f766e" />
           </View>
@@ -196,10 +207,13 @@ function AvailableOrderCard({
   );
 }
 
-function HistoryCard({ item }: { item: HistoryOrder }) {
+function HistoryCard({ item, onPress }: { item: HistoryOrder; onPress: () => void }) {
   const done = item.status === 'completed';
   return (
-    <View style={[s.histCard, !done && s.histCardCancelled]}>
+    <Pressable
+      style={({ pressed }) => [s.histCard, !done && s.histCardCancelled, pressed && { opacity: 0.82 }]}
+      onPress={onPress}
+    >
       <View style={s.histRow}>
         <View style={[s.histIconWrap, { backgroundColor: done ? '#f0fdf4' : '#fff5f5' }]}>
           {done ? <CheckCircle size={18} color="#15803d" /> : <XCircle size={18} color="#c45c5c" />}
@@ -220,8 +234,9 @@ function HistoryCard({ item }: { item: HistoryOrder }) {
             </Text>
           </View>
         </View>
+        <ChevronRight size={14} color="#d0d0d0" />
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -241,9 +256,9 @@ export default function OrdersScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { orders, loading, fetchOrders } = useOrders();
-  const shipper = useAuthStore((s) => s.shipper);
 
   const [activeTab, setActiveTab] = useState<Tab>('active');
+  const [dateRange, setDateRange] = useState<DateRange | null>(null);
   const [myLat, setMyLat] = useState<number | null>(null);
   const [myLng, setMyLng] = useState<number | null>(null);
   const [history, setHistory] = useState<HistoryOrder[]>([]);
@@ -251,10 +266,10 @@ export default function OrdersScreen() {
   const [availableOrders, setAvailableOrders] = useState<NewDeliveryOrderPayload[]>([]);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
 
-  const firstName = shipper?.name?.split(' ').slice(-1)[0] ?? '—';
-  const initial = shipper?.name?.[0]?.toUpperCase() ?? '?';
-
-  const activeOrders = orders.filter((o) => ACTIVE_STATUSES.includes(o.status));
+  const activeOrders = orders.filter(
+    (o) => ACTIVE_STATUSES.includes(o.status) && isInRange(o.createdAt, dateRange),
+  );
+  const filteredHistory = history.filter((h) => isInRange(h.updatedAt, dateRange));
 
   // ── Data fetchers ──────────────────────────────────────────────────────────
 
@@ -276,6 +291,14 @@ export default function OrdersScreen() {
   // ── Socket listeners for available orders ─────────────────────────────────
 
   useEffect(() => {
+    // New order arrives → add to list immediately so dismissing modal still shows it
+    const newOrderHandler = (data: NewDeliveryOrderPayload) => {
+      setAvailableOrders((prev) => {
+        if (prev.some((o) => o.orderId === data.orderId)) return prev;
+        return [data, ...prev];
+      });
+    };
+
     const takenHandler = ({ orderId }: { orderId: string }) =>
       setAvailableOrders((prev) => prev.filter((o) => o.orderId !== orderId));
 
@@ -285,9 +308,11 @@ export default function OrdersScreen() {
       }
     };
 
+    socketService.on<NewDeliveryOrderPayload>('order:new-delivery', newOrderHandler);
     socketService.on<{ orderId: string }>('order:delivery-taken', takenHandler);
     socketService.on<{ orderId: string; status: string }>('order:status', statusHandler);
     return () => {
+      socketService.off('order:new-delivery', newOrderHandler as (...args: unknown[]) => void);
       socketService.off('order:delivery-taken', takenHandler as (...args: unknown[]) => void);
       socketService.off('order:status', statusHandler as (...args: unknown[]) => void);
     };
@@ -348,9 +373,9 @@ export default function OrdersScreen() {
     });
 
   const tabs: { key: Tab; label: string; count: number }[] = [
-    { key: 'available', label: 'Chờ nhận', count: availableOrders.length },
+    { key: 'available', label: 'Free pick',  count: availableOrders.length },
     { key: 'active',    label: 'Đang xử lý', count: activeOrders.length },
-    { key: 'history',   label: 'Đã giao', count: history.filter((h) => h.status === 'completed').length },
+    { key: 'history',   label: 'Đã giao',    count: filteredHistory.filter((h) => h.status === 'completed').length },
   ];
 
   const isRefreshing = loading || histLoading;
@@ -415,10 +440,16 @@ export default function OrdersScreen() {
         </View>
       );
     }
-    if (!history.length) {
-      return <EmptyState label="Chưa có lịch sử giao hàng" />;
+    if (!filteredHistory.length) {
+      return <EmptyState label={history.length ? 'Không có đơn trong khoảng này' : 'Chưa có lịch sử giao hàng'} />;
     }
-    return history.map((item) => <HistoryCard key={item.id} item={item} />);
+    return filteredHistory.map((item) => (
+      <HistoryCard
+        key={item.id}
+        item={item}
+        onPress={() => router.push(`/(shipper)/history/${item.id}`)}
+      />
+    ));
   }
 
   // ── JSX ──────────────────────────────────────────────────────────────────
@@ -426,18 +457,10 @@ export default function OrdersScreen() {
   return (
     <View style={s.root}>
 
-      {/* ── Header (fills behind status bar using insets.top) ── */}
+      {/* ── Header ── */}
       <View style={[s.header, { paddingTop: insets.top + 10 }]}>
-        <View>
-          <Text style={s.eyebrow}>SHIPPER PORTAL</Text>
-          <Text style={s.greeting}>Xin chào, {firstName} 👋</Text>
-        </View>
-        <View style={s.avatarWrap}>
-          <View style={s.avatar}>
-            <Text style={s.avatarText}>{initial}</Text>
-          </View>
-          <View style={s.onlineDot} />
-        </View>
+        <Text style={s.eyebrow}>SHIPPER PORTAL</Text>
+        <Text style={s.headerTitle}>Đơn hàng</Text>
       </View>
 
       {/* ── Tab bar ── */}
@@ -462,6 +485,11 @@ export default function OrdersScreen() {
           );
         })}
       </View>
+
+      {/* ── Date filter — hidden on available tab ── */}
+      {activeTab !== 'available' && (
+        <DateFilter value={dateRange} onChange={setDateRange} />
+      )}
 
       {/* ── Tab content ── */}
       <ScrollView
@@ -491,17 +519,9 @@ export default function OrdersScreen() {
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#f7f7f7' },
 
-  // Header — no SafeAreaView; paddingTop is set dynamically from insets
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: PRIMARY, paddingHorizontal: 20, paddingBottom: 16,
-  },
-  eyebrow: { fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.5)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 3 },
-  greeting: { fontSize: 22, fontWeight: '700', color: '#fff', letterSpacing: -0.3 },
-  avatarWrap: { position: 'relative' },
-  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 2, borderColor: '#99d6b3', alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 18, fontWeight: '700', color: '#fff' },
-  onlineDot: { position: 'absolute', bottom: 0, right: 0, width: 12, height: 12, borderRadius: 6, backgroundColor: '#22c55e', borderWidth: 2, borderColor: PRIMARY },
+  header: { backgroundColor: PRIMARY, paddingHorizontal: 20, paddingBottom: 16, gap: 2 },
+  eyebrow: { fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.5)', letterSpacing: 2, textTransform: 'uppercase' },
+  headerTitle: { fontSize: 22, fontWeight: '700', color: '#fff', letterSpacing: -0.3 },
 
   // Tab bar
   tabBar: {
@@ -556,7 +576,8 @@ const s = StyleSheet.create({
   cardRow2: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
   customerCol: { flex: 1, gap: 2 },
   customerName: { fontSize: 13, fontWeight: '600', color: '#1a1a1a' },
-  customerPhone: { fontSize: 12, color: '#717171' },
+  phoneChip: { flexDirection: 'row', alignItems: 'center', gap: 3, alignSelf: 'flex-start' },
+  customerPhone: { fontSize: 12, color: '#0369a1', fontWeight: '500' },
   amountCol: { alignItems: 'flex-end', gap: 4 },
   amount: { fontSize: 16, fontWeight: '700', color: PRIMARY },
   itemsPill: { backgroundColor: '#f0fdf4', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 100 },

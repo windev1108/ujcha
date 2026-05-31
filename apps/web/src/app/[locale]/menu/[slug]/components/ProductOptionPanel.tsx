@@ -10,21 +10,22 @@ import { useAuthStore } from "@/store/auth-store";
 import { useRouter } from "@/i18n/navigation";
 import { ROUTES } from "@/lib/routes";
 import type { ApiProduct } from "@/services/product/types";
-import { useToppingsQuery } from "@/services/topping/hooks";
 import {
   normalizeOptionGroups,
   computeOptionSurcharge,
   formatVnd,
 } from "@/lib/product-options";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
+import { getDisplayName, getValueLabel, getDisplayDescription } from "@/lib/product-name";
 
 type Props = { product: ApiProduct };
 
 export function ProductOptionPanel({ product }: Props) {
   const t = useTranslations();
+  const locale = useLocale();
   const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
-  const { data: toppings = [] } = useToppingsQuery();
+  const toppings = (product.toppings ?? []).filter((t) => t.isActive !== false);
 
   const optionGroups = useMemo(
     () => normalizeOptionGroups(product.optionGroups),
@@ -63,18 +64,15 @@ export function ProductOptionPanel({ product }: Props) {
     () =>
       toppings
         .filter((t) => selectedToppings.has(t.id))
-        .reduce((s, t) => s + parseFloat(t.price), 0),
+        .reduce((s, t) => s + t.price, 0),
     [toppings, selectedToppings],
   );
 
   const unitPrice = discountedBase + optionSurcharge + toppingTotal;
   const totalPrice = unitPrice * quantity;
 
-  const MAX_TOPPINGS = 2;
-
   function toggleTopping(id: string, checked: boolean) {
     setSelectedToppings((prev) => {
-      if (checked && prev.size >= MAX_TOPPINGS) return prev;
       const next = new Set(prev);
       checked ? next.add(id) : next.delete(id);
       return next;
@@ -105,7 +103,7 @@ export function ProductOptionPanel({ product }: Props) {
         },
         toppingSnapshots: toppings
           .filter((t) => selectedToppings.has(t.id))
-          .map((t) => ({ toppingId: t.id, topping: { id: t.id, name: t.name, price: t.price } })),
+          .map((t) => ({ toppingId: t.id, topping: { id: t.id, name: t.name, price: String(t.price), nameTranslation: t.nameTranslation ?? {} } })),
       },
       {
         onSuccess: () => {
@@ -127,7 +125,7 @@ export function ProductOptionPanel({ product }: Props) {
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <span className="rounded-full bg-surface-secondary px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-muted">
-            {product.category.name}
+            {getDisplayName(product.category, locale)}
           </span>
           {product.isSoldOut && (
             <span className="rounded-full bg-black/8 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-muted">
@@ -142,7 +140,7 @@ export function ProductOptionPanel({ product }: Props) {
         </div>
 
         <h1 className="text-3xl font-semibold leading-tight tracking-tight text-foreground sm:text-4xl">
-          {product.name}
+          {getDisplayName(product, locale)}
         </h1>
 
         {/* Price row */}
@@ -164,9 +162,9 @@ export function ProductOptionPanel({ product }: Props) {
           )}
         </div>
 
-        {product.description && (
+        {getDisplayDescription(product, locale) && (
           <p className="text-sm leading-relaxed text-foreground/65 sm:text-[15px]">
-            {product.description}
+            {getDisplayDescription(product, locale)}
           </p>
         )}
       </div>
@@ -184,7 +182,7 @@ export function ProductOptionPanel({ product }: Props) {
               {optionGroups.map((grp) => (
                 <div key={grp.id} className="space-y-2.5">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-muted">
-                    {grp.name}
+                    {getDisplayName(grp, locale)}
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {grp.values.map((v) => {
@@ -202,7 +200,7 @@ export function ProductOptionPanel({ product }: Props) {
                               : "border-black/10 bg-white text-foreground hover:border-black/20"
                           }`}
                         >
-                          {v.label}
+                          {getValueLabel(v, locale)}
                           {v.priceDelta > 0 && (
                             <span className={`text-xs tabular-nums ${isSelected ? "text-kun-products-forest/70" : "text-muted"}`}>
                               +{formatVnd(v.priceDelta)}
@@ -227,11 +225,11 @@ export function ProductOptionPanel({ product }: Props) {
                   </p>
                   <p className="mt-0.5 text-xs text-foreground/50">{t("topping_desc")}</p>
                 </div>
-                <span className={`shrink-0 text-[11px] font-semibold tabular-nums ${
-                  selectedToppings.size >= MAX_TOPPINGS ? "text-kun-products-forest" : "text-muted"
-                }`}>
-                  {selectedToppings.size}/{MAX_TOPPINGS}
-                </span>
+                {selectedToppings.size > 0 && (
+                  <span className="shrink-0 text-[11px] font-semibold tabular-nums text-kun-products-forest">
+                    {selectedToppings.size} đã chọn
+                  </span>
+                )}
               </div>
               <div
                 className="max-h-[220px] space-y-1.5 overflow-y-auto scroll-smooth rounded-2xl border border-black/[0.07] bg-surface-secondary/40 p-2 pr-1"
@@ -241,29 +239,24 @@ export function ProductOptionPanel({ product }: Props) {
               >
                 {toppings.map((top) => {
                   const isActive = selectedToppings.has(top.id);
-                  const isDisabled = !isActive && selectedToppings.size >= MAX_TOPPINGS;
                   return (
                     <label
                       key={top.id}
                       role="option"
                       aria-selected={isActive}
-                      aria-disabled={isDisabled}
-                      className={`flex items-center gap-2.5 rounded-xl border px-3 py-2 transition-all ${
+                      className={`flex items-center gap-2.5 rounded-xl border px-3 py-2 transition-all cursor-pointer ${
                         isActive
-                          ? "cursor-pointer border-kun-products-forest/35 bg-kun-mint/15"
-                          : isDisabled
-                          ? "cursor-not-allowed border-transparent bg-white opacity-35"
-                          : "cursor-pointer border-transparent bg-white hover:border-black/8"
+                          ? "border-kun-products-forest/35 bg-kun-mint/15"
+                          : "border-transparent bg-white hover:border-black/8"
                       }`}
                     >
                       <Checkbox
                         isSelected={isActive}
-                        isDisabled={isDisabled}
                         onChange={(v) => toggleTopping(top.id, v)}
-                        aria-label={top.name}
+                        aria-label={getDisplayName(top, locale)}
                       />
                       <span className={`min-w-0 flex-1 text-sm font-medium ${isActive ? "text-kun-products-forest" : "text-foreground"}`}>
-                        {top.name}
+                        {getDisplayName(top, locale)}
                       </span>
                       <span className={`shrink-0 text-xs tabular-nums ${isActive ? "font-bold text-kun-products-forest" : "text-foreground/55"}`}>
                         +{formatVnd(top.price)}
@@ -272,11 +265,6 @@ export function ProductOptionPanel({ product }: Props) {
                   );
                 })}
               </div>
-              {selectedToppings.size >= MAX_TOPPINGS && (
-                <p className="text-[11px] text-kun-products-forest/70">
-                  {t("max_toppings_msg")}
-                </p>
-              )}
             </div>
           )}
         </div>

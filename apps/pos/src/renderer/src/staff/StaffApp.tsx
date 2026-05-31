@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { ClipboardList, Settings, Monitor, LogOut, Bell, Bot } from 'lucide-react'
 import { io } from 'socket.io-client'
 import { usePosStore } from '../store/pos-store'
-import { fetchCategories, fetchProducts, fetchTables, fetchPaymentConfig, API_URL, fetchToppings, fetchTtsConfig } from '../api'
+import { fetchCategories, fetchProducts, fetchTables, fetchPaymentConfig, API_URL, fetchTtsConfig } from '../api'
 import type { Product, PosConfig, CustomerUpdate } from '../types/common'
 import { DEFAULT_CONFIG, DEFAULT_BILL_CONFIG, DEFAULT_LABEL_CONFIG } from '../types/common'
 import type { BillConfig, LabelConfig } from '../../../preload'
@@ -53,7 +53,7 @@ const eAPI = (window as unknown as {
 }).electronAPI
 
 export function StaffApp() {
-  const { isLoggedIn, posConfig, setPosConfig, setCategories, setProducts, setIsFetching, setTables, setPaymentConfig, setToppings } = usePosStore()
+  const { isLoggedIn, posConfig, setPosConfig, setCategories, setProducts, setIsFetching, setTables, setPaymentConfig } = usePosStore()
   const cart = usePosStore((s) => s.cart)
   const [booted, setBooted] = useState(false)
   const [checkoutOpen, setCheckoutOpen] = useState(false)
@@ -192,8 +192,8 @@ export function StaffApp() {
     if (!isLoggedIn) return
     const load = async () => {
       setIsFetching(true)
-      const [cats, prods, tabs, pay, tops, tts] = await Promise.allSettled([
-        fetchCategories(), fetchProducts(), fetchTables(), fetchPaymentConfig(), fetchToppings(), fetchTtsConfig()
+      const [cats, prods, tabs, pay, tts] = await Promise.allSettled([
+        fetchCategories(), fetchProducts(), fetchTables(), fetchPaymentConfig(), fetchTtsConfig()
       ])
       if (cats.status === 'fulfilled') setCategories(cats.value)
       if (prods.status === 'fulfilled') {
@@ -202,7 +202,6 @@ export function StaffApp() {
       }
       if (tabs.status === 'fulfilled') setTables(tabs.value)
       if (pay.status === 'fulfilled') setPaymentConfig(pay.value)
-      if (tops.status === 'fulfilled') setToppings(tops.value)
       if (tts.status === 'fulfilled') {
         const fresh = usePosStore.getState().posConfig
         setPosConfig({ ...fresh, ttsConfig: { ...tts.value, token: '' } })

@@ -24,12 +24,15 @@ import {
 } from "@/lib/admin-form-classes";
 import { adminKeys } from "@/services/admin/keys";
 import {
-  createAdmin,
   deleteAdmin,
   fetchAdmins,
   updateAdmin,
 } from "@/services/admin/admin-management-api";
-import { fetchStaffWithProfiles } from "@/services/admin/hrm-api";
+import {
+  fetchStaffWithProfiles,
+  createHrmStaff,
+  resetHrmStaffPassword,
+} from "@/services/admin/hrm-api";
 import type { AdminRole, AdminRow, StaffWithFaceProfile } from "@/services/admin/types";
 import { useAuthStore } from "@/store/auth-store";
 
@@ -39,7 +42,150 @@ import { StaffPermissionsModal } from "./StaffPermissionsModal";
 
 const PAGE_SIZE = 10;
 
-type FaceEntry = StaffWithFaceProfile["faceProfile"];
+function CreateStaffModal({
+  isOpen,
+  onClose,
+  onSuccess,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: (plainPassword: string, phone: string) => void;
+}) {
+  const qc = useQueryClient();
+  const [phone, setPhone] = useState("");
+  const [name, setName] = useState("");
+  const [role, setRole] = useState<AdminRole>("staff");
+  const [password, setPassword] = useState("");
+  const [useRandom, setUseRandom] = useState(false);
+
+  const createMut = useMutation({
+    mutationFn: () =>
+      createHrmStaff({
+        phone: phone.trim(),
+        name: name.trim(),
+        role,
+        password: useRandom ? undefined : password.trim() || undefined,
+      }),
+    onSuccess: (data) => {
+      void qc.invalidateQueries({ queryKey: ["admin", "admins"] });
+      void qc.invalidateQueries({ queryKey: ["admin", "hrm", "staff"] });
+      onSuccess(data.plainPassword, phone.trim());
+      setPhone(""); setName(""); setPassword(""); setUseRandom(false);
+    },
+  });
+
+  if (!isOpen) return null;
+
+  const canSubmit = phone.trim().length >= 9 && name.trim().length > 0 && (useRandom || password.trim().length >= 6);
+
+  return (
+    <Modal.Root isOpen={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <Modal.Backdrop>
+        <Modal.Container placement="center" size="md">
+          <Modal.Dialog className="max-w-md rounded-2xl border border-black/6 p-0 shadow-xl">
+            <Modal.Header className="border-b border-black/6 px-5 py-4">
+              <Modal.Heading>Thêm nhân viên mới</Modal.Heading>
+            </Modal.Header>
+            <Modal.Body className="flex flex-col gap-4 px-5 py-5">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Số điện thoại *</label>
+                <Input type="tel" placeholder="0901234567" value={phone} onChange={(e) => setPhone(e.target.value)} className="rounded-xl border border-black/10 bg-white" disabled={createMut.isPending} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Họ tên *</label>
+                <Input placeholder="Nguyễn Văn A" value={name} onChange={(e) => setName(e.target.value)} className="rounded-xl border border-black/10 bg-white" disabled={createMut.isPending} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Vai trò</label>
+                <Select value={role} onChange={(key) => { if (key) setRole(key as AdminRole); }}>
+                  <Select.Trigger className={adminSelectTriggerCompactClass}><Select.Value className={adminSelectValueCompactClass} /><Select.Indicator /></Select.Trigger>
+                  <Select.Popover><ListBox className="min-w-(--trigger-width) outline-none">
+                    <ListBox.Item id="staff" textValue="Staff" className="rounded-lg text-sm">Staff</ListBox.Item>
+                    <ListBox.Item id="super_admin" textValue="Super Admin" className="rounded-lg text-sm">Super Admin</ListBox.Item>
+                  </ListBox></Select.Popover>
+                </Select>
+              </div>
+              <div className="border-t border-black/6 pt-3">
+                <label className="flex cursor-pointer items-center gap-2 text-sm">
+                  <input type="checkbox" checked={useRandom} onChange={(e) => setUseRandom(e.target.checked)} className="rounded" />
+                  <span>Tự động tạo mật khẩu ngẫu nhiên</span>
+                </label>
+                {!useRandom && (
+                  <div className="mt-3 flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Mật khẩu *</label>
+                    <Input type="password" placeholder="Tối thiểu 6 ký tự" value={password} onChange={(e) => setPassword(e.target.value)} className="rounded-xl border border-black/10 bg-white" disabled={createMut.isPending} />
+                  </div>
+                )}
+              </div>
+              {createMut.isError && (
+                <p className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-700">
+                  {(createMut.error as { response?: { data?: { message?: string } } }).response?.data?.message ?? "Tạo nhân viên thất bại."}
+                </p>
+              )}
+            </Modal.Body>
+            <Modal.Footer className="flex justify-end gap-2 border-t border-black/6 px-5 py-4">
+              <Button variant="ghost" onPress={onClose} isDisabled={createMut.isPending}>Hủy</Button>
+              <Button className="rounded-xl bg-[#1a3c34] font-semibold text-white" onPress={() => createMut.mutate()} isDisabled={!canSubmit || createMut.isPending}>
+                {createMut.isPending ? "Đang tạo…" : "Tạo nhân viên"}
+              </Button>
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+    </Modal.Root>
+  );
+}
+
+function PasswordRevealModal({
+  plainPassword,
+  phone,
+  onClose,
+}: {
+  plainPassword: string;
+  phone: string;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = () => {
+    void navigator.clipboard.writeText(plainPassword).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <Modal.Root isOpen onOpenChange={(open) => { if (!open) onClose(); }}>
+      <Modal.Backdrop>
+        <Modal.Container placement="center" size="sm">
+          <Modal.Dialog className="max-w-sm rounded-2xl border border-black/6 p-0 shadow-xl">
+            <Modal.Header className="border-b border-black/6 px-5 py-4">
+              <Modal.Heading>Nhân viên đã được tạo</Modal.Heading>
+            </Modal.Header>
+            <Modal.Body className="flex flex-col gap-3 px-5 py-5">
+              <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2.5 text-sm text-emerald-700 ring-1 ring-emerald-200">
+                <CheckCircle2 className="size-4 shrink-0" />
+                Đã gửi SMS tài khoản đến <strong>{phone}</strong>
+              </div>
+              <p className="text-sm text-foreground/60">Lưu lại mật khẩu bên dưới phòng trường hợp SMS không đến.</p>
+              <div className="flex items-center gap-2 rounded-xl border border-black/10 bg-[#f3f4f6] px-4 py-3">
+                <span className="flex-1 font-mono text-base font-bold tracking-wider text-foreground">{plainPassword}</span>
+                <Button size="sm" variant="ghost" onPress={copy} className="text-[#1a3c34]">
+                  {copied ? <CheckCircle2 className="size-4" /> : "Copy"}
+                </Button>
+              </div>
+            </Modal.Body>
+            <Modal.Footer className="flex justify-end px-5 py-4">
+              <Button className="rounded-xl bg-[#1a3c34] font-semibold text-white" onPress={onClose}>Đã lưu, đóng</Button>
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+    </Modal.Root>
+  );
+}
+
+type FaceEntry = StaffWithFaceProfile["faceProfile"] | { imageUrl: string | null } | null | undefined;
 
 function usePaginationWindow(current: number, totalPages: number, max = 5) {
   return useMemo(() => {
@@ -70,24 +216,21 @@ function formatRelativeTime(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("vi-VN");
 }
 
-function StaffAvatar({ admin, faceEntry }: { admin: AdminRow; faceEntry: FaceEntry | undefined }) {
-  const initials = (admin.name ?? admin.email).slice(0, 2).toUpperCase();
+function StaffAvatar({ admin, faceEntry }: { admin: AdminRow; faceEntry: FaceEntry }) {
+  const initials = (admin.name ?? admin.phone ?? "AD").slice(0, 2).toUpperCase();
   return (
     <div className="relative size-10 shrink-0">
       {faceEntry?.imageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={faceEntry.imageUrl}
-          alt={admin.name ?? admin.email}
+          alt={admin.name ?? admin.phone ?? "Staff"}
           className="size-10 rounded-full object-cover object-center ring-1 ring-black/8"
         />
       ) : (
         <div className="flex size-10 items-center justify-center rounded-full bg-[color-mix(in_oklab,#1a3c34_10%,white)] text-sm font-bold text-[#1a3c34] ring-1 ring-black/8">
           {initials}
         </div>
-      )}
-      {admin.googleId && (
-        <span className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full bg-emerald-500 ring-2 ring-white" />
       )}
     </div>
   );
@@ -105,6 +248,8 @@ export function StaffTab() {
   const [editTarget, setEditTarget] = useState<AdminRow | null>(null);
   const [faceTarget, setFaceTarget] = useState<StaffWithFaceProfile | null>(null);
   const [permTarget, setPermTarget] = useState<StaffWithFaceProfile | null>(null);
+  const [showCreateStaff, setShowCreateStaff] = useState(false);
+  const [revealInfo, setRevealInfo] = useState<{ password: string; phone: string } | null>(null);
   const formModal = useOverlayState();
 
   useEffect(() => {
@@ -140,14 +285,6 @@ export function StaffTab() {
     return m;
   }, [faceQ.data]);
 
-  const createMut = useMutation({
-    mutationFn: createAdmin,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["admin", "admins"] });
-      formModal.close();
-    },
-  });
-
   const updateMut = useMutation({
     mutationFn: ({ id, body }: { id: string; body: { role: AdminRole; name?: string; phone?: string; address?: string } }) =>
       updateAdmin(id, body),
@@ -169,21 +306,13 @@ export function StaffTab() {
         id: editTarget.id,
         body: { role: data.role, name: data.name, phone: data.phone, address: data.address },
       });
-    } else {
-      createMut.mutate({
-        email: data.email,
-        role: data.role,
-        name: data.name,
-        phone: data.phone,
-        address: data.address,
-      });
     }
   };
 
   const handleDelete = async (admin: AdminRow) => {
     const ok = await confirm({
       title: "Xóa nhân viên?",
-      description: `Xóa tài khoản "${admin.email}"? Hành động không thể hoàn tác.`,
+      description: `Xóa tài khoản "${admin.name ?? admin.phone ?? admin.id}"? Hành động không thể hoàn tác.`,
       tone: "danger",
       confirmLabel: "Xóa",
     });
@@ -194,6 +323,7 @@ export function StaffTab() {
     id: admin.id,
     email: admin.email,
     role: admin.role,
+    isActive: admin.isActive,
     name: admin.name,
     phone: admin.phone,
     address: admin.address,
@@ -253,7 +383,7 @@ export function StaffTab() {
             </div>
             <Button
               type="button"
-              onPress={() => { setEditTarget(null); formModal.open(); }}
+              onPress={() => setShowCreateStaff(true)}
               className="shrink-0 rounded-full bg-[#1a3c34] px-5 font-semibold text-white"
             >
               <Plus className="mr-2 size-4" />
@@ -311,12 +441,12 @@ export function StaffTab() {
                             <StaffAvatar admin={admin} faceEntry={faceEntry} />
                             <div className="min-w-0">
                               <p className="font-semibold text-foreground">
-                                {admin.name ?? admin.email.split("@")[0]}
+                                {admin.name ?? admin.phone ?? "—"}
                                 {isSelf && (
                                   <span className="ml-2 text-xs font-normal text-foreground/45">(Bạn)</span>
                                 )}
                               </p>
-                              <p className="text-xs text-foreground/50">{admin.email}</p>
+                              <p className="text-xs text-foreground/50">{admin.phone ?? admin.email ?? "—"}</p>
                               <p className="mt-0.5 text-[11px] text-foreground/35">{formatRelativeTime(admin.createdAt)}</p>
                             </div>
                           </div>
@@ -376,8 +506,8 @@ export function StaffTab() {
                               </span>
                             )}
                             <span className="inline-flex items-center gap-1.5 text-xs text-foreground/50">
-                              <span className={`size-2 shrink-0 rounded-full ${admin.googleId ? "bg-emerald-500" : "bg-zinc-300"}`} />
-                              {admin.googleId ? "Google" : "Chưa liên kết"}
+                              <span className={`size-2 shrink-0 rounded-full ${admin.isActive ? "bg-emerald-500" : "bg-zinc-300"}`} />
+                              {admin.isActive ? "Đang hoạt động" : "Vô hiệu hóa"}
                             </span>
                           </div>
                         </Table.Cell>
@@ -478,21 +608,21 @@ export function StaffTab() {
           <Modal.Container placement="center" size="md" scroll="inside">
             <Modal.Dialog className="max-w-md rounded-2xl border border-black/6 p-0 shadow-xl">
               <AdminFormModal
-                mode={editTarget ? "edit" : "create"}
+                mode="edit"
                 initial={
                   editTarget
                     ? {
-                        email: editTarget.email,
+                        email: editTarget.email ?? "",
                         role: editTarget.role,
                         name: editTarget.name ?? "",
                         phone: editTarget.phone ?? "",
                         address: editTarget.address ?? "",
                       }
-                    : undefined
+                    : { email: "", role: "staff", name: "", phone: "", address: "" }
                 }
                 onSave={handleSave}
                 onClose={() => { formModal.close(); setEditTarget(null); }}
-                isPending={createMut.isPending || updateMut.isPending}
+                isPending={updateMut.isPending}
               />
             </Modal.Dialog>
           </Modal.Container>
@@ -516,6 +646,25 @@ export function StaffTab() {
         isOpen={permTarget !== null}
         onClose={() => setPermTarget(null)}
       />
+
+      {/* Create staff modal (phone + password) */}
+      <CreateStaffModal
+        isOpen={showCreateStaff}
+        onClose={() => setShowCreateStaff(false)}
+        onSuccess={(plain, phone) => {
+          setShowCreateStaff(false);
+          setRevealInfo({ password: plain, phone });
+        }}
+      />
+
+      {/* Password reveal after creation */}
+      {revealInfo !== null && (
+        <PasswordRevealModal
+          plainPassword={revealInfo.password}
+          phone={revealInfo.phone}
+          onClose={() => setRevealInfo(null)}
+        />
+      )}
     </div>
   );
 }

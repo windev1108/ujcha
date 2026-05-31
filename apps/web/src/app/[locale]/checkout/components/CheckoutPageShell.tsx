@@ -22,6 +22,7 @@ import { normalizeOptionGroups, computeOptionSurcharge } from "@/lib/product-opt
 import { ROUTES } from "@/lib/routes";
 import { useAuthStore } from "@/store/auth-store";
 import { VoucherSection } from "./VoucherSection";
+import { useTranslations } from "next-intl";
 
 function formatVnd(amount: number) {
   return new Intl.NumberFormat("vi-VN").format(Math.round(amount)) + "đ";
@@ -50,6 +51,7 @@ function CheckoutSkeleton() {
 }
 
 export function CheckoutPageShell() {
+  const t = useTranslations();
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -151,7 +153,7 @@ export function CheckoutPageShell() {
             : base;
         const groups = normalizeOptionGroups(item.product.optionGroups);
         const optionSurcharge = computeOptionSurcharge(groups, item.selectedOptions);
-        const toppingTotal = item.toppings.reduce(
+        const toppingTotal = (item.toppings ?? []).reduce(
           (s, t) => s + parseFloat(t.topping.price),
           0,
         );
@@ -163,6 +165,12 @@ export function CheckoutPageShell() {
   // Resolve lat/lng for shipping estimate from selected address or form
   const isDelivery = tab === CHECKOUT_TAB.DELIVERY;
   const isNewAddress = selectedAddressId === "__new__" || savedAddresses.length === 0;
+
+  const hasValidDeliveryAddress = useMemo(() => {
+    if (!isDelivery) return true;
+    if (isNewAddress) return !!deliveryForm.fullAddress.trim();
+    return !!selectedAddressId;
+  }, [isDelivery, isNewAddress, deliveryForm.fullAddress, selectedAddressId]);
 
   const shippingLat = useMemo(() => {
     if (!isDelivery) return null;
@@ -198,7 +206,7 @@ export function CheckoutPageShell() {
     setOrderError(null);
 
     if (items.length === 0) {
-      setOrderError("Giỏ hàng trống.");
+      setOrderError(t("error_cart_empty"));
       return;
     }
 
@@ -206,46 +214,46 @@ export function CheckoutPageShell() {
 
     if (tab === CHECKOUT_TAB.TABLE) {
       if (!tableId) {
-        setOrderError("Không tìm thấy thông tin bàn. Vui lòng quét lại mã QR.");
+        setOrderError(t("error_table_not_found_qr"));
         return;
       }
     }
 
     if (tab === CHECKOUT_TAB.DELIVERY) {
       if (shippingIsOutOfRange) {
-        setOrderError("Địa chỉ giao hàng nằm ngoài vùng phục vụ của quán.");
+        setOrderError(t("error_delivery_out_of_range"));
         return;
       }
       if (isNewAddress) {
         if (!deliveryForm.fullAddress.trim()) {
-          setOrderError("Vui lòng nhập địa chỉ giao hàng.");
+          setOrderError(t("error_enter_delivery_address"));
           return;
         }
         if (!deliveryForm.name.trim()) {
-          setOrderError("Vui lòng nhập tên người nhận.");
+          setOrderError(t("error_enter_recipient_name"));
           return;
         }
         if (!deliveryForm.phone.trim()) {
-          setOrderError("Vui lòng nhập số điện thoại.");
+          setOrderError(t("error_enter_phone"));
           return;
         }
       } else if (!selectedAddressId) {
-        setOrderError("Vui lòng chọn địa chỉ giao hàng.");
+        setOrderError(t("error_select_address"));
         return;
       }
     }
 
     if (tab === CHECKOUT_TAB.PICKUP) {
       if (!pickupForm.name.trim()) {
-        setOrderError("Vui lòng nhập tên liên hệ.");
+        setOrderError(t("error_enter_contact_name"));
         return;
       }
       if (!pickupForm.phone.trim()) {
-        setOrderError("Vui lòng nhập số điện thoại.");
+        setOrderError(t("error_enter_phone"));
         return;
       }
       if (pickupForm.mode === "scheduled" && !pickupForm.scheduledTime) {
-        setOrderError("Vui lòng chọn giờ nhận hàng.");
+        setOrderError(t("error_select_pickup_time"));
         return;
       }
     }
@@ -256,9 +264,7 @@ export function CheckoutPageShell() {
       );
       for (const grp of groups) {
         if (!item.selectedOptions[grp.name]?.trim()) {
-          setOrderError(
-            `"${item.product.name}" chưa chọn "${grp.name}". Vui lòng cập nhật trong giỏ hàng.`,
-          );
+          setOrderError(t("error_option_required", { product: item.product.name, option: grp.name }));
           return;
         }
       }
@@ -282,7 +288,7 @@ export function CheckoutPageShell() {
         quantity: item.quantity,
         price: unitPrice,
         options: item.selectedOptions as Record<string, string>,
-        extras: item.toppings.map((t) => ({ toppingId: t.toppingId })),
+        extras: (item.toppings ?? []).map((t) => ({ toppingId: t.toppingId })),
       };
     });
 
@@ -349,7 +355,7 @@ export function CheckoutPageShell() {
       const raw =
         (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
       setOrderError(
-        Array.isArray(raw) ? raw.join(", ") : (raw ?? "Đặt hàng thất bại. Vui lòng thử lại."),
+        Array.isArray(raw) ? raw.join(", ") : (raw ?? t("order_failed")),
       );
     }
   }
@@ -383,7 +389,7 @@ export function CheckoutPageShell() {
 
             <div className="mt-4 space-y-3 rounded-3xl border border-black/6 bg-white p-5 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.08)] sm:p-6">
               <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-                Ưu đãi
+                {t("offers")}
               </p>
               <VoucherSection
                 subtotal={subtotal}
@@ -414,6 +420,7 @@ export function CheckoutPageShell() {
               isDelivery={isDelivery}
               isSubmitting={isSubmitting}
               isSuccess={false}
+              isAddressInvalid={!hasValidDeliveryAddress}
               errorMessage={orderError}
               onSubmit={() => void handleSubmitOrder()}
             />
@@ -432,7 +439,7 @@ export function CheckoutPageShell() {
         <div className="flex items-center gap-3">
           <div className="shrink-0">
             <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-muted">
-              Thành tiền
+              {t("order_total")}
             </p>
             <p className="text-xl font-bold tabular-nums text-kun-primary">
               {formatVnd(total)}
@@ -441,17 +448,17 @@ export function CheckoutPageShell() {
           <button
             type="button"
             onClick={() => void handleSubmitOrder()}
-            disabled={isSubmitting || items.length === 0 || (isDelivery && shippingIsOutOfRange)}
+            disabled={isSubmitting || items.length === 0 || (isDelivery && shippingIsOutOfRange) || !hasValidDeliveryAddress}
             className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-kun-primary text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
           >
             {isSubmitting ? (
               <>
                 <Loader2 className="size-4 animate-spin" />
-                Đang đặt...
+                {t("placing_order")}
               </>
             ) : (
               <>
-                {isDelivery ? "Đặt hàng" : "Xác nhận đơn"}
+                {isDelivery ? t("confirm_delivery_order") : t("confirm_order_short")}
                 <ArrowRight className="size-4" />
               </>
             )}

@@ -1,21 +1,22 @@
 import { api } from '@/config/server'
-import type { ApiProduct, ApiTopping } from './types'
+import type { ApiProduct } from './types'
 
 export async function fetchProducts(
-  options?: { categoryId?: string; categorySlug?: string },
+  options?: { categoryId?: string; categorySlug?: string; locale?: string },
 ): Promise<ApiProduct[]> {
   const { data } = await api.get<ApiProduct[]>('/products', {
-    params: options ?? undefined,
+    params: {
+      ...(options?.categoryId && { categoryId: options.categoryId }),
+      ...(options?.categorySlug && { categorySlug: options.categorySlug }),
+      ...(options?.locale && { locale: options.locale }),
+    },
   })
   return data
 }
 
-export async function fetchProductBySlug(slug: string): Promise<ApiProduct> {
-  const { data } = await api.get<ApiProduct>(`/products/by-slug/${slug}`)
-  return data
-}
-
-export async function fetchToppings(): Promise<ApiTopping[]> {
-  const { data } = await api.get<ApiTopping[]>('/toppings')
+export async function fetchProductBySlug(slug: string, locale?: string): Promise<ApiProduct> {
+  const { data } = await api.get<ApiProduct>(`/products/by-slug/${slug}`, {
+    params: locale ? { locale } : undefined,
+  })
   return data
 }

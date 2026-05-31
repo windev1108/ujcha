@@ -9,7 +9,8 @@ import { ArrowLeft, ChevronRight } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { ROUTES } from "@/lib/routes";
 import { motion } from "motion/react";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
+import { getDisplayName } from "@/lib/product-name";
 
 const PLACEHOLDER_BG = ["#1a3c34", "#2d1a0a", "#0d2035", "#1a0d2e"];
 
@@ -42,6 +43,7 @@ function DetailSkeleton() {
 
 export function ProductDetailPageShell() {
   const t = useTranslations();
+  const locale = useLocale();
   const params = useParams<{ slug: string }>();
   const { data: product, isLoading, isError } = useProductBySlugQuery(params.slug ?? "");
 
@@ -71,7 +73,7 @@ export function ProductDetailPageShell() {
             <>
               <ChevronRight className="size-3.5 opacity-40" />
               <span className="max-w-[180px] truncate font-medium text-foreground">
-                {product.name}
+                {getDisplayName(product, locale)}
               </span>
             </>
           )}
@@ -98,7 +100,7 @@ export function ProductDetailPageShell() {
             <section className="grid gap-10 lg:grid-cols-[4fr_6fr] lg:items-start lg:gap-14">
               <ProductImageGallery
                 images={product.imageUrls}
-                name={product.name}
+                name={getDisplayName(product, locale)}
                 placeholderBg={PLACEHOLDER_BG[0]}
               />
 

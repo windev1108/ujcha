@@ -6,9 +6,9 @@ export const CHECKOUT_TAB = {
 
 export type CheckoutTabId = (typeof CHECKOUT_TAB)[keyof typeof CHECKOUT_TAB];
 
-export const CHECKOUT_TAB_OPTIONS: { id: CheckoutTabId; label: string }[] = [
-  { id: CHECKOUT_TAB.DELIVERY, label: "Giao hàng" },
-  { id: CHECKOUT_TAB.PICKUP, label: "Nhận tại quán" },
+export const CHECKOUT_TAB_OPTIONS: { id: CheckoutTabId; labelKey: string }[] = [
+  { id: CHECKOUT_TAB.DELIVERY, labelKey: "tab_delivery" },
+  { id: CHECKOUT_TAB.PICKUP, labelKey: "tab_pickup" },
 ];
 
 export function normalizeCheckoutTab(raw: string | null | undefined): CheckoutTabId {

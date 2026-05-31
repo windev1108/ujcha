@@ -17,6 +17,8 @@ function icon(name: React.ComponentProps<typeof Ionicons>['name']) {
 // Navigation / layout
 export const ChevronLeft    = icon('chevron-back-outline');
 export const ChevronRight   = icon('chevron-forward-outline');
+export const ChevronUp      = icon('chevron-up-outline');
+export const ChevronDown    = icon('chevron-down-outline');
 export const ArrowLeft      = icon('arrow-back-outline');
 
 // Actions
