@@ -26,10 +26,11 @@ import { OrderValidationService } from './order-validation.service';
 
 export type OrderDetail = Prisma.OrderGetPayload<{
   include: {
-    items: { include: { product: { select: { id: true; name: true; imageUrls: true } } } };
+    items: { include: { product: { select: { id: true; name: true; nameTranslation: true; imageUrls: true } } } };
     address: true;
     table: true;
     shipper: { select: { id: true; name: true; phone: true } };
+    user: { select: { name: true; phone: true } };
   };
 }>;
 
@@ -41,10 +42,10 @@ export interface OrderDiscountContext {
   finalAmount: Prisma.Decimal;
 }
 
-/** Catalog JSON: giá trị là string (legacy) hoặc { label, priceDelta }. */
+/** Catalog JSON: giá trị là string (legacy) hoặc { label, priceDelta, nameTranslation? }. */
 function parseOptionCatalogValue(
   v: unknown,
-): { label: string; priceDelta: number } | null {
+): { label: string; priceDelta: number; nameTranslation?: Record<string, string> } | null {
   if (typeof v === 'string') {
     const label = v.trim();
     return label ? { label, priceDelta: 0 } : null;
@@ -58,7 +59,12 @@ function parseOptionCatalogValue(
       const n = Number(raw);
       if (Number.isFinite(n) && n >= 0) priceDelta = n;
     }
-    return { label, priceDelta };
+    const nt = (v as { nameTranslation?: unknown }).nameTranslation;
+    const nameTranslation =
+      nt && typeof nt === 'object' && !Array.isArray(nt)
+        ? (nt as Record<string, string>)
+        : undefined;
+    return { label, priceDelta, nameTranslation };
   }
   return null;
 }
@@ -72,11 +78,10 @@ function validateOptionsAndSurcharge(
 ): {
   surcharge: Prisma.Decimal;
   normalized: Record<string, string>;
-  details: Array<{ group: string; label: string; priceDelta: number }>; // ← thêm
+  details: Array<{ group: string; label: string; priceDelta: number; nameTranslation?: Record<string, string> }>;
 } {
   const normalized: Record<string, string> = {};
-  const details: Array<{ group: string; label: string; priceDelta: number }> =
-    [];
+  const details: Array<{ group: string; label: string; priceDelta: number; nameTranslation?: Record<string, string> }> = [];
   let surcharge = new Prisma.Decimal(0);
   const groups = Array.isArray(optionGroupsJson) ? optionGroupsJson : [];
   const opts =
@@ -99,7 +104,7 @@ function validateOptionsAndSurcharge(
       });
     }
     const selTrim = String(sel).trim();
-    let matched: { label: string; priceDelta: number } | null = null;
+    let matched: { label: string; priceDelta: number; nameTranslation?: Record<string, string> } | null = null;
     for (const rv of rawVals) {
       const parsed = parseOptionCatalogValue(rv);
       if (!parsed) continue;
@@ -123,6 +128,7 @@ function validateOptionsAndSurcharge(
       group: name,
       label: selTrim,
       priceDelta: matched.priceDelta,
+      ...(matched.nameTranslation ? { nameTranslation: matched.nameTranslation } : {}),
     });
   }
 
@@ -190,7 +196,7 @@ export class OrderService {
       let unit = new Prisma.Decimal(product.price);
 
       // ── Extras (toppings) — validated against product's inline toppings ───
-      const extrasSnap: { toppingId: string; name: string; price: number }[] = [];
+      const extrasSnap: { toppingId: string; name: string; price: number; nameTranslation: Record<string, string> }[] = [];
       const productToppings = Array.isArray(product.toppings) ? product.toppings as any[] : [];
 
       for (const ex of item.extras ?? []) {
@@ -204,7 +210,7 @@ export class OrderService {
           });
         }
         unit = unit.add(new Prisma.Decimal(Number(t.price)));
-        extrasSnap.push({ toppingId: t.id, name: t.name, price: Number(t.price) });
+        extrasSnap.push({ toppingId: t.id, name: t.name, price: Number(t.price), nameTranslation: (t as any).nameTranslation ?? ex.nameTranslation ?? {} });
       }
 
       // optionGroups is now fully inline — no DB lookup needed
@@ -218,9 +224,18 @@ export class OrderService {
         normalized: optionsNormalized,
         details: optionDetails,
       } = skipOptionValidation
-          ? { surcharge: new Prisma.Decimal(0), normalized: {} as Record<string, string>, details: [] as { group: string; label: string; priceDelta: number }[] }
+          ? { surcharge: new Prisma.Decimal(0), normalized: {} as Record<string, string>, details: [] as { group: string; label: string; priceDelta: number; nameTranslation?: Record<string, string> }[] }
           : validateOptionsAndSurcharge(optionGroupsResolved, item.options);
       unit = unit.add(optionSurcharge);
+
+      // Merge client-provided nameTranslation as fallback for option values the product record may lack.
+      if (item.optionTranslations) {
+        for (const d of optionDetails) {
+          if (!d.nameTranslation && item.optionTranslations[d.group]) {
+            d.nameTranslation = item.optionTranslations[d.group];
+          }
+        }
+      }
 
       const noteTrim = item.note?.trim()
         ? item.note.trim().slice(0, 500)
@@ -451,11 +466,12 @@ export class OrderService {
         include: {
           items: {
             orderBy: { id: 'asc' },
-            include: { product: { select: { id: true, name: true, imageUrls: true } } },
+            include: { product: { select: { id: true, name: true, nameTranslation: true, imageUrls: true } } },
           },
           address: true,
           table: true,
           shipper: { select: { id: true, name: true, phone: true } },
+          user: { select: { name: true, phone: true } },
         },
       });
     });
@@ -524,11 +540,12 @@ export class OrderService {
           include: {
             items: {
               orderBy: { id: 'asc' },
-              include: { product: { select: { id: true, name: true, imageUrls: true } } },
+              include: { product: { select: { id: true, name: true, nameTranslation: true, imageUrls: true } } },
             },
             address: true,
             table: true,
             shipper: { select: { id: true, name: true, phone: true } },
+            user: { select: { name: true, phone: true } },
           },
         });
       });
@@ -548,18 +565,17 @@ export class OrderService {
       where: { id: orderId },
       data: {
         ...(dto.status !== undefined && { status: dto.status }),
-        ...(dto.paymentStatus !== undefined && {
-          paymentStatus: dto.paymentStatus,
-        }),
+        ...(dto.paymentStatus !== undefined && { paymentStatus: dto.paymentStatus }),
       },
       include: {
         items: {
           orderBy: { id: 'asc' },
-          include: { product: { select: { id: true, name: true, imageUrls: true } } },
+          include: { product: { select: { id: true, name: true, nameTranslation: true, imageUrls: true } } },
         },
         address: true,
         table: true,
         shipper: { select: { id: true, name: true, phone: true } },
+        user: { select: { name: true, phone: true } },
       },
     });
 
@@ -634,7 +650,7 @@ export class OrderService {
           items: {
             orderBy: { id: 'asc' },
             include: {
-              product: { select: { id: true, name: true, imageUrls: true } },
+              product: { select: { id: true, name: true, nameTranslation: true, imageUrls: true } },
             },
           },
           address: { select: { id: true, fullAddress: true } },
@@ -691,12 +707,13 @@ export class OrderService {
       where: { paymentCode },
       include: {
         items: {
-          include: { product: { select: { id: true, name: true, imageUrls: true } } },
+          include: { product: { select: { id: true, name: true, nameTranslation: true, imageUrls: true } } },
           orderBy: { id: 'asc' },
         },
         address: true,
         table: true,
         shipper: { select: { id: true, name: true, phone: true } },
+        user: { select: { name: true, phone: true } },
       },
     });
 

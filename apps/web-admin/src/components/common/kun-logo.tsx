@@ -13,7 +13,7 @@ type KunLogoProps = {
 export function KunLogo({
   width = 48,
   height = 16,
-  src = "logo.png",
+  src = "/logo.png",
   className,
   size = "md",
 }: KunLogoProps) {

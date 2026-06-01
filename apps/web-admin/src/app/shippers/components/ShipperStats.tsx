@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent } from "@heroui/react";
-import { Gauge, Truck, Users } from "lucide-react";
+import { Bike, Gauge, Truck, Users } from "lucide-react";
 
 type Props = {
   totalActive: number;
@@ -64,7 +64,7 @@ export function ShipperStats({
               Sẵn sàng ngay
             </span>
             <span className="flex size-9 items-center justify-center rounded-xl bg-white/15 text-white">
-              <Truck className="size-4" aria-hidden />
+              <Bike className="size-4" aria-hidden />
             </span>
           </div>
           <p className="text-2xl font-bold tabular-nums">{availableNow}</p>

@@ -169,18 +169,19 @@ export class ShipperService {
 
     const updated = await this.prisma.order.update({
       where: { id: orderId },
-      data: { status: OrderStatus.picked_up, pickedUpAt: new Date() },
+      data: { status: OrderStatus.delivering, deliveringAt: new Date() },
     });
 
-    this.ordersGateway.emitOrderStatusUpdated({ orderId, status: OrderStatus.picked_up });
-    this.ordersGateway.emitShipperOrderStatusUpdated({ orderId, status: OrderStatus.picked_up, shipperId });
+    this.ordersGateway.emitOrderStatusUpdated({ orderId, status: OrderStatus.delivering });
+    this.ordersGateway.emitShipperOrderStatusUpdated({ orderId, status: OrderStatus.delivering, shipperId });
     return updated;
   }
 
   async markArrived(shipperId: string, orderId: string) {
     const order = await this.assertShipperOwnsOrder(shipperId, orderId);
 
-    if (order.status !== OrderStatus.picked_up) {
+    // Accept both delivering (new flow) and picked_up (legacy in-flight orders)
+    if (order.status !== OrderStatus.delivering && order.status !== OrderStatus.picked_up) {
       throw new ForbiddenException({
         message: 'Chưa lấy hàng.',
         code: 'ORDER_NOT_PICKED_UP',

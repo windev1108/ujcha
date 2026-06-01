@@ -20,7 +20,7 @@ export function useOrders() {
 
   const markPickedUp = useCallback(async (orderId: string) => {
     await shipperApi.markPickedUp(orderId);
-    updateOrderStatus(orderId, 'picked_up');
+    updateOrderStatus(orderId, 'delivering');
   }, [updateOrderStatus]);
 
   const markArrived = useCallback(async (orderId: string) => {

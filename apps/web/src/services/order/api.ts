@@ -5,7 +5,8 @@ export interface CreateOrderItem {
   quantity: number
   price: number
   options?: Record<string, string>
-  extras?: { toppingId: string }[]
+  extras?: { toppingId: string; nameTranslation?: Record<string, string> }[]
+  optionTranslations?: Record<string, Record<string, string>>
   note?: string
 }
 
@@ -114,7 +115,7 @@ export interface UserOrderItem {
   extrasJson: unknown
   optionsJson: unknown
   note: string | null
-  product: { id: string; name: string; imageUrls: string[] }
+  product: { id: string; name: string; nameTranslation?: Record<string, string>; imageUrls: string[] }
 }
 
 export interface UserOrder {
@@ -208,7 +209,7 @@ export interface OrderDetailItem {
   optionsJson: unknown
   optionDetailsJson: unknown
   note: string | null
-  product: { id: string; name: string; imageUrls: string[] }
+  product: { id: string; name: string; nameTranslation?: Record<string, string>; imageUrls: string[] }
 }
 
 export interface OrderDetail extends Omit<UserOrder, 'items' | 'address'> {
@@ -218,6 +219,7 @@ export interface OrderDetail extends Omit<UserOrder, 'items' | 'address'> {
   address: { id: string; fullAddress: string; lat?: number; lng?: number } | null
   guestDeliveryName: string | null
   guestDeliveryPhone: string | null
+  user: { name: string | null; phone: string | null } | null
   shipper: { id: string; name: string; phone: string | null } | null
   // Per-status timestamps (null for statuses not yet reached or pre-migration orders)
   confirmedAt: string | null

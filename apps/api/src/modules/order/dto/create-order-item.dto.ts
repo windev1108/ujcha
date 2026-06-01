@@ -50,6 +50,15 @@ export class CreateOrderItemDto {
   @IsObject()
   options?: Record<string, string>;
 
+  @ApiPropertyOptional({
+    description: 'nameTranslation keyed by group name for the selected option value — used as fallback when product record has none.',
+    type: 'object',
+    additionalProperties: { type: 'object', additionalProperties: { type: 'string' } },
+  })
+  @IsOptional()
+  @IsObject()
+  optionTranslations?: Record<string, Record<string, string>>;
+
   @ApiPropertyOptional({ maxLength: 500 })
   @IsOptional()
   @IsString()

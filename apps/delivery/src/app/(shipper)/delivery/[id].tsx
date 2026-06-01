@@ -104,6 +104,17 @@ export default function DeliveryScreen() {
     }, [id]),
   );
 
+  // Auto-start GPS when order is already in active delivery state
+  // (e.g. admin moved to delivering from POS, or app restarted mid-delivery)
+  useEffect(() => {
+    if (!order) return;
+    const isActive = ['delivering', 'picked_up', 'arrived'].includes(order.status);
+    if (isActive && !isTracking) {
+      void start();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order?.status]);
+
   // Real-time socket updates for this specific order
   useEffect(() => {
     if (!id) return;
@@ -196,9 +207,9 @@ export default function DeliveryScreen() {
   const st = STATUS_LABEL[order.status] ?? { label: order.status, color: '#717171', bg: '#f5f5f5' };
 
   const canPickup = order.status === 'ready';
-  const canArrived = order.status === 'picked_up';
-  const canComplete = order.status === 'arrived' || order.status === 'delivering';
-  const isActiveDelivery = ['picked_up', 'arrived', 'delivering'].includes(order.status);
+  const canArrived = order.status === 'delivering' || order.status === 'picked_up';
+  const canComplete = order.status === 'arrived';
+  const isActiveDelivery = ['delivering', 'picked_up', 'arrived'].includes(order.status);
   const isWaiting = ['confirmed', 'preparing'].includes(order.status);
 
   const isCashPending = order.paymentType === 'cash' && order.paymentStatus !== 'paid';

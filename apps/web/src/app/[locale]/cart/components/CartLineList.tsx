@@ -71,7 +71,7 @@ export function CartLineList({
         <p className="mt-2 text-sm leading-relaxed text-foreground/70 sm:text-base">
           {items.length} {items.length > 1 ? t('products') : t('products').slice(0, -1)}
           {selectedCount < items.length && selectedCount > 0 && (
-            <span className="ml-1.5 font-medium text-kun-primary">· đã chọn {selectedCount}</span>
+            <span className="ml-1.5 font-medium text-kun-primary">· {t("selected")} {selectedCount}</span>
           )}
         </p>
       </motion.div>
@@ -145,7 +145,7 @@ export function CartLineList({
                     isSelected={isSelected}
                     onChange={() => onToggleSelect(id)}
                     variant="primary"
-                    aria-label={`Chọn ${productDisplayName}`}
+                    aria-label={`${t("selected")} ${productDisplayName}`}
                   >
                     <Checkbox.Control className="size-6 rounded-lg border-2 border-black/25">
                       <Checkbox.Indicator className="size-4" />

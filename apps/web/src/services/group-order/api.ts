@@ -8,11 +8,11 @@ export type GroupParticipantPaymentType = 'cash' | 'bank_transfer'
 export interface GroupOrderItem {
   id: string
   productId: string
-  product: { id: string; name: string; imageUrls: string[]; price: string }
+  product: { id: string; name: string; nameTranslation?: Record<string, string> | null; imageUrls: string[]; price: string; optionGroups?: unknown }
   quantity: number
   unitPrice: number
   selectedOptions: Record<string, string>
-  toppings: Array<{ toppingId: string; name: string; price: number }>
+  toppings: Array<{ toppingId: string; name: string; price: number; nameTranslation?: Record<string, string> }>
   note: string | null
 }
 
@@ -93,7 +93,7 @@ export async function updateGroupOrderItems(
     productId: string
     quantity: number
     selectedOptions?: Record<string, string>
-    toppings?: Array<{ toppingId: string; name: string; price: number }>
+    toppings?: Array<{ toppingId: string; name: string; price: number; nameTranslation?: Record<string, string> }>
     note?: string
   }>,
 ): Promise<GroupOrderState> {

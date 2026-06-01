@@ -3,25 +3,77 @@
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { io, type Socket } from "socket.io-client";
+import { useTranslations } from "next-intl";
+import { Maximize2, X, Bike, MapPin } from "lucide-react";
+import { createPortal } from "react-dom";
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+const SOCKET_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
 
 type LatLng = { lat: number; lng: number; timestamp: number };
 type TrackStatus = "connecting" | "online" | "waiting" | "completed";
 
 const ShipperLiveMapInner = dynamic(() => import("./ShipperLiveMapInner"), {
   ssr: false,
-  loading: () => <div className="h-full w-full animate-pulse rounded-2xl bg-surface-card" />,
+  loading: () => <div className="h-full w-full animate-pulse bg-surface-card" />,
 });
 
-const STATUS_CONFIG: Record<TrackStatus, {
-  label: string; dot: string; dotAnimate: boolean; pill: string; text: string;
-}> = {
-  connecting: { label: "Đang kết nối…",          dot: "bg-amber-400", dotAnimate: true,  pill: "bg-amber-50 ring-amber-200",  text: "text-amber-700" },
-  online:     { label: "Đang giao hàng 🛵",        dot: "bg-green-500", dotAnimate: true,  pill: "bg-green-50 ring-green-200",  text: "text-green-700" },
-  waiting:    { label: "Chờ shipper bật GPS…",     dot: "bg-gray-400",  dotAnimate: false, pill: "bg-gray-50 ring-gray-200",    text: "text-gray-500" },
-  completed:  { label: "Đã giao thành công ✓",     dot: "bg-teal-500",  dotAnimate: false, pill: "bg-teal-50 ring-teal-200",    text: "text-teal-700" },
-};
+function FullscreenMap({
+  location,
+  destLat,
+  destLng,
+  onClose,
+}: {
+  location: LatLng | null;
+  destLat?: number | null;
+  destLng?: number | null;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", handler);
+      document.body.style.overflow = "";
+    };
+  }, [onClose]);
+
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex flex-col bg-black">
+      {/* Header bar */}
+      <div className="flex h-12 shrink-0 items-center justify-between bg-black/70 px-4 backdrop-blur-sm">
+        <div className="flex items-center gap-2">
+          <Bike className="size-4 text-white/70" />
+          <span className="text-sm font-semibold text-white">Live tracking</span>
+          {location && (
+            <span className="flex items-center gap-1 rounded-full bg-green-500/20 px-2 py-0.5 text-[11px] font-semibold text-green-400">
+              <span className="size-1.5 animate-pulse rounded-full bg-green-400" />
+              Live
+            </span>
+          )}
+        </div>
+        <button
+          onClick={onClose}
+          className="flex size-8 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+        >
+          <X className="size-4" />
+        </button>
+      </div>
+      {/* Fullscreen map */}
+      <div className="flex-1">
+        <ShipperLiveMapInner
+          shipperLocation={location}
+          destLat={destLat}
+          destLng={destLng}
+          fullscreen={true}
+        />
+      </div>
+    </div>,
+    document.body,
+  );
+}
 
 export function ShipperLiveMap({
   orderId,
@@ -36,7 +88,38 @@ export function ShipperLiveMap({
 }) {
   const [trackStatus, setTrackStatus] = useState<TrackStatus>("connecting");
   const [location, setLocation] = useState<LatLng | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
   const socketRef = useRef<Socket | null>(null);
+  const t = useTranslations();
+
+  const STATUS_CONFIG: Record<TrackStatus, {
+    label: string;
+    dot: string;
+    dotAnimate: boolean;
+    pill: string;
+    text: string;
+  }> = {
+    connecting: {
+      label: t("connecting"),
+      dot: "bg-amber-400", dotAnimate: true,
+      pill: "bg-amber-500/15 ring-amber-400/40", text: "text-amber-300",
+    },
+    online: {
+      label: t("online"),
+      dot: "bg-green-400", dotAnimate: true,
+      pill: "bg-green-500/15 ring-green-400/40", text: "text-green-300",
+    },
+    waiting: {
+      label: t("waiting_shipper_turn_on_location"),
+      dot: "bg-gray-400", dotAnimate: false,
+      pill: "bg-white/15 ring-white/25", text: "text-white/70",
+    },
+    completed: {
+      label: t("status_completed"),
+      dot: "bg-teal-400", dotAnimate: false,
+      pill: "bg-teal-500/15 ring-teal-400/40", text: "text-teal-300",
+    },
+  };
 
   useEffect(() => {
     const socket = io(`${SOCKET_URL}/tracking`, {
@@ -87,7 +170,6 @@ export function ShipperLiveMap({
     };
   }, [orderId]);
 
-  // If the order is already completed when the component mounts, show completed state
   useEffect(() => {
     if (orderStatus === "completed") setTrackStatus("completed");
   }, [orderStatus]);
@@ -95,40 +177,89 @@ export function ShipperLiveMap({
   const st = STATUS_CONFIG[trackStatus];
 
   return (
-    <div className="mt-4 space-y-3">
-      {/* Status pill */}
-      <div className="flex items-center justify-between gap-2">
-        <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ring-1 ${st.pill} ${st.text}`}>
-          <span className={`size-1.5 rounded-full ${st.dot} ${st.dotAnimate ? "animate-pulse" : ""}`} />
-          {st.label}
-        </span>
-        <span className="text-[10px] text-foreground/40">
-          Cập nhật tự động
-        </span>
+    <>
+      <div className="mt-4">
+        {/* Map container — clickable to fullscreen */}
+        <div
+          className="group relative h-[260px] cursor-pointer overflow-hidden rounded-2xl ring-1 ring-black/6"
+          onClick={() => setFullscreen(true)}
+          title={t("tap_to_fullscreen")}
+        >
+          {/* Map */}
+          <div className="absolute inset-0">
+            <ShipperLiveMapInner
+              shipperLocation={location}
+              destLat={destLat}
+              destLng={destLng}
+            />
+          </div>
+
+          {/* Status pill — top-left overlay */}
+          <div className="absolute left-3 top-3" style={{ zIndex: 1000 }}>
+            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11px] font-semibold ring-1 backdrop-blur-md ${st.pill} ${st.text}`}>
+              <span className={`size-1.5 rounded-full ${st.dot} ${st.dotAnimate ? "animate-pulse" : ""}`} />
+              {st.label}
+            </span>
+          </div>
+
+          {/* Fullscreen button — top-right */}
+          <div
+            className="absolute right-3 top-3 opacity-0 transition-opacity group-hover:opacity-100"
+            style={{ zIndex: 1000 }}
+          >
+            <span className="flex size-8 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm ring-1 ring-white/20">
+              <Maximize2 className="size-3.5" />
+            </span>
+          </div>
+
+          {/* Legend — bottom-left overlay */}
+          <div className="absolute bottom-3 left-3" style={{ zIndex: 1000 }}>
+            <div className="flex flex-col gap-1 rounded-xl bg-white/85 px-2.5 py-1.5 shadow-sm backdrop-blur-md ring-1 ring-black/6">
+              <span className="flex items-center gap-1.5 text-[10px] font-medium text-foreground/65">
+                <Bike className="size-3 shrink-0 text-[#1a3c34]" />
+                Shipper
+              </span>
+              {destLat != null && destLng != null && (
+                <span className="flex items-center gap-1.5 text-[10px] font-medium text-foreground/65">
+                  <MapPin className="size-3 shrink-0 text-[#c45c5c]" />
+                  {t("delivery_address_title")}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Waiting overlay */}
+          {trackStatus === "waiting" && (
+            <div
+              className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-white/75 backdrop-blur-[2px]"
+              style={{ zIndex: 900 }}
+            >
+              <div className="flex size-12 items-center justify-center rounded-2xl bg-white shadow-md ring-1 ring-black/6">
+                <Bike className="size-6 text-foreground/30" />
+              </div>
+              <p className="text-xs font-medium text-foreground/50">{t("waiting_shipper_turn_on_location")}</p>
+            </div>
+          )}
+
+          {/* Tap hint */}
+          <div
+            className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-black/8 to-transparent opacity-0 transition-opacity group-hover:opacity-100"
+            style={{ zIndex: 800 }}
+          />
+        </div>
+
+        {/* Auto-update note */}
+        <p className="mt-1.5 text-right text-[10px] text-foreground/35">{t("update_automatically")}</p>
       </div>
 
-      {/* Map */}
-      <div className="h-[320px] overflow-hidden rounded-2xl ring-1 ring-black/6">
-        <ShipperLiveMapInner
-          shipperLocation={location}
+      {fullscreen && (
+        <FullscreenMap
+          location={location}
           destLat={destLat}
           destLng={destLng}
+          onClose={() => setFullscreen(false)}
         />
-      </div>
-
-      {/* Legend */}
-      <div className="flex items-center gap-4 px-1">
-        <span className="flex items-center gap-1.5 text-[11px] text-foreground/50">
-          <span className="inline-block size-3 rounded-full bg-[#1a3c34] ring-2 ring-white shadow-sm" />
-          Shipper
-        </span>
-        {destLat != null && destLng != null && (
-          <span className="flex items-center gap-1.5 text-[11px] text-foreground/50">
-            <span className="inline-block size-3 rounded-full bg-[#c45c5c] ring-2 ring-white shadow-sm" />
-            Địa chỉ giao
-          </span>
-        )}
-      </div>
-    </div>
+      )}
+    </>
   );
 }

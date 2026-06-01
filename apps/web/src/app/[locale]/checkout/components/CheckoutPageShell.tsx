@@ -283,12 +283,26 @@ export function CheckoutPageShell() {
         0,
       );
       const unitPrice = discountedBase + optionSurcharge + toppingTotal;
+
+      const optionTranslations: Record<string, Record<string, string>> = {};
+      for (const g of groups) {
+        const sel = item.selectedOptions[g.name];
+        if (sel) {
+          const v = g.values.find((v) => v.label === sel);
+          if (v?.nameTranslation) optionTranslations[g.name] = v.nameTranslation;
+        }
+      }
+
       return {
         productId: item.productId,
         quantity: item.quantity,
         price: unitPrice,
         options: item.selectedOptions as Record<string, string>,
-        extras: (item.toppings ?? []).map((t) => ({ toppingId: t.toppingId })),
+        extras: (item.toppings ?? []).map((t) => ({
+          toppingId: t.toppingId,
+          nameTranslation: t.topping.nameTranslation,
+        })),
+        ...(Object.keys(optionTranslations).length > 0 ? { optionTranslations } : {}),
       };
     });
 

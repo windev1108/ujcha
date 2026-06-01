@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import {
   AlertCircle,
   ArrowLeft,
+  Bike,
   Check,
   CheckCircle2,
   Loader2,
@@ -21,6 +22,7 @@ import { createAddress, type UserAddress } from "@/services/order/api";
 import { useShippingEstimateQuery } from "@/services/shipping/hooks";
 import { easeOutSmooth } from "@/app/[locale]/(landing)/components/RevealSection";
 import type { GroupOrderState } from "@/services/group-order/api";
+import { useTranslations } from "next-intl";
 
 const MapLocationPicker = dynamic(
   () =>
@@ -48,11 +50,6 @@ function fmtVnd(n: number) {
 
 type TabType = "delivery" | "pickup";
 
-const TABS: { id: TabType; label: string; Icon: React.ElementType }[] = [
-  { id: "delivery", label: "Giao hàng", Icon: Truck },
-  { id: "pickup", label: "Mang về", Icon: ShoppingBag },
-];
-
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -74,6 +71,11 @@ export function GroupOrderCheckoutModal({
   onSave,
   totalAmount,
 }: Props) {
+  const t = useTranslations();
+  const TABS: { id: TabType; label: string; Icon: React.ElementType }[] = [
+    { id: "delivery", label: t("type_delivery"), Icon: Truck },
+    { id: "pickup", label: t("type_pickup"), Icon: ShoppingBag },
+  ];
   const [type, setType] = useState<TabType>(
     (state.type === "table" ? "pickup" : state.type) as TabType,
   );
@@ -139,7 +141,7 @@ export function GroupOrderCheckoutModal({
 
   function handleGetGPS() {
     if (!navigator.geolocation) {
-      setGeoError("Trình duyệt không hỗ trợ định vị.");
+      setGeoError(t("group_geo_not_supported"));
       return;
     }
     setGeoLoading(true);
@@ -151,7 +153,7 @@ export function GroupOrderCheckoutModal({
       },
       () => {
         setGeoLoading(false);
-        setGeoError("Không thể lấy vị trí. Vui lòng cấp quyền định vị.");
+        setGeoError(t("group_geo_error"));
       },
       { timeout: 10_000 },
     );
@@ -164,15 +166,15 @@ export function GroupOrderCheckoutModal({
 
     if (type === "delivery") {
       if (shippingIsOutOfRange) {
-        setError("Địa chỉ nằm ngoài vùng phục vụ của quán.");
+        setError(t("error_delivery_out_of_range"));
         return;
       }
       if (showNewForm && !newAddress.fullAddress.trim()) {
-        setError("Vui lòng nhập địa chỉ giao hàng.");
+        setError(t("error_enter_delivery_address"));
         return;
       }
       if (!showNewForm && !selectedAddressId) {
-        setError("Vui lòng chọn địa chỉ giao hàng.");
+        setError(t("error_select_address"));
         return;
       }
     }
@@ -230,9 +232,9 @@ export function GroupOrderCheckoutModal({
           </button>
           <div className="flex-1">
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-foreground/40">
-              Đơn nhóm · Thiết lập giao hàng
+              {t("group_checkout_eyebrow")}
             </p>
-            <h2 className="text-base font-bold text-foreground">Chọn hình thức nhận hàng</h2>
+            <h2 className="text-base font-bold text-foreground">{t("group_checkout_title")}</h2>
           </div>
           <button
             type="button"
@@ -252,7 +254,7 @@ export function GroupOrderCheckoutModal({
               <div className="overflow-hidden rounded-3xl border border-black/6 bg-white shadow-[0_4px_20px_-8px_rgba(0,0,0,0.08)]">
                 <div className="border-b border-black/5 px-5 pt-5 pb-4">
                   <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-foreground/40">
-                    Hình thức nhận hàng
+                    {t("group_fulfillment_label")}
                   </p>
                   <div className="flex gap-2">
                     {TABS.map(({ id, label, Icon }) => (
@@ -260,11 +262,10 @@ export function GroupOrderCheckoutModal({
                         key={id}
                         type="button"
                         onClick={() => { setType(id); setError(null); }}
-                        className={`flex flex-1 items-center justify-center gap-2 rounded-full py-3 text-sm font-semibold transition ${
-                          type === id
-                            ? "bg-[#1a3c34] text-white shadow-sm"
-                            : "bg-[#f7f7f7] text-foreground/60 hover:bg-black/6"
-                        }`}
+                        className={`flex flex-1 items-center justify-center gap-2 rounded-full py-3 text-sm font-semibold transition ${type === id
+                          ? "bg-[#1a3c34] text-white shadow-sm"
+                          : "bg-[#f7f7f7] text-foreground/60 hover:bg-black/6"
+                          }`}
                       >
                         <Icon className="size-4" />
                         {label}
@@ -287,7 +288,7 @@ export function GroupOrderCheckoutModal({
                       >
                         <div className="flex items-center gap-2">
                           <MapPin className="size-4 shrink-0 text-[#26634d]" />
-                          <p className="text-sm font-semibold text-foreground">Địa chỉ giao hàng</p>
+                          <p className="text-sm font-semibold text-foreground">{t("delivery_address_title")}</p>
                         </div>
 
                         {savedAddresses.map((addr) => {
@@ -297,11 +298,10 @@ export function GroupOrderCheckoutModal({
                               key={addr.id}
                               type="button"
                               onClick={() => setSelectedAddressId(addr.id)}
-                              className={`w-full rounded-2xl border-2 px-4 py-3 text-left transition-colors ${
-                                isSelected
-                                  ? "border-[#26634d] bg-[#f0faf6]"
-                                  : "border-transparent bg-[#f7f7f7] ring-1 ring-black/6 hover:ring-black/10"
-                              }`}
+                              className={`w-full rounded-2xl border-2 px-4 py-3 text-left transition-colors ${isSelected
+                                ? "border-[#26634d] bg-[#f0faf6]"
+                                : "border-transparent bg-[#f7f7f7] ring-1 ring-black/6 hover:ring-black/10"
+                                }`}
                             >
                               <div className="flex items-start gap-3">
                                 <div className={`mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${isSelected ? "border-[#26634d]" : "border-black/25"}`}>
@@ -312,7 +312,7 @@ export function GroupOrderCheckoutModal({
                                   {addr.note && <p className="mt-0.5 text-xs text-foreground/50">{addr.note}</p>}
                                   {addr.isDefault && (
                                     <span className="mt-1 inline-block rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200">
-                                      Mặc định
+                                      {t("group_default_addr_badge")}
                                     </span>
                                   )}
                                 </div>
@@ -326,11 +326,10 @@ export function GroupOrderCheckoutModal({
                           <button
                             type="button"
                             onClick={() => setSelectedAddressId(NEW_ADDRESS_ID)}
-                            className={`w-full rounded-2xl border-2 px-4 py-3 text-left transition-colors ${
-                              showNewForm
-                                ? "border-[#26634d] bg-[#f0faf6]"
-                                : "border-transparent bg-[#f7f7f7] ring-1 ring-black/6 hover:ring-black/10"
-                            }`}
+                            className={`w-full rounded-2xl border-2 px-4 py-3 text-left transition-colors ${showNewForm
+                              ? "border-[#26634d] bg-[#f0faf6]"
+                              : "border-transparent bg-[#f7f7f7] ring-1 ring-black/6 hover:ring-black/10"
+                              }`}
                           >
                             <div className="flex items-center gap-3">
                               <div className={`flex size-4 shrink-0 items-center justify-center rounded-full border-2 ${showNewForm ? "border-[#26634d]" : "border-black/25"}`}>
@@ -338,7 +337,7 @@ export function GroupOrderCheckoutModal({
                               </div>
                               <div className="flex items-center gap-1.5 text-sm font-medium text-foreground/70">
                                 <Plus className="size-3.5" />
-                                Nhập địa chỉ mới
+                                {t("add_new_address_option")}
                               </div>
                             </div>
                           </button>
@@ -356,7 +355,7 @@ export function GroupOrderCheckoutModal({
                             >
                               <div className="space-y-3 px-px pb-1 pt-3">
                                 <label className="block text-xs font-medium text-foreground/70">
-                                  Địa chỉ đầy đủ *
+                                  {t("full_address")}
                                 </label>
                                 <div className="grid grid-cols-2 gap-2">
                                   <button
@@ -365,7 +364,7 @@ export function GroupOrderCheckoutModal({
                                     className="flex items-center justify-center gap-1.5 rounded-xl border border-black/8 bg-[#f7f7f7] py-2.5 text-xs font-semibold text-foreground/65 transition hover:border-[#26634d]/30 hover:text-[#26634d]"
                                   >
                                     <Map className="size-3.5" />
-                                    Chọn trên bản đồ
+                                    {t("group_pick_on_map")}
                                   </button>
                                   <button
                                     type="button"
@@ -374,12 +373,12 @@ export function GroupOrderCheckoutModal({
                                     className="flex items-center justify-center gap-1.5 rounded-xl border border-black/8 bg-[#f7f7f7] py-2.5 text-xs font-semibold text-foreground/65 transition hover:border-[#26634d]/30 hover:text-[#26634d] disabled:opacity-50"
                                   >
                                     {geoLoading ? <Loader2 className="size-3.5 animate-spin" /> : <Navigation className="size-3.5" />}
-                                    Vị trí GPS
+                                    {t("group_gps_btn")}
                                   </button>
                                 </div>
                                 <input
                                   type="text"
-                                  placeholder="Số nhà, tên đường, phường/xã, quận/huyện…"
+                                  placeholder={t("address_placeholder")}
                                   value={newAddress.fullAddress}
                                   onChange={(e) => setNewAddress((p) => ({ ...p, fullAddress: e.target.value }))}
                                   className={inputCls}
@@ -394,7 +393,7 @@ export function GroupOrderCheckoutModal({
                                 ) : (
                                   <p className="flex items-center gap-1 text-[11px] text-foreground/45">
                                     <MapPin className="size-3 shrink-0" />
-                                    Chọn bản đồ hoặc GPS để tính phí ship tự động
+                                    {t("group_map_gps_hint")}
                                   </p>
                                 )}
                               </div>
@@ -413,32 +412,31 @@ export function GroupOrderCheckoutModal({
                               transition={{ duration: 0.2 }}
                               className="overflow-hidden"
                             >
-                              <div className={`flex items-center justify-between rounded-xl px-4 py-3 text-sm ${
-                                shippingFetching
-                                  ? "bg-[#f7f7f7] text-foreground/50"
-                                  : shippingIsOutOfRange
-                                    ? "bg-red-50 text-red-700"
-                                    : shippingIsFree
-                                      ? "bg-emerald-50 text-emerald-700"
-                                      : "bg-[#f0faf6] text-[#26634d]"
-                              }`}>
+                              <div className={`flex items-center justify-between rounded-xl px-4 py-3 text-sm ${shippingFetching
+                                ? "bg-[#f7f7f7] text-foreground/50"
+                                : shippingIsOutOfRange
+                                  ? "bg-red-50 text-red-700"
+                                  : shippingIsFree
+                                    ? "bg-emerald-50 text-emerald-700"
+                                    : "bg-[#f0faf6] text-[#26634d]"
+                                }`}>
                                 <div className="flex items-center gap-1.5">
                                   {shippingFetching
                                     ? <Loader2 className="size-4 animate-spin" />
-                                    : <Truck className="size-4" />
+                                    : <Bike className="size-4" />
                                   }
                                   <span className="font-medium">
                                     {shippingFetching
-                                      ? "Đang tính phí vận chuyển…"
+                                      ? t("group_calculating_ship")
                                       : shippingIsOutOfRange
-                                        ? "Ngoài vùng phục vụ"
+                                        ? t("group_out_of_range_badge")
                                         : `${shippingEstimate!.distanceKm.toFixed(1)} km`
                                     }
                                   </span>
                                 </div>
                                 {!shippingFetching && !shippingIsOutOfRange && (
                                   <span className="font-bold tabular-nums">
-                                    {shippingIsFree ? "Miễn phí" : fmtVnd(shippingFee)}
+                                    {shippingIsFree ? t("group_shipping_free") : fmtVnd(shippingFee)}
                                   </span>
                                 )}
                               </div>
@@ -449,7 +447,7 @@ export function GroupOrderCheckoutModal({
                         {needsCoords && !showNewForm && (
                           <div className="flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2.5 text-xs text-amber-700">
                             <MapPin className="size-3.5 shrink-0" />
-                            Địa chỉ này chưa có tọa độ. Phí ship sẽ xác nhận sau.
+                            {t("group_no_coords_warn")}
                           </div>
                         )}
                       </motion.div>
@@ -466,9 +464,9 @@ export function GroupOrderCheckoutModal({
                           <ShoppingBag className="size-6" strokeWidth={1.75} />
                         </div>
                         <div>
-                          <h3 className="text-base font-semibold text-foreground">Mang về tại quán</h3>
+                          <h3 className="text-base font-semibold text-foreground">{t("group_pickup_title")}</h3>
                           <p className="mt-1 text-sm text-foreground/65">
-                            Cả nhóm tự đến lấy đơn tại UjCha Matcha &amp; Tea.
+                            {t("group_pickup_desc")}
                           </p>
                         </div>
                       </motion.div>
@@ -481,7 +479,7 @@ export function GroupOrderCheckoutModal({
               <div className="flex items-center justify-between rounded-2xl border border-black/6 bg-white px-4 py-3.5">
                 <div className="space-y-0.5">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-foreground/40">
-                    Tổng đơn
+                    {t("group_order_total_label")}
                   </p>
                   <p className="text-lg font-bold tabular-nums text-[#1a3c34]">
                     {fmtVnd(grandTotal)}
@@ -489,7 +487,7 @@ export function GroupOrderCheckoutModal({
                 </div>
                 {type === "delivery" && !shippingFetching && shippingFee > 0 && (
                   <p className="text-xs text-foreground/50">
-                    Gồm phí ship {fmtVnd(shippingFee)}
+                    {t("group_incl_ship", { fee: fmtVnd(shippingFee) })}
                   </p>
                 )}
               </div>
@@ -515,12 +513,12 @@ export function GroupOrderCheckoutModal({
             {submitting ? (
               <>
                 <Loader2 className="size-4 animate-spin" />
-                Đang lưu…
+                {t("group_saving_delivery")}
               </>
             ) : (
               <>
                 <Check className="size-4" />
-                Lưu thiết lập giao hàng
+                {t("group_save_delivery")}
               </>
             )}
           </button>

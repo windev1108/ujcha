@@ -8,7 +8,7 @@ import { Link } from "@/i18n/navigation";
 import { revealTransition } from "@/app/[locale]/(landing)/components/RevealSection";
 import { ShoppingBag, ExternalLink } from "lucide-react";
 import { useState } from "react";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { ProductQuickAddModal } from "./ProductQuickAddModal";
 import { useAuth } from "@/hooks";
 import { getDisplayName } from "@/lib/product-name";
@@ -31,6 +31,7 @@ type Props = {
 
 export function ProductCard({ product, index = 0, eager = false }: Props) {
   const locale = useLocale();
+  const t = useTranslations();
   const displayName = getDisplayName(product, locale);
   const imageUrl = product.imageUrls[0] ?? null;
   const bgColor = PLACEHOLDER_BG[index % PLACEHOLDER_BG.length];
@@ -64,7 +65,7 @@ export function ProductCard({ product, index = 0, eager = false }: Props) {
               disabled={product.isSoldOut}
               className="relative aspect-[4/3] w-full overflow-hidden text-left disabled:cursor-not-allowed"
               style={{ backgroundColor: imageUrl ? undefined : bgColor }}
-              aria-label={`Xem tuỳ chọn cho ${displayName}`}
+              aria-label={`${t("add_to_cart")} ${displayName}`}
             >
               <ProductCardImage imageUrl={imageUrl} name={displayName} bgColor={bgColor} />
 
@@ -74,7 +75,7 @@ export function ProductCard({ product, index = 0, eager = false }: Props) {
                 {!product.isSoldOut && (
                   <span className="pointer-events-none flex items-center gap-1.5 rounded-full bg-white/95 px-4 py-1.5 text-[11px] font-semibold text-[#1a3c34] shadow-lg backdrop-blur-sm">
                     <ShoppingBag className="size-3.5" />
-                    Thêm vào giỏ
+                    {t("add_to_cart")}
                   </span>
                 )}
               </div>
@@ -95,7 +96,7 @@ export function ProductCard({ product, index = 0, eager = false }: Props) {
               href={`${ROUTES.MENU}/${product.slug}`}
               className="relative block aspect-[4/3] w-full overflow-hidden"
               style={{ backgroundColor: imageUrl ? undefined : bgColor }}
-              aria-label={`Xem ${displayName}`}
+              aria-label={`${t("view_menu")} ${displayName}`}
             >
               <ProductCardImage imageUrl={imageUrl} name={displayName} bgColor={bgColor} />
               <ProductCardBadges hasDiscount={hasDiscount} discountPercent={product.discountPercent} isSoldOut={product.isSoldOut} />
@@ -173,6 +174,7 @@ function ProductCardImage({ imageUrl, name, bgColor }: { imageUrl: string | null
 }
 
 function ProductCardBadges({ hasDiscount, discountPercent, isSoldOut }: { hasDiscount: boolean; discountPercent: number; isSoldOut: boolean }) {
+  const t = useTranslations();
   return (
     <>
       {hasDiscount && !isSoldOut && (
@@ -183,7 +185,7 @@ function ProductCardBadges({ hasDiscount, discountPercent, isSoldOut }: { hasDis
       {isSoldOut && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/45 backdrop-blur-[2px]">
           <span className="rounded-full border border-white/25 bg-black/55 px-3 py-1 text-[11px] font-semibold tracking-wide text-white">
-            Hết hàng
+            {t("sold_out")}
           </span>
         </div>
       )}

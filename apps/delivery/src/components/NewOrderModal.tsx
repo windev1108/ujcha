@@ -13,6 +13,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { Audio } from 'expo-av';
 import { Bike, Coffee, MapPin, Phone, Wallet } from '@/components/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
@@ -77,19 +78,22 @@ function buildItemMeta(item: NewDeliveryOrderPayload['items'][number]): string {
 
 function SwipeAccept({ onAccept, disabled }: { onAccept: () => void; disabled: boolean }) {
   const [trackW, setTrackW] = useState(0);
+  const trackWRef = useRef(0);
+  const disabledRef = useRef(disabled);
+  disabledRef.current = disabled;
   const translateX = useRef(new Animated.Value(0)).current;
   const accepted = useRef(false);
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => !disabled,
-      onMoveShouldSetPanResponder: () => !disabled,
+      onStartShouldSetPanResponder: () => !disabledRef.current,
+      onMoveShouldSetPanResponder: () => !disabledRef.current,
       onPanResponderMove: (_, { dx }) => {
-        const max = trackW - THUMB - 8;
+        const max = trackWRef.current - THUMB - 8;
         translateX.setValue(Math.max(0, Math.min(dx, max)));
       },
       onPanResponderRelease: (_, { dx }) => {
-        const max = trackW - THUMB - 8;
+        const max = trackWRef.current - THUMB - 8;
         if (!accepted.current && dx >= max * 0.8) {
           accepted.current = true;
           Animated.timing(translateX, { toValue: max, duration: 120, useNativeDriver: true }).start(() => onAccept());
@@ -107,7 +111,13 @@ function SwipeAccept({ onAccept, disabled }: { onAccept: () => void; disabled: b
   });
 
   return (
-    <View style={s.swipeTrack} onLayout={(e) => setTrackW(e.nativeEvent.layout.width)}>
+    <View
+      style={s.swipeTrack}
+      onLayout={(e) => {
+        trackWRef.current = e.nativeEvent.layout.width;
+        setTrackW(e.nativeEvent.layout.width);
+      }}
+    >
       <Animated.View style={[StyleSheet.absoluteFill, s.swipeFill, { opacity: bgOpacity, borderRadius: 100 }]} />
       <Text style={s.swipeHint}>Trượt để nhận đơn →</Text>
       <Animated.View style={[s.swipeThumb, { transform: [{ translateX }] }]} {...panResponder.panHandlers}>
@@ -161,15 +171,20 @@ export function NewOrderModal({
 
     void (async () => {
       try {
-        const ExpoAv = await import('expo-av');
-        await ExpoAv.Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
-        const { sound } = await ExpoAv.Audio.Sound.createAsync(
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+          shouldDuckAndroid: true,
+        });
+        const { sound } = await Audio.Sound.createAsync(
           // eslint-disable-next-line @typescript-eslint/no-require-imports
           require('../../assets/audio/new-order.mp3'),
           { shouldPlay: true, isLooping: true, volume: 1 },
         );
         soundRef.current = sound;
-      } catch { /* expo-av not available */ }
+      } catch (e) {
+        console.warn('[NewOrderModal] Audio failed:', e);
+      }
     })();
 
     const timer = setInterval(() => {

@@ -243,7 +243,7 @@ export function StaffApp() {
   // ── Socket: real-time events ────────────────────────────────────────────────
   useEffect(() => {
     if (!isLoggedIn) return
-    const socket = io(API_URL, { transports: ['websocket', 'polling'], reconnectionAttempts: 5 })
+    const socket = io(API_URL, { transports: ['websocket', 'polling'], reconnectionAttempts: Infinity, reconnectionDelay: 2000 })
 
     socket.on('order:new', () => newOrderHandlerRef.current())
     socket.on('order:external', (data?: { platform?: string }) => {

@@ -84,7 +84,7 @@ function OrderCard({ order, onPress, distM }: { order: Order; onPress: () => voi
   const st = STATUS[order.status] ?? { label: order.status, color: '#717171', bg: '#f5f5f5', dot: '#717171' };
   const name = order.user?.name ?? order.guestDeliveryName ?? 'Khách';
   const phone = order.user?.phone ?? order.guestDeliveryPhone ?? '';
-  const isActionable = ['ready', 'picked_up', 'arrived'].includes(order.status);
+  const isActionable = ['ready', 'picked_up', 'delivering', 'arrived'].includes(order.status);
 
   return (
     <Pressable
@@ -143,10 +143,11 @@ function OrderCard({ order, onPress, distM }: { order: Order; onPress: () => voi
         <View style={s.actionStrip}>
           <View style={s.actionStripInner}>
             {order.status === 'ready' && <Package size={13} color="#0f766e" />}
-            {order.status === 'picked_up' && <Bike size={13} color="#0f766e" />}
+            {(order.status === 'picked_up' || order.status === 'delivering') && <Bike size={13} color="#0f766e" />}
             {order.status === 'arrived' && <MapPin size={13} color="#0f766e" />}
             <Text style={s.actionStripText}>
               {order.status === 'ready' ? 'Đến lấy hàng' :
+                order.status === 'delivering' ? 'Đang giao hàng' :
                 order.status === 'picked_up' ? 'Đang trên đường' :
                   'Đã đến điểm giao'}
             </Text>

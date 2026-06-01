@@ -42,7 +42,7 @@ export class GroupOrderService {
           user: { select: { id: true, name: true, avatar: true } },
           items: {
             include: {
-              product: { select: { id: true, name: true, imageUrls: true, price: true } },
+              product: { select: { id: true, name: true, nameTranslation: true, imageUrls: true, price: true, optionGroups: true } },
             },
           },
         },

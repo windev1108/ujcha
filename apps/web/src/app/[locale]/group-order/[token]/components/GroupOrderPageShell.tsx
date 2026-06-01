@@ -10,6 +10,7 @@ import { io, Socket } from "socket.io-client";
 import Image from "next/image";
 import {
   Banknote,
+  Bike,
   Check,
   CheckCircle2,
   ChevronRight,
@@ -25,14 +26,14 @@ import {
   QrCode,
   Search,
   ShoppingBag,
-  SlidersHorizontal,
+
   Truck,
   Users,
   Utensils,
   X,
   Zap,
 } from "lucide-react";
-import { Button, Card, CardContent, Checkbox } from "@heroui/react";
+import { Button, Card, CardContent } from "@heroui/react";
 import { env } from "@/config/env";
 import { useAuthStore } from "@/store/auth-store";
 import { useProductsQuery } from "@/services/product/hooks";
@@ -59,17 +60,12 @@ import {
   type GroupOrderItem,
   type GroupDiscountTier,
 } from "@/services/group-order/api";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { getDisplayName } from "@/lib/product-name";
 
 const SESSION_KEY = (token: string) => `group_order_session_${token}`;
 const PARTICIPANT_KEY = (token: string) => `group_order_participant_${token}`;
 
-const FULFILLMENT_LABEL: Record<string, string> = {
-  delivery: "Giao hàng",
-  pickup: "Tại quán",
-  table: "Tại bàn",
-};
 
 function fmtVnd(n: number) {
   return new Intl.NumberFormat("vi-VN").format(Math.round(n)) + "đ";
@@ -81,11 +77,12 @@ function resolveDiscount(participantCount: number, tiers: GroupDiscountTier[]): 
 }
 
 function StatusBadge({ status }: { status: GroupOrderState["status"] }) {
-  const map = {
-    collecting: { label: "Đang thu thập", cls: "bg-blue-50 text-blue-700 ring-blue-200" },
-    locked: { label: "Đã khóa", cls: "bg-amber-50 text-amber-700 ring-amber-200" },
-    completed: { label: "Hoàn thành", cls: "bg-green-50 text-green-700 ring-green-200" },
-    cancelled: { label: "Đã hủy", cls: "bg-red-50 text-red-600 ring-red-200" },
+  const t = useTranslations();
+  const map: Record<GroupOrderState["status"], { label: string; cls: string }> = {
+    collecting: { label: t("group_status_collecting"), cls: "bg-blue-50 text-blue-700 ring-blue-200" },
+    locked: { label: t("group_status_locked"), cls: "bg-amber-50 text-amber-700 ring-amber-200" },
+    completed: { label: t("status_completed"), cls: "bg-green-50 text-green-700 ring-green-200" },
+    cancelled: { label: t("status_cancelled"), cls: "bg-red-50 text-red-600 ring-red-200" },
   };
   const { label, cls } = map[status] ?? map.collecting;
   return (
@@ -95,7 +92,7 @@ function StatusBadge({ status }: { status: GroupOrderState["status"] }) {
   );
 }
 
-type ToppingDraft = { toppingId: string; name: string; price: number };
+type ToppingDraft = { toppingId: string; name: string; price: number; nameTranslation?: Record<string, string> };
 type DraftValue = { quantity: number; selectedOptions: Record<string, string>; toppings: ToppingDraft[] };
 type DraftItem = DraftValue & { productId: string };
 
@@ -113,6 +110,7 @@ function ProductCustomizeSheet({
   onClose: () => void;
 }) {
   const locale = useLocale();
+  const t = useTranslations();
   const optionGroups = normalizeOptionGroups(product.optionGroups);
   const toppings = (product.toppings ?? []).filter((t) => t.isActive !== false);
   const basePrice = parseFloat(product.price) * (1 - (product.discountPercent ?? 0) / 100);
@@ -126,7 +124,8 @@ function ProductCustomizeSheet({
     return opts;
   });
   const [selectedToppings, setSelectedToppings] = useState<Set<string>>(
-    () => new Set(initial?.toppings?.map((t) => t.toppingId) ?? []),
+    // Limit to at most 1 from initial data
+    () => new Set((initial?.toppings?.map((t) => t.toppingId) ?? []).slice(0, 1)),
   );
 
   const optionSurcharge = computeOptionSurcharge(optionGroups, selectedOptions);
@@ -135,12 +134,9 @@ function ProductCustomizeSheet({
     .reduce((s, t) => s + t.price, 0);
   const unitPrice = basePrice + optionSurcharge + toppingTotal;
 
+  // Single-select: checking a new topping clears the previous one
   const toggleTopping = (id: string, checked: boolean) => {
-    setSelectedToppings((prev) => {
-      const next = new Set(prev);
-      checked ? next.add(id) : next.delete(id);
-      return next;
-    });
+    setSelectedToppings(checked ? new Set([id]) : new Set());
   };
 
   const handleConfirm = () => {
@@ -149,7 +145,7 @@ function ProductCustomizeSheet({
       selectedOptions,
       toppings: toppings
         .filter((t) => selectedToppings.has(t.id))
-        .map((t) => ({ toppingId: t.id, name: t.name, price: t.price })),
+        .map((t) => ({ toppingId: t.id, name: t.name, price: t.price, nameTranslation: t.nameTranslation })),
     });
   };
 
@@ -169,7 +165,7 @@ function ProductCustomizeSheet({
           <X className="size-4" />
         </button>
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-foreground/40">Tuỳ chọn</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-foreground/40">{t("group_options_eyebrow")}</p>
           <h3 className="truncate text-sm font-bold text-foreground">{getDisplayName(product, locale)}</h3>
         </div>
       </div>
@@ -177,13 +173,16 @@ function ProductCustomizeSheet({
       <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
         {optionGroups.length > 0 && (
           <div className="space-y-3 rounded-2xl border border-black/6 bg-[#f9fafb] p-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/40">Lựa chọn</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/40">{t("group_selection_eyebrow")}</p>
             {optionGroups.map((grp) => (
               <div key={grp.id} className="space-y-1.5">
-                <p className="text-xs font-semibold text-foreground">{grp.name}</p>
+                <p className="text-xs font-semibold text-foreground">
+                  {grp.nameTranslation?.[locale] ?? grp.name}
+                </p>
                 <div className="flex flex-wrap gap-1.5">
                   {grp.values.map((v) => {
                     const active = selectedOptions[grp.name] === v.label;
+                    const displayLabel = v.nameTranslation?.[locale] ?? v.label;
                     return (
                       <button
                         key={v.label}
@@ -194,7 +193,7 @@ function ProductCustomizeSheet({
                           : "bg-white text-foreground/70 ring-1 ring-black/10 hover:ring-[#1a3c34]/30"
                           }`}
                       >
-                        {v.label}
+                        {displayLabel}
                         {v.priceDelta > 0 && (
                           <span className={`ml-1 ${active ? "text-white/70" : "text-foreground/40"}`}>
                             +{formatVnd(v.priceDelta)}
@@ -212,37 +211,37 @@ function ProductCustomizeSheet({
         {toppings.length > 0 && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/40">Topping</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/40">{t("group_toppings_eyebrow")}</p>
               {selectedToppings.size > 0 && (
                 <p className="text-[10px] font-semibold text-foreground/40">
-                  {selectedToppings.size} đã chọn
+                  {t("group_selected_count", { count: selectedToppings.size })}
                 </p>
               )}
             </div>
-            <div className="max-h-52 space-y-1.5 overflow-y-auto rounded-2xl border border-black/6 bg-[#f9fafb] p-2">
+            <div className="space-y-1.5 rounded-2xl border border-black/6 bg-[#f9fafb] p-2">
               {toppings.map((top) => {
                 const active = selectedToppings.has(top.id);
                 return (
-                  <label
+                  <button
                     key={top.id}
-                    className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors cursor-pointer ${
-                      active
-                        ? "border-[#1a3c34]/30 bg-[#f0faf6]"
-                        : "border-transparent bg-white hover:border-black/8"
-                    }`}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => toggleTopping(top.id, !active)}
+                    className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${active
+                      ? "border-[#1a3c34]/30 bg-[#f0faf6]"
+                      : "border-transparent bg-white hover:border-black/8"
+                      }`}
                   >
-                    <Checkbox
-                      isSelected={active}
-                      onChange={(v) => toggleTopping(top.id, v)}
-                      aria-label={top.name}
-                    />
+                    <div className={`flex size-[18px] shrink-0 items-center justify-center rounded-[5px] border-2 transition-colors ${active ? "border-[#1a3c34] bg-[#1a3c34]" : "border-black/20 bg-white"}`}>
+                      {active && <Check className="size-2.5 text-white" />}
+                    </div>
                     <span className={`flex-1 text-sm font-medium ${active ? "text-[#1a3c34]" : "text-foreground"}`}>
-                      {top.name}
+                      {top.nameTranslation?.[locale] ?? top.name}
                     </span>
                     <span className={`text-sm tabular-nums ${active ? "font-semibold text-[#1a3c34]" : "text-foreground/50"}`}>
                       +{formatVnd(top.price)}
                     </span>
-                  </label>
+                  </button>
                 );
               })}
             </div>
@@ -250,7 +249,7 @@ function ProductCustomizeSheet({
         )}
 
         <div className="space-y-1.5">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/40">Số lượng</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/40">{t("group_quantity_label")}</p>
           <div className="inline-flex items-center rounded-full border border-black/8 bg-[#f7f7f7]">
             <button
               type="button"
@@ -272,7 +271,7 @@ function ProductCustomizeSheet({
         </div>
 
         <div className="flex items-center justify-between rounded-2xl bg-[#1a3c34]/8 px-4 py-3">
-          <span className="text-sm font-semibold text-[#1a3c34]">Đơn giá</span>
+          <span className="text-sm font-semibold text-[#1a3c34]">{t("group_unit_price_label")}</span>
           <span className="text-xl font-bold tabular-nums text-[#1a3c34]">{fmtVnd(unitPrice)}</span>
         </div>
       </div>
@@ -283,7 +282,7 @@ function ProductCustomizeSheet({
           onPress={handleConfirm}
         >
           <Check className="size-5" />
-          {initial ? "Cập nhật món" : "Thêm vào đơn"}
+          {initial ? t("group_update_item_btn") : t("group_add_item_btn")}
         </Button>
       </div>
     </motion.div>
@@ -306,6 +305,7 @@ function ProductPickerDrawer({
   saving: boolean;
 }) {
   const locale = useLocale();
+  const t = useTranslations();
   const [draft, setDraft] = useState<Map<string, DraftValue>>(() => {
     const m = new Map<string, DraftValue>();
     initialItems.forEach((item) =>
@@ -402,8 +402,8 @@ function ProductPickerDrawer({
 
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-black/6 px-5 py-4">
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-foreground/40">Thực đơn</p>
-                <h2 className="text-base font-bold text-foreground">Chọn món của bạn</h2>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-foreground/40">{t("group_menu_eyebrow")}</p>
+                <h2 className="text-base font-bold text-foreground">{t("group_select_items_title")}</h2>
               </div>
               <button
                 type="button"
@@ -419,7 +419,7 @@ function ProductPickerDrawer({
                 <Search className="size-4 shrink-0 text-foreground/40" />
                 <input
                   className="flex-1 bg-transparent text-sm text-foreground placeholder:text-foreground/40 focus:outline-none"
-                  placeholder="Tìm món…"
+                  placeholder={t("group_search_items")}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
@@ -441,7 +441,7 @@ function ProductPickerDrawer({
                     : "bg-black/6 text-foreground/60 hover:bg-black/10"
                     }`}
                 >
-                  Tất cả
+                  {t("group_all_categories")}
                 </button>
                 {categories.map((cat) => (
                   <button
@@ -466,7 +466,7 @@ function ProductPickerDrawer({
                 </div>
               ) : products.length === 0 ? (
                 <div className="flex h-32 items-center justify-center text-sm text-foreground/40">
-                  Không tìm thấy món nào
+                  {t("group_no_items_found")}
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -525,7 +525,7 @@ function ProductPickerDrawer({
                               {fmtVnd(price)}
                             </span>
                             {unavailable ? (
-                              <span className="text-[10px] text-foreground/40">Hết hàng</span>
+                              <span className="text-[10px] text-foreground/40">{t("group_sold_out")}</span>
                             ) : qty === 0 ? (
                               <button
                                 type="button"
@@ -575,7 +575,11 @@ function ProductPickerDrawer({
                 onPress={() => void handleSave()}
               >
                 {saving ? <Loader2 className="size-5 animate-spin" /> : <ShoppingBag className="size-5" />}
-                {saving ? "Đang lưu…" : totalCount > 0 ? `Lưu ${totalCount} món` : "Chưa chọn món nào"}
+                {saving
+                  ? t("group_saving_items")
+                  : totalCount > 0
+                    ? t("group_save_items_btn", { count: totalCount })
+                    : t("group_pick_items")}
               </Button>
             </div>
           </motion.div>
@@ -595,6 +599,7 @@ function ParticipantRow({
   paymentMode,
   onConfirmPaid,
   onOpenPicker,
+  onRemoveItem,
 }: {
   participant: GroupOrderState["participants"][0];
   isMe: boolean;
@@ -603,8 +608,10 @@ function ParticipantRow({
   paymentMode: GroupOrderState["paymentMode"];
   onConfirmPaid?: (participantId: string) => void;
   onOpenPicker?: () => void;
+  onRemoveItem?: (productId: string) => void;
 }) {
   const locale = useLocale();
+  const t = useTranslations();
   const canConfirm =
     groupStatus === "locked" &&
     paymentMode === "split" &&
@@ -641,12 +648,12 @@ function ParticipantRow({
               )}
               {isMe && (
                 <span className="ml-1.5 text-[10px] font-bold uppercase tracking-wide text-[#1a3c34]">
-                  (bạn)
+                  {t("group_you")}
                 </span>
               )}
             </p>
             <p className="text-xs text-foreground/50">
-              {participant.items.length} món · {fmtVnd(participant.subtotal)}
+              {t("group_items_amount", { count: participant.items.length, amount: fmtVnd(participant.subtotal) })}
             </p>
           </div>
         </div>
@@ -658,7 +665,7 @@ function ParticipantRow({
               className="flex items-center gap-1 rounded-full bg-[#1a3c34] px-3 py-1 text-xs font-semibold text-white transition hover:opacity-90"
             >
               <Plus className="size-3" />
-              Chọn món
+              {t('choose_dish')}
             </button>
           )}
           {participant.isReady && groupStatus === "collecting" && (
@@ -667,7 +674,7 @@ function ParticipantRow({
           {paymentMode === "split" && groupStatus === "locked" && (
             participant.paymentStatus === "paid" ? (
               <span className="flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-xs font-semibold text-green-700 ring-1 ring-green-200">
-                <Check className="size-3" /> Đã thanh toán
+                <Check className="size-3" /> {t("group_paid")}
               </span>
             ) : participant.items.length > 0 && canConfirm ? (
               <Button
@@ -675,7 +682,7 @@ function ParticipantRow({
                 className="rounded-full bg-[#1a3c34] px-3 py-1 text-xs font-semibold text-white"
                 onPress={() => onConfirmPaid?.(participant.id)}
               >
-                Xác nhận đã TT
+                {t("group_confirm_paid")}
               </Button>
             ) : null
           )}
@@ -685,28 +692,52 @@ function ParticipantRow({
       {participant.items.length > 0 && (
         <div className="mt-3 space-y-2 border-t border-black/6 pt-3">
           {participant.items.map((item) => {
-            const optionValues = Object.values(item.selectedOptions ?? {}).filter(Boolean);
+            const groups = normalizeOptionGroups(item.product?.optionGroups);
+            const resolvedOptions = Object.entries(item.selectedOptions ?? {})
+              .map(([groupName, optionLabel]) => {
+                const grp = groups.find((g) => g.name === groupName);
+                const val = grp?.values.find((v) => v.label === optionLabel);
+                return {
+                  label: val?.nameTranslation?.[locale] ?? val?.label ?? optionLabel,
+                  priceDelta: val?.priceDelta ?? 0,
+                };
+              })
+              .filter((o) => o.label);
             const toppingTotal = item.toppings?.reduce((s, t) => s + t.price, 0) ?? 0;
             const lineTotal = (item.unitPrice + toppingTotal) * item.quantity;
             return (
-              <div key={item.id} className="flex items-start justify-between gap-2 text-xs">
+              <div key={item.id} className="flex items-start gap-2 text-xs">
+                {isMe && groupStatus === "collecting" && !participant.isReady && (
+                  <button
+                    type="button"
+                    onClick={() => onRemoveItem?.(item.productId)}
+                    className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-black/6 text-foreground/35 transition-colors hover:bg-red-50 hover:text-red-500"
+                  >
+                    <X className="size-2.5" />
+                  </button>
+                )}
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className="flex items-start gap-1.5">
-                    <ChevronRight className="mt-0.5 size-3 shrink-0 text-foreground/25" />
+                    {!(isMe && groupStatus === "collecting" && !participant.isReady) && (
+                      <ChevronRight className="mt-0.5 size-3 shrink-0 text-foreground/25" />
+                    )}
                     <span className="font-medium text-foreground/80">
                       {item.product ? getDisplayName(item.product, locale) : "Sản phẩm"} ×{item.quantity}
                     </span>
                   </span>
-                  {optionValues.length > 0 && (
+                  {resolvedOptions.length > 0 && (
                     <p className="pl-[18px] text-[11px] text-foreground/45">
-                      {optionValues.join(" · ")}
+                      {resolvedOptions.map((o) =>
+                        o.priceDelta > 0 ? `${o.label} +${formatVnd(o.priceDelta)}` : o.label
+                      ).join(" · ")}
                     </p>
                   )}
-                  {item.toppings?.length > 0 && (
-                    <p className="pl-[18px] text-[11px] text-foreground/45">
-                      +{item.toppings.map((t) => t.name).join(", ")}
+                  {item.toppings?.map((top) => (
+                    <p key={top.toppingId} className="pl-[18px] text-[11px] text-foreground/45">
+                      {top.nameTranslation?.[locale] ?? top.name}
+                      {top.price > 0 && <span className="ml-1">+{formatVnd(top.price)}</span>}
                     </p>
-                  )}
+                  ))}
                   {item.note && (
                     <p className="pl-[18px] text-[11px] italic text-foreground/35">"{item.note}"</p>
                   )}
@@ -732,39 +763,40 @@ function DiscountBanner({
   participantCount: number;
   tiers: GroupDiscountTier[];
 }) {
+  const t = useTranslations();
   if (tiers.length === 0) return null;
   const sorted = [...tiers].sort((a, b) => a.minParticipants - b.minParticipants);
   const current = resolveDiscount(participantCount, tiers);
-  const next = sorted.find((t) => t.minParticipants > participantCount);
+  const next = sorted.find((tier) => tier.minParticipants > participantCount);
 
   return (
     <div className="rounded-2xl border border-dashed border-[#1a3c34]/30 bg-gradient-to-br from-[#f0faf6] to-white px-4 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Zap className="size-4 text-[#1a3c34]" />
-          <span className="text-sm font-semibold text-[#1a3c34]">Ưu đãi nhóm</span>
+          <span className="text-sm font-semibold text-[#1a3c34]">{t("group_discount_title")}</span>
         </div>
         {current > 0 ? (
           <span className="rounded-full bg-[#1a3c34] px-3 py-0.5 text-xs font-bold text-white">
-            -{current}% đang áp dụng
+            {t("group_discount_active", { pct: current })}
           </span>
         ) : next ? (
           <span className="text-xs text-foreground/60">
-            Thêm {next.minParticipants - participantCount} người → -{next.discountPercent}%
+            {t("group_add_for_tier", { need: next.minParticipants - participantCount, pct: next.discountPercent })}
           </span>
         ) : null}
       </div>
       {tiers.length > 0 && (
         <div className="mt-2.5 flex flex-wrap gap-2">
-          {sorted.map((t) => (
+          {sorted.map((tier) => (
             <div
-              key={t.minParticipants}
-              className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1 ${participantCount >= t.minParticipants
+              key={tier.minParticipants}
+              className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1 ${participantCount >= tier.minParticipants
                 ? "bg-[#1a3c34] text-white ring-[#1a3c34]"
                 : "bg-white text-foreground/50 ring-black/10"
                 }`}
             >
-              {t.minParticipants}+ người: -{t.discountPercent}%
+              {tier.minParticipants}+ người: -{tier.discountPercent}%
             </div>
           ))}
         </div>
@@ -776,6 +808,7 @@ function DiscountBanner({
 // ── CopyLinkButton ────────────────────────────────────────────────────────────
 
 function CopyLinkButton({ token: _token }: { token: string }) {
+  const t = useTranslations();
   const [copied, setCopied] = useState(false);
   const url = typeof window !== "undefined" ? window.location.href : "";
 
@@ -796,7 +829,7 @@ function CopyLinkButton({ token: _token }: { token: string }) {
       onPress={copy}
     >
       {copied ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
-      {copied ? "Đã sao chép!" : "Sao chép link"}
+      {copied ? t("group_copied") : t("group_copy_link")}
     </Button>
   );
 }
@@ -804,6 +837,7 @@ function CopyLinkButton({ token: _token }: { token: string }) {
 // ── LoginRequired ─────────────────────────────────────────────────────────────
 
 function LoginRequired({ token }: { token: string }) {
+  const t = useTranslations();
   const handleLogin = () => {
     sessionStorage.setItem("pendingGroupOrderJoin", token);
     window.location.href = "/login";
@@ -822,22 +856,17 @@ function LoginRequired({ token }: { token: string }) {
               <div className="flex size-14 items-center justify-center rounded-2xl bg-[#1a3c34]/8">
                 <Users className="size-7 text-[#1a3c34]" />
               </div>
-              <p className="text-lg font-bold text-foreground">Bạn được mời vào đơn nhóm</p>
-              <p className="text-sm text-foreground/55">
-                Đăng nhập để bắt đầu chọn món cùng nhóm
-              </p>
+              <p className="text-lg font-bold text-foreground">{t("group_login_title")}</p>
+              <p className="text-sm text-foreground/55">{t("group_login_desc")}</p>
             </div>
             <div className="rounded-xl border border-dashed border-[#1a3c34]/20 bg-[#f0faf6] px-4 py-3 text-center">
-              <p className="text-xs text-foreground/55">
-                Yêu cầu tài khoản để đảm bảo mỗi người chỉ tham gia một lần và nhận ưu đãi nhóm
-                chính xác.
-              </p>
+              <p className="text-xs text-foreground/55">{t("group_login_note")}</p>
             </div>
             <Button
               className="w-full rounded-full bg-[#1a3c34] py-3 font-semibold text-white"
               onPress={handleLogin}
             >
-              Đăng nhập để tham gia
+              {t("group_login_btn")}
             </Button>
           </CardContent>
         </Card>
@@ -861,9 +890,10 @@ function PaymentSheet({
   onSelect: (t: "cash" | "bank_transfer") => void;
   onClose: () => void;
 }) {
+  const t = useTranslations();
   const opts = [
-    { id: "cash" as const, label: "Tiền mặt", desc: "Thanh toán khi nhận hàng hoặc tại quán", Icon: Banknote },
-    { id: "bank_transfer" as const, label: "Chuyển khoản", desc: "Chuyển khoản ngân hàng / quét QR", Icon: QrCode },
+    { id: "cash" as const, label: t("cash"), desc: t("group_payment_cash_desc_2"), Icon: Banknote },
+    { id: "bank_transfer" as const, label: t("bank_transfer"), desc: t("group_payment_transfer_desc_2"), Icon: QrCode },
   ];
 
   return (
@@ -883,17 +913,14 @@ function PaymentSheet({
             transition={{ type: "spring", damping: 30, stiffness: 350 }}
             className="w-full rounded-t-3xl bg-white p-5 sm:max-w-sm sm:rounded-3xl"
           >
-            {/* Handle */}
             <div className="mb-4 flex justify-center sm:hidden">
               <div className="h-1 w-10 rounded-full bg-black/12" />
             </div>
 
             <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-foreground/40">
-              Phương thức thanh toán
+              {t("group_payment_sheet_title")}
             </p>
-            <p className="mb-4 text-xs text-foreground/50">
-              Áp dụng cho toàn bộ đơn nhóm
-            </p>
+            <p className="mb-4 text-xs text-foreground/50">{t("group_payment_for_order")}</p>
 
             <div className="space-y-2">
               {opts.map(({ id, label, desc, Icon }) => {
@@ -904,11 +931,10 @@ function PaymentSheet({
                     type="button"
                     disabled={loading}
                     onClick={() => onSelect(id)}
-                    className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left transition-all disabled:opacity-50 ${
-                      isSelected
-                        ? "bg-[#1a3c34] text-white shadow-sm"
-                        : "bg-[#f7f7f7] text-foreground hover:bg-black/6"
-                    }`}
+                    className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left transition-all disabled:opacity-50 ${isSelected
+                      ? "bg-[#1a3c34] text-white shadow-sm"
+                      : "bg-[#f7f7f7] text-foreground hover:bg-black/6"
+                      }`}
                   >
                     <div className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${isSelected ? "bg-white/15" : "bg-white"}`}>
                       {loading && isSelected
@@ -931,7 +957,7 @@ function PaymentSheet({
               onClick={onClose}
               className="mt-4 flex h-10 w-full items-center justify-center rounded-full border border-black/8 text-sm text-foreground/60 transition hover:bg-black/4"
             >
-              Đóng
+              {t("group_close")}
             </button>
           </motion.div>
         </motion.div>
@@ -943,6 +969,8 @@ function PaymentSheet({
 // ── GroupOrderPageShell ───────────────────────────────────────────────────────
 
 export function GroupOrderPageShell() {
+  const t = useTranslations();
+  const locale = useLocale();
   const params = useParams();
   const token = Array.isArray(params.token) ? params.token[0] : (params.token as string);
   const router = useRouter();
@@ -1070,7 +1098,7 @@ export function GroupOrderPageShell() {
   useEffect(() => {
     if (!hasPendingBankTransfer) return;
     const id = setInterval(() => {
-      fetchGroupOrder(token).then(setState).catch(() => {});
+      fetchGroupOrder(token).then(setState).catch(() => { });
     }, 5000);
     return () => clearInterval(id);
   }, [hasPendingBankTransfer, token]);
@@ -1163,6 +1191,30 @@ export function GroupOrderPageShell() {
     }
   };
 
+  const handleRemoveItem = async (productId: string) => {
+    if (!sessionToken || !me) return;
+    setPickerSaving(true);
+    try {
+      const remaining = me.items
+        .filter((item) => item.productId !== productId)
+        .map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          selectedOptions: item.selectedOptions,
+          toppings: item.toppings,
+          note: item.note ?? undefined,
+        }));
+      const newState = await updateGroupOrderItems(token, sessionToken, remaining);
+      setState(newState);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string | string[] } } };
+      const msg = err?.response?.data?.message ?? "Có lỗi xảy ra.";
+      alert(typeof msg === "string" ? msg : msg.join(", "));
+    } finally {
+      setPickerSaving(false);
+    }
+  };
+
   const handleSetFulfillment = async (payload: {
     type: "delivery" | "pickup";
     addressId?: string;
@@ -1241,6 +1293,10 @@ export function GroupOrderPageShell() {
   const FulfillmentIcon =
     state.type === "delivery" ? Truck : state.type === "table" ? Utensils : ShoppingBag;
   const needsAddress = state.type === "delivery" && !state.address;
+  const fulfillmentLabel = t(
+    state.type === "delivery" ? "type_delivery" :
+      state.type === "table" ? "type_table" : "type_pickup"
+  );
 
   return (
     <>
@@ -1282,38 +1338,33 @@ export function GroupOrderPageShell() {
         >
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-foreground/40">
-              Đơn hàng nhóm
+              {t("group_order_badge")}
             </p>
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-              Cùng chọn món nhé!
+              {t("group_headline")}
             </h1>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <StatusBadge status={state.status} />
               <span
-                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${
-                  state.paymentMode === "host_pays"
-                    ? "bg-amber-50 text-amber-700 ring-amber-200"
-                    : "bg-[#f0faf6] text-[#1a3c34] ring-[#1a3c34]/20"
-                }`}
+                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${state.paymentMode === "host_pays"
+                  ? "bg-amber-50 text-amber-700 ring-amber-200"
+                  : "bg-[#f0faf6] text-[#1a3c34] ring-[#1a3c34]/20"
+                  }`}
               >
                 {state.paymentMode === "host_pays" ? (
                   <Crown className="size-3" />
                 ) : (
                   <Users className="size-3" />
                 )}
-                {state.paymentMode === "host_pays" ? "Chủ nhóm trả" : "Mỗi người tự trả"}
+                {state.paymentMode === "host_pays" ? t("group_host_pays") : t("group_split_pay")}
               </span>
               <span className="text-xs text-foreground/50">
                 <Users className="mr-1 inline-block size-3.5" />
-                {state.participants.length} thành viên
+                {t("group_n_members", { count: state.participants.length })}
               </span>
               <span className="text-xs text-foreground/40">
                 <Clock className="mr-1 inline-block size-3.5" />
-                Hết hạn{" "}
-                {new Date(state.expiresAt).toLocaleTimeString("vi-VN", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
+                {t("group_expires", { time: new Date(state.expiresAt).toLocaleTimeString(locale === "vi" ? "vi-VN" : "en-US", { hour: "2-digit", minute: "2-digit" }) })}
               </span>
             </div>
           </div>
@@ -1321,7 +1372,6 @@ export function GroupOrderPageShell() {
           <div className="flex flex-wrap items-center gap-2">
             <CopyLinkButton token={token} />
 
-            {/* Unlock button — host only, locked state */}
             {state.status === "locked" && isHost && (
               <Button
                 size="sm"
@@ -1330,11 +1380,10 @@ export function GroupOrderPageShell() {
                 onPress={() => void withAction(() => unlockGroupOrder(token, sessionToken!))}
               >
                 <LockOpen className="size-3.5" />
-                Mở khóa
+                {t("group_unlock")}
               </Button>
             )}
 
-            {/* Lock button — host only, collecting state */}
             {state.status === "collecting" && isHost && (
               <Button
                 size="sm"
@@ -1343,7 +1392,7 @@ export function GroupOrderPageShell() {
                 onPress={() => void withAction(() => lockGroupOrder(token, sessionToken!))}
               >
                 <Lock className="size-3.5" />
-                Khóa đơn
+                {t("group_lock")}
               </Button>
             )}
           </div>
@@ -1382,7 +1431,7 @@ export function GroupOrderPageShell() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className={`text-sm font-semibold ${needsAddress ? "text-amber-800" : "text-foreground"}`}>
-                      {FULFILLMENT_LABEL[state.type] ?? state.type}
+                      {fulfillmentLabel}
                       {needsAddress && <span className="ml-1.5 text-amber-600">· Chưa chọn địa chỉ</span>}
                     </p>
                     {state.address && (
@@ -1392,38 +1441,12 @@ export function GroupOrderPageShell() {
                       <p className="text-xs text-foreground/45">Nhấn để thay đổi hình thức</p>
                     )}
                     {needsAddress && (
-                      <p className="text-xs text-amber-600/80">Thiết lập địa chỉ trước khi khóa đơn</p>
+                      <p className="text-xs text-amber-600/80">{t("group_need_addr_hint")}</p>
                     )}
                   </div>
                   <ChevronRight className={`size-4 shrink-0 ${needsAddress ? "text-amber-400" : "text-foreground/25"}`} />
                 </motion.button>
 
-                {/* Payment type — separate row */}
-                <motion.button
-                  type="button"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.08 }}
-                  onClick={() => setShowPaymentPicker(true)}
-                  className="flex w-full items-center gap-3 rounded-2xl border border-black/6 bg-white p-4 text-left transition hover:border-[#1a3c34]/20 hover:shadow-sm"
-                >
-                  <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#1a3c34]/8">
-                    {state.paymentType === "cash"
-                      ? <Banknote className="size-4.5 text-[#1a3c34]" />
-                      : <QrCode className="size-4.5 text-[#1a3c34]" />
-                    }
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-foreground">Phương thức thanh toán</p>
-                    <p className="text-xs text-foreground/55">
-                      {state.paymentType === "cash" ? "Tiền mặt" : "Chuyển khoản ngân hàng"}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <SlidersHorizontal className="size-3.5 text-foreground/30" />
-                    <span className="text-[11px] font-semibold text-[#1a3c34]">Thay đổi</span>
-                  </div>
-                </motion.button>
               </>
             )}
 
@@ -1440,9 +1463,7 @@ export function GroupOrderPageShell() {
                     <FulfillmentIcon className="size-4.5 text-[#1a3c34]" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-foreground">
-                      {FULFILLMENT_LABEL[state.type] ?? state.type}
-                    </p>
+                    <p className="text-sm font-semibold text-foreground">{fulfillmentLabel}</p>
                     {state.address && (
                       <p className="truncate text-xs text-foreground/55">{state.address.fullAddress}</p>
                     )}
@@ -1489,6 +1510,7 @@ export function GroupOrderPageShell() {
                       void withAction(() => confirmParticipantPaid(token, sessionToken!, participantId))
                     }
                     onOpenPicker={() => setShowPicker(true)}
+                    onRemoveItem={(productId) => void handleRemoveItem(productId)}
                   />
                 </motion.div>
               ))}
@@ -1503,8 +1525,8 @@ export function GroupOrderPageShell() {
                 >
                   <Plus className="mr-1 size-4" />
                   {me.items.length > 0
-                    ? `Sửa món (${me.items.reduce((s, i) => s + i.quantity, 0)})`
-                    : "Chọn món"}
+                    ? t("group_edit_items", { count: me.items.reduce((s, i) => s + i.quantity, 0) })
+                    : t("group_pick_items")}
                 </Button>
                 <Button
                   className="flex-1 rounded-full bg-[#1a3c34] py-3 font-semibold text-white"
@@ -1514,7 +1536,7 @@ export function GroupOrderPageShell() {
                   }
                 >
                   <CheckCircle2 className="mr-1 size-4" />
-                  Xác nhận
+                  {t("group_confirm_ready")}
                 </Button>
               </div>
             )}
@@ -1522,10 +1544,8 @@ export function GroupOrderPageShell() {
             {me && me.isReady && state.status === "collecting" && (
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center">
                 <CheckCircle2 className="mx-auto mb-1 size-5 text-emerald-600" />
-                <p className="text-sm font-semibold text-emerald-800">Bạn đã xác nhận xong!</p>
-                <p className="mt-0.5 text-xs text-emerald-700">
-                  Chờ các thành viên khác và chủ nhóm khóa đơn
-                </p>
+                <p className="text-sm font-semibold text-emerald-800">{t("group_ready_title")}</p>
+                <p className="mt-0.5 text-xs text-emerald-700">{t("group_ready_waiting")}</p>
               </div>
             )}
 
@@ -1539,21 +1559,23 @@ export function GroupOrderPageShell() {
                   {me.paymentType === null ? (
                     <div className="flex items-center justify-center gap-2 py-4">
                       <Loader2 className="size-4 animate-spin text-[#1a3c34]" />
-                      <span className="text-sm text-foreground/55">Đang khởi tạo thanh toán…</span>
+                      <span className="text-sm text-foreground/55">{t("group_init_payment")}</span>
                     </div>
                   ) : me.paymentType === "cash" ? (
                     <>
                       <div className="mb-3 flex items-center gap-2">
                         <Banknote className="size-4 text-[#1a3c34]" />
-                        <p className="text-sm font-semibold text-foreground">Thanh toán tiền mặt</p>
+                        <p className="text-sm font-semibold text-foreground">{t("group_split_cash_title")}</p>
                       </div>
                       <div className="mb-3 flex items-center justify-between rounded-xl bg-[#f0faf6] px-4 py-3">
-                        <span className="text-sm text-foreground/65">Phần của bạn</span>
+                        <span className="text-sm text-foreground/65">{t("group_split_my_share")}</span>
                         <span className="text-lg font-bold tabular-nums text-[#1a3c34]">{fmtVnd(myAmount)}</span>
                       </div>
                       {discountPercent > 0 && (
                         <p className="mb-2 text-xs text-foreground/45">
-                          Đã bao gồm -{discountPercent}% giảm giá nhóm{state.shippingFee > 0 ? ` và phí ship chia đều` : ""}
+                          {state.shippingFee > 0
+                            ? t("group_incl_discount_ship", { pct: discountPercent })
+                            : t("group_incl_discount", { pct: discountPercent })}
                         </p>
                       )}
                       <Button
@@ -1562,14 +1584,14 @@ export function GroupOrderPageShell() {
                         onPress={() => void withAction(() => confirmParticipantPaid(token, sessionToken!, me.id))}
                       >
                         <Check className="mr-1.5 size-4" />
-                        Tôi đã trả tiền mặt
+                        {t("group_cash_confirm_btn")}
                       </Button>
                     </>
                   ) : me.paymentQrToken ? (
                     <>
                       <div className="mb-3 flex items-center gap-2">
                         <QrCode className="size-4 text-[#1a3c34]" />
-                        <p className="text-sm font-semibold text-foreground">Chuyển khoản ngân hàng</p>
+                        <p className="text-sm font-semibold text-foreground">{t("group_split_transfer_title")}</p>
                       </div>
                       <div className="mb-3 flex flex-col items-center gap-3">
                         {payConfig?.bankCode && payConfig?.accountNumber ? (
@@ -1586,27 +1608,29 @@ export function GroupOrderPageShell() {
                         )}
                         {payConfig && (
                           <div className="w-full space-y-1.5 rounded-xl bg-[#f0faf6] px-4 py-3 text-xs">
-                            {payConfig.bankCode && <div className="flex justify-between"><span className="text-foreground/50">Ngân hàng</span><span className="font-semibold">{payConfig.bankCode}</span></div>}
-                            {payConfig.accountNumber && <div className="flex justify-between"><span className="text-foreground/50">Số tài khoản</span><span className="font-mono font-semibold">{payConfig.accountNumber}</span></div>}
-                            <div className="flex justify-between"><span className="text-foreground/50">Số tiền</span><span className="font-bold text-[#1a3c34]">{fmtVnd(myAmount)}</span></div>
-                            <div className="flex justify-between"><span className="text-foreground/50">Nội dung CK</span><span className="font-mono font-semibold">{me.paymentQrToken.slice(0, 12).toUpperCase()}</span></div>
+                            {payConfig.bankCode && <div className="flex justify-between"><span className="text-foreground/50">{t("group_bank")}</span><span className="font-semibold">{payConfig.bankCode}</span></div>}
+                            {payConfig.accountNumber && <div className="flex justify-between"><span className="text-foreground/50">{t("group_account_no")}</span><span className="font-mono font-semibold">{payConfig.accountNumber}</span></div>}
+                            <div className="flex justify-between"><span className="text-foreground/50">{t("group_amount")}</span><span className="font-bold text-[#1a3c34]">{fmtVnd(myAmount)}</span></div>
+                            <div className="flex justify-between"><span className="text-foreground/50">{t("group_transfer_note")}</span><span className="font-mono font-semibold">{me.paymentQrToken.slice(0, 12).toUpperCase()}</span></div>
                           </div>
                         )}
                         {discountPercent > 0 && (
                           <p className="w-full text-xs text-foreground/45">
-                            Đã bao gồm -{discountPercent}% giảm giá nhóm{state.shippingFee > 0 ? ` và phí ship chia đều` : ""}
+                            {state.shippingFee > 0
+                              ? t("group_incl_discount_ship", { pct: discountPercent })
+                              : t("group_incl_discount", { pct: discountPercent })}
                           </p>
                         )}
                       </div>
                       <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-[#1a3c34]/20 bg-[#f0faf6] py-3">
                         <Loader2 className="size-4 animate-spin text-[#1a3c34]" />
-                        <span className="text-sm font-medium text-[#1a3c34]">Đang chờ xác nhận thanh toán…</span>
+                        <span className="text-sm font-medium text-[#1a3c34]">{t("group_split_waiting")}</span>
                       </div>
                     </>
                   ) : (
                     <div className="flex items-center justify-center gap-2 py-4">
                       <Loader2 className="size-4 animate-spin text-[#1a3c34]" />
-                      <span className="text-sm text-foreground/55">Đang tạo mã QR…</span>
+                      <span className="text-sm text-foreground/55">{t("group_gen_qr")}</span>
                     </div>
                   )}
                 </div>
@@ -1622,89 +1646,65 @@ export function GroupOrderPageShell() {
           >
             <Card className="rounded-3xl border border-black/6 bg-white shadow-[0_12px_40px_-20px_rgba(0,0,0,0.12)]">
               <CardContent className="space-y-4 p-6">
+                {/* Summary header */}
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-foreground">Tổng kết đơn</p>
+                  <p className="text-sm font-semibold text-foreground">{t("group_order_summary")}</p>
                   <span
-                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${
-                      state.paymentMode === "host_pays"
-                        ? "bg-amber-50 text-amber-700 ring-amber-200"
-                        : "bg-[#f0faf6] text-[#1a3c34] ring-[#1a3c34]/20"
-                    }`}
+                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${state.paymentMode === "host_pays"
+                      ? "bg-amber-50 text-amber-700 ring-amber-200"
+                      : "bg-[#f0faf6] text-[#1a3c34] ring-[#1a3c34]/20"
+                      }`}
                   >
                     {state.paymentMode === "host_pays" ? (
                       <Crown className="size-3" />
                     ) : (
                       <Users className="size-3" />
                     )}
-                    {state.paymentMode === "host_pays" ? "Chủ nhóm trả" : "Mỗi người tự trả"}
+                    {state.paymentMode === "host_pays" ? t("group_host_pays") : t("group_split_pay")}
                   </span>
                 </div>
 
-                {/* Fulfillment chip */}
-                <div className="flex items-center justify-between gap-2 rounded-xl border border-black/6 px-3 py-2">
-                  <div className="flex items-center gap-2">
-                    <FulfillmentIcon className="size-3.5 text-foreground/50" />
-                    <span className="text-xs font-medium text-foreground/70">
-                      {FULFILLMENT_LABEL[state.type] ?? state.type}
-                    </span>
-                  </div>
-                  {isHost && state.status === "collecting" && (
-                    <button
-                      type="button"
-                      onClick={() => setShowFulfillment(true)}
-                      className="text-[11px] font-semibold text-[#1a3c34] hover:underline"
-                    >
-                      Thay đổi
-                    </button>
-                  )}
-                </div>
-
-                {/* Payment method row */}
-                {isHost && (
-                  <div className="flex items-center justify-between gap-2 rounded-xl border border-black/6 px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      {state.paymentType === "cash" ? (
-                        <Banknote className="size-3.5 text-foreground/50" />
-                      ) : (
-                        <QrCode className="size-3.5 text-foreground/50" />
+                {/* Delivery + Payment — consolidated section */}
+                <div className="rounded-2xl border border-black/6 bg-[#f9fafb] divide-y divide-black/6">
+                  {/* Fulfillment row — read-only in sidebar; left column card handles editing */}
+                  <div className="flex items-center gap-2.5 px-3 py-2.5">
+                    <FulfillmentIcon className="size-3.5 shrink-0 text-foreground/45" />
+                    <span className="min-w-0 flex-1 text-xs font-medium text-foreground/70">
+                      {fulfillmentLabel}
+                      {state.address && (
+                        <span className="block truncate text-[11px] font-normal text-foreground/45">
+                          {state.address.fullAddress}
+                        </span>
                       )}
-                      <span className="text-xs font-medium text-foreground/70">
-                        {state.paymentType === "cash" ? "Tiền mặt" : "Chuyển khoản"}
+                    </span>
+                    {state.type === "delivery" && shippingEstimate?.distanceKm && (
+                      <span className="shrink-0 text-[11px] font-semibold text-[#1a3c34]">
+                        {shippingEstimate.distanceKm.toFixed(1)} km
                       </span>
-                    </div>
-                    {state.status === "collecting" && (
+                    )}
+                  </div>
+
+                  {/* Payment type row — "Thay đổi" only here (not duplicated in left column) */}
+                  <div className="flex items-center gap-2.5 px-3 py-2.5">
+                    {state.paymentType === "cash" ? (
+                      <Banknote className="size-3.5 shrink-0 text-foreground/45" />
+                    ) : (
+                      <QrCode className="size-3.5 shrink-0 text-foreground/45" />
+                    )}
+                    <span className="flex-1 text-xs font-medium text-foreground/70">
+                      {state.paymentType === "cash" ? t("cash") : t("bank_transfer")}
+                    </span>
+                    {isHost && state.status === "collecting" && (
                       <button
                         type="button"
                         onClick={() => setShowPaymentPicker(true)}
-                        className="text-[11px] font-semibold text-[#1a3c34] hover:underline"
+                        className="shrink-0 text-[11px] font-semibold text-[#1a3c34] hover:underline"
                       >
-                        Thay đổi
+                        {t("group_change")}
                       </button>
                     )}
                   </div>
-                )}
-
-                {state.address && (
-                  <div className="flex items-start gap-1.5 rounded-xl bg-[#f9fafb] px-3 py-2">
-                    <MapPin className="mt-0.5 size-3.5 shrink-0 text-foreground/40" />
-                    <p className="text-xs leading-snug text-foreground/60">{state.address.fullAddress}</p>
-                  </div>
-                )}
-
-                {/* Shipping distance badge */}
-                {state.type === "delivery" && shippingEstimate?.distanceKm && (
-                  <div className="flex items-center gap-2 rounded-xl border border-[#1a3c34]/12 bg-[#f0faf6] px-3 py-2">
-                    <Truck className="size-3.5 shrink-0 text-[#1a3c34]/60" />
-                    <span className="text-xs font-semibold text-[#1a3c34]">
-                      {shippingEstimate.distanceKm.toFixed(1)} km
-                    </span>
-                    {state.shippingFee > 0 && (
-                      <span className="ml-auto text-xs tabular-nums text-foreground/50">
-                        {fmtVnd(state.shippingFee)}
-                      </span>
-                    )}
-                  </div>
-                )}
+                </div>
 
                 {needsAddress && isHost && state.status === "collecting" && (
                   <button
@@ -1713,25 +1713,25 @@ export function GroupOrderPageShell() {
                     className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-amber-300 bg-amber-50 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100"
                   >
                     <MapPin className="size-3.5" />
-                    Chọn địa chỉ giao hàng
+                    {t("group_set_address_btn")}
                   </button>
                 )}
 
                 {/* Totals */}
                 <div className="space-y-2 text-sm text-foreground/70">
                   <div className="flex justify-between">
-                    <span>Tạm tính ({totalItems} món)</span>
+                    <span>{t("group_subtotal_n", { count: totalItems })}</span>
                     <span className="tabular-nums font-medium text-foreground">{fmtVnd(totalAmount)}</span>
                   </div>
                   {discountAmount > 0 && (
                     <div className="flex justify-between text-emerald-700">
-                      <span>Giảm giá nhóm (-{discountPercent}%)</span>
+                      <span>{t("group_group_discount", { pct: discountPercent })}</span>
                       <span className="tabular-nums font-medium">-{fmtVnd(discountAmount)}</span>
                     </div>
                   )}
                   {state.shippingFee > 0 && (
                     <div className="flex justify-between">
-                      <span>Phí vận chuyển</span>
+                      <span>{t("shipping_fee")}</span>
                       <span className="tabular-nums font-medium">{fmtVnd(state.shippingFee)}</span>
                     </div>
                   )}
@@ -1739,7 +1739,7 @@ export function GroupOrderPageShell() {
 
                 <div className="border-t border-black/6 pt-3">
                   <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-sm font-medium text-foreground/70">Thành tiền</span>
+                    <span className="text-sm font-medium text-foreground/70">{t("group_grand_total")}</span>
                     <span className="text-2xl font-bold tabular-nums text-[#1a3c34]">
                       {fmtVnd(finalAmount)}
                     </span>
@@ -1749,9 +1749,7 @@ export function GroupOrderPageShell() {
                 {/* Host pays checkout */}
                 {state.status === "locked" && state.paymentMode === "host_pays" && isHost && !pendingCheckoutOrder && (
                   <div className="space-y-2 pt-2">
-                    <p className="text-xs text-foreground/55">
-                      Bạn (chủ nhóm) sẽ thanh toán toàn bộ đơn:
-                    </p>
+                    <p className="text-xs text-foreground/55">{t("group_host_pays_desc")}</p>
                     <Button
                       className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#1a3c34] text-sm font-semibold text-white"
                       isDisabled={actionLoading}
@@ -1762,7 +1760,7 @@ export function GroupOrderPageShell() {
                       ) : (
                         <QrCode className="size-4" />
                       )}
-                      {state.paymentType === "cash" ? "Thanh toán tiền mặt" : "Thanh toán chuyển khoản"}
+                      {state.paymentType === "cash" ? t("group_pay_cash_btn") : t("group_pay_transfer_btn")}
                     </Button>
                   </div>
                 )}
@@ -1789,16 +1787,14 @@ export function GroupOrderPageShell() {
                 {state.status === "completed" && state.order && (
                   <div className="rounded-xl bg-emerald-50 px-4 py-3 text-center">
                     <Loader2 className="mx-auto mb-1.5 size-5 animate-spin text-emerald-600" />
-                    <p className="text-sm font-semibold text-emerald-800">Đơn đã tạo thành công!</p>
-                    <p className="mt-0.5 text-xs text-emerald-700">Đang chuyển đến chi tiết đơn…</p>
+                    <p className="text-sm font-semibold text-emerald-800">{t("group_order_done")}</p>
+                    <p className="mt-0.5 text-xs text-emerald-700">{t("group_order_redirecting")}</p>
                   </div>
                 )}
 
                 {state.status === "collecting" && (
                   <p className="text-center text-xs text-foreground/40">
-                    {allReady
-                      ? "Tất cả đã sẵn sàng — chủ nhóm có thể khóa đơn"
-                      : "Chờ tất cả thành viên chọn xong"}
+                    {allReady ? t("group_all_ready_hint") : t("group_waiting_hint")}
                   </p>
                 )}
               </CardContent>

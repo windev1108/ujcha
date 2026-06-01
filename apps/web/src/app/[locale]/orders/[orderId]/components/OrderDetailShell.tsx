@@ -1,12 +1,13 @@
 "use client";
 
 import { Fragment, useCallback } from "react";
-import dynamic from "next/dynamic";
 import { motion } from "motion/react";
 import Image from "next/image";
 import {
-  ArrowLeft, BadgeCheck, Ban, Bike, Box, CheckCircle2, Circle, Clock,
+  ArrowLeft, BadgeCheck, Ban, Box, CheckCircle2, Circle, Clock,
   CreditCard, ExternalLink, MapPin, Package, Phone, Printer, Star, Truck, Utensils, Users,
+  Bike,
+  Motorbike,
 } from "lucide-react";
 import { ShipperLiveMap } from "./ShipperLiveMap";
 import { useRouter } from "@/i18n/navigation";
@@ -15,20 +16,12 @@ import { useOrderDetailQuery, orderKeys } from "@/services/order/hooks";
 import { useOrderStatusSocket } from "@/hooks/useOrderStatusSocket";
 import { ROUTES } from "@/lib/routes";
 import { revealTransition, easeOutSmooth } from "@/app/[locale]/(landing)/components/RevealSection";
-import type { OrderDetail, OrderStatus, PaymentType } from "@/services/order/api";
+import type { OrderDetail, OrderStatus } from "@/services/order/api";
 import { BankTransferQR } from "@/app/[locale]/checkout/components/BankTransferQR";
 import { printReceipt, type ReceiptOrder } from "@/lib/order-receipt";
 import { fetchGroupOrder, type GroupOrderState } from "@/services/group-order/api";
-
-const LeafletMap = dynamic(
-  () => import("@/components/common/LeafletMapInner"),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="h-full w-full animate-pulse rounded-2xl bg-surface-card" />
-    ),
-  },
-);
+import { useTranslations, useLocale } from "next-intl";
+import { getDisplayName } from "@/lib/product-name";
 
 // ── formatters ────────────────────────────────────────────────────────────────
 
@@ -37,8 +30,9 @@ function fmtVnd(s: string | number) {
   return new Intl.NumberFormat("vi-VN").format(Math.round(n)) + "đ";
 }
 
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleString("vi-VN", {
+function fmtDate(iso: string, locale: string) {
+  const tag = locale === "vi" ? "vi-VN" : "en-US";
+  return new Date(iso).toLocaleString(tag, {
     weekday: "long",
     day: "2-digit",
     month: "2-digit",
@@ -48,8 +42,9 @@ function fmtDate(iso: string) {
   });
 }
 
-function fmtStepTime(iso: string) {
-  return new Date(iso).toLocaleString("vi-VN", {
+function fmtStepTime(iso: string, locale: string) {
+  const tag = locale === "vi" ? "vi-VN" : "en-US";
+  return new Date(iso).toLocaleString(tag, {
     day: "2-digit",
     month: "2-digit",
     hour: "2-digit",
@@ -72,40 +67,27 @@ const STEP_TIMESTAMP_KEY: Partial<Record<OrderStatus, keyof OrderDetail>> = {
 // ── status config ──────────────────────────────────────────────────────────────
 
 const STATUS_STEPS_DELIVERY: OrderStatus[] = [
-  "pending", "confirmed", "preparing", "ready", "picked_up", "arrived", "completed",
+  "pending", "confirmed", "preparing", "ready", "delivering", "arrived", "completed",
 ];
 const STATUS_STEPS_NO_DELIVERY: OrderStatus[] = [
   "pending", "confirmed", "preparing", "ready", "completed",
 ];
 
 const STATUS_META: Record<OrderStatus, {
-  label: string;
-  desc: string;
   icon: React.ElementType;
   color: string;
   bg: string;
   ring: string;
 }> = {
-  pending: { label: "Chờ xác nhận", desc: "Đơn vừa được đặt", icon: Clock, color: "text-amber-700", bg: "bg-amber-50", ring: "ring-amber-200" },
-  confirmed: { label: "Đã xác nhận", desc: "Quán đã nhận đơn", icon: BadgeCheck, color: "text-blue-700", bg: "bg-blue-50", ring: "ring-blue-200" },
-  preparing: { label: "Đang pha chế", desc: "Đang chuẩn bị đơn", icon: Box, color: "text-purple-700", bg: "bg-purple-50", ring: "ring-purple-200" },
-  ready: { label: "Sẵn sàng", desc: "Đơn đã sẵn sàng", icon: CheckCircle2, color: "text-teal-700", bg: "bg-teal-50", ring: "ring-teal-200" },
-  delivering: { label: "Đang giao", desc: "Shipper đang trên đường", icon: Truck, color: "text-sky-700", bg: "bg-sky-50", ring: "ring-sky-200" },
-  picked_up: { label: "Đã lấy hàng", desc: "Shipper đã lấy hàng, đang giao", icon: Truck, color: "text-orange-700", bg: "bg-orange-50", ring: "ring-orange-200" },
-  arrived: { label: "Đã đến nơi", desc: "Shipper đã đến địa chỉ của bạn", icon: MapPin, color: "text-sky-700", bg: "bg-sky-50", ring: "ring-sky-200" },
-  completed: { label: "Hoàn thành", desc: "Đơn đã được giao thành công", icon: CheckCircle2, color: "text-green-700", bg: "bg-green-50", ring: "ring-green-200" },
-  cancelled: { label: "Đã huỷ", desc: "Đơn đã bị huỷ", icon: Ban, color: "text-red-600", bg: "bg-red-50", ring: "ring-red-200" },
-};
-
-const PAYMENT_LABEL: Record<PaymentType, string> = {
-  cash: "Tiền mặt khi nhận",
-  bank_transfer: "Chuyển khoản ngân hàng",
-};
-
-const TYPE_LABEL: Record<string, string> = {
-  delivery: "Giao hàng",
-  pickup: "Nhận tại quán",
-  table: "Tại bàn",
+  pending: { icon: Clock, color: "text-amber-700", bg: "bg-amber-50", ring: "ring-amber-200" },
+  confirmed: { icon: BadgeCheck, color: "text-blue-700", bg: "bg-blue-50", ring: "ring-blue-200" },
+  preparing: { icon: Box, color: "text-purple-700", bg: "bg-purple-50", ring: "ring-purple-200" },
+  ready: { icon: CheckCircle2, color: "text-teal-700", bg: "bg-teal-50", ring: "ring-teal-200" },
+  delivering: { icon: Truck, color: "text-sky-700", bg: "bg-sky-50", ring: "ring-sky-200" },
+  picked_up: { icon: Truck, color: "text-orange-700", bg: "bg-orange-50", ring: "ring-orange-200" },
+  arrived: { icon: MapPin, color: "text-sky-700", bg: "bg-sky-50", ring: "ring-sky-200" },
+  completed: { icon: CheckCircle2, color: "text-green-700", bg: "bg-green-50", ring: "ring-green-200" },
+  cancelled: { icon: Ban, color: "text-red-600", bg: "bg-red-50", ring: "ring-red-200" },
 };
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -117,13 +99,19 @@ function getOptions(raw: unknown): Record<string, string> {
   return {};
 }
 
-type ExtraItem = { name?: string; toppingId?: string; price?: string };
+type OptionDetail = { group: string; label: string; priceDelta?: number; nameTranslation?: Record<string, string> };
+function getOptionDetails(raw: unknown): OptionDetail[] {
+  if (Array.isArray(raw)) return raw as OptionDetail[];
+  return [];
+}
+
+type ExtraItem = { name?: string; toppingId?: string; price?: string; nameTranslation?: Record<string, string> };
 function getExtras(raw: unknown): ExtraItem[] {
   if (Array.isArray(raw)) return raw as ExtraItem[];
   return [];
 }
 
-function toReceiptOrder(order: OrderDetail): ReceiptOrder {
+function toReceiptOrder(order: OrderDetail, locale: string): ReceiptOrder {
   return {
     paymentCode: order.paymentCode,
     createdAt: order.createdAt,
@@ -141,37 +129,48 @@ function toReceiptOrder(order: OrderDetail): ReceiptOrder {
     items: order.items.map((item) => ({
       quantity: item.quantity,
       price: item.price,
-      productName: item.product.name,
-      options: getOptions(item.optionsJson),
-      extras: getExtras(item.extrasJson).map((e) => ({ name: e.name ?? "", price: e.price ?? 0 })),
+      productName: getDisplayName(item.product, locale),
+      options: Object.fromEntries(
+        getOptionDetails(item.optionDetailsJson).map((od) => [
+          od.group,
+          od.nameTranslation?.[locale] ?? od.label,
+        ]),
+      ),
+      extras: getExtras(item.extrasJson).map((e) => ({
+        name: e.nameTranslation?.[locale] ?? e.name ?? "",
+        price: e.price ?? 0,
+      })),
       note: item.note,
     })),
   };
 }
 
-// ── pill badges (synced with ItemOptionsDisplay) ───────────────────────────────
+// ── pill badges ───────────────────────────────────────────────────────────────
 
-function OrderItemBadges({ options, extras }: { options: Record<string, string>; extras: ExtraItem[] }) {
-  const optionEntries = Object.entries(options);
-  if (optionEntries.length === 0 && extras.length === 0) return null;
+function OrderItemBadges({ optionDetails = [], extras, locale }: { optionDetails?: OptionDetail[]; extras: ExtraItem[]; locale: string }) {
+  if (optionDetails.length === 0 && extras.length === 0) return null;
   return (
     <div className="mt-1.5 flex flex-wrap gap-1.5">
-      {optionEntries.map(([, v]) => (
-        <span
-          key={v}
-          className="inline-flex items-center rounded-full bg-surface-secondary px-2.5 py-0.5 text-[11px] font-medium text-foreground/70"
-        >
-          {v}
-        </span>
-      ))}
+      {optionDetails.map((od, i) => {
+        const label = od.nameTranslation?.[locale] ?? od.label;
+        return (
+          <span
+            key={i}
+            className="inline-flex items-center rounded-full bg-surface-secondary px-2.5 py-0.5 text-[11px] font-medium text-foreground/70"
+          >
+            {label}
+          </span>
+        );
+      })}
       {extras.map((e, i) => {
         const price = e.price ? parseFloat(e.price) : 0;
+        const name = e.nameTranslation?.[locale] ?? e.name ?? "Topping";
         return (
           <span
             key={i}
             className="inline-flex items-center gap-1 rounded-full bg-kun-mint/20 px-2.5 py-0.5 text-[11px] font-medium text-kun-products-forest"
           >
-            + {e.name ?? "Topping"}
+            + {name}
             {price > 0 && (
               <span className="text-[10px] text-kun-products-forest/60">+{fmtVnd(price)}</span>
             )}
@@ -200,6 +199,33 @@ function Skeleton() {
 export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const t = useTranslations();
+  const locale = useLocale();
+
+  const STATUS_LABEL: Record<OrderStatus, string> = {
+    pending: t("status_pending"),
+    confirmed: t("status_confirmed"),
+    preparing: t("status_preparing"),
+    ready: t("status_ready"),
+    delivering: t("status_delivering"),
+    picked_up: t("picked_up"),
+    arrived: t("arrived"),
+    completed: t("status_completed"),
+    cancelled: t("status_cancelled"),
+  };
+
+  const STATUS_DESC: Record<OrderStatus, string> = {
+    pending: t("status_pending_desc"),
+    confirmed: t("status_confirmed_desc"),
+    preparing: t("status_preparing_desc"),
+    ready: t("status_ready_desc"),
+    delivering: t("status_delivering_desc"),
+    picked_up: t("status_picked_up_desc"),
+    arrived: t("status_arrived_desc"),
+    completed: t("status_completed_desc"),
+    cancelled: t("status_cancelled_desc"),
+  };
+
   const { data: order, isLoading, isError } = useOrderDetailQuery(paymentCode);
 
   const isTerminal = order?.status === "completed" || order?.status === "cancelled";
@@ -246,13 +272,13 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 bg-surface-soft px-4 text-center">
         <Package className="size-12 text-foreground/25" />
-        <p className="font-semibold text-foreground">Không tìm thấy đơn hàng</p>
+        <p className="font-semibold text-foreground">{t("order_not_found")}</p>
         <button
           type="button"
           onClick={() => router.push(ROUTES.ORDERS)}
           className="text-sm text-kun-products-forest hover:underline"
         >
-          Quay lại lịch sử đơn
+          {t("back_to_order_history")}
         </button>
       </div>
     );
@@ -270,7 +296,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
     !isCancelled;
 
   function handlePrint() {
-    printReceipt(toReceiptOrder(order!));
+    printReceipt(toReceiptOrder(order!, locale), locale);
   }
 
   return (
@@ -290,7 +316,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
             className="flex items-center gap-1.5 text-sm text-foreground/55 hover:text-foreground transition-colors"
           >
             <ArrowLeft className="size-4" />
-            Lịch sử đơn hàng
+            {t("order_history")}
           </button>
           <button
             type="button"
@@ -298,7 +324,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
             className="flex items-center gap-1.5 rounded-full border border-black/10 bg-white px-4 py-2 text-sm font-medium text-foreground/65 shadow-[0_2px_8px_-4px_rgba(0,0,0,0.08)] transition hover:bg-surface-soft hover:text-foreground"
           >
             <Printer className="size-3.5" />
-            In hóa đơn
+            {t("print_invoice")}
           </button>
         </motion.div>
 
@@ -311,38 +337,37 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
             transition={{ ...revealTransition, delay: 0.04 }}
             className="overflow-hidden rounded-3xl border border-black/6 bg-white shadow-[0_4px_20px_-8px_rgba(0,0,0,0.1)]"
           >
-            {/* Top stripe — status color */}
             <div className={`h-1.5 w-full ${statusMeta.bg}`} />
 
             <div className="p-5 sm:p-6">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-                    {isGroupOrder ? "Đơn nhóm" : "Đơn hàng"}
+                    {isGroupOrder ? t("group_order_badge") : t("order")}
                   </p>
                   <p className="mt-1 font-mono text-2xl font-bold tracking-tight text-foreground">
                     #{order.paymentCode}
                   </p>
-                  <p className="mt-1 text-xs text-foreground/50">{fmtDate(order.createdAt)}</p>
+                  <p className="mt-1 text-xs text-foreground/50">{fmtDate(order.createdAt, locale)}</p>
                 </div>
                 <div className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold ring-1 ${statusMeta.bg} ${statusMeta.color} ${statusMeta.ring}`}>
                   <StatusIcon className="size-3.5" />
-                  {statusMeta.label}
+                  {STATUS_LABEL[order.status]}
                 </div>
               </div>
 
               {/* Tags row */}
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <span className="rounded-full bg-surface-secondary px-3 py-1 text-xs font-medium text-foreground/70">
-                  {TYPE_LABEL[order.type] ?? order.type}
+                  {t(`type_${order.type}` as "type_delivery" | "type_pickup" | "type_table")}
                 </span>
                 <span className="rounded-full bg-surface-secondary px-3 py-1 text-xs font-medium text-foreground/70">
-                  {PAYMENT_LABEL[order.paymentType]}
+                  {t(order.paymentType as "cash" | "bank_transfer")}
                 </span>
                 {isGroupOrder && (
                   <span className="flex items-center gap-1 rounded-full bg-[#1a3c34]/8 px-3 py-1 text-xs font-semibold text-[#1a3c34]">
                     <Users className="size-3" />
-                    Đơn nhóm
+                    {t("group_order_badge")}
                   </span>
                 )}
                 {order.shipper && (
@@ -360,11 +385,11 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                     <Star className="size-4 fill-amber-500 text-amber-500" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold text-amber-800">Điểm tích lũy từ đơn này</p>
+                    <p className="text-xs font-semibold text-amber-800">{t("earned_points_from_order")}</p>
                     <p className="text-[11px] text-amber-600/80">
                       {order.status === "completed"
-                        ? "Điểm đã được cộng vào tài khoản"
-                        : "Sẽ được cộng khi đơn hoàn thành"}
+                        ? t("points_already_added")
+                        : t("points_will_be_added")}
                     </p>
                   </div>
                   <span className="shrink-0 text-lg font-bold tabular-nums text-amber-700">
@@ -384,10 +409,9 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
               className="rounded-3xl border border-black/6 bg-white p-5 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.1)] sm:p-6"
             >
               <p className="mb-5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-                Tiến trình đơn hàng
+                {t("order_progress")}
               </p>
 
-              {/* Mobile: vertical; Desktop (sm+): horizontal */}
               <div className="flex flex-col sm:flex-row sm:items-start">
                 {STATUS_STEPS.map((step, i) => {
                   const done = i <= activeStepIdx;
@@ -397,10 +421,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
 
                   return (
                     <Fragment key={step}>
-                      {/* Step item */}
                       <div className="flex gap-4 sm:flex-1 sm:flex-col sm:items-center sm:gap-1.5">
-
-                        {/* Dot + vertical connector (mobile only) */}
                         <div className="flex shrink-0 flex-col items-center">
                           <motion.div
                             initial={{ scale: 0.7, opacity: 0 }}
@@ -425,17 +446,16 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                           )}
                         </div>
 
-                        {/* Label + timestamp */}
                         <div className={`pt-1.5 sm:pt-0 sm:text-center ${isLast ? "" : "pb-6 sm:pb-0"}`}>
                           <p className={`text-sm font-semibold leading-tight sm:text-[11px] transition-colors ${active ? "text-kun-products-forest"
                             : done ? "text-foreground"
                               : "text-foreground/35"
                             }`}>
-                            {STATUS_META[step].label}
+                            {STATUS_LABEL[step]}
                           </p>
                           {active && (
                             <p className="mt-0.5 text-xs text-foreground/55 sm:hidden">
-                              {STATUS_META[step].desc}
+                              {STATUS_DESC[step]}
                             </p>
                           )}
                           {done && (() => {
@@ -444,14 +464,13 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                             if (!ts) return null;
                             return (
                               <p className="mt-0.5 text-[10px] tabular-nums text-foreground/40 sm:text-[9px]">
-                                {fmtStepTime(ts)}
+                                {fmtStepTime(ts, locale)}
                               </p>
                             );
                           })()}
                         </div>
                       </div>
 
-                      {/* Horizontal connector — desktop only, between steps */}
                       {!isLast && (
                         <div className={`hidden sm:block h-0.5 min-w-3 flex-1 self-start mt-5 rounded-full ${i < activeStepIdx ? "bg-kun-mint/50" : "bg-surface-secondary"
                           }`} />
@@ -473,8 +492,8 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
             >
               <Ban className="size-5 shrink-0 text-red-500" />
               <div>
-                <p className="text-sm font-semibold text-red-700">Đơn hàng đã bị huỷ</p>
-                <p className="mt-0.5 text-xs text-red-500/80">Liên hệ quán nếu bạn cần hỗ trợ.</p>
+                <p className="text-sm font-semibold text-red-700">{t("order_cancelled_title")}</p>
+                <p className="mt-0.5 text-xs text-red-500/80">{t("order_cancelled_desc")}</p>
               </div>
             </motion.div>
           )}
@@ -487,40 +506,55 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
               transition={{ ...revealTransition, delay: 0.10 }}
               className="overflow-hidden rounded-3xl border border-black/6 bg-white shadow-[0_4px_20px_-8px_rgba(0,0,0,0.1)]"
             >
-              {/* Live stripe khi đang giao */}
-              {isShipperActive && (
-                <div className="h-1 w-full bg-gradient-to-r from-sky-400 via-sky-500 to-sky-400 animate-pulse" />
-              )}
-
-              <div className="p-5 sm:p-6">
-                <p className="mb-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-                  Shipper giao hàng
-                </p>
-
-                <div className="flex items-center gap-4">
-                  {/* Avatar */}
-                  <div className={`relative flex size-12 shrink-0 items-center justify-center rounded-full ring-1 ${order.status === "delivering"
-                      ? "bg-sky-50 ring-sky-200"
-                      : order.status === "completed"
-                        ? "bg-green-50 ring-green-200"
-                        : "bg-surface-soft ring-black/8"
-                    }`}>
-                    <Bike className={`size-5 ${order.status === "delivering"
-                        ? "text-sky-600"
-                        : order.status === "completed"
-                          ? "text-green-600"
-                          : "text-foreground/50"
-                      }`} />
-                    {order.status === "delivering" && (
-                      <span className="absolute -right-0.5 -top-0.5 flex size-3 items-center justify-center rounded-full bg-sky-500 ring-2 ring-white">
-                        <span className="size-1.5 animate-ping rounded-full bg-white opacity-80" />
-                      </span>
-                    )}
+              {/* Active delivery — gradient header */}
+              {isShipperActive ? (
+                <div className="bg-gradient-to-r from-[#1a3c34] to-[#26634d] px-5 py-4 sm:px-6">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      {/* Truck avatar */}
+                      <div className="relative flex size-11 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/20">
+                        <Bike className="size-5 text-white" />
+                        <span className="absolute -right-1 -top-1 flex size-3.5 items-center justify-center rounded-full bg-sky-400 ring-2 ring-[#1a3c34]">
+                          <span className="size-2 animate-ping rounded-full bg-white opacity-75" />
+                        </span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/55">
+                          {t("shipper_delivering")}
+                        </p>
+                        <p className="mt-0.5 font-semibold text-white">{order.shipper.name}</p>
+                      </div>
+                    </div>
+                    <span className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold text-white ring-1 ring-white/20">
+                      <span className="size-1.5 animate-pulse rounded-full bg-sky-300" />
+                      {STATUS_LABEL[order.status]}
+                    </span>
                   </div>
-
-                  {/* Info */}
+                  {order.shipper.phone && (
+                    <a
+                      href={`tel:${order.shipper.phone}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white/80 ring-1 ring-white/15 transition-colors hover:bg-white/20"
+                    >
+                      <Phone className="size-3" />
+                      {order.shipper.phone}
+                    </a>
+                  )}
+                </div>
+              ) : (
+                /* Completed / other state — light header */
+                <div className="flex items-center gap-3 px-5 py-4 sm:px-6">
+                  <div className={`flex size-11 shrink-0 items-center justify-center rounded-2xl ${order.status === "completed"
+                    ? "bg-green-50 ring-1 ring-green-200"
+                    : "bg-surface-soft ring-1 ring-black/8"
+                    }`}>
+                    <Bike className={`size-5 ${order.status === "completed" ? "text-green-600" : "text-foreground/40"}`} />
+                  </div>
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-foreground">{order.shipper.name}</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+                      {t("shipper_delivering")}
+                    </p>
+                    <p className="mt-0.5 font-semibold text-foreground">{order.shipper.name}</p>
                     {order.shipper.phone ? (
                       <a
                         href={`tel:${order.shipper.phone}`}
@@ -531,35 +565,29 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                         {order.shipper.phone}
                       </a>
                     ) : (
-                      <p className="mt-0.5 text-sm text-foreground/40">Chưa có số điện thoại</p>
+                      <p className="mt-0.5 text-xs text-foreground/35">{t("no_phone_number")}</p>
                     )}
                   </div>
-
-                  {/* Status badge */}
-                  {isShipperActive && (
-                    <span className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-700 ring-1 ring-sky-200">
-                      <span className="size-1.5 animate-pulse rounded-full bg-sky-500" />
-                      {STATUS_META[order.status]?.label ?? "Đang giao"}
-                    </span>
-                  )}
                   {order.status === "completed" && (
                     <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 ring-1 ring-green-200">
                       <CheckCircle2 className="size-3.5" />
-                      Đã giao
+                      {t("delivered")}
                     </span>
                   )}
                 </div>
+              )}
 
-                {/* Live tracking map — shown while delivery is active */}
-                {isShipperActive && (
+              {/* Live map */}
+              {isShipperActive && (
+                <div className="px-5 pb-5 sm:px-6 sm:pb-6">
                   <ShipperLiveMap
                     orderId={order.id}
                     destLat={order.address?.lat}
                     destLng={order.address?.lng}
                     orderStatus={order.status}
                   />
-                )}
-              </div>
+                </div>
+              )}
             </motion.div>
           )}
 
@@ -599,12 +627,11 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
               return (
                 <>
                   <p className="mb-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-                    Sản phẩm ({totalItemCount})
+                    {t("items_count", { count: totalItemCount })}
                   </p>
                   <div className="divide-y divide-black/6">
                     {participantsWithItems.map((participant, pIdx) => (
                       <div key={participant.id} className={pIdx > 0 ? "pt-5" : ""}>
-                        {/* Participant cluster header */}
                         <div className="mb-3 flex items-center gap-2.5">
                           {participant.avatar ? (
                             <div className="relative size-7 shrink-0 overflow-hidden rounded-full ring-1 ring-black/8">
@@ -618,7 +645,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                           <span className="text-sm font-semibold text-foreground">{participant.name}</span>
                           {participant.isHost && (
                             <span className="rounded-full bg-[#1a3c34]/8 px-2 py-0.5 text-[10px] font-semibold text-[#1a3c34]">
-                              Chủ nhóm
+                              {t("group_host")}
                             </span>
                           )}
                           <span className="ml-auto text-sm font-bold tabular-nums text-kun-primary">
@@ -626,17 +653,18 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                           </span>
                         </div>
 
-                        {/* Participant's items */}
                         <ul className="space-y-3">
                           {participant.items.map((item, iIdx) => {
                             const imageUrl = item.product.imageUrls[0] ?? null;
-                            const options = item.selectedOptions ?? {};
-                            const extras: ExtraItem[] = (item.toppings ?? []).map((t) => ({
-                              name: t.name,
-                              toppingId: t.toppingId,
-                              price: String(t.price),
+                            const productName = getDisplayName(item.product, locale);
+                            const optionDetails: OptionDetail[] = Object.entries(item.selectedOptions ?? {}).map(([group, label]) => ({ group, label }));
+                            const extras: ExtraItem[] = (item.toppings ?? []).map((top) => ({
+                              name: top.name,
+                              toppingId: top.toppingId,
+                              price: String(top.price),
+                              nameTranslation: top.nameTranslation,
                             }));
-                            const toppingTotal = item.toppings?.reduce((s, t) => s + t.price, 0) ?? 0;
+                            const toppingTotal = item.toppings?.reduce((s, top) => s + top.price, 0) ?? 0;
                             const lineTotal = (item.unitPrice + toppingTotal) * item.quantity;
 
                             return (
@@ -653,11 +681,11 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                                     style={{ backgroundColor: imageUrl ? undefined : "#1a3c34" }}
                                   >
                                     {imageUrl ? (
-                                      <Image src={imageUrl} alt={item.product.name} fill className="object-cover" sizes="64px" />
+                                      <Image src={imageUrl} alt={productName} fill className="object-cover" sizes="64px" />
                                     ) : (
                                       <div className="absolute inset-0 flex items-center justify-center">
                                         <span className="select-none text-xl font-black text-white/20">
-                                          {item.product.name.charAt(0).toUpperCase()}
+                                          {productName.charAt(0).toUpperCase()}
                                         </span>
                                       </div>
                                     )}
@@ -669,12 +697,12 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
 
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-start justify-between gap-2">
-                                    <p className="font-semibold leading-snug text-foreground">{item.product.name}</p>
+                                    <p className="font-semibold leading-snug text-foreground">{productName}</p>
                                     <p className="shrink-0 text-sm font-bold tabular-nums text-kun-primary">
                                       {fmtVnd(lineTotal)}
                                     </p>
                                   </div>
-                                  <OrderItemBadges options={options} extras={extras} />
+                                  <OrderItemBadges optionDetails={optionDetails} extras={extras} locale={locale} />
                                   {item.note && (
                                     <p className="mt-1.5 text-xs italic text-foreground/45">&ldquo;{item.note}&rdquo;</p>
                                   )}
@@ -691,12 +719,13 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
             })() : (
               <>
                 <p className="mb-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-                  Sản phẩm ({order.items.length})
+                  {t("items_count", { count: order.items.length })}
                 </p>
                 <ul className="space-y-4">
                   {order.items.map((item, idx) => {
                     const imageUrl = item.product.imageUrls[0] ?? null;
-                    const options = getOptions(item.optionsJson);
+                    const productName = getDisplayName(item.product, locale);
+                    const optionDetails = getOptionDetails(item.optionDetailsJson);
                     const extras = getExtras(item.extrasJson);
                     const lineTotal = parseFloat(item.price) * item.quantity;
 
@@ -714,11 +743,11 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                             style={{ backgroundColor: imageUrl ? undefined : "#1a3c34" }}
                           >
                             {imageUrl ? (
-                              <Image src={imageUrl} alt={item.product.name} fill className="object-cover" sizes="64px" />
+                              <Image src={imageUrl} alt={productName} fill className="object-cover" sizes="64px" />
                             ) : (
                               <div className="absolute inset-0 flex items-center justify-center">
                                 <span className="select-none text-xl font-black text-white/20">
-                                  {item.product.name.charAt(0).toUpperCase()}
+                                  {productName.charAt(0).toUpperCase()}
                                 </span>
                               </div>
                             )}
@@ -731,13 +760,13 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0 flex-1">
-                              <p className="mt-0.5 font-semibold leading-snug text-foreground">{item.product.name}</p>
+                              <p className="mt-0.5 font-semibold leading-snug text-foreground">{productName}</p>
                             </div>
                             <p className="shrink-0 text-sm font-bold tabular-nums text-kun-primary">
                               {fmtVnd(lineTotal)}
                             </p>
                           </div>
-                          <OrderItemBadges options={options} extras={extras} />
+                          <OrderItemBadges optionDetails={optionDetails} extras={extras} locale={locale} />
                           {item.note && (
                             <p className="mt-1.5 text-xs italic text-foreground/45">&ldquo;{item.note}&rdquo;</p>
                           )}
@@ -759,53 +788,54 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
               className="rounded-3xl border border-black/6 bg-white p-5 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.1)] sm:p-6"
             >
               <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-                Thông tin nhận hàng
+                {t("fulfillment_info")}
               </p>
               <div className="space-y-3">
-                {order.type === "delivery" && (order.guestDeliveryName || order.guestDeliveryPhone) && (
-                  <div className="flex gap-3">
-                    <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-soft">
-                      <Phone className="size-4 text-kun-products-forest" />
+                {order.type === "delivery" && (() => {
+                  const recipientName = order.guestDeliveryName || order.user?.name || null;
+                  const recipientPhone = order.guestDeliveryPhone || order.user?.phone || null;
+                  if (!recipientName && !recipientPhone) return null;
+                  return (
+                    <div className="flex gap-3">
+                      <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-soft">
+                        <Phone className="size-4 text-kun-products-forest" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        {recipientName && (
+                          <p className="text-sm font-medium text-foreground">{recipientName}</p>
+                        )}
+                        {recipientPhone && (
+                          <a
+                            href={`tel:${recipientPhone}`}
+                            className="mt-0.5 inline-flex items-center gap-1 text-sm text-foreground/65 hover:text-kun-products-forest"
+                          >
+                            <Phone className="size-3.5" />
+                            {recipientPhone}
+                          </a>
+                        )}
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      {order.guestDeliveryName && (
-                        <p className="text-sm font-medium text-foreground">{order.guestDeliveryName}</p>
-                      )}
-                      {order.guestDeliveryPhone && (
-                        <p className="mt-0.5 text-sm text-foreground/65">{order.guestDeliveryPhone}</p>
-                      )}
-                    </div>
-                  </div>
-                )}
+                  );
+                })()}
                 {order.address && (
                   <div className="flex gap-3">
                     <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-soft">
                       <MapPin className="size-4 text-kun-products-forest" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-foreground">Địa chỉ giao hàng</p>
+                      <p className="text-sm font-medium text-foreground">{t("delivery_address_title")}</p>
                       <p className="mt-0.5 text-sm text-foreground/65">{order.address.fullAddress}</p>
-
                       {order.address.lat != null && order.address.lng != null && (
-                        <>
-                          <div className="mt-3 h-44 overflow-hidden rounded-2xl ring-1 ring-black/6">
-                            <LeafletMap
-                              lat={order.address.lat}
-                              lng={order.address.lng}
-                              address={order.address.fullAddress}
-                            />
-                          </div>
-                          <a
-                            href={`https://www.google.com/maps?q=${order.address.lat},${order.address.lng}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-kun-products-forest hover:underline"
-                          >
-                            <ExternalLink className="size-3" />
-                            Mở trong Google Maps
-                          </a>
-                        </>
+                        <a
+                          href={`https://www.google.com/maps?q=${order.address.lat},${order.address.lng}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-kun-products-forest hover:underline"
+                        >
+                          <ExternalLink className="size-3" />
+                          {t("open_in_google_maps")}
+                        </a>
                       )}
                     </div>
                   </div>
@@ -818,7 +848,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                     <div>
                       <p className="text-sm font-medium text-foreground">{order.table.name}</p>
                       {order.table.area && (
-                        <p className="mt-0.5 text-sm text-foreground/65">Khu vực {order.table.area}</p>
+                        <p className="mt-0.5 text-sm text-foreground/65">{t("table_area_label", { area: order.table.area })}</p>
                       )}
                     </div>
                   </div>
@@ -829,15 +859,14 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                       <Clock className="size-4 text-kun-products-forest" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-foreground">Giờ nhận</p>
-                      <p className="mt-0.5 text-sm text-foreground/65">{fmtDate(order.pickupTime)}</p>
+                      <p className="text-sm font-medium text-foreground">{t("pickup_time")}</p>
+                      <p className="mt-0.5 text-sm text-foreground/65">{fmtDate(order.pickupTime, locale)}</p>
                     </div>
                   </div>
                 )}
               </div>
             </motion.div>
           )}
-
 
           {/* ── Payment summary ───────────────────────────────────── */}
           <motion.div
@@ -847,7 +876,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
             className="rounded-3xl border border-black/6 bg-white p-5 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.1)] sm:p-6"
           >
             <p className="mb-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-              Thanh toán
+              {t("payment")}
             </p>
 
             <div className="space-y-2.5 text-sm">
@@ -860,33 +889,33 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                 return (
                   <>
                     <div className="flex justify-between text-foreground/65">
-                      <span>Tạm tính</span>
+                      <span>{t("temporarily_calculated")}</span>
                       <span className="tabular-nums font-medium text-foreground">{fmtVnd(subtotal)}</span>
                     </div>
                     {discount > 0 && (
                       <div className="flex justify-between text-foreground/65">
-                        <span>Giảm giá</span>
+                        <span>{t("discount")}</span>
                         <span className="tabular-nums font-medium text-kun-products-forest">-{fmtVnd(discount)}</span>
                       </div>
                     )}
                     {pointDiscount > 0 && (
                       <div className="flex justify-between text-foreground/65">
-                        <span>Điểm UjCha</span>
+                        <span>{t("points_label")}</span>
                         <span className="tabular-nums font-medium text-kun-products-forest">-{fmtVnd(pointDiscount)}</span>
                       </div>
                     )}
                     {order.type === 'delivery' && (
                       <div className="flex justify-between text-foreground/65">
-                        <span>Phí vận chuyển</span>
+                        <span>{t("shipping_fee")}</span>
                         {shipping > 0 ? (
                           <span className="tabular-nums font-medium text-foreground">{fmtVnd(shipping)}</span>
                         ) : (
-                          <span className="text-xs font-semibold uppercase text-kun-products-forest">Miễn phí</span>
+                          <span className="text-xs font-semibold uppercase text-kun-products-forest">{t("free")}</span>
                         )}
                       </div>
                     )}
                     <div className="flex items-baseline justify-between border-t border-black/6 pt-3">
-                      <span className="font-semibold text-foreground/70">Tổng cộng</span>
+                      <span className="font-semibold text-foreground/70">{t("total")}</span>
                       <span className="text-xl font-bold tabular-nums text-kun-primary sm:text-2xl">
                         {fmtVnd(total)}
                       </span>
@@ -898,11 +927,11 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
 
             <div className="mt-4 flex items-center gap-2.5 rounded-2xl bg-surface-soft px-4 py-3">
               <CreditCard className="size-4 shrink-0 text-kun-products-forest" />
-              <span className="text-sm text-foreground/70">{PAYMENT_LABEL[order.paymentType]}</span>
+              <span className="text-sm text-foreground/70">{t(order.paymentType as "cash" | "bank_transfer")}</span>
               {order.paymentStatus === "paid" && (
                 <span className="ml-auto flex items-center gap-1 text-xs font-semibold text-green-600">
                   <CheckCircle2 className="size-3.5" />
-                  Đã thanh toán
+                  {t("paid")}
                 </span>
               )}
             </div>

@@ -4,7 +4,8 @@ import { useState } from "react";
 import { motion } from "motion/react";
 import Image from "next/image";
 import { useRouter } from "@/i18n/navigation";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
+import { getDisplayName } from "@/lib/product-name";
 import { ArrowLeft, ChevronLeft, ChevronRight, MapPin, Package, ShoppingBag, Star, Truck, Utensils, Users } from "lucide-react";
 import { Button } from "@heroui/react";
 import { useMyOrdersQuery, orderKeys } from "@/services/order/hooks";
@@ -22,18 +23,19 @@ function formatVnd(s: string | number) {
 
 type TFunction = ReturnType<typeof useTranslations>;
 
-function formatDateCompact(iso: string, t: TFunction) {
+function formatDateCompact(iso: string, t: TFunction, locale: string) {
+  const tag = locale === "vi" ? "vi-VN" : "en-US";
   const d = new Date(iso);
   const today = new Date();
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
-  const time = d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  const time = d.toLocaleTimeString(tag, { hour: "2-digit", minute: "2-digit" });
   if (d.toDateString() === today.toDateString()) return t("today_at", { time });
   if (d.toDateString() === yesterday.toDateString()) return t("yesterday_at", { time });
-  return d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" }) + `, ${time}`;
+  return d.toLocaleDateString(tag, { day: "2-digit", month: "2-digit" }) + `, ${time}`;
 }
 
-function ProductImageStack({ items }: { items: UserOrderItem[] }) {
+function ProductImageStack({ items, locale }: { items: UserOrderItem[]; locale: string }) {
   const maxShow = 3;
   const shown = items.slice(0, maxShow);
   const rest = items.length - maxShow;
@@ -42,6 +44,7 @@ function ProductImageStack({ items }: { items: UserOrderItem[] }) {
     <div className="flex items-center">
       {shown.map((item, i) => {
         const imgUrl = item.product.imageUrls[0] ?? null;
+        const name = getDisplayName(item.product, locale);
         return (
           <div
             key={item.id}
@@ -51,7 +54,7 @@ function ProductImageStack({ items }: { items: UserOrderItem[] }) {
             {imgUrl ? (
               <Image
                 src={imgUrl}
-                alt={item.product.name}
+                alt={name}
                 fill
                 className="object-cover"
                 sizes="44px"
@@ -59,7 +62,7 @@ function ProductImageStack({ items }: { items: UserOrderItem[] }) {
             ) : (
               <div className="flex h-full w-full items-center justify-center bg-[#1a3c34]">
                 <span className="select-none text-xs font-bold text-white/30">
-                  {item.product.name.charAt(0).toUpperCase()}
+                  {name.charAt(0).toUpperCase()}
                 </span>
               </div>
             )}
@@ -94,6 +97,7 @@ const STATUS_ACTIVE: OrderStatus[] = ["pending", "confirmed", "preparing", "read
 
 function OrderCard({ order, index = 0 }: { order: UserOrder; index?: number }) {
   const t = useTranslations();
+  const locale = useLocale();
   const router = useRouter();
 
   const STATUS_CONFIG: Record<OrderStatus, { label: string; badge: string }> = {
@@ -143,7 +147,7 @@ function OrderCard({ order, index = 0 }: { order: UserOrder; index?: number }) {
         {/* Row 1: Image stack + Status badge */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            <ProductImageStack items={order.items} />
+            <ProductImageStack items={order.items} locale={locale} />
             {order.isGroupOrder && (
               <span className="inline-flex items-center gap-1 rounded-full bg-[#1a3c34]/8 px-2 py-0.5 text-[10px] font-semibold text-[#1a3c34]">
                 <Users className="size-3" />
@@ -162,7 +166,7 @@ function OrderCard({ order, index = 0 }: { order: UserOrder; index?: number }) {
             <p key={i} className="truncate text-sm leading-snug">
               <span className="tabular-nums text-foreground/40 text-xs">{item.quantity}×</span>
               {" "}
-              <span className="font-semibold text-foreground">{item.product.name}</span>
+              <span className="font-semibold text-foreground">{getDisplayName(item.product, locale)}</span>
             </p>
           ))}
           {moreCount > 0 && (
@@ -196,7 +200,7 @@ function OrderCard({ order, index = 0 }: { order: UserOrder; index?: number }) {
                 </span>
               );
             })()}
-            <p className="truncate text-[11px] text-muted">{formatDateCompact(order.createdAt, t)}</p>
+            <p className="truncate text-[11px] text-muted">{formatDateCompact(order.createdAt, t, locale)}</p>
           </div>
 
           {/* Amount + points */}

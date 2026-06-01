@@ -15,6 +15,59 @@ function vnd(n: string | number): string {
   return new Intl.NumberFormat("vi-VN").format(Math.round(num)) + "đ";
 }
 
+const RECEIPT_I18N = {
+  vi: {
+    order: "Đơn",
+    type: "Loại",
+    address: "Địa chỉ",
+    table: "Bàn",
+    subtotal: "Tạm tính",
+    discount: "Giảm giá",
+    points: "Điểm UjCha",
+    shipping: "Phí vận chuyển",
+    free: "Miễn phí",
+    total: "Tổng cộng",
+    payment: "Thanh toán",
+    paid: "✓ Đã thanh toán",
+    pending: "Chờ thanh toán",
+    note: "Ghi chú",
+    type_delivery: "Giao hàng",
+    type_table: "Tại bàn",
+    type_pickup: "Mang đi",
+    pay_cash: "Tiền mặt",
+    pay_transfer: "Chuyển khoản",
+    invoice: "Hóa đơn",
+  },
+  en: {
+    order: "Order",
+    type: "Type",
+    address: "Address",
+    table: "Table",
+    subtotal: "Subtotal",
+    discount: "Discount",
+    points: "UjCha Points",
+    shipping: "Shipping fee",
+    free: "Free",
+    total: "Total",
+    payment: "Payment",
+    paid: "✓ Paid",
+    pending: "Pending payment",
+    note: "Note",
+    type_delivery: "Delivery",
+    type_table: "Dine in",
+    type_pickup: "Pickup",
+    pay_cash: "Cash",
+    pay_transfer: "Bank transfer",
+    invoice: "Invoice",
+  },
+} as const;
+
+type I18nStrings = typeof RECEIPT_I18N.vi;
+
+function getI18n(locale: string): I18nStrings {
+  return locale === "en" ? RECEIPT_I18N.en : RECEIPT_I18N.vi;
+}
+
 export type ReceiptOrderItem = {
   quantity: number;
   price: string | number;
@@ -41,18 +94,18 @@ export type ReceiptOrder = {
   tableArea?: string | null;
 };
 
-function serviceLabel(t: string): string {
-  if (t === "delivery") return "Giao hàng";
-  if (t === "table") return "Tại bàn";
-  if (t === "pickup") return "Mang đi";
-  return t;
+function serviceLabel(type: string, i18n: I18nStrings): string {
+  if (type === "delivery") return i18n.type_delivery;
+  if (type === "table") return i18n.type_table;
+  if (type === "pickup") return i18n.type_pickup;
+  return type;
 }
 
-function payLabel(t: string): string {
-  return t === "cash" ? "Tiền mặt" : "Chuyển khoản";
+function payLabel(type: string, i18n: I18nStrings): string {
+  return type === "cash" ? i18n.pay_cash : i18n.pay_transfer;
 }
 
-function buildItemsHtml(items: ReceiptOrderItem[]): string {
+function buildItemsHtml(items: ReceiptOrderItem[], i18n: I18nStrings): string {
   const lines: string[] = [];
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
@@ -82,7 +135,7 @@ function buildItemsHtml(items: ReceiptOrderItem[]): string {
       );
     }
     if (it.note) {
-      lines.push(`<div style="margin-left:26px;font-style:italic;font-size:11px;color:#000;">Ghi chú: ${esc(it.note)}</div>`);
+      lines.push(`<div style="margin-left:26px;font-style:italic;font-size:11px;color:#000;">${esc(i18n.note)}: ${esc(it.note)}</div>`);
     }
     if (i < items.length - 1) {
       lines.push(`<div style="border-bottom:1px dashed #000;margin:5px 0 4px;"></div>`);
@@ -91,9 +144,11 @@ function buildItemsHtml(items: ReceiptOrderItem[]): string {
   return lines.join("");
 }
 
-export function buildReceiptHtml(order: ReceiptOrder): string {
+export function buildReceiptHtml(order: ReceiptOrder, locale = "vi"): string {
+  const i18n = getI18n(locale);
   const ref = `#${order.paymentCode}`;
-  const date = new Date(order.createdAt).toLocaleString("vi-VN");
+  const localeTag = locale === "en" ? "en-US" : "vi-VN";
+  const date = new Date(order.createdAt).toLocaleString(localeTag);
   const subtotal = typeof order.totalAmount === "string" ? parseFloat(order.totalAmount) : order.totalAmount;
   const discount = typeof order.discountAmount === "string" ? parseFloat(order.discountAmount) : order.discountAmount;
   const pointDiscount = order.pointDiscountAmount
@@ -105,42 +160,38 @@ export function buildReceiptHtml(order: ReceiptOrder): string {
   const total = subtotal - discount - pointDiscount + shipping;
 
   const body = [
-    // Shop header
     `<div style="text-align:center;font-size:22px;font-weight:bold;letter-spacing:4px;color:#000;">Ujcha</div>`,
     `<div style="border-top:2px dashed #000;margin:6px 0;"></div>`,
 
-    // Order meta
-    `<div style="font-size:12px;margin-bottom:1px;color:#000;">Đơn: <b>${esc(ref)}</b></div>`,
+    `<div style="font-size:12px;margin-bottom:1px;color:#000;">${esc(i18n.order)}: <b>${esc(ref)}</b></div>`,
     `<div style="font-size:11px;color:#444;margin-bottom:1px;">${esc(date)}</div>`,
-    `<div style="font-size:12px;margin-bottom:1px;color:#000;">Loại: <b>${esc(serviceLabel(order.type))}</b></div>`,
+    `<div style="font-size:12px;margin-bottom:1px;color:#000;">${esc(i18n.type)}: <b>${esc(serviceLabel(order.type, i18n))}</b></div>`,
     order.deliveryAddress
-      ? `<div style="font-size:11px;color:#444;margin-bottom:1px;">Địa chỉ: ${esc(order.deliveryAddress)}</div>`
+      ? `<div style="font-size:11px;color:#444;margin-bottom:1px;">${esc(i18n.address)}: ${esc(order.deliveryAddress)}</div>`
       : "",
     order.tableName
-      ? `<div style="font-size:11px;color:#444;margin-bottom:1px;">Bàn: ${esc(order.tableName)}${order.tableArea ? ` — ${esc(order.tableArea)}` : ""}</div>`
+      ? `<div style="font-size:11px;color:#444;margin-bottom:1px;">${esc(i18n.table)}: ${esc(order.tableName)}${order.tableArea ? ` — ${esc(order.tableArea)}` : ""}</div>`
       : "",
     `<div style="border-top:2px dashed #000;margin:6px 0;"></div>`,
 
-    // Items
-    buildItemsHtml(order.items),
+    buildItemsHtml(order.items, i18n),
     `<div style="border-top:2px dashed #000;margin:6px 0;"></div>`,
 
-    // Totals
-    `<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;color:#000;"><span>Tạm tính</span><span style="white-space:nowrap;">${esc(vnd(subtotal))}</span></div>`,
+    `<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;color:#000;"><span>${esc(i18n.subtotal)}</span><span style="white-space:nowrap;">${esc(vnd(subtotal))}</span></div>`,
     discount > 0
-      ? `<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;color:#000;"><span>Giảm giá</span><span style="white-space:nowrap;">-${esc(vnd(discount))}</span></div>`
+      ? `<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;color:#000;"><span>${esc(i18n.discount)}</span><span style="white-space:nowrap;">-${esc(vnd(discount))}</span></div>`
       : "",
     pointDiscount > 0
-      ? `<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;color:#000;"><span>Điểm UjCha</span><span style="white-space:nowrap;">-${esc(vnd(pointDiscount))}</span></div>`
+      ? `<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;color:#000;"><span>${esc(i18n.points)}</span><span style="white-space:nowrap;">-${esc(vnd(pointDiscount))}</span></div>`
       : "",
     order.type === "delivery"
-      ? `<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;color:#000;"><span>Phí vận chuyển</span><span style="white-space:nowrap;">${shipping > 0 ? esc(vnd(shipping)) : "Miễn phí"}</span></div>`
+      ? `<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;color:#000;"><span>${esc(i18n.shipping)}</span><span style="white-space:nowrap;">${shipping > 0 ? esc(vnd(shipping)) : esc(i18n.free)}</span></div>`
       : "",
-    `<div style="display:flex;justify-content:space-between;font-weight:bold;font-size:15px;margin-top:3px;color:#000;"><span>Tổng cộng</span><span style="white-space:nowrap;">${esc(vnd(total))}</span></div>`,
-    `<div style="font-size:12px;margin-top:2px;color:#000;">Thanh toán: <b>${esc(payLabel(order.paymentType))}</b></div>`,
+    `<div style="display:flex;justify-content:space-between;font-weight:bold;font-size:15px;margin-top:3px;color:#000;"><span>${esc(i18n.total)}</span><span style="white-space:nowrap;">${esc(vnd(total))}</span></div>`,
+    `<div style="font-size:12px;margin-top:2px;color:#000;">${esc(i18n.payment)}: <b>${esc(payLabel(order.paymentType, i18n))}</b></div>`,
     order.paymentStatus === "paid"
-      ? `<div style="font-size:12px;font-weight:bold;color:#000;margin-top:1px;">✓ Đã thanh toán</div>`
-      : `<div style="font-size:12px;color:#000;margin-top:1px;">Chờ thanh toán</div>`,
+      ? `<div style="font-size:12px;font-weight:bold;color:#000;margin-top:1px;">${esc(i18n.paid)}</div>`
+      : `<div style="font-size:12px;color:#000;margin-top:1px;">${esc(i18n.pending)}</div>`,
 
     `<div style="border-top:1px dashed #000;margin:4px 0;"></div>`,
     `<div style="text-align:center;font-size:10px;color:#000;">${env.SITE_URL}</div>`,
@@ -148,7 +199,7 @@ export function buildReceiptHtml(order: ReceiptOrder): string {
 
   return (
     `<!DOCTYPE html><html><head><meta charset="utf-8"/>` +
-    `<title>Hóa đơn ${esc(ref)}</title>` +
+    `<title>${esc(i18n.invoice)} ${esc(ref)}</title>` +
     `<style>` +
     `@page { size: 80mm auto; margin: 4mm; }` +
     `body { font-family: ui-sans-serif, system-ui, sans-serif; width: 80mm; margin: 0 auto; font-size: 13px; color: #000; }` +
@@ -157,8 +208,8 @@ export function buildReceiptHtml(order: ReceiptOrder): string {
   );
 }
 
-export function printReceipt(order: ReceiptOrder): void {
-  const html = buildReceiptHtml(order);
+export function printReceipt(order: ReceiptOrder, locale = "vi"): void {
+  const html = buildReceiptHtml(order, locale);
   const w = window.open("", "_blank");
   if (!w) return;
   w.document.write(html);

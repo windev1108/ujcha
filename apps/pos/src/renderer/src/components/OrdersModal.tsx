@@ -286,7 +286,7 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const socket = io(API_URL, {
       transports: ['websocket', 'polling'],
-      reconnectionAttempts: 5,
+      reconnectionAttempts: Infinity,
       reconnectionDelay: 2000,
     })
     const fullReload = (addToQueue = false) => {

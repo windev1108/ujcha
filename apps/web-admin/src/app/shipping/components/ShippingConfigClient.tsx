@@ -2,7 +2,7 @@
 
 import { Button, Card, CardContent, Input, Switch } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, MapPin, RefreshCw, Truck } from "lucide-react";
+import { Bike, CheckCircle2, MapPin, RefreshCw, Truck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { adminFieldStack, adminInputClass, adminLabelClass } from "@/lib/admin-form-classes";
 import { adminKeys } from "@/services/admin/keys";
@@ -72,7 +72,7 @@ export function ShippingConfigClient() {
           Cấu hình
         </p>
         <h1 className="flex items-center gap-2 text-2xl font-semibold text-foreground">
-          <Truck className="size-6 text-[#1a3c34]" />
+          <Bike className="size-6 text-[#1a3c34]" />
           Phí vận chuyển
         </h1>
         <p className="text-sm text-foreground/55">
@@ -211,7 +211,7 @@ export function ShippingConfigClient() {
               ) : saved ? (
                 <CheckCircle2 className="size-4" />
               ) : (
-                <Truck className="size-4" />
+                <Bike className="size-4" />
               )}
               {mutation.isPending ? "Đang lưu..." : saved ? "Đã lưu!" : "Lưu cấu hình"}
             </Button>
