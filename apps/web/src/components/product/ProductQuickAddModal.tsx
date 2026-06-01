@@ -100,7 +100,7 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
       setQuantity(1);
       setNote("");
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   useEffect(() => {
@@ -184,15 +184,15 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
         product: {
           id: resolvedProduct.id,
           name: resolvedProduct.name,
-          nameTranslation: resolvedProduct.nameTranslation,
+          nameTranslation: resolvedProduct.nameTranslation!,
           slug: resolvedProduct.slug,
           price: resolvedProduct.price,
           imageUrls: resolvedProduct.imageUrls,
           discountPercent: resolvedProduct.discountPercent,
-          optionGroups: resolvedProduct.optionGroups,
+          optionGroups: resolvedProduct.optionGroups as any,
           category: {
             name: resolvedProduct.category.name,
-            nameTranslation: resolvedProduct.category.nameTranslation,
+            nameTranslation: resolvedProduct.category.nameTranslation!,
           },
         },
         toppingSnapshots: toppings
@@ -387,11 +387,10 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
                                   key={v.label}
                                   type="button"
                                   onClick={() => setSelectedOptions((prev) => ({ ...prev, [grp.name]: v.label }))}
-                                  className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition-all ${
-                                    isSelected
-                                      ? "border-kun-products-forest bg-kun-products-forest/10 text-kun-products-forest"
-                                      : "border-black/10 bg-white text-foreground hover:border-black/20"
-                                  }`}
+                                  className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition-all ${isSelected
+                                    ? "border-kun-products-forest bg-kun-products-forest/10 text-kun-products-forest"
+                                    : "border-black/10 bg-white text-foreground hover:border-black/20"
+                                    }`}
                                 >
                                   {getValueLabel(v, locale)}
                                   {v.priceDelta > 0 && (
@@ -434,11 +433,10 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
                               key={top.id}
                               type="button"
                               onClick={() => toggleTopping(top.id, isActive)}
-                              className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left transition-all ${
-                                isActive
-                                  ? "border-kun-products-forest/40 bg-kun-products-forest/8 text-kun-products-forest"
-                                  : "border-black/[0.07] bg-surface-card/40 text-foreground hover:border-black/15"
-                              }`}
+                              className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left transition-all ${isActive
+                                ? "border-kun-products-forest/40 bg-kun-products-forest/8 text-kun-products-forest"
+                                : "border-black/[0.07] bg-surface-card/40 text-foreground hover:border-black/15"
+                                }`}
                             >
                               <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
                                 {getDisplayName(top, locale)}
@@ -515,11 +513,10 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
                     type="button"
                     disabled={isSoldOut || isPending}
                     onClick={handleSubmit}
-                    className={`flex h-12 w-full items-center justify-center gap-2 rounded-full text-[14px] font-semibold shadow-lg transition-all disabled:opacity-60 ${
-                      addedFeedback
-                        ? "bg-emerald-600 text-white shadow-emerald-200"
-                        : "bg-kun-products-forest text-white hover:opacity-90 shadow-kun-products-forest/25"
-                    }`}
+                    className={`flex h-12 w-full items-center justify-center gap-2 rounded-full text-[14px] font-semibold shadow-lg transition-all disabled:opacity-60 ${addedFeedback
+                      ? "bg-emerald-600 text-white shadow-emerald-200"
+                      : "bg-kun-products-forest text-white hover:opacity-90 shadow-kun-products-forest/25"
+                      }`}
                   >
                     {isPending ? (
                       <Loader2 className="size-4 animate-spin" />

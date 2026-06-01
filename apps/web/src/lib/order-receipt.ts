@@ -62,7 +62,7 @@ const RECEIPT_I18N = {
   },
 } as const;
 
-type I18nStrings = typeof RECEIPT_I18N.vi;
+type I18nStrings = typeof RECEIPT_I18N[keyof typeof RECEIPT_I18N];
 
 function getI18n(locale: string): I18nStrings {
   return locale === "en" ? RECEIPT_I18N.en : RECEIPT_I18N.vi;
