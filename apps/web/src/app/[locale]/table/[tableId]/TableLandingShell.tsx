@@ -855,7 +855,7 @@ export function TableLandingShell({ tableId }: { tableId: string }) {
 
   const categoriesQuery = useQuery({
     queryKey: ["categories"],
-    queryFn: fetchCategories,
+    queryFn: () => fetchCategories(),
     staleTime: 10 * 60_000,
     enabled: menuEnabled,
   });
