@@ -139,7 +139,7 @@ export function FaceSetupModal({ staff, isOpen, onClose, onSuccess }: Props) {
           <Modal.Dialog>
             <Modal.Header>
               <Modal.Heading>
-                Đăng ký khuôn mặt — {staff.email.split("@")[0]}
+                Đăng ký khuôn mặt — {staff.phone?.[0] ?? "Staff"}
               </Modal.Heading>
               <Modal.CloseTrigger />
             </Modal.Header>

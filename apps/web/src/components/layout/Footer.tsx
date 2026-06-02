@@ -45,9 +45,9 @@ export default function Footer() {
           {/* Brand */}
           <div className="flex flex-col gap-4">
             <Logo horizontal={false} size="md" className="self-start" />
-            <p className="max-w-xs text-sm leading-relaxed text-muted">
+            {/* <p className="max-w-xs text-sm leading-relaxed text-muted">
               Stone-ground ceremonial matcha và các thức uống thủ công, chọn lọc kỹ lưỡng cho nghi thức thường ngày của bạn.
-            </p>
+            </p> */}
           </div>
 
           {/* Navigation */}
@@ -123,7 +123,7 @@ export default function Footer() {
                 />
               ) : (
                 <div className="flex h-full w-full items-center justify-center bg-surface-card text-xs text-muted">
-                  Chưa cấu hình vị trí
+                  {t('not_config_location')}
                 </div>
               )}
             </div>
@@ -136,10 +136,10 @@ export default function Footer() {
           </p>
           <div className="flex gap-4">
             <Link href={ROUTES.TERMS} className="text-xs text-muted/80 hover:text-foreground transition-colors">
-              Điều khoản
+              {t('terms')}
             </Link>
             <Link href={ROUTES.PRIVACY} className="text-xs text-muted/80 hover:text-foreground transition-colors">
-              Chính sách bảo mật
+              {t('privacy')}
             </Link>
           </div>
         </div>

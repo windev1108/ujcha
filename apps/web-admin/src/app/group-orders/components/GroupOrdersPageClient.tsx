@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
 import type { AxiosError } from "axios";
 import {
   CheckCircle2,
@@ -45,14 +44,13 @@ function axiosMessage(e: unknown): string {
 }
 
 function DiscountPreview({ tiers }: { tiers: GroupDiscountTier[] }) {
-  const t = useTranslations();
   const sorted = [...tiers].sort((a, b) => a.minParticipants - b.minParticipants);
   if (sorted.length === 0) return null;
 
   return (
     <div className="rounded-xl border border-black/[0.06] bg-[#f9fafb] px-4 py-4">
       <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-foreground/45">
-        {t("admin_go_preview_label")}
+        Xem trước bậc giảm giá
       </p>
       <div className="flex flex-wrap gap-2">
         {sorted.map((tier, i) => (
@@ -61,7 +59,7 @@ function DiscountPreview({ tiers }: { tiers: GroupDiscountTier[] }) {
             className="flex items-center gap-2 rounded-full bg-[#1a3c34]/8 px-3 py-1.5 text-[13px] font-semibold text-[#1a3c34]"
           >
             <Users className="size-3.5" />
-            {tier.minParticipants}+ {t("admin_go_people_suffix")}
+            {tier.minParticipants}+ người
             <span className="text-xs text-[#1a3c34]/70">→</span>
             <Percent className="size-3" />
             -{tier.discountPercent}%
@@ -73,7 +71,6 @@ function DiscountPreview({ tiers }: { tiers: GroupDiscountTier[] }) {
 }
 
 export function GroupOrdersPageClient() {
-  const t = useTranslations();
   const qc = useQueryClient();
   const cfgQuery = useQuery({
     queryKey: adminKeys.groupOrderConfig,
@@ -88,6 +85,7 @@ export function GroupOrdersPageClient() {
 
   useEffect(() => {
     if (!cfg) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsEnabled(cfg.isEnabled);
     setExpiryMinutes(cfg.expiryMinutes ?? 120);
     setTiers(cfg.discountTiers ?? []);
@@ -142,10 +140,10 @@ export function GroupOrdersPageClient() {
             Group Order
           </p>
           <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
-            {t("admin_go_config_title")}
+            Cấu hình đơn hàng nhóm
           </h1>
           <p className="max-w-lg text-sm text-white/60">
-            {t("admin_go_config_desc")}
+            Bật chức năng đặt hàng nhóm và cấu hình bậc giảm giá theo số lượng thành viên tham gia.
           </p>
         </div>
       </header>
@@ -157,9 +155,9 @@ export function GroupOrdersPageClient() {
             {/* Toggle */}
             <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl bg-[#f9fafb] px-4 py-3 ring-1 ring-black/[0.06]">
               <div>
-                <Text className="text-sm font-semibold">{t("admin_go_toggle_label")}</Text>
+                <Text className="text-sm font-semibold">Bật chức năng đặt hàng nhóm</Text>
                 <Description className="text-xs">
-                  {t("admin_go_toggle_hint")}
+                  Tắt sẽ không cho phép tạo đơn hàng nhóm mới.
                 </Description>
               </div>
               <Switch isSelected={isEnabled} onChange={setIsEnabled}>
@@ -173,10 +171,10 @@ export function GroupOrdersPageClient() {
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <Clock className="size-4 text-[#1a3c34]" />
-                <p className="text-sm font-semibold text-[#1a3c34]">{t("admin_go_expiry_label")}</p>
+                <p className="text-sm font-semibold text-[#1a3c34]">Thời gian hết hạn</p>
               </div>
               <p className="text-[11px] text-foreground/50">
-                {t("admin_go_expiry_hint")}
+                Đơn nhóm chưa chốt sẽ tự xóa sau khoảng thời gian này. Tối thiểu 5 phút.
               </p>
               <div className="flex items-center gap-2">
                 <div className="flex items-center overflow-hidden rounded-lg border border-black/[0.1] bg-white">
@@ -202,11 +200,11 @@ export function GroupOrdersPageClient() {
                     <Plus className="size-3.5" />
                   </button>
                 </div>
-                <span className="text-sm text-foreground/60">{t("admin_go_minutes")}</span>
+                <span className="text-sm text-foreground/60">phút</span>
                 <span className="text-xs text-foreground/40">
                   ({expiryMinutes >= 60
-                    ? t("admin_go_hours_fmt", { n: (expiryMinutes / 60).toFixed(1).replace(/\.0$/, '') })
-                    : `${expiryMinutes} ${t("admin_go_minutes")}`})
+                    ? ` ${expiryMinutes / 60} giờ`
+                    : `${expiryMinutes} phút`})
                 </span>
               </div>
             </div>
@@ -215,9 +213,9 @@ export function GroupOrdersPageClient() {
             <div>
               <div className="mb-3 flex items-center justify-between gap-2">
                 <div>
-                  <p className="text-sm font-semibold text-[#1a3c34]">{t("admin_go_tiers_label")}</p>
+                  <p className="text-sm font-semibold text-[#1a3c34]">Bậc giảm giá</p>
                   <p className="mt-0.5 text-[11px] text-foreground/50">
-                    {t("admin_go_tiers_hint")}
+                    Mời càng nhiều người → giảm càng nhiều. Các bậc sẽ được sắp xếp tự động theo số người tối thiểu.
                   </p>
                 </div>
                 <Button
@@ -227,21 +225,21 @@ export function GroupOrdersPageClient() {
                   onPress={addTier}
                 >
                   <Plus className="size-3.5" />
-                  {t("admin_go_add_tier")}
+                  Thêm bậc
                 </Button>
               </div>
 
               {tiers.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-black/10 py-8 text-center">
                   <Zap className="size-8 text-foreground/20" />
-                  <p className="text-sm text-foreground/45">{t("admin_go_no_tiers")}</p>
+                  <p className="text-sm text-foreground/45">Chưa có bậc giảm giá nào</p>
                   <Button
                     type="button"
                     size="sm"
                     className="mt-1 rounded-full bg-[#1a3c34] px-4 font-semibold text-white"
                     onPress={addTier}
                   >
-                    {t("admin_go_add_first_tier")}
+                    Thêm bậc đầu tiên
                   </Button>
                 </div>
               ) : (
@@ -252,7 +250,7 @@ export function GroupOrdersPageClient() {
                       className="grid grid-cols-[1fr_1fr_auto] items-end gap-3 rounded-xl border border-black/[0.06] bg-white p-4"
                     >
                       <div className="space-y-1.5">
-                        <Label className={adminLabelClass}>{t("admin_go_min_participants")}</Label>
+                        <Label className={adminLabelClass}>Số người tối thiểu</Label>
                         <div className="flex items-center rounded-lg border border-black/[0.1] bg-white overflow-hidden">
                           <button
                             type="button"
@@ -279,7 +277,7 @@ export function GroupOrdersPageClient() {
                       </div>
 
                       <div className="space-y-1.5">
-                        <Label className={adminLabelClass}>{t("admin_go_discount_pct")}</Label>
+                        <Label className={adminLabelClass}>Phần trăm giảm giá</Label>
                         <div className="relative">
                           <input
                             type="number"
@@ -316,7 +314,7 @@ export function GroupOrdersPageClient() {
             {saveMut.isSuccess && (
               <p className="flex items-center gap-1.5 text-sm text-emerald-700">
                 <CheckCircle2 className="size-4" />
-                {t("admin_go_saved")}
+                Đã lưu cấu hình thành công.
               </p>
             )}
 
@@ -328,11 +326,11 @@ export function GroupOrdersPageClient() {
                 isDisabled={saveMut.isPending}
               >
                 <Save className="size-4" />
-                {saveMut.isPending ? t("admin_go_saving") : t("admin_go_save")}
+                {saveMut.isPending ? "Đang lưu..." : "Lưu cấu hình"}
               </Button>
               {cfg?.discountTiers != null && (
                 <Text className="text-xs text-foreground/45">
-                  {t("admin_go_tiers_count", { count: tiers.length })}
+                  {`${tiers.length} bậc đang cấu hình`}
                 </Text>
               )}
             </div>
@@ -342,20 +340,20 @@ export function GroupOrdersPageClient() {
         {/* Info card */}
         <Card className="h-fit rounded-2xl border border-black/[0.06] bg-gradient-to-br from-[#f9fafb] to-white shadow-sm">
           <CardContent className="space-y-4 p-5">
-            <p className="text-sm font-semibold text-[#1a3c34]">{t("admin_go_how_title")}</p>
+            <p className="text-sm font-semibold text-[#1a3c34]">Cách sử dụng</p>
             <ol className="space-y-3 text-xs text-foreground/60">
               {([1, 2, 3, 4, 5] as const).map((n, i) => (
                 <li key={n} className="flex items-start gap-2.5">
                   <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-[#1a3c34]/10 text-[10px] font-bold text-[#1a3c34]">
                     {n}
                   </span>
-                  {t(`admin_go_how_${n}` as `admin_go_how_${typeof n}`)}
+                  Người dùng tạo đơn nhóm từ trang giỏ hàng
                 </li>
               ))}
             </ol>
 
             <div className="rounded-xl border border-[#1a3c34]/10 bg-[#1a3c34]/5 px-4 py-3">
-              <p className="text-xs font-semibold text-[#1a3c34]">{t("admin_go_example_title")}</p>
+              <p className="text-xs font-semibold text-[#1a3c34]">Ví dụ bậc giảm giá</p>
               <div className="mt-2 space-y-1 text-[11px] text-[#1a3c34]/70">
                 <p>2–3 người → -5%</p>
                 <p>4–5 người → -8%</p>

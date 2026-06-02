@@ -142,7 +142,6 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
   const unitPrice = discountedBase + optionSurcharge + toppingTotal;
   const totalPrice = unitPrice * quantity;
 
-  // Radio style — max 1 topping
   function toggleTopping(id: string, isCurrentlyActive: boolean) {
     setSelectedToppings(isCurrentlyActive ? new Set() : new Set([id]));
   }

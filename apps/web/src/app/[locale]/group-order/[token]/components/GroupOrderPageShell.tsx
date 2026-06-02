@@ -124,8 +124,7 @@ function ProductCustomizeSheet({
     return opts;
   });
   const [selectedToppings, setSelectedToppings] = useState<Set<string>>(
-    // Limit to at most 1 from initial data
-    () => new Set((initial?.toppings?.map((t) => t.toppingId) ?? []).slice(0, 1)),
+    () => new Set(initial?.toppings?.map((t) => t.toppingId) ?? []),
   );
 
   const optionSurcharge = computeOptionSurcharge(optionGroups, selectedOptions);
@@ -134,9 +133,12 @@ function ProductCustomizeSheet({
     .reduce((s, t) => s + t.price, 0);
   const unitPrice = basePrice + optionSurcharge + toppingTotal;
 
-  // Single-select: checking a new topping clears the previous one
   const toggleTopping = (id: string, checked: boolean) => {
-    setSelectedToppings(checked ? new Set([id]) : new Set());
+    setSelectedToppings((prev) => {
+      const next = new Set(prev);
+      checked ? next.add(id) : next.delete(id);
+      return next;
+    });
   };
 
   const handleConfirm = () => {

@@ -11,7 +11,7 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ujcha.vercel.app";
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "UjCha — Matcha & Đồ uống thủ công",
+    default: "UjCha — Enjoy matcha your way.",
     template: "%s | UjCha",
   },
   description: "Khám phá matcha ceremonial grade, cà phê, trà thủ công và đồ uống theo mùa tại UjCha. Nguồn gốc bền vững, chất lượng cao.",
@@ -23,12 +23,12 @@ export const metadata: Metadata = {
     locale: "vi_VN",
     url: SITE_URL,
     siteName: "UjCha",
-    title: "UjCha — Matcha & Đồ uống thủ công",
+    title: "UjCha — Enjoy matcha your way.",
     description: "Matcha ceremonial grade, cà phê và đồ uống thủ công tại UjCha. Nguồn gốc bền vững, chất lượng cao.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "UjCha — Matcha & Đồ uống thủ công",
+    title: "UjCha — Enjoy matcha your way.",
     description: "Matcha ceremonial grade, cà phê và đồ uống thủ công tại UjCha.",
   },
   icons: {

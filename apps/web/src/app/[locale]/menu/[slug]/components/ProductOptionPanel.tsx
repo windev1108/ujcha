@@ -72,11 +72,7 @@ export function ProductOptionPanel({ product }: Props) {
   const totalPrice = unitPrice * quantity;
 
   function toggleTopping(id: string, checked: boolean) {
-    setSelectedToppings((prev) => {
-      const next = new Set(prev);
-      checked ? next.add(id) : next.delete(id);
-      return next;
-    });
+    setSelectedToppings(checked ? new Set([id]) : new Set());
   }
 
   function handleAddToCart() {
@@ -227,7 +223,7 @@ export function ProductOptionPanel({ product }: Props) {
                 </div>
                 {selectedToppings.size > 0 && (
                   <span className="shrink-0 text-[11px] font-semibold tabular-nums text-kun-products-forest">
-                    {selectedToppings.size} đã chọn
+                    {t("selected")}
                   </span>
                 )}
               </div>
@@ -235,7 +231,7 @@ export function ProductOptionPanel({ product }: Props) {
                 className="max-h-[220px] space-y-1.5 overflow-y-auto scroll-smooth rounded-2xl border border-black/[0.07] bg-surface-secondary/40 p-2 pr-1"
                 role="listbox"
                 aria-label="Danh sách topping"
-                aria-multiselectable="true"
+                aria-multiselectable="false"
               >
                 {toppings.map((top) => {
                   const isActive = selectedToppings.has(top.id);

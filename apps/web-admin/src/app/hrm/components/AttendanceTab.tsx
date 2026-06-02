@@ -305,10 +305,10 @@ export function AttendanceTab() {
                     <ListBox.Item
                       key={s.id}
                       id={s.id}
-                      textValue={s.name ?? s.email.split("@")[0]}
+                      textValue={s.name ?? s.phone?.[0] ?? "Staff"}
                       className="rounded-lg text-sm"
                     >
-                      <span>{s.name ?? s.email.split("@")[0]}</span>
+                      <span>{s.name ?? s.phone?.split("@")[0] ?? "Staff"}</span>
                       <span className="ml-1.5 text-foreground/40">
                         {s.role === "super_admin" ? "Super Admin" : "Staff"}
                       </span>
