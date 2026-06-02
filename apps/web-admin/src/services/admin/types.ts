@@ -776,7 +776,7 @@ export type AdminPostContentFormat = "markdown" | "html";
 
 export type AdminPostAuthor = {
   id: string;
-  email: string | null;
+  phone: string;
   role: string;
 };
 

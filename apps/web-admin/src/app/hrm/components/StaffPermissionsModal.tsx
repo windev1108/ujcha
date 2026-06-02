@@ -41,7 +41,7 @@ export function StaffPermissionsModal({ staff, isOpen, onClose }: Props) {
 
   if (!staff) return null;
 
-  const displayName = staff.name ?? staff.email.split("@")[0];
+  const displayName = staff.name ?? staff.phone ?? `ID: ${staff.id}`;
 
   function toggle(p: Permission) {
     if (LOCKED_PERMISSIONS.includes(p)) return;
@@ -85,17 +85,15 @@ export function StaffPermissionsModal({ staff, isOpen, onClose }: Props) {
                         type="button"
                         onClick={() => toggle(p)}
                         disabled={locked}
-                        className={`flex items-center gap-3 rounded-xl border px-4 py-2.5 text-left transition-colors ${
-                          locked
-                            ? "cursor-default border-[#1a3c34]/20 bg-[#e8f0ee]/60"
-                            : checked
-                              ? "border-[#1a3c34]/25 bg-[#e8f0ee] hover:bg-[#d8ebe5]"
-                              : "border-black/8 bg-white hover:bg-black/[0.03]"
-                        }`}
+                        className={`flex items-center gap-3 rounded-xl border px-4 py-2.5 text-left transition-colors ${locked
+                          ? "cursor-default border-[#1a3c34]/20 bg-[#e8f0ee]/60"
+                          : checked
+                            ? "border-[#1a3c34]/25 bg-[#e8f0ee] hover:bg-[#d8ebe5]"
+                            : "border-black/8 bg-white hover:bg-black/[0.03]"
+                          }`}
                       >
-                        <span className={`flex size-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${
-                          checked ? "border-[#1a3c34] bg-[#1a3c34]" : "border-black/20 bg-white"
-                        }`}>
+                        <span className={`flex size-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${checked ? "border-[#1a3c34] bg-[#1a3c34]" : "border-black/20 bg-white"
+                          }`}>
                           {checked && (
                             <svg className="size-3 text-white" fill="none" viewBox="0 0 12 12">
                               <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />

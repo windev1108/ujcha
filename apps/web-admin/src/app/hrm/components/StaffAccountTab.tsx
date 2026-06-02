@@ -64,6 +64,7 @@ export function StaffAccountTab() {
   }, [search]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1);
   }, [debouncedSearch, roleFilter]);
 
@@ -250,12 +251,12 @@ export function StaffAccountTab() {
                 initial={
                   editTarget
                     ? {
-                        email: editTarget.email,
-                        role: editTarget.role,
-                        name: editTarget.name ?? "",
-                        phone: editTarget.phone ?? "",
-                        address: editTarget.address ?? "",
-                      }
+                      email: editTarget.email ?? "",
+                      role: editTarget.role,
+                      name: editTarget.name ?? "",
+                      phone: editTarget.phone ?? "",
+                      address: editTarget.address ?? "",
+                    }
                     : undefined
                 }
                 onSave={handleFormSave}

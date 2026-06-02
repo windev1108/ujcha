@@ -10,7 +10,7 @@ import type { StaffWithFaceProfile } from "@/services/admin/types";
 import { FaceSetupModal } from "./FaceSetupModal";
 
 function initials(staff: StaffWithFaceProfile) {
-  return (staff.name ?? staff.email).slice(0, 2).toUpperCase();
+  return (staff.name ?? staff.phone ?? 'Staff').slice(0, 2).toUpperCase();
 }
 
 export function StaffFaceTab() {
@@ -73,7 +73,7 @@ export function StaffFaceTab() {
                           </div>
                           <div className="min-w-0">
                             <p className="font-semibold text-foreground">
-                              {staff.name ?? staff.email.split("@")[0]}
+                              {staff.name ?? staff.phone ?? 'Staff'}
                             </p>
                             <p className="text-xs text-foreground/50">{staff.email}</p>
                           </div>

@@ -68,7 +68,7 @@ function usePaginationWindow(
     if (totalPages <= 0) return [];
     const half = Math.floor(max / 2);
     let start = Math.max(1, current - half);
-    let end = Math.min(totalPages, start + max - 1);
+    const end = Math.min(totalPages, start + max - 1);
     start = Math.max(1, end - max + 1);
     return Array.from({ length: end - start + 1 }, (_, i) => start + i);
   }, [current, totalPages, max]);
@@ -93,6 +93,7 @@ export function PostsPageClient() {
   }, [search]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1);
   }, [statusTab, typeFilter, sort, debouncedSearch]);
 
@@ -366,132 +367,132 @@ export function PostsPageClient() {
               <Table.Body>
                 {listQuery.isLoading
                   ? Array.from({ length: 6 }).map((_, i) => (
-                      <Table.Row key={i}>
-                        {Array.from({ length: 6 }).map((__, j) => (
-                          <Table.Cell key={j} className="px-5 py-4">
-                            <div className="h-4 animate-pulse rounded-md bg-black/5" />
-                          </Table.Cell>
-                        ))}
-                      </Table.Row>
-                    ))
+                    <Table.Row key={i}>
+                      {Array.from({ length: 6 }).map((__, j) => (
+                        <Table.Cell key={j} className="px-5 py-4">
+                          <div className="h-4 animate-pulse rounded-md bg-black/5" />
+                        </Table.Cell>
+                      ))}
+                    </Table.Row>
+                  ))
                   : items.map((p) => {
-                      const busy = busyId === p.id;
-                      return (
-                        <Table.Row key={p.id}>
-                          <Table.Cell className="max-w-[340px] px-5 py-3">
-                            <div className="flex gap-3">
-                              <div className="relative size-12 shrink-0 overflow-hidden rounded-xl bg-[#f3f4f6] ring-1 ring-black/6">
-                                {p.thumbnail ? (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img
-                                    src={p.thumbnail}
-                                    alt=""
-                                    className="size-full object-cover"
-                                  />
-                                ) : (
-                                  <div className="flex size-full items-center justify-center text-foreground/30">
-                                    <FileText className="size-5" />
-                                  </div>
-                                )}
-                              </div>
-                              <div className="min-w-0">
-                                <p className="font-semibold text-[#1a3c34]">
-                                  {p.title}
-                                </p>
-                                <p className="mt-0.5 line-clamp-2 text-xs text-foreground/50">
-                                  {postExcerpt(p.content)}
-                                </p>
-                              </div>
+                    const busy = busyId === p.id;
+                    return (
+                      <Table.Row key={p.id}>
+                        <Table.Cell className="max-w-[340px] px-5 py-3">
+                          <div className="flex gap-3">
+                            <div className="relative size-12 shrink-0 overflow-hidden rounded-xl bg-[#f3f4f6] ring-1 ring-black/6">
+                              {p.thumbnail ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={p.thumbnail}
+                                  alt=""
+                                  className="size-full object-cover"
+                                />
+                              ) : (
+                                <div className="flex size-full items-center justify-center text-foreground/30">
+                                  <FileText className="size-5" />
+                                </div>
+                              )}
                             </div>
-                          </Table.Cell>
-                          <Table.Cell className="px-5 py-3">
-                            <div className="flex items-center gap-2">
-                              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_oklab,#71b394_14%,transparent)] text-[10px] font-bold text-[#14532d]">
-                                {authorInitials(p.author.email)}
-                              </span>
-                              <span className="truncate text-sm text-foreground/80">
-                                {p.author.email}
-                              </span>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-[#1a3c34]">
+                                {p.title}
+                              </p>
+                              <p className="mt-0.5 line-clamp-2 text-xs text-foreground/50">
+                                {postExcerpt(p.content)}
+                              </p>
                             </div>
-                          </Table.Cell>
-                          <Table.Cell className="px-5 py-3">
-                            <Chip
-                              size="sm"
-                              variant="soft"
-                              className="border-0 bg-[color-mix(in_oklab,#71b394_16%,transparent)] font-semibold uppercase tracking-wide text-[#14532d]"
-                            >
-                              <Chip.Label>
-                                {postTypeLabelVi(p.type)}
-                              </Chip.Label>
-                            </Chip>
-                          </Table.Cell>
-                          <Table.Cell className="px-5 py-3">
-                            <span className="inline-flex items-center gap-1.5 text-sm">
-                              <span
-                                className={`size-2 shrink-0 rounded-full ${postStatusDotClass(p.status)}`}
-                              />
-                              {postStatusLabelVi(p.status)}
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell className="px-5 py-3">
+                          <div className="flex items-center gap-2">
+                            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_oklab,#71b394_14%,transparent)] text-[10px] font-bold text-[#14532d]">
+                              {authorInitials(p.author.phone)}
                             </span>
-                          </Table.Cell>
-                          <Table.Cell className="px-5 py-3 text-sm text-foreground/70">
-                            {postDisplayDate(p)}
-                          </Table.Cell>
-                          <Table.Cell className="px-5 py-3 text-right">
-                            <Dropdown.Root>
-                              <Dropdown.Trigger
-                                className={`inline-flex size-9 items-center justify-center rounded-xl text-foreground outline-none transition-colors hover:bg-black/6 ${busy ? "pointer-events-none opacity-50" : ""}`}
-                                aria-label="Thao tác bài viết"
-                                isDisabled={busy}
+                            <span className="truncate text-sm text-foreground/80">
+                              {p.author.phone}
+                            </span>
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell className="px-5 py-3">
+                          <Chip
+                            size="sm"
+                            variant="soft"
+                            className="border-0 bg-[color-mix(in_oklab,#71b394_16%,transparent)] font-semibold uppercase tracking-wide text-[#14532d]"
+                          >
+                            <Chip.Label>
+                              {postTypeLabelVi(p.type)}
+                            </Chip.Label>
+                          </Chip>
+                        </Table.Cell>
+                        <Table.Cell className="px-5 py-3">
+                          <span className="inline-flex items-center gap-1.5 text-sm">
+                            <span
+                              className={`size-2 shrink-0 rounded-full ${postStatusDotClass(p.status)}`}
+                            />
+                            {postStatusLabelVi(p.status)}
+                          </span>
+                        </Table.Cell>
+                        <Table.Cell className="px-5 py-3 text-sm text-foreground/70">
+                          {postDisplayDate(p)}
+                        </Table.Cell>
+                        <Table.Cell className="px-5 py-3 text-right">
+                          <Dropdown.Root>
+                            <Dropdown.Trigger
+                              className={`inline-flex size-9 items-center justify-center rounded-xl text-foreground outline-none transition-colors hover:bg-black/6 ${busy ? "pointer-events-none opacity-50" : ""}`}
+                              aria-label="Thao tác bài viết"
+                              isDisabled={busy}
+                            >
+                              <MoreVertical className="size-4" />
+                            </Dropdown.Trigger>
+                            <Dropdown.Popover placement="bottom end">
+                              <Dropdown.Menu
+                                aria-label="Menu bài viết"
+                                onAction={(key) => {
+                                  const k = String(key);
+                                  if (k === "edit") {
+                                    router.push(ROUTES.postEdit(p.id));
+                                    return;
+                                  }
+                                  if (k === "publish") publishMut.mutate(p.id);
+                                  if (k === "unpublish")
+                                    unpublishMut.mutate(p.id);
+                                  if (k === "delete") void handleDelete(p);
+                                }}
                               >
-                                <MoreVertical className="size-4" />
-                              </Dropdown.Trigger>
-                              <Dropdown.Popover placement="bottom end">
-                                <Dropdown.Menu
-                                  aria-label="Menu bài viết"
-                                  onAction={(key) => {
-                                    const k = String(key);
-                                    if (k === "edit") {
-                                      router.push(ROUTES.postEdit(p.id));
-                                      return;
-                                    }
-                                    if (k === "publish") publishMut.mutate(p.id);
-                                    if (k === "unpublish")
-                                      unpublishMut.mutate(p.id);
-                                    if (k === "delete") void handleDelete(p);
-                                  }}
-                                >
-                                  <Dropdown.Item id="edit" textValue="Sửa">
-                                    <span className="flex items-center gap-2">
-                                      <Pencil className="size-3.5" />
-                                      Sửa bài
-                                    </span>
+                                <Dropdown.Item id="edit" textValue="Sửa">
+                                  <span className="flex items-center gap-2">
+                                    <Pencil className="size-3.5" />
+                                    Sửa bài
+                                  </span>
+                                </Dropdown.Item>
+                                {p.status === "draft" ? (
+                                  <Dropdown.Item
+                                    id="publish"
+                                    textValue="Xuất bản"
+                                  >
+                                    Xuất bản
                                   </Dropdown.Item>
-                                  {p.status === "draft" ? (
-                                    <Dropdown.Item
-                                      id="publish"
-                                      textValue="Xuất bản"
-                                    >
-                                      Xuất bản
-                                    </Dropdown.Item>
-                                  ) : null}
-                                  {p.status === "published" ? (
-                                    <Dropdown.Item
-                                      id="unpublish"
-                                      textValue="Gỡ xuất bản"
-                                    >
-                                      Gỡ xuất bản
-                                    </Dropdown.Item>
-                                  ) : null}
-                                  <Dropdown.Item id="delete" textValue="Xóa">
-                                    Xóa
+                                ) : null}
+                                {p.status === "published" ? (
+                                  <Dropdown.Item
+                                    id="unpublish"
+                                    textValue="Gỡ xuất bản"
+                                  >
+                                    Gỡ xuất bản
                                   </Dropdown.Item>
-                                </Dropdown.Menu>
-                              </Dropdown.Popover>
-                            </Dropdown.Root>
-                          </Table.Cell>
-                        </Table.Row>
-                      );
-                    })}
+                                ) : null}
+                                <Dropdown.Item id="delete" textValue="Xóa">
+                                  Xóa
+                                </Dropdown.Item>
+                              </Dropdown.Menu>
+                            </Dropdown.Popover>
+                          </Dropdown.Root>
+                        </Table.Cell>
+                      </Table.Row>
+                    );
+                  })}
               </Table.Body>
             </Table.Content>
           </Table.ScrollContainer>

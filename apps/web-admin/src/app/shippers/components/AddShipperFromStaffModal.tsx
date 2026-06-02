@@ -58,8 +58,8 @@ export function AddShipperFromStaffModal({ isOpen, onOpenChange }: Props) {
     return (staffQ.data ?? []).filter((s) => {
       if (!q) return true;
       const name = (s.name ?? "").toLowerCase();
-      const email = s.email.toLowerCase();
-      return name.includes(q) || email.includes(q);
+      const phone = s?.phone?.toLowerCase();
+      return name.includes(q) || phone?.includes(q);
     });
   }, [staffQ.data, search]);
 
@@ -104,7 +104,7 @@ export function AddShipperFromStaffModal({ isOpen, onOpenChange }: Props) {
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-foreground/35" />
                 <input
                   type="text"
-                  placeholder="Tìm theo tên hoặc email…"
+                  placeholder="Tìm theo tên hoặc số điện thoại…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="w-full rounded-xl border border-black/10 bg-[#f8faf9] py-2.5 pl-10 pr-4 text-sm focus:border-[#1a3c34] focus:outline-none"
@@ -137,7 +137,7 @@ export function AddShipperFromStaffModal({ isOpen, onOpenChange }: Props) {
                     )
                     : filtered.map((staff) => {
                       const isLinked = linkedAdminIds.has(staff.id);
-                      const displayName = staff.name ?? staff.email.split("@")[0];
+                      const displayName = staff.name ?? staff.phone ?? "Không tên";
                       const isAdding = addingId === staff.id;
 
                       return (

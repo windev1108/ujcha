@@ -185,7 +185,7 @@ function PasswordRevealModal({
   );
 }
 
-type FaceEntry = StaffWithFaceProfile["faceProfile"] | { imageUrl: string | null } | null | undefined;
+type FaceEntry = StaffWithFaceProfile["faceProfile"];
 
 function usePaginationWindow(current: number, totalPages: number, max = 5) {
   return useMemo(() => {
@@ -257,6 +257,7 @@ export function StaffTab() {
     return () => window.clearTimeout(t);
   }, [search]);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setPage(1); }, [debouncedSearch, roleFilter]);
 
   const adminsQuery = useQuery({
@@ -431,7 +432,7 @@ export function StaffTab() {
                   ))
                   : (adminsQuery.data?.items ?? []).map((admin) => {
                     const isSelf = admin.id === currentAdmin?.id;
-                    const faceEntry = faceMap.get(admin.id);
+                    const faceEntry = faceMap.get(admin.id) ?? null;
                     return (
                       <Table.Row key={admin.id} id={admin.id}>
 
@@ -612,12 +613,12 @@ export function StaffTab() {
                 initial={
                   editTarget
                     ? {
-                        email: editTarget.email ?? "",
-                        role: editTarget.role,
-                        name: editTarget.name ?? "",
-                        phone: editTarget.phone ?? "",
-                        address: editTarget.address ?? "",
-                      }
+                      email: editTarget.email ?? "",
+                      role: editTarget.role,
+                      name: editTarget.name ?? "",
+                      phone: editTarget.phone ?? "",
+                      address: editTarget.address ?? "",
+                    }
                     : { email: "", role: "staff", name: "", phone: "", address: "" }
                 }
                 onSave={handleSave}
