@@ -5,6 +5,8 @@ import { getDisplayName, getDisplayDescription } from '@/lib/product-name'
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://kun.vn'
 
+export const revalidate = 300;
+
 export async function generateMetadata({
   params,
 }: {

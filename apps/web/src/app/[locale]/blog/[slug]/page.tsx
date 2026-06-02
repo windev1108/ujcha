@@ -3,6 +3,8 @@ import { Suspense } from "react";
 import { Loader2 } from "lucide-react";
 import { BlogPostShell } from "./components/BlogPostShell";
 
+export const revalidate = 3600;
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
 
 export async function generateMetadata(

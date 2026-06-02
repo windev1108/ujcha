@@ -15,9 +15,9 @@ export class JwtTokensService {
     return this.jwt.signAsync({ sub: userId });
   }
 
-  generateRefreshToken(userId: string): Promise<string> {
+  generateRefreshToken(userId: string, sessionId: string): Promise<string> {
     return this.jwt.signAsync(
-      { sub: userId },
+      { sub: userId, sid: sessionId },
       {
         secret: this.config.getOrThrow<string>(JWT_ENV.REFRESH_SECRET),
         expiresIn: (this.config.get<string>(JWT_ENV.REFRESH_EXPIRES) ??

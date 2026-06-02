@@ -5,10 +5,19 @@ import { useQuery } from "@tanstack/react-query";
 import { adminKeys } from "@/services/admin/keys";
 import { fetchAdminOverview } from "@/services/admin/overview-api";
 
+import dynamic from "next/dynamic";
 import { DashboardMetricCards } from "./DashboardMetricCards";
-import { OrderTypeDonutChart } from "./OrderTypeDonutChart";
 import { RecentOrdersTable } from "./RecentOrdersTable";
-import { RevenueLineChart } from "./RevenueLineChart";
+
+const RevenueLineChart = dynamic(
+  () => import("./RevenueLineChart").then((m) => ({ default: m.RevenueLineChart })),
+  { ssr: false, loading: () => <div className="h-[320px] animate-pulse rounded-2xl bg-surface-card" /> },
+);
+
+const OrderTypeDonutChart = dynamic(
+  () => import("./OrderTypeDonutChart").then((m) => ({ default: m.OrderTypeDonutChart })),
+  { ssr: false, loading: () => <div className="h-[320px] animate-pulse rounded-2xl bg-surface-card" /> },
+);
 
 export function DashboardView() {
   const q = useQuery({

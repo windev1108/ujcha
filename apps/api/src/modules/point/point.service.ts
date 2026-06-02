@@ -210,26 +210,37 @@ export class PointService {
    */
   async expirePoints(): Promise<{ expiredLots: number; totalPoints: number }> {
     const now = new Date();
-
-    const candidates = await this.prisma.pointTransaction.findMany({
-      where: {
-        type: PointTransactionType.earn,
-        remainingAmount: { gt: 0 },
-        expiresAt: { not: null, lte: now },
-      },
-      select: { id: true, userId: true },
-      orderBy: { expiresAt: 'asc' },
-    });
+    const BATCH = 200;
 
     let expiredLots = 0;
     let totalPoints = 0;
+    let lastId: string | undefined;
 
-    for (const row of candidates) {
-      const n = await this.expireOneEarnLot(row.userId, row.id, now);
-      if (n > 0) {
-        expiredLots += 1;
-        totalPoints += n;
+    while (true) {
+      const candidates = await this.prisma.pointTransaction.findMany({
+        where: {
+          type: PointTransactionType.earn,
+          remainingAmount: { gt: 0 },
+          expiresAt: { not: null, lte: now },
+          ...(lastId ? { id: { gt: lastId } } : {}),
+        },
+        select: { id: true, userId: true },
+        orderBy: { id: 'asc' },
+        take: BATCH,
+      });
+
+      if (candidates.length === 0) break;
+      lastId = candidates[candidates.length - 1].id;
+
+      for (const row of candidates) {
+        const n = await this.expireOneEarnLot(row.userId, row.id, now);
+        if (n > 0) {
+          expiredLots += 1;
+          totalPoints += n;
+        }
       }
+
+      if (candidates.length < BATCH) break;
     }
 
     return { expiredLots, totalPoints };

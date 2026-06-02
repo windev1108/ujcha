@@ -18,4 +18,4 @@ RUN pnpm run build
 
 EXPOSE 3000
 
-CMD ["node", "dist/main.js"]
+CMD ["node", "--max-old-space-size=1024", "dist/main.js"]

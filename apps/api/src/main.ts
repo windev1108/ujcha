@@ -37,7 +37,9 @@ async function bootstrap() {
       transform: true,
     }),
   );
-  setupSwagger(app);
+  if (process.env.NODE_ENV !== 'production') {
+    setupSwagger(app);
+  }
   const port = process.env.PORT ?? 5000;
   await app.listen(port);
   console.log(`Swagger UI: http://localhost:${port}${swaggerDocsPath}`);

@@ -9,6 +9,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import type { Session } from '@prisma/client';
 import { JWT_ENV } from '../auth/config/jwt.config';
+import type { JwtRefreshPayload } from '../auth/jwt.types';
 import { OTP_DEFAULTS, OTP_ENV } from '../otp/config/otp.config';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -29,6 +30,7 @@ export class SessionService {
     refreshTokenPlain: string,
     deviceId: string,
     ipAddress: string,
+    sessionId: string,
   ): Promise<Session> {
     const rounds = this.getBcryptRounds();
     const hashed = await bcrypt.hash(refreshTokenPlain, rounds);
@@ -36,6 +38,7 @@ export class SessionService {
 
     return this.prisma.session.create({
       data: {
+        id: sessionId,
         userId,
         refreshToken: hashed,
         deviceId,
@@ -50,9 +53,9 @@ export class SessionService {
    */
   async validateRefreshToken(refreshTokenPlain: string): Promise<ValidatedRefreshContext> {
     const secret = this.config.getOrThrow<string>(JWT_ENV.REFRESH_SECRET);
-    let payload: jwt.JwtPayload;
+    let payload: JwtRefreshPayload;
     try {
-      payload = jwt.verify(refreshTokenPlain, secret) as jwt.JwtPayload;
+      payload = jwt.verify(refreshTokenPlain, secret) as JwtRefreshPayload;
     } catch {
       throw new UnauthorizedException({
         message: 'Refresh token không hợp lệ hoặc đã hết hạn.',
@@ -61,31 +64,34 @@ export class SessionService {
     }
 
     const userId = payload.sub;
-    if (!userId || typeof userId !== 'string') {
+    const sessionId = payload.sid;
+    if (!userId || typeof userId !== 'string' || !sessionId) {
       throw new UnauthorizedException({
-        message: 'Refresh token thiếu subject.',
-        code: 'REFRESH_TOKEN_SUB_MISSING',
+        message: 'Refresh token thiếu thông tin.',
+        code: 'REFRESH_TOKEN_INVALID',
       });
     }
 
-    const sessions = await this.prisma.session.findMany({
-      where: {
-        userId,
-        expiredAt: { gt: new Date() },
-      },
+    const session = await this.prisma.session.findFirst({
+      where: { id: sessionId, userId, expiredAt: { gt: new Date() } },
     });
 
-    for (const s of sessions) {
-      const match = await bcrypt.compare(refreshTokenPlain, s.refreshToken);
-      if (match) {
-        return { sessionId: s.id, userId };
-      }
+    if (!session) {
+      throw new UnauthorizedException({
+        message: 'Phiên không tồn tại hoặc refresh token đã bị thu hồi.',
+        code: 'REFRESH_SESSION_MISMATCH',
+      });
     }
 
-    throw new UnauthorizedException({
-      message: 'Phiên không tồn tại hoặc refresh token đã bị thu hồi.',
-      code: 'REFRESH_SESSION_MISMATCH',
-    });
+    const match = await bcrypt.compare(refreshTokenPlain, session.refreshToken);
+    if (!match) {
+      throw new UnauthorizedException({
+        message: 'Phiên không tồn tại hoặc refresh token đã bị thu hồi.',
+        code: 'REFRESH_SESSION_MISMATCH',
+      });
+    }
+
+    return { sessionId: session.id, userId };
   }
 
   async revokeSession(sessionId: string): Promise<void> {

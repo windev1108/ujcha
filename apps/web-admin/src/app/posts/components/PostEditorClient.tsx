@@ -35,7 +35,12 @@ import type {
   AdminPostType,
 } from "@/services/admin/types";
 
-import { PostTipTapEditor } from "./PostTipTapEditor";
+import dynamic from "next/dynamic";
+
+const PostTipTapEditor = dynamic(
+  () => import("./PostTipTapEditor").then((m) => ({ default: m.PostTipTapEditor })),
+  { ssr: false, loading: () => <div className="h-64 animate-pulse rounded-2xl bg-surface-card" /> },
+);
 import { hasMeaningfulHtmlContent, htmlFromMarkdownFallback } from "./post-html";
 import { postTypeLabelVi } from "./posts-display";
 

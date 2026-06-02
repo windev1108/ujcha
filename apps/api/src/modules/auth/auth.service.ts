@@ -4,6 +4,7 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import type { User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { FraudService } from '../fraud/fraud.service';
@@ -171,9 +172,10 @@ export class AuthService {
     user: User,
     ctx: SessionContext,
   ): Promise<AuthResult> {
+    const sessionId = randomUUID();
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtTokensService.generateAccessToken(user.id),
-      this.jwtTokensService.generateRefreshToken(user.id),
+      this.jwtTokensService.generateRefreshToken(user.id, sessionId),
     ]);
 
     await this.sessionService.createSession(
@@ -181,6 +183,7 @@ export class AuthService {
       refreshToken,
       ctx.deviceId,
       ctx.ipAddress,
+      sessionId,
     );
 
     let next = await this.userService.ensureRegistrationMetadata(

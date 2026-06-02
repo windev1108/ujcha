@@ -49,22 +49,6 @@ export class AdminOverviewService {
         const typeRangeStart = addUtcDays(todayStart, -29);
         const typeRangeEnd = endOfUtcDay(todayStart);
 
-        const revenueDayPromises = Array.from({ length: 7 }, (_, i) => {
-            const dayStart = addUtcDays(last7Start, i);
-            const dayEnd = endOfUtcDay(dayStart);
-            return this.prisma.order
-                .aggregate({
-                    where: {
-                        paymentStatus: PaymentStatus.paid,
-                        createdAt: { gte: dayStart, lte: dayEnd },
-                    },
-                    _sum: { finalAmount: true },
-                })
-                .then((agg) => ({
-                    date: dayStart.toISOString().slice(0, 10),
-                    revenue: Number(agg._sum.finalAmount ?? 0),
-                }));
-        });
 
         const last7StartStr = last7Start.toISOString().slice(0, 10)
     const last7EndStr = last7End.toISOString().slice(0, 10)
@@ -85,7 +69,7 @@ export class AdminOverviewService {
             totalOrdersCount,
             platformRevenue,
         ] = await Promise.all([
-            Promise.all(revenueDayPromises),
+            this.buildRevenueByDay7(last7Start),
             this.sumPaidRevenue(last7Start, last7End),
             this.sumPaidRevenue(prev7Start, prev7End),
             this.countOrders(last7Start, last7End),
@@ -242,6 +226,26 @@ export class AdminOverviewService {
             _sum: { finalAmount: true },
         });
         return Number(r._sum.finalAmount ?? 0);
+    }
+
+    private async buildRevenueByDay7(from: Date): Promise<Array<{ date: string; revenue: number }>> {
+        const to = endOfUtcDay(addUtcDays(from, 6));
+        const rows = await this.prisma.$queryRaw<Array<{ day: Date; revenue: unknown }>>`
+            SELECT date_trunc('day', "createdAt") AS day,
+                   COALESCE(SUM("finalAmount"), 0) AS revenue
+            FROM "Order"
+            WHERE "paymentStatus" = ${PaymentStatus.paid}
+              AND "createdAt" >= ${from}
+              AND "createdAt" <= ${to}
+            GROUP BY 1
+            ORDER BY 1 ASC
+        `;
+        const byDate = new Map(rows.map((r) => [r.day.toISOString().slice(0, 10), Number(r.revenue)]));
+        return Array.from({ length: 7 }, (_, i) => {
+            const day = addUtcDays(from, i);
+            const date = day.toISOString().slice(0, 10);
+            return { date, revenue: byDate.get(date) ?? 0 };
+        });
     }
 
     private countOrders(from: Date, to: Date) {

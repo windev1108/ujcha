@@ -11,6 +11,8 @@ export async function generateMetadata(): Promise<Metadata> {
     };
 }
 
+export const revalidate = 300;
+
 export default function ProductsPage() {
     return <ProductPageShell />;
 }

@@ -127,6 +127,8 @@ const SECTIONS = [
   },
 ];
 
+export const revalidate = false;
+
 export default async function PrivacyPage() {
   const t = await getTranslations();
   return (

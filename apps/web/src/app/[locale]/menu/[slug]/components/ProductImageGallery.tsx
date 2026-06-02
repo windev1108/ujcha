@@ -56,6 +56,7 @@ export function ProductImageGallery({ images, name, placeholderBg = "#1a3c34" }:
                 alt={`${name} - ảnh ${active + 1}`}
                 fill
                 priority={active === 0}
+                unoptimized
                 className="object-cover"
                 sizes="(min-width: 1280px) 400px, (min-width: 1024px) 360px, 100vw"
               />
@@ -118,6 +119,7 @@ export function ProductImageGallery({ images, name, placeholderBg = "#1a3c34" }:
                 src={img}
                 alt={`${name} - thu nhỏ ${i + 1}`}
                 fill
+                unoptimized
                 className="object-cover"
                 sizes="72px"
               />

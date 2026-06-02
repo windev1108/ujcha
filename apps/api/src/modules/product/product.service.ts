@@ -41,6 +41,7 @@ export class ProductService {
                 ],
             },
             orderBy: [{ name: 'asc' }],
+            take: 200,
             include: { category: { select: { id: true, name: true, nameTranslation: true, slug: true, thumbnail: true } } },
         });
         const result = rows.map(normalizeProductRow);
