@@ -687,6 +687,10 @@ function ParticipantRow({
                   <Check className="size-3" /> {t("group_paid")}
                 </span>
               )
+            ) : participant.paymentType === "bank_transfer" && participant.items.length > 0 ? (
+              <span className="flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700 ring-1 ring-blue-200">
+                <Loader2 className="size-3 animate-spin" /> {t("group_awaiting_transfer")}
+              </span>
             ) : participant.items.length > 0 && canConfirm ? (
               <Button
                 size="sm"

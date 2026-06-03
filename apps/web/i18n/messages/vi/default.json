@@ -80,6 +80,7 @@
   "group_payment_transfer_desc_2": "Chuyển khoản ngân hàng / quét QR",
   "group_close": "Đóng",
   "group_paid": "Đã thanh toán",
+  "group_awaiting_transfer": "Chờ chuyển khoản",
   "group_confirm_paid": "Xác nhận đã TT",
   "group_split_cash_title": "Thanh toán tiền mặt",
   "group_split_my_share": "Phần của bạn",
@@ -847,5 +848,59 @@
   "table_basket_info_suffix": "— nhân viên sẽ mang đến bàn",
   "default_area": "Tầng 1",
 
-  "group_cash_delivery_note": "Tiền mặt sẽ được shipper thu khi giao hàng thành công — bạn không cần làm gì thêm."
+  "group_cash_delivery_note": "Tiền mặt sẽ được shipper thu khi giao hàng thành công — bạn không cần làm gì thêm.",
+
+  "terms_updated": "Cập nhật lần cuối: tháng 5 năm 2026",
+  "privacy_updated": "Cập nhật lần cuối: tháng 5 năm 2026",
+  "terms_intro": "Các điều khoản này điều chỉnh mối quan hệ giữa UjCha và người dùng khi sử dụng ứng dụng đặt đồ uống, chương trình tích điểm và các dịch vụ liên quan của UjCha.",
+
+  "ts1_title": "1. Chấp nhận điều khoản",
+  "ts1_body": "Bằng cách tạo tài khoản hoặc sử dụng bất kỳ dịch vụ nào của UjCha, bạn xác nhận đã đọc, hiểu và đồng ý bị ràng buộc bởi các Điều khoản dịch vụ này. Nếu bạn không đồng ý, vui lòng không sử dụng dịch vụ.",
+
+  "ts2_title": "2. Tài khoản người dùng",
+  "ts2_p1_sub": "Đăng ký",
+  "ts2_p1_body": "Để đặt hàng và tích điểm, bạn cần tạo tài khoản với số điện thoại hợp lệ tại Việt Nam. Một số điện thoại chỉ được liên kết với một tài khoản. Bạn phải cung cấp thông tin chính xác và cập nhật khi có thay đổi.",
+  "ts2_p2_sub": "Bảo mật tài khoản",
+  "ts2_p2_body": "Bạn chịu trách nhiệm bảo mật thông tin đăng nhập và toàn bộ hoạt động xảy ra dưới tài khoản của mình. Thông báo ngay cho UjCha nếu phát hiện truy cập trái phép.",
+  "ts2_p3_sub": "Độ tuổi",
+  "ts2_p3_body": "Dịch vụ dành cho người dùng từ 16 tuổi trở lên. Người dưới 18 tuổi cần có sự đồng ý của cha mẹ hoặc người giám hộ hợp pháp.",
+
+  "ts3_title": "3. Đặt hàng và thanh toán",
+  "ts3_p1_sub": "Xác nhận đơn hàng",
+  "ts3_p1_body": "Đơn hàng được coi là đã xác nhận khi bạn nhận được thông báo xác nhận từ hệ thống. UjCha có quyền hủy đơn trong trường hợp sản phẩm hết hàng hoặc phát hiện thông tin gian lận.",
+  "ts3_p2_sub": "Giá và thanh toán",
+  "ts3_p2_body": "Giá hiển thị trên ứng dụng đã bao gồm VAT (nếu áp dụng). UjCha chấp nhận thanh toán tiền mặt, chuyển khoản ngân hàng và các phương thức được liệt kê trong ứng dụng. Giá có thể thay đổi mà không cần báo trước.",
+  "ts3_p3_sub": "Voucher và ưu đãi",
+  "ts3_p3_body": "Voucher chỉ áp dụng theo điều kiện được nêu rõ và không thể quy đổi thành tiền mặt. Mỗi voucher chỉ được dùng một lần trừ khi có quy định khác. UjCha có quyền thu hồi voucher nếu phát hiện sử dụng gian lận.",
+
+  "ts4_title": "4. Hủy đơn và hoàn tiền",
+  "ts4_p1_sub": "Hủy đơn",
+  "ts4_p1_body": "Bạn có thể hủy đơn trong vòng 5 phút kể từ khi đặt hàng thành công nếu đơn chưa được xác nhận bởi cửa hàng. Sau khi cửa hàng xác nhận, đơn hàng không thể hủy.",
+  "ts4_p2_sub": "Hoàn tiền",
+  "ts4_p2_body": "Trong trường hợp đơn hàng bị hủy do lỗi từ phía UjCha (hết hàng, lỗi hệ thống), chúng tôi hoàn tiền đầy đủ qua cùng phương thức thanh toán trong vòng 3–7 ngày làm việc.",
+  "ts4_p3_sub": "Khiếu nại chất lượng",
+  "ts4_p3_body": "Nếu sản phẩm nhận được không đúng mô tả hoặc kém chất lượng, vui lòng liên hệ trong vòng 1 giờ kể từ khi nhận hàng kèm ảnh chụp. Chúng tôi sẽ xem xét và hoàn tiền/bù đắp trong trường hợp khiếu nại hợp lệ.",
+
+  "ts5_title": "5. Điểm thưởng và chương trình khách hàng thân thiết",
+  "ts5_p1_sub": "Tích điểm",
+  "ts5_p1_body": "Điểm thưởng được tính tự động sau khi đơn hàng hoàn thành theo tỷ lệ hiện hành. Điểm không được tính cho đơn hàng bị hủy hoặc hoàn tiền.",
+  "ts5_p2_sub": "Đổi điểm",
+  "ts5_p2_body": "Điểm tích lũy chỉ có thể đổi lấy voucher giảm giá tại trang Phần thưởng. Điểm không có giá trị quy đổi tiền mặt và không thể chuyển nhượng giữa các tài khoản.",
+  "ts5_p3_sub": "Hết hạn",
+  "ts5_p3_body": "Điểm không có thời hạn miễn tài khoản vẫn hoạt động. Nếu tài khoản không có giao dịch trong 24 tháng liên tiếp, điểm có thể bị thu hồi với thông báo trước 30 ngày.",
+
+  "ts6_title": "6. Hành vi bị cấm",
+  "ts6_body": "Người dùng không được: (1) Tạo nhiều tài khoản để lạm dụng ưu đãi; (2) Sử dụng công cụ tự động để đặt hàng hoặc tích điểm; (3) Chia sẻ tài khoản với người khác nhằm trục lợi ưu đãi; (4) Cung cấp thông tin sai lệch; (5) Thực hiện bất kỳ hành vi gian lận nào ảnh hưởng đến hệ thống hoặc người dùng khác. Vi phạm có thể dẫn đến khóa tài khoản vĩnh viễn và thu hồi toàn bộ điểm thưởng.",
+
+  "ts7_title": "7. Giới hạn trách nhiệm",
+  "ts7_body": "UjCha cung cấp dịch vụ theo hiện trạng và không đảm bảo dịch vụ sẽ không bị gián đoạn. Trong phạm vi tối đa cho phép bởi pháp luật, UjCha không chịu trách nhiệm cho thiệt hại gián tiếp, ngẫu nhiên hoặc hậu quả phát sinh từ việc sử dụng dịch vụ.",
+
+  "ts8_title": "8. Thay đổi điều khoản",
+  "ts8_body": "UjCha có quyền cập nhật Điều khoản này bất kỳ lúc nào. Thay đổi có hiệu lực ngay khi được đăng tải. Chúng tôi sẽ thông báo qua ứng dụng hoặc email cho các thay đổi quan trọng. Việc tiếp tục sử dụng dịch vụ sau khi thay đổi được coi là bạn đã chấp nhận điều khoản mới.",
+
+  "ts9_title": "9. Luật áp dụng",
+  "ts9_body": "Điều khoản này được điều chỉnh bởi pháp luật nước Cộng hòa xã hội chủ nghĩa Việt Nam. Mọi tranh chấp sẽ được giải quyết tại tòa án có thẩm quyền tại địa phương nơi UjCha đặt trụ sở.",
+
+  "ts10_title": "10. Liên hệ",
+  "ts10_body": "Với bất kỳ câu hỏi nào về Điều khoản dịch vụ, vui lòng liên hệ bộ phận hỗ trợ UjCha qua ứng dụng hoặc đến trực tiếp cửa hàng. Chúng tôi sẵn sàng giải đáp trong giờ làm việc."
 }

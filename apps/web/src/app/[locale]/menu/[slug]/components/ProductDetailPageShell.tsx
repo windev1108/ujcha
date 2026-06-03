@@ -16,12 +16,12 @@ const PLACEHOLDER_BG = ["#1a3c34", "#2d1a0a", "#0d2035", "#1a0d2e"];
 
 function DetailSkeleton() {
   return (
-    <div className="grid gap-8 lg:grid-cols-[4fr_6fr] lg:gap-14">
-      <div className="flex flex-col gap-3">
+    <div className="grid gap-10 lg:grid-cols-[4fr_6fr] lg:gap-14">
+      <div className="flex flex-col gap-2.5">
         <div className="aspect-[3/4] w-full animate-pulse rounded-3xl bg-black/[0.06]" />
         <div className="flex gap-2">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="aspect-[3/4] w-[72px] shrink-0 animate-pulse rounded-xl bg-black/[0.06]" />
+            <div key={i} className="aspect-[3/4] w-[60px] shrink-0 animate-pulse rounded-xl bg-black/[0.06]" />
           ))}
         </div>
       </div>
@@ -36,6 +36,7 @@ function DetailSkeleton() {
           <div className="h-4 w-5/6 animate-pulse rounded bg-black/[0.06]" />
           <div className="h-4 w-3/4 animate-pulse rounded bg-black/[0.06]" />
         </div>
+        <div className="mt-4 h-48 animate-pulse rounded-3xl bg-black/[0.04]" />
       </div>
     </div>
   );

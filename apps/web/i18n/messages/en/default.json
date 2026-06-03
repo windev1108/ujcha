@@ -80,6 +80,7 @@
   "group_payment_transfer_desc_2": "Bank transfer / QR scan",
   "group_close": "Close",
   "group_paid": "Paid",
+  "group_awaiting_transfer": "Awaiting transfer",
   "group_confirm_paid": "Confirm paid",
   "group_split_cash_title": "Cash payment",
   "group_split_my_share": "Your share",
@@ -804,5 +805,110 @@
   "table_basket_info_suffix": "— staff will bring it to your table",
   "default_area": "Floor 1",
 
-  "group_cash_delivery_note": "Cash will be collected by the shipper upon successful delivery — no action required from you."
+  "group_cash_delivery_note": "Cash will be collected by the shipper upon successful delivery — no action required from you.",
+
+  "terms_updated": "Last updated: May 2026",
+  "privacy_updated": "Last updated: May 2026",
+  "terms_intro": "These Terms govern the relationship between UjCha and its users when using the beverage ordering app, loyalty programme, and related UjCha services.",
+  "privacy_intro": "At UjCha, we value your privacy. This Policy clearly explains what information is collected, how it is used, and how we protect your personal data when you use the UjCha app and services.",
+
+  "ts1_title": "1. Acceptance of terms",
+  "ts1_body": "By creating an account or using any UjCha service, you confirm that you have read, understood, and agree to be bound by these Terms of Service. If you do not agree, please do not use the service.",
+
+  "ts2_title": "2. User account",
+  "ts2_p1_sub": "Registration",
+  "ts2_p1_body": "To place orders and earn loyalty points, you need to create an account with a valid Vietnamese phone number. One phone number may only be linked to one account. You must provide accurate information and update it when changes occur.",
+  "ts2_p2_sub": "Account security",
+  "ts2_p2_body": "You are responsible for keeping your login credentials secure and for all activity that occurs under your account. Notify UjCha immediately if you discover any unauthorised access.",
+  "ts2_p3_sub": "Age requirement",
+  "ts2_p3_body": "The service is intended for users aged 16 and over. Users under 18 require the consent of a parent or legal guardian.",
+
+  "ts3_title": "3. Ordering and payment",
+  "ts3_p1_sub": "Order confirmation",
+  "ts3_p1_body": "An order is considered confirmed when you receive a confirmation notification from the system. UjCha reserves the right to cancel an order if a product is out of stock or if fraudulent information is detected.",
+  "ts3_p2_sub": "Pricing and payment",
+  "ts3_p2_body": "Prices shown in the app include VAT (where applicable). UjCha accepts cash, bank transfer, and other payment methods listed in the app. Prices may change without prior notice.",
+  "ts3_p3_sub": "Vouchers and promotions",
+  "ts3_p3_body": "Vouchers are only valid under the conditions stated and cannot be exchanged for cash. Each voucher may only be used once unless otherwise specified. UjCha reserves the right to revoke vouchers if fraudulent use is detected.",
+
+  "ts4_title": "4. Cancellations and refunds",
+  "ts4_p1_sub": "Order cancellation",
+  "ts4_p1_body": "You may cancel an order within 5 minutes of placing it, provided the store has not yet confirmed it. Once the store confirms the order, it cannot be cancelled.",
+  "ts4_p2_sub": "Refunds",
+  "ts4_p2_body": "If an order is cancelled due to an error on UjCha's part (out of stock, system error), we will issue a full refund via the same payment method within 3–7 business days.",
+  "ts4_p3_sub": "Quality complaints",
+  "ts4_p3_body": "If the product received does not match its description or is of poor quality, please contact us within 1 hour of receiving the order and attach photos. We will review the complaint and provide a refund or compensation where the claim is valid.",
+
+  "ts5_title": "5. Loyalty points and rewards",
+  "ts5_p1_sub": "Earning points",
+  "ts5_p1_body": "Points are credited automatically when an order is completed, at the current earning rate. Points are not awarded for cancelled or refunded orders.",
+  "ts5_p2_sub": "Redeeming points",
+  "ts5_p2_body": "Accumulated points can only be redeemed for discount vouchers on the Rewards page. Points have no cash value and cannot be transferred between accounts.",
+  "ts5_p3_sub": "Expiry",
+  "ts5_p3_body": "Points do not expire as long as the account remains active. If an account has no transactions for 24 consecutive months, points may be forfeited with 30 days' notice.",
+
+  "ts6_title": "6. Prohibited conduct",
+  "ts6_body": "Users must not: (1) Create multiple accounts to abuse promotions; (2) Use automated tools to place orders or earn points; (3) Share an account with others to exploit offers; (4) Provide false information; (5) Engage in any fraudulent behaviour that affects the system or other users. Violations may result in permanent account suspension and forfeiture of all accumulated points.",
+
+  "ts7_title": "7. Limitation of liability",
+  "ts7_body": "UjCha provides the service on an as-is basis and does not guarantee uninterrupted service. To the fullest extent permitted by law, UjCha is not liable for any indirect, incidental, or consequential damages arising from the use of the service.",
+
+  "ts8_title": "8. Changes to the terms",
+  "ts8_body": "UjCha may update these Terms at any time. Changes take effect immediately upon publication. We will notify users via the app or email for significant changes. Continued use of the service after changes constitutes acceptance of the updated terms.",
+
+  "ts9_title": "9. Governing law",
+  "ts9_body": "These Terms are governed by the laws of the Socialist Republic of Vietnam. All disputes shall be resolved in the competent court at the locality where UjCha is headquartered.",
+
+  "ts10_title": "10. Contact",
+  "ts10_body": "If you have any questions about these Terms of Service, please contact UjCha support via the app or visit our store directly. We are happy to assist during business hours.",
+
+  "ps1_title": "1. Information we collect",
+  "ps1_b1_sub": "Information you provide",
+  "ps1_b1_body": "When registering an account, you provide your name, phone number, and password. When placing an order, we record your delivery address and payment method. This information is required to complete a transaction.",
+  "ps1_b2_sub": "Automatically collected information",
+  "ps1_b2_body": "When you use the app, we automatically collect device data (device type, operating system), IP address, in-app browsing history, and shopping habits to improve your experience.",
+  "ps1_b3_sub": "Transaction information",
+  "ps1_b3_body": "Order history, accumulated points, vouchers used, and all financial activity on the UjCha platform are stored to support customer service and the loyalty programme.",
+
+  "ps2_title": "2. How we use your information",
+  "ps2_b1_sub": "Processing orders",
+  "ps2_b1_body": "Personal information is used to process, confirm, and deliver orders to the correct address; to notify you of order status via SMS/push notifications; and to resolve transaction-related complaints.",
+  "ps2_b2_sub": "Loyalty programme",
+  "ps2_b2_body": "Transaction data is used to calculate reward points, assign membership tiers, and send personalised offers tailored to your shopping habits.",
+  "ps2_b3_sub": "Improving the service",
+  "ps2_b3_body": "We analyse aggregated (anonymised) data to develop new products, optimise the app experience, and adjust the menu based on actual demand.",
+  "ps2_b4_sub": "Communications",
+  "ps2_b4_body": "We may send order notifications, policy updates, and — if you agree — marketing offers via SMS or email. You can unsubscribe from marketing communications at any time.",
+
+  "ps3_title": "3. Sharing your information",
+  "ps3_b1_sub": "We do not sell data",
+  "ps3_b1_body": "UjCha commits to never selling, renting, or trading your personal information with third parties for commercial purposes.",
+  "ps3_b2_sub": "Processing partners",
+  "ps3_b2_body": "We share the minimum necessary information with payment partners (bank payment gateways), delivery partners, and SMS service providers to carry out transactions. These partners are bound by strict confidentiality agreements.",
+  "ps3_b3_sub": "Legal requirements",
+  "ps3_b3_body": "We may disclose information when required by a competent state authority under Vietnamese law.",
+
+  "ps4_title": "4. Data protection",
+  "ps4_b1_sub": "Technical measures",
+  "ps4_b1_body": "All data is transmitted over TLS-encrypted HTTPS connections. Passwords are hashed using the bcrypt algorithm and are never stored in plain text. Sensitive payment information is not stored directly on UjCha's systems.",
+  "ps4_b2_sub": "Access control",
+  "ps4_b2_body": "Only authorised personnel may access customer data within the scope of their role. All access is logged and reviewed periodically.",
+
+  "ps5_title": "5. Your rights",
+  "ps5_b1_sub": "Access and correction",
+  "ps5_b1_body": "You may view and edit your personal information at any time in the Profile section of the app.",
+  "ps5_b2_sub": "Account deletion",
+  "ps5_b2_body": "You may request deletion of your account and all personal data by contacting our support team. We will process the request within 30 business days, except for data we are legally required to retain.",
+  "ps5_b3_sub": "Withdraw consent",
+  "ps5_b3_body": "You can unsubscribe from marketing communications at any time via Settings → Notifications, or by contacting us directly.",
+
+  "ps6_title": "6. Data retention",
+  "ps6_b1_sub": "Account data",
+  "ps6_b1_body": "Retained for the lifetime of the account and deleted 90 days after the account is closed (except transaction data required under accounting law).",
+  "ps6_b2_sub": "Transaction history",
+  "ps6_b2_body": "Under Vietnamese law, financial transaction data is retained for a minimum of 5 years.",
+
+  "ps7_title": "7. Contact",
+  "ps7_b1_sub": "Feedback and complaints",
+  "ps7_b1_body": "If you have questions about this Privacy Policy or wish to exercise your rights, please contact us via our support email or visit a UjCha store in person. We are committed to responding within 3 business days."
 }

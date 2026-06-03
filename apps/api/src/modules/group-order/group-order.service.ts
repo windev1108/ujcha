@@ -366,6 +366,11 @@ export class GroupOrderService {
       throw new NotFoundException('Khong tim thay thanh vien.');
     }
 
+    // Bank transfer confirmations must come through the payment webhook, not manually
+    if (target.paymentType === 'bank_transfer') {
+      throw new BadRequestException('Chuyen khoan duoc xac nhan tu dong khi nhan tien.');
+    }
+
     await this.prisma.groupOrderParticipant.update({
       where: { id: participantId },
       data: {
@@ -381,12 +386,14 @@ export class GroupOrderService {
       },
     });
 
-    const allPaid = goCheck!.participants.every((p) => p.paymentStatus === 'paid');
+    const withItems = goCheck!.participants.filter((p) => p.items.length > 0);
+    const allPaid = withItems.every((p) => p.paymentStatus === 'paid');
 
     if (allPaid) {
       const firstParticipant = goCheck!.participants.find((p) => p.paymentType != null);
       const paymentType = firstParticipant?.paymentType ?? 'cash';
-      const order = await this.createFinalOrder(goCheck!, paymentType as any, true);
+      // Cash is collected by the shipper on delivery — order stays unpaid until then
+      const order = await this.createFinalOrder(goCheck!, paymentType as any, false);
       await this.prisma.groupOrder.update({
         where: { token },
         data: { status: GroupOrderStatus.completed, orderId: order.id },
