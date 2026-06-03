@@ -234,7 +234,7 @@ export class AdminOverviewService {
             SELECT date_trunc('day', "createdAt") AS day,
                    COALESCE(SUM("finalAmount"), 0) AS revenue
             FROM "Order"
-            WHERE "paymentStatus" = ${PaymentStatus.paid}
+            WHERE "paymentStatus" = ${PaymentStatus.paid}::"PaymentStatus"
               AND "createdAt" >= ${from}
               AND "createdAt" <= ${to}
             GROUP BY 1

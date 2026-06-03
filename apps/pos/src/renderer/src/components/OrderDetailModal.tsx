@@ -49,7 +49,7 @@ type PrintStatus = 'idle' | 'printing' | 'done' | 'error'
 
 // ── Status timeline ────────────────────────────────────────────────────────────
 
-const TIMELINE_STEPS_DELIVERY: OrderStatus[] = ['pending', 'confirmed', 'preparing', 'ready', 'delivering', 'completed']
+const TIMELINE_STEPS_DELIVERY: OrderStatus[] = ['pending', 'confirmed', 'preparing', 'ready', 'delivering', 'arrived', 'completed']
 const TIMELINE_STEPS_OTHER: OrderStatus[] = ['pending', 'confirmed', 'preparing', 'ready', 'completed']
 
 const STEP_META: Record<OrderStatus, { label: string; icon: React.ElementType }> = {
@@ -58,6 +58,7 @@ const STEP_META: Record<OrderStatus, { label: string; icon: React.ElementType }>
     preparing: { label: 'Đang làm', icon: Box },
     ready: { label: 'Sẵn sàng', icon: CheckCircle2 },
     delivering: { label: 'Đang giao', icon: Truck },
+    arrived: { label: 'Đã đến nơi', icon: MapPin },
     completed: { label: 'Hoàn thành', icon: CheckCircle2 },
     cancelled: { label: 'Đã huỷ', icon: Ban },
 }

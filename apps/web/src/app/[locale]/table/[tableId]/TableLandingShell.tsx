@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   AlertCircle,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Loader2,
   LocateFixed,
   MapPin,
@@ -32,6 +34,7 @@ import { ROUTES } from "@/lib/routes";
 import { getDisplayName, getValueLabel, getDisplayDescription } from "@/lib/product-name";
 
 const TABLE_STORAGE_KEY = "kun_table_id";
+const PAGE_SIZE = 12;
 
 interface StoreLocationConfig {
   lat: number;
@@ -171,7 +174,7 @@ function LocationGate({
         </p>
         {distance !== undefined && radiusMeters !== undefined && (
           <p className="mt-3 inline-block rounded-full bg-red-50 px-4 py-1.5 text-xs font-semibold text-red-600">
-            Khoảng cách: {Math.round(distance)}m · Bán kính cho phép: {radiusMeters}m
+            {t("table_distance_hint", { distance: Math.round(distance), radius: radiusMeters })}
           </p>
         )}
       </div>
@@ -198,34 +201,92 @@ function CategoryTabs({
   onSelect: (id: string | null) => void;
 }) {
   const t = useTranslations();
+  const locale = useLocale();
+  const pillsRef = useRef<HTMLDivElement>(null);
+  const [fadeLeft, setFadeLeft] = useState(false);
+  const [fadeRight, setFadeRight] = useState(false);
+
+  const syncFade = () => {
+    const el = pillsRef.current;
+    if (!el) return;
+    setFadeLeft(el.scrollLeft > 1);
+    setFadeRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+  };
+
+  useEffect(() => {
+    const el = pillsRef.current;
+    if (!el) return;
+    syncFade();
+    el.addEventListener("scroll", syncFade, { passive: true });
+    const ro = new ResizeObserver(syncFade);
+    ro.observe(el);
+    return () => { el.removeEventListener("scroll", syncFade); ro.disconnect(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => { syncFade(); }, [categories]);
+
   return (
-    <div className="sticky top-[57px] z-20 overflow-x-auto border-b border-black/[0.06] bg-white [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      <div className="flex min-w-max gap-2 px-4 py-2.5">
-        <button
-          type="button"
-          onClick={() => onSelect(null)}
-          className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
-            selectedId === null
-              ? "bg-kun-primary text-white"
-              : "bg-black/[0.05] text-foreground/60 hover:bg-black/[0.08]"
-          }`}
+    <div className="sticky top-[57px] z-20 border-b border-black/[0.06] bg-white">
+      <div className="relative px-4 py-2.5">
+        {fadeLeft && (
+          <>
+            <div className="pointer-events-none absolute inset-y-0 left-4 z-10 w-10 bg-gradient-to-r from-white to-transparent" />
+            <button
+              type="button"
+              aria-label={t("scroll_left")}
+              onClick={() => pillsRef.current?.scrollBy({ left: -180, behavior: "smooth" })}
+              className="absolute left-3 top-1/2 z-20 flex size-6 -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white shadow-sm transition-colors hover:bg-black/[0.04]"
+            >
+              <ChevronLeft className="size-3.5 text-foreground/55" />
+            </button>
+          </>
+        )}
+
+        <div
+          ref={pillsRef}
+          className="overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
-          {t("all")}
-        </button>
-        {categories.map((cat) => (
-          <button
-            key={cat.id}
-            type="button"
-            onClick={() => onSelect(cat.id)}
-            className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
-              selectedId === cat.id
+          <div className="flex w-max min-w-full items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onSelect(null)}
+              className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${selectedId === null
                 ? "bg-kun-primary text-white"
                 : "bg-black/[0.05] text-foreground/60 hover:bg-black/[0.08]"
-            }`}
-          >
-            {cat.name}
-          </button>
-        ))}
+                }`}
+            >
+              {t("all")}
+            </button>
+            {categories.map((cat) => (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => onSelect(cat.id)}
+                className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${selectedId === cat.id
+                  ? "bg-kun-primary text-white"
+                  : "bg-black/[0.05] text-foreground/60 hover:bg-black/[0.08]"
+                  }`}
+              >
+                {locale === "vi" ? cat.name : (cat.nameTranslation?.[locale] || cat.name)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {fadeRight && (
+          <>
+            <div className="pointer-events-none absolute inset-y-0 right-4 z-10 w-10 bg-gradient-to-l from-white to-transparent" />
+            <button
+              type="button"
+              aria-label={t("scroll_right")}
+              onClick={() => pillsRef.current?.scrollBy({ left: 180, behavior: "smooth" })}
+              className="absolute right-3 top-1/2 z-20 flex size-6 -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white shadow-sm transition-colors hover:bg-black/[0.04]"
+            >
+              <ChevronRight className="size-3.5 text-foreground/55" />
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
@@ -254,11 +315,10 @@ function ProductCard({
       type="button"
       disabled={sold}
       onClick={() => onPick(product)}
-      className={`relative flex flex-col overflow-hidden rounded-3xl bg-white text-left shadow-[0_4px_20px_-8px_rgba(0,0,0,0.1)] transition-all active:scale-[0.98] ${
-        sold
-          ? "cursor-not-allowed opacity-50"
-          : "hover:shadow-[0_4px_20px_-4px_rgba(26,60,52,0.15)]"
-      }`}
+      className={`relative flex flex-col overflow-hidden rounded-xl bg-white text-left shadow-[0_4px_20px_-8px_rgba(0,0,0,0.1)] transition-all active:scale-[0.98] ${sold
+        ? "cursor-not-allowed opacity-50"
+        : "hover:shadow-[0_4px_20px_-4px_rgba(26,60,52,0.15)]"
+        }`}
     >
       <div className="relative aspect-square w-full bg-surface-card">
         {img ? (
@@ -410,11 +470,10 @@ function ProductPickModal({
                     key={v.label}
                     type="button"
                     onClick={() => setSelectedOptions((o) => ({ ...o, [g.name]: v.label }))}
-                    className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors ${
-                      selectedOptions[g.name] === v.label
-                        ? "border-kun-primary bg-kun-primary text-white"
-                        : "border-black/12 text-foreground/70 hover:border-kun-primary/40"
-                    }`}
+                    className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors ${selectedOptions[g.name] === v.label
+                      ? "border-kun-primary bg-kun-primary text-white"
+                      : "border-black/12 text-foreground/70 hover:border-kun-primary/40"
+                      }`}
                   >
                     {getValueLabel(v, locale)}
                     {v.priceDelta > 0 && (
@@ -439,9 +498,8 @@ function ProductPickModal({
                     >
                       <div className="flex items-center gap-2.5">
                         <div
-                          className={`flex size-5 shrink-0 items-center justify-center rounded ${
-                            checked ? "bg-kun-primary" : "border border-black/20"
-                          }`}
+                          className={`flex size-5 shrink-0 items-center justify-center rounded ${checked ? "bg-kun-primary" : "border border-black/20"
+                            }`}
                         >
                           {checked && (
                             <svg viewBox="0 0 10 8" className="size-3">
@@ -475,7 +533,7 @@ function ProductPickModal({
           )}
 
           <div className="mt-5">
-            <p className="mb-2 text-sm font-bold text-kun-primary">Ghi chú</p>
+            <p className="mb-2 text-sm font-bold text-kun-primary">{t("note")}</p>
             <input
               type="text"
               value={note}
@@ -636,7 +694,9 @@ function OrderBasketSheet({
           <div className="mx-4 my-3 flex items-center gap-2 rounded-xl bg-kun-sage/10 px-3 py-2.5">
             <MapPin className="size-3.5 shrink-0 text-kun-primary/70" />
             <p className="text-xs text-kun-primary/70">
-              Đặt tại <span className="font-semibold">{tableName}</span> — nhân viên sẽ mang đến bàn
+              {t("table_basket_info_prefix")}{" "}
+              <span className="font-semibold">{tableName}</span>
+              {" "}{t("table_basket_info_suffix")}
             </p>
           </div>
 
@@ -648,11 +708,10 @@ function OrderBasketSheet({
                   key={pm}
                   type="button"
                   onClick={() => setPaymentType(pm)}
-                  className={`flex-1 rounded-xl border py-2.5 text-sm font-semibold transition-colors ${
-                    paymentType === pm
-                      ? "border-kun-primary bg-kun-primary/5 text-kun-primary"
-                      : "border-black/10 text-foreground/60"
-                  }`}
+                  className={`flex-1 rounded-xl border py-2.5 text-sm font-semibold transition-colors ${paymentType === pm
+                    ? "border-kun-primary bg-kun-primary/5 text-kun-primary"
+                    : "border-black/10 text-foreground/60"
+                    }`}
                 >
                   {pm === "cash" ? `💵 ${t("cash")}` : `🏦 ${t("bank_transfer")}`}
                 </button>
@@ -764,6 +823,8 @@ export function TableLandingShell({ tableId }: { tableId: string }) {
 
   // menu
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const [basket, setBasket] = useState<TableOrderItem[]>([]);
   const [pickingProduct, setPickingProduct] = useState<ApiProduct | null>(null);
   const [showBasket, setShowBasket] = useState(false);
@@ -780,7 +841,7 @@ export function TableLandingShell({ tableId }: { tableId: string }) {
       })
       .catch(() => setTableError(t("table_not_found")))
       .finally(() => setTableLoading(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tableId]);
 
   // Step 2: after table loads and is active, run location check
@@ -839,7 +900,7 @@ export function TableLandingShell({ tableId }: { tableId: string }) {
     }
 
     void checkLocation();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [table, geoRetry]);
 
   // React Query — only enabled after geo passes
@@ -866,6 +927,23 @@ export function TableLandingShell({ tableId }: { tableId: string }) {
     staleTime: 10 * 60_000,
     enabled: menuEnabled,
   });
+
+  // Reset paging when category changes
+  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [selectedCategoryId]);
+
+  // Infinite scroll — reconnects each time visibleCount or data changes
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const total = productsQuery.data?.length ?? 0;
+    if (visibleCount >= total) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) setVisibleCount((c) => c + PAGE_SIZE); },
+      { rootMargin: "200px" },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [visibleCount, productsQuery.data]);
 
   const toppings = toppingsQuery.data ?? [];
   const basketCount = basket.reduce((s, b) => s + b.quantity, 0);
@@ -937,7 +1015,7 @@ export function TableLandingShell({ tableId }: { tableId: string }) {
     );
   }
 
-  const area = (table.area ?? "").trim() || "Tầng 1";
+  const area = (table.area ?? "").trim() || t("default_area");
 
   // ── Success ──────────────────────────────────────────────────────────────────
 
@@ -966,7 +1044,7 @@ export function TableLandingShell({ tableId }: { tableId: string }) {
           <Utensils className="size-4 text-white" strokeWidth={1.75} />
         </div>
         <div className="min-w-0">
-          <p className="truncate text-sm font-bold text-kun-primary">{table.name}</p>
+          <p className="truncate text-sm font-bold text-kun-primary">{t('table_header')}: {table.name}</p>
           <p className="flex items-center gap-1 text-[11px] text-foreground/50">
             <MapPin className="size-3 shrink-0" />
             {area}
@@ -995,11 +1073,18 @@ export function TableLandingShell({ tableId }: { tableId: string }) {
             <p className="text-sm text-foreground/40">{t("no_items_in_category")}</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {productsQuery.data.map((p) => (
-              <ProductCard key={p.id} product={p} onPick={setPickingProduct} />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {productsQuery.data.slice(0, visibleCount).map((p) => (
+                <ProductCard key={p.id} product={p} onPick={setPickingProduct} />
+              ))}
+            </div>
+            {visibleCount < productsQuery.data.length && (
+              <div ref={sentinelRef} className="flex justify-center py-8">
+                <Loader2 className="size-5 animate-spin text-kun-primary/40" />
+              </div>
+            )}
+          </>
         )}
       </div>
 

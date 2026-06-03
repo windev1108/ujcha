@@ -8,7 +8,7 @@ import { UpdatePosReleaseDto } from './dto/update-pos-release.dto';
 import { PosReleaseService } from './pos-release.service';
 
 @ApiTags('pos-release')
-@Controller('kun-pos')
+@Controller('ujcha-pos')
 export class PosReleaseController {
   constructor(private readonly service: PosReleaseService) { }
 

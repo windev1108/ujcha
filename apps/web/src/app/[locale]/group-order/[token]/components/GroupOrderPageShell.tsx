@@ -614,11 +614,14 @@ function ParticipantRow({
 }) {
   const locale = useLocale();
   const t = useTranslations();
+  // cash is auto-confirmed (collected by shipper); bank_transfer is auto-confirmed via webhook
   const canConfirm =
     groupStatus === "locked" &&
     paymentMode === "split" &&
     participant.paymentStatus === "pending" &&
     participant.items.length > 0 &&
+    participant.paymentType !== null &&
+    participant.paymentType !== "cash" &&
     participant.paymentType !== "bank_transfer" &&
     (isMe || isMeHost);
 
@@ -675,9 +678,15 @@ function ParticipantRow({
           )}
           {paymentMode === "split" && groupStatus === "locked" && (
             participant.paymentStatus === "paid" ? (
-              <span className="flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-xs font-semibold text-green-700 ring-1 ring-green-200">
-                <Check className="size-3" /> {t("group_paid")}
-              </span>
+              participant.paymentType === "cash" ? (
+                <span className="flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-200">
+                  <Banknote className="size-3" /> {t("cash")}
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-xs font-semibold text-green-700 ring-1 ring-green-200">
+                  <Check className="size-3" /> {t("group_paid")}
+                </span>
+              )
             ) : participant.items.length > 0 && canConfirm ? (
               <Button
                 size="sm"
@@ -995,6 +1004,7 @@ export function GroupOrderPageShell() {
   const [showPaymentPicker, setShowPaymentPicker] = useState(false);
   const [pendingCheckoutOrder, setPendingCheckoutOrder] = useState<{ id: string; paymentCode: string } | null>(null);
   const splitInitRef = useRef(false);
+  const splitCashConfirmRef = useRef(false);
 
   const socketRef = useRef<Socket | null>(null);
 
@@ -1128,6 +1138,24 @@ export function GroupOrderPageShell() {
         .catch(() => { splitInitRef.current = false; });
     }
   }, [state?.status, state?.paymentMode, state?.paymentType, me?.paymentStatus, me?.paymentType, me?.items.length, sessionToken, token]);
+
+  // Auto-confirm cash split participants — cash is collected by shipper on delivery, no manual confirmation needed
+  useEffect(() => {
+    if (
+      state?.status === "locked" &&
+      state.paymentMode === "split" &&
+      me?.paymentStatus === "pending" &&
+      me.paymentType === "cash" &&
+      me.items.length > 0 &&
+      sessionToken &&
+      !splitCashConfirmRef.current
+    ) {
+      splitCashConfirmRef.current = true;
+      void confirmParticipantPaid(token, sessionToken, me.id)
+        .then((newState) => setState(newState))
+        .catch(() => { splitCashConfirmRef.current = false; });
+    }
+  }, [state?.status, state?.paymentMode, me?.paymentStatus, me?.paymentType, me?.items.length, me?.id, sessionToken, token]);
 
   const withAction = async (fn: () => Promise<GroupOrderState | { groupOrder: GroupOrderState }>) => {
     if (!sessionToken) return;
@@ -1574,20 +1602,16 @@ export function GroupOrderPageShell() {
                         <span className="text-lg font-bold tabular-nums text-[#1a3c34]">{fmtVnd(myAmount)}</span>
                       </div>
                       {discountPercent > 0 && (
-                        <p className="mb-2 text-xs text-foreground/45">
+                        <p className="mb-3 text-xs text-foreground/45">
                           {state.shippingFee > 0
                             ? t("group_incl_discount_ship", { pct: discountPercent })
                             : t("group_incl_discount", { pct: discountPercent })}
                         </p>
                       )}
-                      <Button
-                        className="w-full rounded-full bg-[#1a3c34] py-3 font-semibold text-white"
-                        isDisabled={actionLoading}
-                        onPress={() => void withAction(() => confirmParticipantPaid(token, sessionToken!, me.id))}
-                      >
-                        <Check className="mr-1.5 size-4" />
-                        {t("group_cash_confirm_btn")}
-                      </Button>
+                      <div className="flex items-center gap-2.5 rounded-xl border border-dashed border-[#1a3c34]/20 bg-[#f0faf6] px-3 py-3">
+                        <Bike className="size-4 shrink-0 text-[#1a3c34]" />
+                        <p className="text-xs text-[#1a3c34]">{t("group_cash_delivery_note")}</p>
+                      </div>
                     </>
                   ) : me.paymentQrToken ? (
                     <>

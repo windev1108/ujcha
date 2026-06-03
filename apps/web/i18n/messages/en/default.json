@@ -570,6 +570,8 @@
   "stars": "stars",
   "store": "Store",
   "suggestions": "Suggestions",
+  "table": "Table",
+  "table_header": "Table",
   "table_inactive_msg": "is not currently in service.",
   "table_not_found": "Table not found or no longer active.",
   "table_only_instore": "Table ordering is only available when you are inside the restaurant.",
@@ -795,5 +797,12 @@
   "online": "Live tracking",
   "waiting_shipper_turn_on_location": "Waiting for shipper location",
   "update_automatically": "Updates automatically",
-  "tap_to_fullscreen": "Tap to view fullscreen"
+  "tap_to_fullscreen": "Tap to view fullscreen",
+
+  "table_distance_hint": "Distance: {distance}m · Allowed radius: {radius}m",
+  "table_basket_info_prefix": "Ordered at",
+  "table_basket_info_suffix": "— staff will bring it to your table",
+  "default_area": "Floor 1",
+
+  "group_cash_delivery_note": "Cash will be collected by the shipper upon successful delivery — no action required from you."
 }

@@ -1,9 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { AdminRole } from '@prisma/client';
-import { IsEmail, IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsEmail,
+  IsEnum,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 
 export class CreateAdminDto {
-  @ApiProperty({ example: 'staff@kun.vn' })
+  @ApiProperty({ example: 'staff@ujcha.vn' })
   @IsEmail()
   email: string;
 

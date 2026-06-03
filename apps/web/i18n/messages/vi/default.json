@@ -614,6 +614,7 @@
   "stars": "sao",
   "store": "Cửa hàng",
   "suggestions": "Gợi ý",
+  "table_header": "Bàn",
   "table_inactive_msg": "hiện chưa phục vụ.",
   "table_not_found": "Không tìm thấy bàn hoặc bàn không còn hoạt động.",
   "table_only_instore": "Tính năng đặt món tại bàn chỉ khả dụng khi bạn ở trong nhà hàng.",
@@ -839,5 +840,12 @@
   "online": "Đang theo dõi trực tiếp",
   "waiting_shipper_turn_on_location": "Chờ shipper bật định vị",
   "update_automatically": "Tự động cập nhật",
-  "tap_to_fullscreen": "Nhấn để xem toàn màn hình"
+  "tap_to_fullscreen": "Nhấn để xem toàn màn hình",
+
+  "table_distance_hint": "Khoảng cách: {distance}m · Bán kính cho phép: {radius}m",
+  "table_basket_info_prefix": "Đặt tại",
+  "table_basket_info_suffix": "— nhân viên sẽ mang đến bàn",
+  "default_area": "Tầng 1",
+
+  "group_cash_delivery_note": "Tiền mặt sẽ được shipper thu khi giao hàng thành công — bạn không cần làm gì thêm."
 }

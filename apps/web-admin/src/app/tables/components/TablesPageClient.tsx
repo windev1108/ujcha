@@ -99,11 +99,6 @@ export function TablesPageClient() {
     return Array.from(s).sort((a, b) => a.localeCompare(b, "vi"));
   }, [tables]);
 
-  const areaOptionsForFilter = useMemo(
-    () => tableAreaSelectOptions(uniqueAreas),
-    [uniqueAreas],
-  );
-
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return tables.filter((t) => {

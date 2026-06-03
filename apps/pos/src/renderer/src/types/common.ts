@@ -189,6 +189,7 @@ export type OrderStatus =
   | 'preparing'
   | 'ready'
   | 'delivering'
+  | 'arrived'
   | 'cancelled'
   | 'completed'
 

@@ -48,6 +48,7 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
   preparing: 'Đang làm',
   ready: 'Sẵn sàng',
   delivering: 'Đang giao',
+  arrived: 'Đã đến nơi',
   cancelled: 'Đã huỷ',
 }
 
@@ -57,6 +58,7 @@ const STATUS_COLOR: Record<OrderStatus, string> = {
   preparing: 'bg-violet-100 text-violet-700 border-violet-200',
   ready: 'bg-emerald-100 text-emerald-700 border-emerald-200',
   delivering: 'bg-sky-100 text-sky-700 border-sky-200',
+  arrived: 'bg-indigo-100 text-indigo-700 border-indigo-200',
   cancelled: 'bg-red-100 text-red-600 border-red-200',
   completed: 'bg-teal-100 text-teal-700 border-teal-200',
 }
@@ -67,6 +69,7 @@ const STATUS_DOT: Record<OrderStatus, string> = {
   preparing: 'bg-violet-500',
   ready: 'bg-emerald-500',
   delivering: 'bg-sky-500',
+  arrived: 'bg-indigo-500',
   cancelled: 'bg-red-500',
   completed: 'bg-teal-500',
 }
@@ -90,6 +93,7 @@ const STATUS_FILTERS: { key: 'all' | OrderStatus; label: string }[] = [
   { key: 'preparing', label: 'Đang làm' },
   { key: 'ready', label: 'Sẵn sàng' },
   { key: 'delivering', label: 'Đang giao' },
+  { key: 'arrived', label: 'Đã đến nơi' },
   { key: 'completed', label: 'Hoàn thành' },
   { key: 'cancelled', label: 'Đã huỷ' },
 ]
@@ -668,7 +672,7 @@ function OrderCard({
 
   const visibleItems = order.items.slice(0, 2)
   const hiddenCount = order.items.length - visibleItems.length
-  const showActions = ['pending', 'confirmed', 'preparing', 'ready', 'delivering'].includes(order.status)
+  const showActions = ['pending', 'confirmed', 'preparing', 'ready', 'delivering', 'arrived'].includes(order.status)
 
   return (
     <div className={`relative flex flex-col rounded-2xl border bg-white overflow-hidden transition-all duration-200 ${isSelected
@@ -853,6 +857,15 @@ function OrderCard({
               </button>
             )}
             {order.status === 'delivering' && (
+              <button
+                onClick={(e) => { e.stopPropagation(); void onStatusChange(order.id, 'completed') }}
+                disabled={isBusy}
+                className="flex flex-1 items-center justify-center gap-1 rounded-full bg-emerald-50 px-2.5 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
+              >
+                <CheckCircle2 className="size-3" /> Hoàn thành
+              </button>
+            )}
+            {order.status === 'arrived' && (
               <button
                 onClick={(e) => { e.stopPropagation(); void onStatusChange(order.id, 'completed') }}
                 disabled={isBusy}

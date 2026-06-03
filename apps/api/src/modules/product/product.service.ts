@@ -1,5 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { normalizeInlineOptionGroups, normalizeInlineToppings } from '../../helper/utils';
+import {
+    normalizeInlineOptionGroups,
+    normalizeInlineToppings,
+} from '../../helper/utils';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 
@@ -23,8 +26,8 @@ export class ProductService {
         const categoryFilter = categoryId
             ? { categoryId }
             : categorySlug
-            ? { category: { slug: categorySlug } }
-            : {};
+                ? { category: { slug: categorySlug } }
+                : {};
         const rows = await this.prisma.product.findMany({
             where: {
                 AND: [

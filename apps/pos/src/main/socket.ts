@@ -166,7 +166,7 @@ function connect() {
   client = mqtt.connect(ANALY_MQTT_URL, {
     username: currentEmail,
     password: currentToken,
-    clientId: `kun-pos-${Date.now().toString(36)}`,
+    clientId: `ujcha-pos-${Date.now().toString(36)}`,
     reconnectPeriod: 0,       // manual reconnect
     connectTimeout: 10_000,
     protocolVersion: 4,

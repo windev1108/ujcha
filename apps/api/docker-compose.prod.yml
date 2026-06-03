@@ -1,0 +1,87 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ujcha-api
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      NODE_ENV: production
+      PORT: "5000"
+      DATABASE_URL: "postgresql://ujcha:${POSTGRES_PASSWORD}@postgres:5432/ujcha?schema=public&connection_limit=10&pool_timeout=20"
+      DIRECT_URL: "postgresql://ujcha:${POSTGRES_PASSWORD}@postgres:5432/ujcha?schema=public"
+      REDIS_URL: "redis://redis:6379"
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - ujcha-internal
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: ujcha-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ujcha
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ujcha
+    command: >
+      postgres
+        -c shared_buffers=256MB
+        -c work_mem=4MB
+        -c max_connections=50
+    volumes:
+      - kun_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ujcha -d ujcha"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - ujcha-internal
+
+  redis:
+    image: redis:7-alpine
+    container_name: ujcha-redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --save ""
+    volumes:
+      - kun_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - ujcha-internal
+
+  adminer:
+    image: adminer:latest
+    container_name: ujcha-adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    networks:
+      - ujcha-internal
+
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: ujcha-redisinsight
+    restart: unless-stopped
+    ports:
+      - "5540:5540"
+    networks:
+      - ujcha-internal
+
+networks:
+  ujcha-internal:
+    driver: bridge
+
+volumes:
+  kun_pgdata:
+  kun_redis_data:

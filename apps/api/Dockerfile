@@ -1,21 +1,45 @@
-FROM node:20-slim
+# ─── Stage 1: Builder ────────────────────────────────────────────────────────
+FROM node:20-slim AS builder
 
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 
-WORKDIR /usr/src/app
+WORKDIR /app
 
-# Install deps first (layer cache — only re-runs when package.json changes)
-COPY package.json ./
+COPY package.json pnpm-lock.yaml* ./
 COPY prisma ./prisma/
 
-RUN pnpm install --no-frozen-lockfile
+RUN pnpm install --frozen-lockfile
 
-# Copy source after install
 COPY . .
-
-# prebuild runs prisma generate automatically before nest build
 RUN pnpm run build
 
-EXPOSE 3000
+# Prune devDependencies để giảm kích thước image
+RUN pnpm prune --prod
 
-CMD ["node", "--max-old-space-size=1024", "dist/main.js"]
+# ─── Stage 2: Runner ─────────────────────────────────────────────────────────
+FROM node:20-slim AS runner
+
+# openssl cần cho Prisma binary
+RUN apt-get update -y \
+    && apt-get install -y --no-install-recommends openssl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Chạy dưới non-root user
+RUN addgroup --system --gid 1001 nodejs \
+    && adduser --system --uid 1001 --ingroup nodejs nestjs
+
+WORKDIR /app
+
+COPY --from=builder --chown=nestjs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nestjs:nodejs /app/dist         ./dist
+COPY --from=builder --chown=nestjs:nodejs /app/prisma       ./prisma
+COPY --from=builder --chown=nestjs:nodejs /app/package.json ./package.json
+COPY --chown=nestjs:nodejs scripts/start.sh ./scripts/start.sh
+
+RUN chmod +x ./scripts/start.sh
+
+USER nestjs
+
+EXPOSE 5000
+
+CMD ["./scripts/start.sh"]

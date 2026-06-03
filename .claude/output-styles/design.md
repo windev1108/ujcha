@@ -134,8 +134,8 @@ rounded:
   sm: 8px
   md: 12px        # --radius: 0.75rem — default card radius
   lg: 16px
-  xl: 24px        # --radius-kun-xl: 1.5rem — panels, modals, large cards
-  2xl: 32px       # --radius-kun-2xl: 2rem — hero cards, promo panels
+  xl: 24px        # --radius-ujcha-xl: 1.5rem — panels, modals, large cards
+  2xl: 32px       # --radius-ujcha-2xl: 2rem — hero cards, promo panels
   full: 9999px    # pill badges, avatar circles
 
 spacing:
@@ -453,11 +453,11 @@ Every LP section uses `RevealSection` with `px-4 py-12 sm:px-6 sm:py-16`. All co
 ## Writing Style (Component Code)
 
 When writing components for this project:
-1. **Always use CSS variable tokens** (`text-kun-primary`, `bg-kun-mint`, `text-muted`, `border-black/6`) over arbitrary hex values.
+1. **Always use CSS variable tokens** (`text-ujcha-primary`, `bg-ujcha-mint`, `text-muted`, `border-black/6`) over arbitrary hex values.
 2. **Pill CTAs** — all interactive buttons use `rounded-full`. No `rounded-lg` on buttons.
 3. **Cards** — `rounded-3xl border border-black/6 bg-white` is the standard card shell.
 4. **Eyebrow labels** — every section head should have a `text-[10px] font-semibold uppercase tracking-[0.2em] text-muted` line above the h2.
-5. **Price display** — always `font-bold tabular-nums text-kun-products-forest` or `text-kun-primary`.
+5. **Price display** — always `font-bold tabular-nums text-ujcha-products-forest` or `text-ujcha-primary`.
 6. **Motion** — use `motion.div` with `initial={{ opacity: 0, y: 14 }}` + `whileInView` + `viewport={{ once: true, margin: "-48px" }}` + staggered `delay: index * 0.07` for list items.
 7. **Images** — always include `fill` + `object-cover` + correct `sizes` prop. Never hard-code `width`/`height` on Next.js `<Image>` unless it's a fixed-size icon.
 8. **No comments** explaining what code does — only add a comment when the WHY is non-obvious.

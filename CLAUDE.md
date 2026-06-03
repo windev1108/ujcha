@@ -45,7 +45,7 @@ Use 'pdftotext', not the 'Read' tool. Use 'Read' only when the user directly ask
 | Admin panel | `apps/web-admin` | `web-admin` | :3001 |
 | NestJS API | `apps/api` | `api` | :5000 |
 | Shipper mobile | `apps/mobile-delivery` | `ujcha-delivery` | Expo / RN |
-| POS desktop | `apps/pos` | `kun-pos` | Electron |
+| POS desktop | `apps/pos` | `ujcha-pos` | Electron |
 
 ### Shipper Mobile (apps/mobile-delivery)
 

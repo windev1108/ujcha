@@ -1,14 +1,14 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: kun-postgres
+    container_name: ujcha-postgres
     restart: unless-stopped
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: kun
-      POSTGRES_PASSWORD: kun
-      POSTGRES_DB: kun
+      POSTGRES_USER: ujcha
+      POSTGRES_PASSWORD: ujcha
+      POSTGRES_DB: ujcha
     command: >
       postgres
         -c shared_buffers=256MB
@@ -22,14 +22,14 @@ services:
     volumes:
       - kun_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kun -d kun"]
+      test: ["CMD-SHELL", "pg_isready -U ujcha -d ujcha"]
       interval: 5s
       timeout: 5s
       retries: 5
 
   redis:
     image: redis:7-alpine
-    container_name: kun-redis
+    container_name: ujcha-redis
     restart: unless-stopped
     ports:
       - "6379:6379"
