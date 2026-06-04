@@ -22,6 +22,16 @@ export async function pollGrabWebLogin(sessionId: string): Promise<{
   }>;
 }
 
+export async function pollGrabAuthRelay(): Promise<{
+  ok: boolean;
+  cookie?: string;
+  pending?: boolean;
+}> {
+  const res = await fetch("/api/grab/auth-relay");
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json() as Promise<{ ok: boolean; cookie?: string; pending?: boolean }>;
+}
+
 export async function fetchGrabMenu(
   authCookie: string,
   merchantId?: string,

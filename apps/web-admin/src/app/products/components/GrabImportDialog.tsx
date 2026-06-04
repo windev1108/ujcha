@@ -6,10 +6,13 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  Copy,
+  ExternalLink,
   Loader2,
   MonitorDot,
   Settings2,
   Tag,
+  Terminal,
   UtensilsCrossed,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -17,6 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createAdminCategory } from "@/services/admin/categories-api";
 import {
   fetchGrabMenu,
+  pollGrabAuthRelay,
   pollGrabWebLogin,
   startGrabWebLogin,
 } from "@/services/admin/grab-api";
@@ -225,6 +229,9 @@ function normalizeGrabMenu(raw: unknown): GrabMenuData {
   return { categories, modifierGroups };
 }
 
+const GRAB_PORTAL_URL =
+  "https://merchant.grab.com/portal";
+
 // ─── Step machine ─────────────────────────────────────────────────────────────
 
 type Step = "login" | "preview" | "importing" | "done";
@@ -246,8 +253,15 @@ interface ImportStatus {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function GrabImportDialog({ isOpen, onOpenChange, categories, onImported }: Props) {
+  const isLocalDev = typeof window !== "undefined" && window.location.hostname === "localhost";
+  const relayUrl   = typeof window !== "undefined"
+    ? `${window.location.origin}/api/grab/auth-relay`
+    : "/api/grab/auth-relay";
+  const consoleScript = `fetch('${relayUrl}',{method:'POST',mode:'no-cors',body:document.cookie})`;
+
   const [step, setStep]             = useState<Step>("login");
   const [starting, setStarting]     = useState(false);
+  const [copied, setCopied]         = useState(false);
   const [loginError, setLoginError]  = useState<string | null>(null);
   const [fetchError, setFetchError]  = useState<string | null>(null);
   const [menuData, setMenuData]     = useState<GrabMenuData | null>(null);
@@ -279,9 +293,35 @@ export function GrabImportDialog({ isOpen, onOpenChange, categories, onImported 
     onOpenChange: (open) => { if (!open) reset(); onOpenChange(open); },
   });
 
+  const handleCopyScript = async () => {
+    await navigator.clipboard.writeText(consoleScript);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   // ── Auth ─────────────────────────────────────────────────────────────────
   const handleStartLogin = async () => {
     setStarting(true); setLoginError(null);
+
+    // Cloud (Vercel): open grab portal + poll auth-relay
+    if (!isLocalDev) {
+      window.open(GRAB_PORTAL_URL, "_blank", "noopener");
+      pollRef.current = setInterval(async () => {
+        try {
+          const r = await pollGrabAuthRelay();
+          if (!r.ok) return;
+          if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+          if (!r.cookie) {
+            setLoginError("Không nhận được cookie — thử lại");
+            setStarting(false); return;
+          }
+          await loadMenu(r.cookie);
+        } catch { /* blip */ }
+      }, 1500);
+      return;
+    }
+
+    // Local dev: puppeteer opens Chrome window
     try {
       const { sessionId } = await startGrabWebLogin();
       pollRef.current = setInterval(async () => {
@@ -572,8 +612,10 @@ export function GrabImportDialog({ isOpen, onOpenChange, categories, onImported 
                   <div className="flex items-start gap-3 rounded-2xl bg-[#f0f7f4] p-5">
                     <MonitorDot className="mt-0.5 size-5 shrink-0 text-[#1a3c34]" />
                     <p className="text-sm text-foreground/70">
-                      Một cửa sổ Chrome sẽ mở ra. Đăng nhập tài khoản GrabFood merchant, rồi bấm nút xanh{" "}
-                      <strong className="text-[#00b14f]">"Xác nhận đã đăng nhập — Lấy session"</strong>.
+                      {isLocalDev
+                        ? <>Một cửa sổ Chrome sẽ mở ra. Đăng nhập tài khoản GrabFood merchant, rồi bấm nút xanh{" "}<strong className="text-[#00b14f]">"Xác nhận đã đăng nhập — Lấy session"</strong>.</>
+                        : <>Tab GrabFood sẽ mở ra. Sau khi đăng nhập, chạy script bên dưới trong DevTools Console của trang GrabFood để gửi session về.</>
+                      }
                     </p>
                   </div>
                   {(loginError ?? fetchError) && (
@@ -585,8 +627,8 @@ export function GrabImportDialog({ isOpen, onOpenChange, categories, onImported 
                 </div>
               )}
 
-              {/* login waiting */}
-              {step === "login" && starting && (
+              {/* login waiting — local dev */}
+              {step === "login" && starting && isLocalDev && (
                 <div className="flex flex-col items-center gap-6 py-8">
                   <div className="flex size-16 items-center justify-center rounded-2xl bg-[#f0f7f4]">
                     <Loader2 className="size-8 animate-spin text-[#1a3c34]" />
@@ -598,6 +640,69 @@ export function GrabImportDialog({ isOpen, onOpenChange, categories, onImported 
                       <strong className="text-[#00b14f]">"Xác nhận đã đăng nhập"</strong>
                     </p>
                   </div>
+                  {fetchError && (
+                    <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                      <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                      {fetchError}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* login waiting — cloud/Vercel */}
+              {step === "login" && starting && !isLocalDev && (
+                <div className="flex flex-col gap-5">
+                  {/* Step 1 */}
+                  <div className="flex items-start gap-3">
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#1a3c34] text-xs font-bold text-white">1</span>
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">Tab GrabFood đã mở</p>
+                      <p className="mt-0.5 text-xs text-foreground/55">Đăng nhập tài khoản GrabFood Merchant của bạn trong tab mới.</p>
+                      <a
+                        href={GRAB_PORTAL_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold text-[#1a3c34] underline-offset-2 hover:underline"
+                      >
+                        <ExternalLink className="size-3" /> Mở lại nếu chưa thấy tab
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Step 2 */}
+                  <div className="flex items-start gap-3">
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#1a3c34] text-xs font-bold text-white">2</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-foreground">Chạy script trong DevTools Console</p>
+                      <p className="mt-0.5 text-xs text-foreground/55">
+                        Sau khi đăng nhập thành công, nhấn <kbd className="rounded border border-black/15 bg-black/5 px-1 py-0.5 font-mono text-[10px]">F12</kbd> → tab <strong>Console</strong> → dán script bên dưới và Enter:
+                      </p>
+                      <div className="mt-2 flex items-center gap-2 overflow-hidden rounded-xl border border-[#1a3c34]/20 bg-[#0d1f1b] p-3">
+                        <Terminal className="size-3.5 shrink-0 text-[#5a8f7a]" />
+                        <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-[#99d6b3]">
+                          {consoleScript}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={() => void handleCopyScript()}
+                          className="shrink-0 rounded-lg p-1.5 text-[#5a8f7a] transition hover:bg-white/10 hover:text-white"
+                          title="Copy script"
+                        >
+                          {copied ? <CheckCircle2 className="size-3.5 text-emerald-400" /> : <Copy className="size-3.5" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Step 3 — waiting */}
+                  <div className="flex items-start gap-3">
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#1a3c34]/15 text-xs font-bold text-[#1a3c34]">3</span>
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="size-4 animate-spin text-[#1a3c34]" />
+                      <p className="text-sm text-foreground/55">Đang chờ nhận session…</p>
+                    </div>
+                  </div>
+
                   {fetchError && (
                     <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                       <AlertCircle className="mt-0.5 size-4 shrink-0" />
@@ -977,7 +1082,7 @@ export function GrabImportDialog({ isOpen, onOpenChange, categories, onImported 
                 <>
                   <Button variant="ghost" onPress={() => onOpenChange(false)} className="rounded-full">Hủy</Button>
                   <Button onPress={() => void handleStartLogin()} className="rounded-full bg-[#1a3c34] font-semibold text-white">
-                    Mở cửa sổ đăng nhập GrabFood →
+                    {isLocalDev ? "Mở cửa sổ đăng nhập GrabFood →" : <><ExternalLink className="mr-1.5 size-4" />Mở GrabFood và lấy session →</>}
                   </Button>
                 </>
               )}
