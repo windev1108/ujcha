@@ -114,37 +114,31 @@ export function AppHeader() {
             </div>
 
             {/* ── Mobile trigger ──────────────────────────────── */}
-            <div className="md:hidden">
-              {!isHydrated ? (
-                <div className="size-8 shrink-0" aria-hidden />
-              ) : isLoggedIn ? (
-                /* Logged-in: avatar opens the drawer */
-                <button
-                  type="button"
-                  onClick={() => setMenuOpen(true)}
-                  aria-label="Mở menu tài khoản"
-                  className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full ring-2 ring-kun-primary/30 transition-opacity hover:opacity-85"
-                >
-                  {user?.avatar ? (
+            {/* Always show hamburger; when logged-in + hydrated, also show avatar badge */}
+            <div className="relative md:hidden">
+              <button
+                type="button"
+                onClick={() => setMenuOpen(true)}
+                aria-label="Mở menu điều hướng"
+                className={`flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full transition-colors ${
+                  isHydrated && isLoggedIn
+                    ? "ring-2 ring-kun-primary/30"
+                    : "bg-surface-secondary text-foreground/70 hover:bg-surface-card"
+                }`}
+              >
+                {isHydrated && isLoggedIn ? (
+                  user?.avatar ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={user.avatar} alt={name} className="size-full object-cover" />
                   ) : (
                     <div className="flex size-full items-center justify-center bg-kun-primary text-xs font-bold text-white">
                       {initial}
                     </div>
-                  )}
-                </button>
-              ) : (
-                /* Not logged-in: hamburger icon */
-                <button
-                  type="button"
-                  onClick={() => setMenuOpen(true)}
-                  aria-label="Mở menu điều hướng"
-                  className="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-secondary text-foreground/70 transition-colors hover:bg-surface-card"
-                >
+                  )
+                ) : (
                   <Menu className="size-[18px]" />
-                </button>
-              )}
+                )}
+              </button>
             </div>
           </div>
         </div>

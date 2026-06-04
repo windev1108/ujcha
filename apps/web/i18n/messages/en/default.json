@@ -812,6 +812,13 @@
   "terms_intro": "These Terms govern the relationship between UjCha and its users when using the beverage ordering app, loyalty programme, and related UjCha services.",
   "privacy_intro": "At UjCha, we value your privacy. This Policy clearly explains what information is collected, how it is used, and how we protect your personal data when you use the UjCha app and services.",
 
+  "error_phone_required": "Please enter your phone number",
+  "error_phone_invalid": "Invalid phone number (9–11 digits)",
+  "error_password_required": "Password is required",
+  "error_password_min": "Password must be at least 6 characters",
+  "error_name_required": "Please enter your full name",
+  "error_name_min": "Name must be at least 2 characters",
+
   "ts1_title": "1. Acceptance of terms",
   "ts1_body": "By creating an account or using any UjCha service, you confirm that you have read, understood, and agree to be bound by these Terms of Service. If you do not agree, please do not use the service.",
 

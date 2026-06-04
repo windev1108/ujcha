@@ -19,6 +19,11 @@ function axiosErrorMessage(e: unknown, fallback: string): string {
   return err.response?.data?.message ?? err.message ?? fallback;
 }
 
+function isValidPhone(phone: string): boolean {
+  const digits = phone.replace(/\D/g, "");
+  return digits.length >= 9 && digits.length <= 11;
+}
+
 function RefCodeRow() {
   const t = useTranslations();
   const searchParams = useSearchParams();
@@ -145,11 +150,20 @@ function RegisterContent() {
   const sendOtp = useSendOtpMutation();
   const register = useRegisterMutation();
 
+  const [touched, setTouched] = useState({ name: false, phone: false, password: false });
+  const touch = (field: keyof typeof touched) =>
+    setTouched((prev) => ({ ...prev, [field]: true }));
+
   const pwdMismatch = confirmPwd.length > 0 && password !== confirmPwd;
-  const step1Valid = name.trim().length >= 2 && phone.trim().length >= 9 && password.length >= 6 && password === confirmPwd;
+  const step1Valid = name.trim().length >= 2 && isValidPhone(phone) && password.length >= 6 && !pwdMismatch;
+
+  const nameError     = touched.name     && (name.trim().length === 0 ? t("error_name_required") : name.trim().length < 2 ? t("error_name_min") : null);
+  const phoneError    = touched.phone    && (!phone.trim() ? t("error_phone_required") : !isValidPhone(phone) ? t("error_phone_invalid") : null);
+  const passwordError = touched.password && (password.length === 0 ? t("error_password_required") : password.length < 6 ? t("error_password_min") : null);
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
+    setTouched({ name: true, phone: true, password: true });
     if (!step1Valid) return;
     await sendOtp.mutateAsync(phone.trim());
     countdown.start();
@@ -175,41 +189,55 @@ function RegisterContent() {
             <div className="space-y-1.5">
               <label className="block text-xs font-semibold text-foreground/60">{t("full_name")}</label>
               <div className="relative">
-                <UserRound className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-foreground/35" aria-hidden />
+                <UserRound className={`pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 transition-colors ${nameError ? "text-red-400" : "text-foreground/35"}`} aria-hidden />
                 <input type="text" placeholder="Nguyễn Văn A" value={name}
-                  onChange={(e) => setName(e.target.value)} autoComplete="name" autoFocus maxLength={64}
-                  className="h-11 w-full rounded-xl border-0 bg-black/[0.04] pl-10 pr-4 text-sm ring-1 ring-black/[0.08] transition placeholder:text-foreground/30 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1a3c34]/40"
+                  onChange={(e) => setName(e.target.value)}
+                  onBlur={() => touch("name")}
+                  autoComplete="name" autoFocus maxLength={64}
+                  aria-invalid={!!nameError}
+                  className={`h-11 w-full rounded-xl border-0 bg-black/[0.04] pl-10 pr-4 text-sm ring-1 transition placeholder:text-foreground/30 focus:bg-white focus:outline-none focus:ring-2 ${nameError ? "ring-red-300 focus:ring-red-400" : "ring-black/[0.08] focus:ring-[#1a3c34]/40"}`}
                 />
               </div>
+              {nameError && <p role="alert" className="text-xs text-red-500">{nameError}</p>}
             </div>
 
             {/* Phone */}
             <div className="space-y-1.5">
               <label className="block text-xs font-semibold text-foreground/60">{t("phone_number")}</label>
               <div className="relative">
-                <Phone className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-foreground/35" aria-hidden />
+                <Phone className={`pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 transition-colors ${phoneError ? "text-red-400" : "text-foreground/35"}`} aria-hidden />
                 <input type="tel" inputMode="tel" placeholder="0912 345 678" value={phone}
-                  onChange={(e) => setPhone(e.target.value)} autoComplete="tel"
-                  className="h-11 w-full rounded-xl border-0 bg-black/[0.04] pl-10 pr-4 text-sm ring-1 ring-black/[0.08] transition placeholder:text-foreground/30 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1a3c34]/40"
+                  onChange={(e) => setPhone(e.target.value)}
+                  onBlur={() => touch("phone")}
+                  autoComplete="tel"
+                  aria-invalid={!!phoneError}
+                  className={`h-11 w-full rounded-xl border-0 bg-black/[0.04] pl-10 pr-4 text-sm ring-1 transition placeholder:text-foreground/30 focus:bg-white focus:outline-none focus:ring-2 ${phoneError ? "ring-red-300 focus:ring-red-400" : "ring-black/[0.08] focus:ring-[#1a3c34]/40"}`}
                 />
               </div>
+              {phoneError && <p role="alert" className="text-xs text-red-500">{phoneError}</p>}
             </div>
 
             {/* Password */}
             <div className="space-y-1.5">
               <label className="block text-xs font-semibold text-foreground/60">{t("password")}</label>
               <div className="relative">
-                <Lock className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-foreground/35" aria-hidden />
+                <Lock className={`pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 transition-colors ${passwordError ? "text-red-400" : "text-foreground/35"}`} aria-hidden />
                 <input type={showPwd ? "text" : "password"} placeholder={t("min_6_chars")} value={password}
-                  onChange={(e) => setPassword(e.target.value)} autoComplete="new-password"
-                  className="h-11 w-full rounded-xl border-0 bg-black/[0.04] pl-10 pr-11 text-sm ring-1 ring-black/[0.08] transition placeholder:text-foreground/30 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1a3c34]/40"
+                  onChange={(e) => setPassword(e.target.value)}
+                  onBlur={() => touch("password")}
+                  autoComplete="new-password"
+                  aria-invalid={!!passwordError}
+                  className={`h-11 w-full rounded-xl border-0 bg-black/[0.04] pl-10 pr-11 text-sm ring-1 transition placeholder:text-foreground/30 focus:bg-white focus:outline-none focus:ring-2 ${passwordError ? "ring-red-300 focus:ring-red-400" : "ring-black/[0.08] focus:ring-[#1a3c34]/40"}`}
                 />
                 <button type="button" onClick={() => setShowPwd((v) => !v)} tabIndex={-1}
                   className="absolute right-3.5 top-1/2 -translate-y-1/2 text-foreground/35 transition hover:text-foreground/60">
                   {showPwd ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                 </button>
               </div>
-              <PasswordStrengthMeter password={password} />
+              {passwordError
+                ? <p role="alert" className="text-xs text-red-500">{passwordError}</p>
+                : <PasswordStrengthMeter password={password} />
+              }
             </div>
 
             {/* Confirm password */}

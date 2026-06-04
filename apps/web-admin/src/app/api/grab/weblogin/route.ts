@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { existsSync } from "fs";
+import { execSync } from "child_process";
 import puppeteer, { type Browser } from "puppeteer-core";
 
 export const runtime = "nodejs";
@@ -39,15 +40,45 @@ function cleanSessions() {
 
 function findChrome(): string {
   const local = process.env["LOCALAPPDATA"] ?? "";
+  const pf   = process.env["PROGRAMFILES"]      ?? "C:\\Program Files";
+  const pf86 = process.env["PROGRAMFILES(X86)"] ?? "C:\\Program Files (x86)";
+
   const candidates = [
-    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+    // Windows
+    `${pf}\\Google\\Chrome\\Application\\chrome.exe`,
+    `${pf86}\\Google\\Chrome\\Application\\chrome.exe`,
     `${local}\\Google\\Chrome\\Application\\chrome.exe`,
-    "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
-    "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
-    "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+    `${pf}\\Microsoft\\Edge\\Application\\msedge.exe`,
+    `${pf86}\\Microsoft\\Edge\\Application\\msedge.exe`,
+    `${pf}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`,
+    // Linux
+    "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    "/usr/local/bin/chromium",
+    "/snap/bin/chromium",
+    // macOS
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
   ];
+
   for (const p of candidates) if (p && existsSync(p)) return p;
+
+  // Fallback: where (Windows) / which (Unix)
+  try {
+    const cmd =
+      process.platform === "win32"
+        ? "where chrome.exe"
+        : "which google-chrome 2>/dev/null || which chromium-browser 2>/dev/null || which chromium 2>/dev/null";
+    const found = execSync(cmd, { stdio: ["pipe", "pipe", "pipe"] })
+      .toString()
+      .trim()
+      .split("\n")[0]
+      ?.trim();
+    if (found && existsSync(found)) return found;
+  } catch { /* not found via PATH */ }
+
   throw new Error(
     "Không tìm thấy Chrome/Edge. Vui lòng cài đặt Google Chrome.",
   );

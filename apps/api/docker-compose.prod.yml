@@ -26,6 +26,8 @@ services:
     image: postgres:16-alpine
     container_name: ujcha-postgres
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_USER: ujcha
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -49,6 +51,8 @@ services:
     image: redis:7-alpine
     container_name: ujcha-redis
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --save ""
     volumes:
       - kun_redis_data:/data
@@ -57,6 +61,21 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    networks:
+      - ujcha-internal
+
+  nginx:
+    image: nginx:alpine
+    container_name: ujcha-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - api
     networks:
       - ujcha-internal
 

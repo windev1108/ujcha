@@ -14,17 +14,37 @@ function axiosErrorMessage(e: unknown, fallback: string): string {
   return err.response?.data?.message ?? err.message ?? fallback;
 }
 
+function isValidPhone(phone: string): boolean {
+  const digits = phone.replace(/\D/g, "");
+  return digits.length >= 9 && digits.length <= 11;
+}
+
 export function LoginFormCard() {
   const t = useTranslations();
   const { route } = useLocalizedHref();
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
+  const [touched, setTouched] = useState({ phone: false, password: false });
   const login = useLoginMutation();
+
+  const touch = (field: keyof typeof touched) =>
+    setTouched((prev) => ({ ...prev, [field]: true }));
+
+  const phoneDigits = phone.replace(/\D/g, "");
+  const phoneEmpty    = !phone.trim();
+  const phoneInvalid  = !phoneEmpty && !isValidPhone(phone);
+  const passwordEmpty = !password;
+
+  const phoneError    = touched.phone    && (phoneEmpty ? t("error_phone_required")    : phoneInvalid ? t("error_phone_invalid") : null);
+  const passwordError = touched.password && (passwordEmpty ? t("error_password_required") : null);
+
+  const canSubmit = !phoneEmpty && isValidPhone(phone) && !passwordEmpty;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!phone.trim() || !password) return;
+    setTouched({ phone: true, password: true });
+    if (!canSubmit) return;
     login.mutate({ phone: phone.trim(), password });
   };
 
@@ -39,23 +59,39 @@ export function LoginFormCard() {
         <p className="text-sm text-foreground/50">{t("login_welcome")}</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+      <form onSubmit={handleSubmit} className="mt-8 space-y-4" noValidate>
+
         {/* Phone */}
         <div className="space-y-1.5">
           <label className="block text-xs font-semibold text-foreground/60">{t("phone_number")}</label>
           <div className="relative">
-            <Phone className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-foreground/35" aria-hidden />
+            <Phone
+              className={`pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 transition-colors ${phoneError ? "text-red-400" : "text-foreground/35"}`}
+              aria-hidden
+            />
             <input
               type="tel"
               inputMode="tel"
               placeholder="0912 345 678"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
+              onBlur={() => touch("phone")}
               autoComplete="tel"
               autoFocus
-              className="h-11 w-full rounded-xl border-0 bg-black/[0.04] pl-10 pr-4 text-sm ring-1 ring-black/[0.08] transition placeholder:text-foreground/30 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1a3c34]/40"
+              aria-invalid={!!phoneError}
+              aria-describedby={phoneError ? "phone-error" : undefined}
+              className={`h-11 w-full rounded-xl border-0 bg-black/[0.04] pl-10 pr-4 text-sm ring-1 transition placeholder:text-foreground/30 focus:bg-white focus:outline-none focus:ring-2 ${
+                phoneError
+                  ? "ring-red-300 focus:ring-red-400"
+                  : "ring-black/[0.08] focus:ring-[#1a3c34]/40"
+              }`}
             />
           </div>
+          {phoneError && (
+            <p id="phone-error" role="alert" className="flex items-center gap-1 text-xs text-red-500">
+              {phoneError}
+            </p>
+          )}
         </div>
 
         {/* Password */}
@@ -70,14 +106,24 @@ export function LoginFormCard() {
             </Link>
           </div>
           <div className="relative">
-            <Lock className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-foreground/35" aria-hidden />
+            <Lock
+              className={`pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 transition-colors ${passwordError ? "text-red-400" : "text-foreground/35"}`}
+              aria-hidden
+            />
             <input
               type={showPwd ? "text" : "password"}
               placeholder={t("password_placeholder")}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              onBlur={() => touch("password")}
               autoComplete="current-password"
-              className="h-11 w-full rounded-xl border-0 bg-black/[0.04] pl-10 pr-11 text-sm ring-1 ring-black/[0.08] transition placeholder:text-foreground/30 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1a3c34]/40"
+              aria-invalid={!!passwordError}
+              aria-describedby={passwordError ? "password-error" : undefined}
+              className={`h-11 w-full rounded-xl border-0 bg-black/[0.04] pl-10 pr-11 text-sm ring-1 transition placeholder:text-foreground/30 focus:bg-white focus:outline-none focus:ring-2 ${
+                passwordError
+                  ? "ring-red-300 focus:ring-red-400"
+                  : "ring-black/[0.08] focus:ring-[#1a3c34]/40"
+              }`}
             />
             <button
               type="button"
@@ -89,9 +135,14 @@ export function LoginFormCard() {
               {showPwd ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
             </button>
           </div>
+          {passwordError && (
+            <p id="password-error" role="alert" className="text-xs text-red-500">
+              {passwordError}
+            </p>
+          )}
         </div>
 
-        {/* Error */}
+        {/* API error */}
         {login.isError && (
           <div className="rounded-xl border border-red-100 bg-red-50 px-3.5 py-2.5 text-xs text-red-700">
             {axiosErrorMessage(login.error, t("generic_error"))}
@@ -101,7 +152,7 @@ export function LoginFormCard() {
         {/* Submit */}
         <button
           type="submit"
-          disabled={!phone.trim() || !password || login.isPending}
+          disabled={login.isPending}
           className="flex h-11 w-full items-center justify-center rounded-xl bg-[#1a3c34] text-sm font-semibold text-white transition hover:bg-[#2d4a43] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {login.isPending ? (

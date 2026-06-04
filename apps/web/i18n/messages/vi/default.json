@@ -854,6 +854,13 @@
   "privacy_updated": "Cập nhật lần cuối: tháng 5 năm 2026",
   "terms_intro": "Các điều khoản này điều chỉnh mối quan hệ giữa UjCha và người dùng khi sử dụng ứng dụng đặt đồ uống, chương trình tích điểm và các dịch vụ liên quan của UjCha.",
 
+  "error_phone_required": "Vui lòng nhập số điện thoại",
+  "error_phone_invalid": "Số điện thoại không hợp lệ (9–11 chữ số)",
+  "error_password_required": "Vui lòng nhập mật khẩu",
+  "error_password_min": "Mật khẩu cần ít nhất 6 ký tự",
+  "error_name_required": "Vui lòng nhập họ và tên",
+  "error_name_min": "Họ tên cần ít nhất 2 ký tự",
+
   "ts1_title": "1. Chấp nhận điều khoản",
   "ts1_body": "Bằng cách tạo tài khoản hoặc sử dụng bất kỳ dịch vụ nào của UjCha, bạn xác nhận đã đọc, hiểu và đồng ý bị ràng buộc bởi các Điều khoản dịch vụ này. Nếu bạn không đồng ý, vui lòng không sử dụng dịch vụ.",
 
