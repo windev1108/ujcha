@@ -17,13 +17,14 @@ async function bootstrap() {
   const allowedOrigins = parseCorsOrigins();
 
   app.enableCors({
-    // Dùng function để xử lý Origin: null từ Electron production (file://)
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('null')) {
-        callback(null, true);
-      } else {
-        callback(new Error(`Origin ${origin} not allowed`));
-      }
+      // No origin: React Native, mobile apps, curl, server-to-server
+      if (!origin) return callback(null, true);
+      // Electron production builds send "null" as origin string (file:// scheme)
+      if (origin === 'null') return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      console.warn(`[CORS] Blocked origin: ${origin}`);
+      callback(new Error(`Origin ${origin} not allowed`));
     },
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],

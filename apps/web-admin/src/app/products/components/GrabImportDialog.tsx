@@ -6,13 +6,12 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
-  Copy,
   ExternalLink,
   Loader2,
   MonitorDot,
+  Puzzle,
   Settings2,
   Tag,
-  Terminal,
   UtensilsCrossed,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -257,11 +256,12 @@ export function GrabImportDialog({ isOpen, onOpenChange, categories, onImported 
   const relayUrl   = typeof window !== "undefined"
     ? `${window.location.origin}/api/grab/auth-relay`
     : "/api/grab/auth-relay";
-  const consoleScript = `fetch('${relayUrl}',{method:'POST',mode:'no-cors',body:document.cookie})`;
+  const extensionUrl = typeof window !== "undefined"
+    ? `${window.location.origin}/grab-extension`
+    : "/grab-extension";
 
   const [step, setStep]             = useState<Step>("login");
   const [starting, setStarting]     = useState(false);
-  const [copied, setCopied]         = useState(false);
   const [loginError, setLoginError]  = useState<string | null>(null);
   const [fetchError, setFetchError]  = useState<string | null>(null);
   const [menuData, setMenuData]     = useState<GrabMenuData | null>(null);
@@ -293,24 +293,19 @@ export function GrabImportDialog({ isOpen, onOpenChange, categories, onImported 
     onOpenChange: (open) => { if (!open) reset(); onOpenChange(open); },
   });
 
-  const handleCopyScript = async () => {
-    await navigator.clipboard.writeText(consoleScript);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   // ── Auth ─────────────────────────────────────────────────────────────────
   const handleStartLogin = async () => {
     setStarting(true); setLoginError(null);
 
-    // Cloud (Vercel): open small centered popup + wait for postMessage from bookmarklet
+    // Cloud (Vercel): open small centered popup + wait for postMessage from extension
     if (!isLocalDev) {
       const w = 520, h = 700;
       const left = Math.round(window.screenX + (window.outerWidth  - w) / 2);
       const top  = Math.round(window.screenY + (window.outerHeight - h) / 2);
+      // Pass relay URL via window.name as fallback (for when window.opener is unavailable)
       window.open(
         GRAB_LOGIN_URL,
-        "grab_login",
+        relayUrl,
         `width=${w},height=${h},left=${left},top=${top},toolbar=no,menubar=no,scrollbars=yes`,
       );
 
@@ -628,12 +623,29 @@ export function GrabImportDialog({ isOpen, onOpenChange, categories, onImported 
                   <div className="flex items-start gap-3 rounded-2xl bg-[#f0f7f4] p-5">
                     <MonitorDot className="mt-0.5 size-5 shrink-0 text-[#1a3c34]" />
                     <p className="text-sm text-foreground/70">
-                      {isLocalDev
-                        ? <>Một cửa sổ Chrome sẽ mở ra. Đăng nhập tài khoản GrabFood merchant, rồi bấm nút xanh{" "}<strong className="text-[#00b14f]">"Xác nhận đã đăng nhập — Lấy session"</strong>.</>
-                        : <>Tab GrabFood sẽ mở ra. Sau khi đăng nhập, chạy script bên dưới trong DevTools Console của trang GrabFood để gửi session về.</>
-                      }
+                      Một cửa sổ Chrome sẽ mở ra. Đăng nhập tài khoản GrabFood merchant, rồi bấm nút xanh{" "}
+                      <strong className="text-[#00b14f]">"Xác nhận đã đăng nhập — Lấy session"</strong>.
                     </p>
                   </div>
+
+                  {/* Extension notice — only on cloud */}
+                  {!isLocalDev && (
+                    <div className="flex items-start gap-3 rounded-2xl border border-[#1a3c34]/15 bg-white p-4">
+                      <Puzzle className="mt-0.5 size-4 shrink-0 text-[#1a3c34]" />
+                      <div className="text-sm">
+                        <p className="font-semibold text-foreground">Cần cài Extension Chrome (1 lần duy nhất)</p>
+                        <p className="mt-0.5 text-xs text-foreground/55">
+                          Extension tự động inject nút xanh vào trang GrabFood — không cần thao tác thêm.
+                        </p>
+                        <ol className="mt-2 space-y-1 text-xs text-foreground/70">
+                          <li>1. <a href={extensionUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-[#1a3c34] underline-offset-2 hover:underline inline-flex items-center gap-0.5">Tải thư mục extension <ExternalLink className="size-2.5" /></a></li>
+                          <li>2. Mở <code className="rounded bg-black/6 px-1">chrome://extensions</code> → bật <strong>Developer mode</strong></li>
+                          <li>3. Bấm <strong>Load unpacked</strong> → chọn thư mục vừa tải</li>
+                        </ol>
+                      </div>
+                    </div>
+                  )}
+
                   {(loginError ?? fetchError) && (
                     <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                       <AlertCircle className="mt-0.5 size-4 shrink-0" />
@@ -667,85 +679,31 @@ export function GrabImportDialog({ isOpen, onOpenChange, categories, onImported 
 
               {/* login waiting — cloud/Vercel */}
               {step === "login" && starting && !isLocalDev && (
-                <div className="flex flex-col gap-5">
-
-                  {/* Cửa sổ đã mở */}
-                  <div className="flex items-start gap-3 rounded-2xl bg-[#f0f7f4] p-4">
-                    <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin text-[#1a3c34]" />
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">Cửa sổ GrabFood đã mở</p>
-                      <p className="mt-0.5 text-xs text-foreground/55">
-                        Đăng nhập tài khoản GrabFood Merchant, sau đó bấm nút{" "}
-                        <strong className="text-[#00b14f]">"✓ Xác nhận đã đăng nhập"</strong> bên dưới.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const w = 520, h = 700;
-                          const left = Math.round(window.screenX + (window.outerWidth - w) / 2);
-                          const top  = Math.round(window.screenY + (window.outerHeight - h) / 2);
-                          window.open(GRAB_LOGIN_URL, "grab_login",
-                            `width=${w},height=${h},left=${left},top=${top},toolbar=no,menubar=no,scrollbars=yes`);
-                        }}
-                        className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[#1a3c34] underline-offset-2 hover:underline"
-                      >
-                        <ExternalLink className="size-3" /> Mở lại cửa sổ
-                      </button>
-                    </div>
+                <div className="flex flex-col items-center gap-6 py-8">
+                  <div className="flex size-16 items-center justify-center rounded-2xl bg-[#f0f7f4]">
+                    <Loader2 className="size-8 animate-spin text-[#1a3c34]" />
                   </div>
-
-                  {/* Nút xanh — bookmarklet */}
-                  <div className="flex flex-col gap-2">
-                    <p className="text-xs font-semibold text-foreground/60">
-                      Sau khi đăng nhập thành công, kéo nút xanh này lên thanh Bookmarks rồi bấm vào nó trên trang GrabFood:
+                  <div className="text-center">
+                    <p className="font-semibold">Cửa sổ GrabFood đã mở</p>
+                    <p className="mt-1.5 text-sm text-foreground/55">
+                      Đăng nhập xong → bấm nút xanh{" "}
+                      <strong className="text-[#00b14f]">"Xác nhận đã đăng nhập"</strong>{" "}
+                      trên trang GrabFood
                     </p>
-                    <div className="flex items-center gap-3">
-                      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                      <a
-                        href={`javascript:(function(){var c=document.cookie;if(window.opener){window.opener.postMessage({type:'grab-session',cookie:c},'*');window.close();}else{fetch('${relayUrl}',{method:'POST',mode:'no-cors',body:c});}})();`}
-                        onClick={e => e.preventDefault()}
-                        draggable
-                        className="inline-flex cursor-grab items-center gap-2 rounded-full bg-[#00b14f] px-4 py-2 text-sm font-bold text-white shadow-md active:cursor-grabbing"
-                        title="Kéo nút này lên thanh Bookmarks"
-                      >
-                        ✓ Xác nhận đã đăng nhập
-                      </a>
-                      <span className="text-xs text-foreground/40">← Kéo lên thanh bookmarks</span>
-                    </div>
-                    <p className="text-[11px] text-foreground/40">
-                      Chỉ cần kéo 1 lần. Lần sau dùng lại không cần kéo nữa.
-                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const w = 520, h = 700;
+                        const left = Math.round(window.screenX + (window.outerWidth - w) / 2);
+                        const top  = Math.round(window.screenY + (window.outerHeight - h) / 2);
+                        window.open(GRAB_LOGIN_URL, relayUrl,
+                          `width=${w},height=${h},left=${left},top=${top},toolbar=no,menubar=no,scrollbars=yes`);
+                      }}
+                      className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[#1a3c34] underline-offset-2 hover:underline"
+                    >
+                      <ExternalLink className="size-3" /> Mở lại cửa sổ
+                    </button>
                   </div>
-
-                  {/* Divider */}
-                  <div className="flex items-center gap-2">
-                    <div className="h-px flex-1 bg-black/8" />
-                    <span className="text-[10px] text-foreground/30">hoặc dùng Console</span>
-                    <div className="h-px flex-1 bg-black/8" />
-                  </div>
-
-                  {/* Fallback: console script */}
-                  <div className="flex items-start gap-2">
-                    <Terminal className="mt-0.5 size-3.5 shrink-0 text-foreground/30" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[11px] text-foreground/45">
-                        Hoặc nhấn <kbd className="rounded border border-black/15 bg-black/5 px-1 font-mono text-[10px]">F12</kbd> → Console trên trang GrabFood → dán và Enter:
-                      </p>
-                      <div className="mt-1.5 flex items-center gap-2 overflow-hidden rounded-lg border border-black/8 bg-[#0d1f1b] px-3 py-2">
-                        <code className="min-w-0 flex-1 truncate font-mono text-[10px] text-[#99d6b3]">
-                          {consoleScript}
-                        </code>
-                        <button
-                          type="button"
-                          onClick={() => void handleCopyScript()}
-                          className="shrink-0 rounded p-1 text-[#5a8f7a] transition hover:bg-white/10"
-                        >
-                          {copied ? <CheckCircle2 className="size-3 text-emerald-400" /> : <Copy className="size-3" />}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
                   {fetchError && (
                     <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                       <AlertCircle className="mt-0.5 size-4 shrink-0" />

@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "UjCha – GrabFood Session",
+  "version": "1.0.0",
+  "description": "Tự động inject nút lấy session trên GrabFood merchant portal",
+  "content_scripts": [
+    {
+      "matches": ["https://merchant.grab.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
