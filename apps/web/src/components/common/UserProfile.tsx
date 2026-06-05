@@ -111,16 +111,6 @@ export const UserProfile = ({ onNavigate }: { onNavigate?: () => void } = {}) =>
               </div>
             </Dropdown.Item>
             <Dropdown.Item
-              textValue={t('loyalty_nav_label')}
-              onPress={() => router.push(ROUTES.LOYALTY_PAGE)}
-              className="cursor-pointer"
-            >
-              <div className="flex items-center gap-2.5 py-0.5 text-sm text-foreground">
-                <Star className="size-4 shrink-0 text-foreground/50" />
-                {t('loyalty_nav_label')}
-              </div>
-            </Dropdown.Item>
-            <Dropdown.Item
               textValue={t('my_vouchers')}
               onPress={() => router.push(ROUTES.VOUCHERS)}
               className="cursor-pointer"
