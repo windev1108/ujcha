@@ -115,7 +115,21 @@ function PageHero({
 
 // ─── Entry Screen ─────────────────────────────────────────────────────────────
 
-function EntryScreen({ onSubmit, isLoggedIn }: { onSubmit: (code: string) => void; isLoggedIn: boolean }) {
+function EntryScreen({
+  onSubmit,
+  isLoggedIn,
+  isLoading,
+  serverError,
+  errorCode,
+  onRetry,
+}: {
+  onSubmit: (code: string) => void;
+  isLoggedIn: boolean;
+  isLoading?: boolean;
+  serverError?: string | null;
+  errorCode?: string;
+  onRetry?: () => void;
+}) {
   const t = useTranslations();
   const [suffix, setSuffix] = useState("");
   const [touched, setTouched] = useState(false);
@@ -147,79 +161,128 @@ function EntryScreen({ onSubmit, isLoggedIn }: { onSubmit: (code: string) => voi
       <div className="bg-white px-5 pb-20">
         <div className="mx-auto max-w-md pt-6">
 
-          {/* Input card */}
+          {/* Input card — switches between form / loading / error */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.22, type: "spring", damping: 26, stiffness: 280 }}
-            className="rounded-3xl border border-black/[0.06] bg-white p-6 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.12)]"
+            className={`rounded-3xl border p-6 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.12)] ${
+              serverError
+                ? "border-red-100 bg-red-50/60"
+                : "border-black/[0.06] bg-white"
+            }`}
           >
-            <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-muted">
-              {t("loyalty_code_eyebrow")}
-            </p>
-            <p className="mb-4 text-sm text-foreground/60">{t("loyalty_code_hint")}</p>
-
-            <form onSubmit={handleSubmit} className="space-y-3">
-              <div>
-                <div
-                  className={`flex items-center gap-1 rounded-2xl border-2 bg-surface-soft px-4 py-3.5 transition-all ${
-                    showError
-                      ? "border-danger bg-red-50/60"
-                      : "border-transparent focus-within:border-kun-primary focus-within:bg-white"
-                  }`}
+            <AnimatePresence mode="wait">
+              {isLoading ? (
+                <motion.div
+                  key="loading"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="flex flex-col items-center gap-3 py-4"
                 >
-                  <QrCode className={`mr-2 size-5 shrink-0 transition-colors ${showError ? "text-danger" : "text-muted"}`} />
-                  <span className="shrink-0 select-none font-mono text-base font-semibold tracking-widest text-muted/60">
-                    UJCHA-
-                  </span>
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={suffix}
-                    onChange={(e) => {
-                      setSuffix(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""));
-                      setTouched(false);
-                    }}
-                    placeholder={t("loyalty_code_placeholder")}
-                    className="flex-1 bg-transparent font-mono text-base font-semibold tracking-widest text-foreground outline-none placeholder:font-sans placeholder:text-sm placeholder:tracking-normal placeholder:font-normal placeholder:text-muted/50"
-                    spellCheck={false}
-                    autoComplete="off"
-                    autoCapitalize="characters"
-                    maxLength={20}
-                  />
-                  {suffix && (
-                    <button
-                      type="button"
-                      onClick={() => { setSuffix(""); setTouched(false); inputRef.current?.focus(); }}
-                      className="shrink-0 rounded-full p-0.5 text-muted transition-colors hover:bg-surface-card hover:text-foreground"
-                    >
-                      <X className="size-4" />
-                    </button>
-                  )}
-                </div>
-                <AnimatePresence>
-                  {showError && (
-                    <motion.p
-                      initial={{ opacity: 0, y: -4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -4 }}
-                      className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-danger"
-                    >
-                      <AlertCircle className="size-3.5 shrink-0" />
-                      {t("loyalty_code_required")}
-                    </motion.p>
-                  )}
-                </AnimatePresence>
-              </div>
+                  <div className="flex size-12 items-center justify-center rounded-full bg-kun-primary/10">
+                    <Loader2 className="size-6 animate-spin text-kun-primary" />
+                  </div>
+                  <p className="text-sm text-muted">{t("loyalty_loading")}</p>
+                </motion.div>
+              ) : serverError ? (
+                <motion.div
+                  key="error"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="flex flex-col items-center gap-3 py-2 text-center"
+                >
+                  <div className="flex size-12 items-center justify-center rounded-full bg-white ring-4 ring-red-100">
+                    <AlertCircle className="size-6 text-danger" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-foreground">{serverError}</p>
+                    {errorCode && (
+                      <p className="mt-0.5 font-mono text-sm text-muted">#{errorCode}</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onRetry}
+                    className="flex items-center gap-1.5 rounded-full border border-black/10 bg-white px-5 py-2.5 text-sm font-medium text-foreground/70 transition-colors hover:bg-surface-card"
+                  >
+                    <ChevronLeft className="size-4" />
+                    {t("loyalty_try_another")}
+                  </button>
+                </motion.div>
+              ) : (
+                <motion.div key="form" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-muted">
+                    {t("loyalty_code_eyebrow")}
+                  </p>
+                  <p className="mb-4 text-sm text-foreground/60">{t("loyalty_code_hint")}</p>
 
-              <button
-                type="submit"
-                className="flex w-full items-center justify-center gap-2 rounded-full bg-[#1a3c34] py-3.5 text-sm font-semibold text-white shadow-[0_4px_16px_-4px_rgba(26,60,52,0.4)] transition-all hover:opacity-90 active:scale-[0.98]"
-              >
-                {t("loyalty_find_btn")}
-                <ArrowRight className="size-4" />
-              </button>
-            </form>
+                  <form onSubmit={handleSubmit} className="space-y-3">
+                    <div>
+                      <div
+                        className={`flex items-center gap-1 rounded-2xl border-2 bg-surface-soft px-4 py-3.5 transition-all ${
+                          showError
+                            ? "border-danger bg-red-50/60"
+                            : "border-transparent focus-within:border-kun-primary focus-within:bg-white"
+                        }`}
+                      >
+                        <QrCode className={`mr-2 size-5 shrink-0 transition-colors ${showError ? "text-danger" : "text-muted"}`} />
+                        <span className="shrink-0 select-none font-mono text-base font-semibold tracking-widest text-muted/60">
+                          UJCHA-
+                        </span>
+                        <input
+                          ref={inputRef}
+                          type="text"
+                          value={suffix}
+                          onChange={(e) => {
+                            setSuffix(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""));
+                            setTouched(false);
+                          }}
+                          placeholder={t("loyalty_code_placeholder")}
+                          className="flex-1 bg-transparent font-mono text-base font-semibold tracking-widest text-foreground outline-none placeholder:font-sans placeholder:text-sm placeholder:tracking-normal placeholder:font-normal placeholder:text-muted/50"
+                          spellCheck={false}
+                          autoComplete="off"
+                          autoCapitalize="characters"
+                          maxLength={20}
+                        />
+                        {suffix && (
+                          <button
+                            type="button"
+                            onClick={() => { setSuffix(""); setTouched(false); inputRef.current?.focus(); }}
+                            className="shrink-0 rounded-full p-0.5 text-muted transition-colors hover:bg-surface-card hover:text-foreground"
+                          >
+                            <X className="size-4" />
+                          </button>
+                        )}
+                      </div>
+                      <AnimatePresence>
+                        {showError && (
+                          <motion.p
+                            initial={{ opacity: 0, y: -4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -4 }}
+                            className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-danger"
+                          >
+                            <AlertCircle className="size-3.5 shrink-0" />
+                            {t("loyalty_code_required")}
+                          </motion.p>
+                        )}
+                      </AnimatePresence>
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="flex w-full items-center justify-center gap-2 rounded-full bg-[#1a3c34] py-3.5 text-sm font-semibold text-white shadow-[0_4px_16px_-4px_rgba(26,60,52,0.4)] transition-all hover:opacity-90 active:scale-[0.98]"
+                    >
+                      {t("loyalty_find_btn")}
+                      <ArrowRight className="size-4" />
+                    </button>
+                  </form>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
 
           {/* How it works */}
@@ -448,63 +511,17 @@ export function LoyaltyPageShell() {
     }
   }
 
-  // ── No code → entry screen ─────────────────────────────────────────────────
-  if (!code) {
-    return <EntryScreen isLoggedIn={!!accessToken} onSubmit={(c) => router.push(ROUTES.LOYALTY(c))} />;
-  }
-
-  // ── Loading ────────────────────────────────────────────────────────────────
-  if (isFetching) {
+  // ── No code / loading / fetch error → entry screen ────────────────────────
+  if (!code || isFetching || fetchError || !orderInfo) {
     return (
-      <div className="flex min-h-[70vh] items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="flex size-14 items-center justify-center rounded-full bg-kun-primary/10">
-            <Loader2 className="size-7 animate-spin text-kun-primary" />
-          </div>
-          <p className="text-sm text-muted">{t("loyalty_loading")}</p>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Fetch error ────────────────────────────────────────────────────────────
-  if (fetchError || !orderInfo) {
-    return (
-      <div className="flex min-h-[70vh] flex-col items-center justify-center gap-5 px-4 text-center">
-        <motion.div
-          initial={{ scale: 0.7, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: "spring", stiffness: 240, damping: 18 }}
-          className="flex size-20 items-center justify-center rounded-full bg-red-50 ring-8 ring-red-50/60"
-        >
-          <AlertCircle className="size-9 text-danger" />
-        </motion.div>
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-          <p className="font-semibold text-foreground">{fetchError ?? "Đơn hàng không tồn tại"}</p>
-          <p className="mt-1 font-mono text-sm text-muted">#{code}</p>
-        </motion.div>
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25 }}
-          className="flex gap-3"
-        >
-          <button
-            type="button"
-            onClick={() => router.push(ROUTES.LOYALTY_PAGE)}
-            className="flex items-center gap-1.5 rounded-full border border-black/10 bg-white px-5 py-2.5 text-sm font-medium text-foreground/70 transition-colors hover:bg-surface-card"
-          >
-            <ChevronLeft className="size-4" />
-            {t("loyalty_try_another")}
-          </button>
-          <Link
-            href={ROUTES.HOME}
-            className="rounded-full bg-[#1a3c34] px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
-          >
-            {t("loyalty_go_home")}
-          </Link>
-        </motion.div>
-      </div>
+      <EntryScreen
+        isLoggedIn={!!accessToken}
+        onSubmit={(c) => router.push(ROUTES.LOYALTY(c))}
+        isLoading={isFetching}
+        serverError={fetchError}
+        errorCode={fetchError ? code : undefined}
+        onRetry={() => router.push(ROUTES.LOYALTY_PAGE)}
+      />
     );
   }
 

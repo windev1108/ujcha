@@ -89,8 +89,8 @@ function NotificationItem({
     );
     observer.observe(el);
     return () => observer.disconnect();
-  // onRead excluded — kept in onReadRef to avoid re-creating the observer
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // onRead excluded — kept in onReadRef to avoid re-creating the observer
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [n.id, n.isRead]);
 
   function handleClick() {
@@ -105,9 +105,8 @@ function NotificationItem({
       tabIndex={0}
       onClick={handleClick}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleClick(); }}
-      className={`group relative flex cursor-pointer items-start gap-3 rounded-2xl px-4 py-3 transition-colors ${
-        n.isRead ? "bg-transparent" : "bg-kun-primary/[0.04]"
-      } hover:bg-black/[0.04]`}
+      className={`group relative flex cursor-pointer items-start gap-3 rounded-2xl px-4 py-3 transition-colors ${n.isRead ? "bg-transparent" : "bg-kun-primary/[0.04]"
+        } hover:bg-black/[0.04]`}
     >
       <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-card">
         {typeIcon(n.type)}
@@ -268,7 +267,7 @@ export function NotificationBell() {
         type="button"
         onClick={handleOpen}
         aria-label={t("notifications")}
-        className="relative flex size-8 items-center justify-center rounded-full text-foreground/75 transition-colors hover:bg-black/[0.05] hover:text-foreground"
+        className="cursor-pointer relative flex size-8 items-center justify-center rounded-full text-foreground/75 transition-colors hover:bg-black/[0.05] hover:text-foreground"
       >
         <Bell className="size-[18px]" />
         {displayCount > 0 && (

@@ -92,17 +92,17 @@ function parseGrabTranslation(raw: unknown): Record<string, string> {
 function normalizeModifierGroups(raw: unknown): GrabModifierGroup[] {
   if (!Array.isArray(raw)) return [];
   return (raw as Record<string, unknown>[]).flatMap((g) => {
-    const id   = str(g.modifierGroupID) || str(g.modifierID) || str(g.id);
+    const id = str(g.modifierGroupID) || str(g.modifierID) || str(g.id);
     const name = str(g.modifierGroupName) || str(g.modifierName) || str(g.name);
     if (!id || !name) return [];
 
     // Grab uses `modifiers` (not `items`/`modifierItems`) inside each group
     const rawItems = Array.isArray(g.modifiers) ? g.modifiers :
       Array.isArray(g.modifierItems) ? g.modifierItems :
-      Array.isArray(g.items) ? g.items : [];
+        Array.isArray(g.items) ? g.items : [];
 
     const items: GrabModifierItem[] = (rawItems as Record<string, unknown>[]).flatMap((mi) => {
-      const itemId   = str(mi.modifierItemID) || str(mi.modifierID) || str(mi.id);
+      const itemId = str(mi.modifierItemID) || str(mi.modifierID) || str(mi.id);
       const itemName = str(mi.modifierItemName) || str(mi.modifierName) || str(mi.name);
       if (!itemId || !itemName) return [];
       const price = typeof mi.priceInMin === "number" ? mi.priceInMin :
@@ -151,7 +151,7 @@ function normalizeGrabMenu(raw: unknown): GrabMenuData {
   const categories: GrabCategory[] = [];
 
   for (const cat of rawCats) {
-    const categoryID   = str(cat.categoryID) || str(cat.id) || str(cat.ID);
+    const categoryID = str(cat.categoryID) || str(cat.id) || str(cat.ID);
     const categoryName = str(cat.categoryName) || str(cat.name) || str(cat.Name);
     if (!categoryName) continue;
 
@@ -170,12 +170,12 @@ function normalizeGrabMenu(raw: unknown): GrabMenuData {
     const items: GrabItem[] = [];
 
     for (const item of rawItems) {
-      const itemID   = str(item.itemID)   || str(item.id)   || str(item.ID);
+      const itemID = str(item.itemID) || str(item.id) || str(item.ID);
       const itemName = str(item.itemName) || str(item.name) || str(item.Name);
       if (!itemID || !itemName) continue;
 
       let imageURL: string | undefined;
-      if (str(item.imageURL))      imageURL = str(item.imageURL);
+      if (str(item.imageURL)) imageURL = str(item.imageURL);
       else if (str(item.imageUrl)) imageURL = str(item.imageUrl);
       else if (Array.isArray(item.photos) && (item.photos as unknown[]).length > 0) {
         const p = (item.photos as Record<string, unknown>[])[0]!;
@@ -248,18 +248,18 @@ interface ImportStatus {
 export function GrabImportDialog({ isOpen, onOpenChange, categories, onImported }: Props) {
   const isLocalDev = typeof window !== "undefined" && window.location.hostname === "localhost";
 
-  const [step, setStep]             = useState<Step>("login");
-  const [starting, setStarting]     = useState(false);
-  const [loginError, setLoginError]  = useState<string | null>(null);
-  const [fetchError, setFetchError]  = useState<string | null>(null);
-  const [menuData, setMenuData]     = useState<GrabMenuData | null>(null);
-  const [selected, setSelected]     = useState<Set<string>>(new Set());
+  const [step, setStep] = useState<Step>("login");
+  const [starting, setStarting] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [menuData, setMenuData] = useState<GrabMenuData | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
   const [toppingCatIds, setToppingCatIds] = useState<Set<string>>(new Set());
   // Modifier groups the user manually promoted to optionGroups (overrides selectionRangeMin===0)
   const [forceOptionGroupIDs, setForceOptionGroupIDs] = useState<Set<string>>(new Set());
   const [showGroupClassifier, setShowGroupClassifier] = useState(true);
-  const [status, setStatus]         = useState<ImportStatus>({ phase: "", done: 0, total: 0, failed: 0 });
+  const [status, setStatus] = useState<ImportStatus>({ phase: "", done: 0, total: 0, failed: 0 });
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [skippedCount, setSkippedCount] = useState(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -546,10 +546,10 @@ export function GrabImportDialog({ isOpen, onOpenChange, categories, onImported 
   });
 
   const heading = {
-    login:     "Kết nối GrabFood",
-    preview:   `Chọn sản phẩm (${totalItems} món)`,
+    login: "Kết nối GrabFood",
+    preview: `Chọn sản phẩm (${totalItems} món)`,
     importing: "Đang nhập…",
-    done:      "Nhập xong",
+    done: "Nhập xong",
   }[step];
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -612,42 +612,6 @@ export function GrabImportDialog({ isOpen, onOpenChange, categories, onImported 
                 </div>
               )}
 
-              {/* login waiting — cloud/Vercel */}
-              {step === "login" && starting && !isLocalDev && (
-                <div className="flex flex-col items-center gap-6 py-8">
-                  <div className="flex size-16 items-center justify-center rounded-2xl bg-[#f0f7f4]">
-                    <Loader2 className="size-8 animate-spin text-[#1a3c34]" />
-                  </div>
-                  <div className="text-center">
-                    <p className="font-semibold">Cửa sổ GrabFood đã mở</p>
-                    <p className="mt-1.5 text-sm text-foreground/55">
-                      Đăng nhập xong → bấm nút xanh{" "}
-                      <strong className="text-[#00b14f]">"Xác nhận đã đăng nhập"</strong>{" "}
-                      trên trang GrabFood
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const w = 520, h = 700;
-                        const left = Math.round(window.screenX + (window.outerWidth - w) / 2);
-                        const top  = Math.round(window.screenY + (window.outerHeight - h) / 2);
-                        window.open(GRAB_LOGIN_URL, relayUrl,
-                          `width=${w},height=${h},left=${left},top=${top},toolbar=no,menubar=no,scrollbars=yes`);
-                      }}
-                      className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[#1a3c34] underline-offset-2 hover:underline"
-                    >
-                      <ExternalLink className="size-3" /> Mở lại cửa sổ
-                    </button>
-                  </div>
-                  {fetchError && (
-                    <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                      <AlertCircle className="mt-0.5 size-4 shrink-0" />
-                      {fetchError}
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* preview */}
               {step === "preview" && menuData && (
                 <div className="flex flex-col gap-4">
@@ -696,11 +660,11 @@ export function GrabImportDialog({ isOpen, onOpenChange, categories, onImported 
                     !toppingCatIds.has(cat.categoryID) &&
                     !categories.find(c => c.name.toLowerCase() === cat.categoryName.toLowerCase())
                   ) && (
-                    <div className="flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-700">
-                      <Tag className="mt-0.5 size-3.5 shrink-0" />
-                      Danh mục sản phẩm chưa có trong UjCha sẽ được tạo tự động khi import.
-                    </div>
-                  )}
+                      <div className="flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-700">
+                        <Tag className="mt-0.5 size-3.5 shrink-0" />
+                        Danh mục sản phẩm chưa có trong UjCha sẽ được tạo tự động khi import.
+                      </div>
+                    )}
 
                   {/* ── Modifier group classifier ── */}
                   {menuData.modifierGroups.length > 0 && (
@@ -724,8 +688,8 @@ export function GrabImportDialog({ isOpen, onOpenChange, categories, onImported 
                         <div className="divide-y divide-black/[0.04]">
                           {menuData.modifierGroups.map(g => {
                             const isRequired = g.selectionRangeMin >= 1;
-                            const isForced   = forceOptionGroupIDs.has(g.modifierGroupID);
-                            const isOpt      = isRequired || isForced;
+                            const isForced = forceOptionGroupIDs.has(g.modifierGroupID);
+                            const isOpt = isRequired || isForced;
 
                             return (
                               <div key={g.modifierGroupID} className="flex items-center gap-3 px-4 py-2">
@@ -759,11 +723,10 @@ export function GrabImportDialog({ isOpen, onOpenChange, categories, onImported 
                                       next.has(g.modifierGroupID) ? next.delete(g.modifierGroupID) : next.add(g.modifierGroupID);
                                       return next;
                                     })}
-                                    className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold transition hover:opacity-80 ${
-                                      isForced
+                                    className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold transition hover:opacity-80 ${isForced
                                         ? "border-amber-200 bg-amber-50 text-amber-700"
                                         : "border-blue-200 bg-blue-50 text-blue-700"
-                                    }`}
+                                      }`}
                                   >
                                     {isForced ? "→ Topping" : "→ Biến thể"}
                                   </button>
@@ -779,20 +742,20 @@ export function GrabImportDialog({ isOpen, onOpenChange, categories, onImported 
                   {/* ── Category list ── */}
                   <div className="flex flex-col gap-2">
                     {menuData.categories.map(cat => {
-                      const isEmpty     = cat.items.length === 0;
-                      const isTopping   = toppingCatIds.has(cat.categoryID);
-                      const catItems    = cat.items;
-                      const allSel      = !isEmpty && catItems.every(i => selected.has(i.itemID));
-                      const someSel     = catItems.some(i => selected.has(i.itemID));
-                      const expanded    = expandedCats.has(cat.categoryName);
+                      const isEmpty = cat.items.length === 0;
+                      const isTopping = toppingCatIds.has(cat.categoryID);
+                      const catItems = cat.items;
+                      const allSel = !isEmpty && catItems.every(i => selected.has(i.itemID));
+                      const someSel = catItems.some(i => selected.has(i.itemID));
+                      const expanded = expandedCats.has(cat.categoryName);
                       const existingCat = categories.find(c => c.name.toLowerCase() === cat.categoryName.toLowerCase());
 
                       // Color scheme per category type
                       const headerBg = isEmpty
                         ? "bg-[#fafafa] opacity-60"
                         : isTopping
-                        ? "bg-amber-50/70"
-                        : "bg-[#fafafa]";
+                          ? "bg-amber-50/70"
+                          : "bg-[#fafafa]";
 
                       return (
                         <div key={cat.categoryID} className={`overflow-hidden rounded-xl border bg-white ${isEmpty ? "border-black/6 opacity-70" : isTopping ? "border-amber-200" : "border-black/8"}`}>
@@ -839,11 +802,10 @@ export function GrabImportDialog({ isOpen, onOpenChange, categories, onImported 
                                   type="button"
                                   onClick={() => toggleToppingCat(cat.categoryID)}
                                   title={isTopping ? "Chuyển sang Sản phẩm" : "Chuyển sang Topping"}
-                                  className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold transition hover:opacity-80 ${
-                                    isTopping
+                                  className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold transition hover:opacity-80 ${isTopping
                                       ? "border-green-200 bg-green-50 text-green-700"
                                       : "border-amber-200 bg-amber-50 text-amber-700"
-                                  }`}
+                                    }`}
                                 >
                                   {isTopping ? "→ Sản phẩm" : "→ Topping"}
                                 </button>
@@ -868,12 +830,12 @@ export function GrabImportDialog({ isOpen, onOpenChange, categories, onImported 
                           {!isEmpty && expanded && (
                             <div className="divide-y divide-black/[0.04]">
                               {catItems.map(item => {
-                                const checked   = selected.has(item.itemID);
+                                const checked = selected.has(item.itemID);
                                 const resolvedGroups = item.modifierGroupIDs
                                   .map(id => modGroupMap.get(id))
                                   .filter((g): g is GrabModifierGroup => !!g);
                                 // Respect user classification overrides
-                                const optionMods  = resolvedGroups.filter(g => g.selectionRangeMin >= 1 || forceOptionGroupIDs.has(g.modifierGroupID));
+                                const optionMods = resolvedGroups.filter(g => g.selectionRangeMin >= 1 || forceOptionGroupIDs.has(g.modifierGroupID));
                                 const toppingMods = resolvedGroups.filter(g => g.selectionRangeMin === 0 && !forceOptionGroupIDs.has(g.modifierGroupID));
                                 const allToppingItems = toppingMods.flatMap(g => g.items);
 

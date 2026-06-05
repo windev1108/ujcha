@@ -207,7 +207,7 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
           setTimeout(() => {
             setAddedFeedback(false);
             onClose();
-          }, 800);
+          }, 300);
         },
       },
     );

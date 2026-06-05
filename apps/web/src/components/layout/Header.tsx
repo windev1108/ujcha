@@ -273,8 +273,7 @@ export function AppHeader() {
                       {[
                         { href: ROUTES.ORDERS, label: t("order_history"), Icon: ShoppingBag },
                         { href: ROUTES.PROFILE, label: t("my_account"), Icon: User },
-                        { href: ROUTES.LOYALTY_PAGE, label: t("loyalty_nav_label"), Icon: Star },
-                        { href: ROUTES.NOTIFICATIONS, label: "Thông báo", Icon: Bell },
+                        { href: ROUTES.NOTIFICATIONS, label: t("notifications"), Icon: Bell },
                         { href: ROUTES.ADDRESSES, label: t("shipping_addresses"), Icon: MapPin },
                       ].map(({ href, label, Icon: Ic }) => (
                         <Link

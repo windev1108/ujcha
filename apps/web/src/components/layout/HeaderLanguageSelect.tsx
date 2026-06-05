@@ -34,7 +34,7 @@ export function HeaderLanguageSelect() {
             aria-pressed={active}
             disabled={isPending}
             className={[
-              "rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide transition-all duration-150",
+              "cursor-pointer rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide transition-all duration-150",
               active
                 ? "bg-[#1a3c34] text-white shadow-sm"
                 : "text-[#717171] hover:text-[#1a1a1a]",
