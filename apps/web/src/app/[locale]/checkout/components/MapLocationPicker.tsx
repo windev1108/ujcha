@@ -5,6 +5,7 @@ import { MapContainer, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Loader2, MapPin, Navigation, X } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 // Re-use the same fix for webpack-broken default icons
 L.Icon.Default.mergeOptions({
@@ -38,7 +39,7 @@ function FlyTo({ target }: { target: [number, number] | null }) {
   return null;
 }
 
-async function reverseGeocode(lat: number, lng: number): Promise<string> {
+export async function reverseGeocode(lat: number, lng: number): Promise<string> {
   try {
     const resp = await fetch(
       `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=vi`,
@@ -59,6 +60,7 @@ type Props = {
 };
 
 export function MapLocationPicker({ initialLat, initialLng, onConfirm, onClose }: Props) {
+  const t = useTranslations();
   const hasInitialCoords = initialLat != null && initialLng != null;
 
   // Fall back to HCM only as the MapContainer seed — real position is acquired below
@@ -129,7 +131,7 @@ export function MapLocationPicker({ initialLat, initialLng, onConfirm, onClose }
 
   function handleGetGPS() {
     if (!navigator.geolocation) {
-      setGeoError("Trình duyệt không hỗ trợ định vị.");
+      setGeoError(t("browser_no_location"));
       return;
     }
     setGeoError(null);
@@ -141,7 +143,7 @@ export function MapLocationPicker({ initialLat, initialLng, onConfirm, onClose }
       },
       () => {
         setIsLocating(false);
-        setGeoError("Không thể lấy vị trí. Vui lòng cấp quyền định vị.");
+        setGeoError(t("location_permission_denied"));
       },
       { timeout: 8_000 },
     );
@@ -168,16 +170,16 @@ export function MapLocationPicker({ initialLat, initialLng, onConfirm, onClose }
           type="button"
           onClick={onClose}
           className="flex size-9 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-surface-card"
-          aria-label="Đóng bản đồ"
+          aria-label={t("close_map")}
         >
           <X className="size-5 text-foreground/70" />
         </button>
 
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-            Địa chỉ giao hàng
+            {t("delivery_address_title")}
           </p>
-          <h2 className="text-sm font-semibold text-foreground">Chọn vị trí trên bản đồ</h2>
+          <h2 className="text-sm font-semibold text-foreground">{t("map_picker_title")}</h2>
         </div>
 
         <button
@@ -191,7 +193,7 @@ export function MapLocationPicker({ initialLat, initialLng, onConfirm, onClose }
           ) : (
             <Navigation className="size-3.5" />
           )}
-          Vị trí của tôi
+          {t("my_location")}
         </button>
       </div>
 
@@ -215,7 +217,7 @@ export function MapLocationPicker({ initialLat, initialLng, onConfirm, onClose }
         {isLocating && (
           <div className="absolute inset-0 z-[1001] flex flex-col items-center justify-center gap-3 bg-white/80 backdrop-blur-sm">
             <Loader2 className="size-7 animate-spin text-kun-primary" />
-            <p className="text-sm font-medium text-foreground/70">Đang lấy vị trí của bạn…</p>
+            <p className="text-sm font-medium text-foreground/70">{t("getting_location")}</p>
           </div>
         )}
 
@@ -234,7 +236,7 @@ export function MapLocationPicker({ initialLat, initialLng, onConfirm, onClose }
         {/* Tip label */}
         <div className="pointer-events-none absolute bottom-4 left-1/2 z-[1000] -translate-x-1/2">
           <div className="rounded-full border border-black/6 bg-white/90 px-3 py-1.5 text-[11px] font-medium text-foreground/70 shadow-sm backdrop-blur-sm">
-            Kéo bản đồ để đặt vị trí
+            {t("map_drag_hint")}
           </div>
         </div>
       </div>
@@ -247,12 +249,12 @@ export function MapLocationPicker({ initialLat, initialLng, onConfirm, onClose }
             {isLocating ? (
               <div className="flex items-center gap-1.5">
                 <Loader2 className="size-3 animate-spin text-muted" />
-                <span className="text-xs text-muted">Đang tìm vị trí của bạn…</span>
+                <span className="text-xs text-muted">{t("getting_location")}</span>
               </div>
             ) : isGeocoding ? (
               <div className="flex items-center gap-1.5">
                 <Loader2 className="size-3 animate-spin text-muted" />
-                <span className="text-xs text-muted">Đang xác định địa chỉ…</span>
+                <span className="text-xs text-muted">{t("resolving_address")}</span>
               </div>
             ) : addressPreview ? (
               <p className="line-clamp-2 text-sm leading-snug text-foreground">{addressPreview}</p>
@@ -275,10 +277,10 @@ export function MapLocationPicker({ initialLat, initialLng, onConfirm, onClose }
           {isConfirming ? (
             <>
               <Loader2 className="size-4 animate-spin" />
-              Đang xác nhận…
+              {t("confirming_location")}
             </>
           ) : (
-            "Xác nhận vị trí này"
+            t("confirm_location")
           )}
         </button>
       </div>

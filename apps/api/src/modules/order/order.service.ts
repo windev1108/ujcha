@@ -22,6 +22,7 @@ import { ReferralRewardProcessingService } from '../referral/referral-reward-pro
 import type { CreateOrderDto } from './dto/create-order.dto';
 import type { CreateOrderItemDto } from './dto/create-order-item.dto';
 import type { UpdateOrderStatusDto } from './dto/update-order-status.dto';
+import { NotificationService } from '../notification/notification.service';
 import { OrderValidationService } from './order-validation.service';
 
 export type OrderDetail = Prisma.OrderGetPayload<{
@@ -145,6 +146,7 @@ export class OrderService {
     private readonly pointOrderReward: PointOrderRewardService,
     private readonly pointService: PointService,
     private readonly referralRewardProcessing: ReferralRewardProcessingService,
+    private readonly notificationService: NotificationService,
   ) { }
 
   calculateTotal(items: CreateOrderItemDto[]): Prisma.Decimal {
@@ -312,28 +314,40 @@ export class OrderService {
       });
     }
 
+    const MAX_SAVED_ADDRESSES = 3;
+
     if (dto.type === OrderType.delivery) {
       if (userId) {
-        if (!dto.addressId?.trim()) {
+        const hasAddressId = !!dto.addressId?.trim();
+        const hasInline = !!dto.inlineAddress;
+        if (!hasAddressId && !hasInline) {
           throw new BadRequestException({
-            message: 'Đơn gắn khách cần addressId (địa chỉ đã lưu).',
-            code: 'ORDER_DELIVERY_ADDRESS_ID_REQUIRED',
+            message: 'Đơn gắn khách cần addressId hoặc inlineAddress.',
+            code: 'ORDER_DELIVERY_ADDRESS_REQUIRED',
+          });
+        }
+        if (hasAddressId && hasInline) {
+          throw new BadRequestException({
+            message: 'Không dùng cùng lúc addressId và inlineAddress.',
+            code: 'ORDER_DELIVERY_ADDRESS_CONFLICT',
           });
         }
         if (dto.guestDeliveryAddress?.trim()) {
           throw new BadRequestException({
-            message: 'Không kết hợp addressId với guestDeliveryAddress.',
+            message: 'Không kết hợp addressId/inlineAddress với guestDeliveryAddress.',
             code: 'ORDER_DELIVERY_ADDRESS_CONFLICT',
           });
         }
-        const addr = await this.prisma.address.findFirst({
-          where: { id: dto.addressId!, userId },
-        });
-        if (!addr) {
-          throw new BadRequestException({
-            message: 'Địa chỉ không tồn tại hoặc không thuộc tài khoản.',
-            code: 'ORDER_ADDRESS_INVALID',
+        if (hasAddressId) {
+          const addr = await this.prisma.address.findFirst({
+            where: { id: dto.addressId!, userId },
           });
+          if (!addr) {
+            throw new BadRequestException({
+              message: 'Địa chỉ không tồn tại hoặc không thuộc tài khoản.',
+              code: 'ORDER_ADDRESS_INVALID',
+            });
+          }
         }
       } else {
         if (!dto.guestDeliveryAddress?.trim()) {
@@ -384,10 +398,42 @@ export class OrderService {
     const paymentStatusOnCreate =
       options?.initialPaymentStatus ?? PaymentStatus.pending;
 
-    return this.prisma.$transaction(async (tx) => {
+    const order = await this.prisma.$transaction(async (tx) => {
       const paymentCode = await this.allocPaymentCode(tx);
 
       const isGuestDelivery = dto.type === OrderType.delivery && userId == null;
+
+      // Resolve address for logged-in delivery orders using inlineAddress
+      let resolvedAddressId: string | null = null;
+      let resolvedGuestAddress: string | null = null;
+
+      if (dto.type === OrderType.delivery) {
+        if (userId && dto.inlineAddress) {
+          const existingCount = await tx.address.count({ where: { userId } });
+          if (existingCount < MAX_SAVED_ADDRESSES) {
+            const isFirst = existingCount === 0;
+            if (isFirst) {
+              await tx.address.updateMany({ where: { userId }, data: { isDefault: false } });
+            }
+            const saved = await tx.address.create({
+              data: {
+                userId,
+                fullAddress: dto.inlineAddress.fullAddress,
+                lat: dto.inlineAddress.lat,
+                lng: dto.inlineAddress.lng,
+                isDefault: isFirst,
+              },
+            });
+            resolvedAddressId = saved.id;
+          } else {
+            resolvedGuestAddress = dto.inlineAddress.fullAddress;
+          }
+        } else if (userId && dto.addressId) {
+          resolvedAddressId = dto.addressId;
+        } else if (!userId) {
+          resolvedGuestAddress = dto.guestDeliveryAddress!.trim();
+        }
+      }
 
       const activeVat = await tx.vatConfig.findFirst({
         where: { isActive: true },
@@ -405,11 +451,8 @@ export class OrderService {
         data: {
           userId,
           type: dto.type,
-          addressId:
-            dto.type === OrderType.delivery && userId ? dto.addressId! : null,
-          guestDeliveryAddress: isGuestDelivery
-            ? dto.guestDeliveryAddress!.trim()
-            : null,
+          addressId: resolvedAddressId,
+          guestDeliveryAddress: resolvedGuestAddress,
           guestDeliveryPhone: isGuestDelivery
             ? dto.guestDeliveryPhone?.trim() || null
             : null,
@@ -475,6 +518,18 @@ export class OrderService {
         },
       });
     });
+
+    if (userId) {
+      void this.notificationService.createAndEmit({
+        userId,
+        type: 'order',
+        title: 'Đặt đơn thành công',
+        content: `Đơn #${order.paymentCode} đã được tạo và đang chờ xác nhận.`,
+        data: { orderId: order.id, paymentCode: order.paymentCode, notifKey: 'order_created' },
+      }).catch(() => null);
+    }
+
+    return order;
   }
 
   async updateStatus(
@@ -551,11 +606,7 @@ export class OrderService {
       });
 
       if (shouldRewardPoints) {
-        void this.pointOrderReward
-          .tryRewardOrderCompletion(updated.id)
-          .catch((err: unknown) => {
-            this.logger.error(err);
-          });
+        this.fireOrderCompletionSideEffects(updated.id, updated.userId, updated.paymentCode);
       }
 
       return updated;
@@ -580,23 +631,44 @@ export class OrderService {
     });
 
     if (shouldRewardPoints) {
-      this.fireOrderCompletionSideEffects(updated.id);
+      this.fireOrderCompletionSideEffects(updated.id, updated.userId);
     }
 
     return updated;
   }
 
-  private fireOrderCompletionSideEffects(orderId: string) {
-    void this.pointOrderReward
-      .tryRewardOrderCompletion(orderId)
-      .catch((err: unknown) => {
-        this.logger.error(err);
-      });
+  private fireOrderCompletionSideEffects(orderId: string, userId?: string | null, paymentCode?: string) {
     void this.referralRewardProcessing
       .tryProcessReferralOnOrderCompleted(orderId)
-      .catch((err: unknown) => {
-        this.logger.error(err);
-      });
+      .catch((err: unknown) => { this.logger.error(err); });
+    void this.rewardAndNotifyCompletion(orderId, userId ?? null, paymentCode ?? '')
+      .catch((err: unknown) => { this.logger.error(err); });
+  }
+
+  private async rewardAndNotifyCompletion(orderId: string, userId: string | null, paymentCode: string) {
+    try {
+      await this.pointOrderReward.tryRewardOrderCompletion(orderId);
+    } catch (err) {
+      this.logger.error(err);
+    }
+    if (!userId) return;
+
+    const earnedTxn = await this.prisma.pointTransaction.findFirst({
+      where: { userId, source: PointSource.order, referenceId: orderId, type: PointTransactionType.earn },
+      select: { amount: true },
+    }).catch(() => null);
+
+    const points = earnedTxn ? Math.round(Number(earnedTxn.amount) * 10) / 10 : 0;
+
+    await this.notificationService.createAndEmit({
+      userId,
+      type: 'order',
+      title: 'Đơn hàng hoàn thành',
+      content: points > 0
+        ? `Đơn #${paymentCode} hoàn thành. Bạn tích được ${points} điểm!`
+        : `Đơn #${paymentCode} hoàn thành. Cảm ơn bạn đã sử dụng UjCha!`,
+      data: { orderId, paymentCode, earnedPoints: points, notifKey: 'order_completed' },
+    });
   }
 
   async getPaymentStatus(userId: string, orderId: string) {

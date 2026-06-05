@@ -1,10 +1,12 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PostStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationService } from '../../notification/notification.service';
 import { slugify, uniqueSlugSuffix } from '../slug.util';
 import type { AdminPostListQueryDto } from './dto/admin-post-list-query.dto';
 import type { CreatePostDto } from './dto/create-post.dto';
@@ -16,7 +18,12 @@ const authorInclude = {
 
 @Injectable()
 export class AdminPostService {
-  constructor(private readonly prisma: PrismaService) { }
+  private readonly logger = new Logger(AdminPostService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationService: NotificationService,
+  ) { }
 
   async findAll(query: AdminPostListQueryDto) {
     const usePageMode = query.page != null || query.pageSize != null;
@@ -84,7 +91,7 @@ export class AdminPostService {
     const publishedAt =
       status === PostStatus.published ? new Date() : null;
 
-    return this.prisma.post.create({
+    const post = await this.prisma.post.create({
       data: {
         title: dto.title.trim(),
         slug,
@@ -98,6 +105,12 @@ export class AdminPostService {
       },
       include: authorInclude,
     });
+
+    if (status === PostStatus.published) {
+      void this.notifyNewPost(post).catch((err) => this.logger.error(err));
+    }
+
+    return post;
   }
 
   async update(id: string, dto: UpdatePostDto) {
@@ -121,7 +134,7 @@ export class AdminPostService {
       }
     }
 
-    return this.prisma.post.update({
+    const updated = await this.prisma.post.update({
       where: { id },
       data: {
         ...(dto.title !== undefined && { title: dto.title.trim() }),
@@ -141,11 +154,20 @@ export class AdminPostService {
       },
       include: authorInclude,
     });
+
+    if (
+      existing.status !== PostStatus.published &&
+      nextStatus === PostStatus.published
+    ) {
+      void this.notifyNewPost(updated).catch((err) => this.logger.error(err));
+    }
+
+    return updated;
   }
 
   async publish(id: string) {
     await this.findById(id);
-    return this.prisma.post.update({
+    const updated = await this.prisma.post.update({
       where: { id },
       data: {
         status: PostStatus.published,
@@ -153,6 +175,8 @@ export class AdminPostService {
       },
       include: authorInclude,
     });
+    void this.notifyNewPost(updated).catch((err) => this.logger.error(err));
+    return updated;
   }
 
   async unpublish(id: string) {
@@ -170,6 +194,15 @@ export class AdminPostService {
   async remove(id: string) {
     await this.findById(id);
     await this.prisma.post.delete({ where: { id } });
+  }
+
+  private async notifyNewPost(post: { id: string; title: string; slug: string }) {
+    await this.notificationService.createAndBroadcastToAll({
+      type: 'news',
+      title: `Bài viết mới: ${post.title}`,
+      content: 'UjCha vừa đăng bài mới. Đọc ngay nhé!',
+      data: { postId: post.id, slug: post.slug },
+    });
   }
 
   private async allocSlug(base: string, excludeId?: string): Promise<string> {

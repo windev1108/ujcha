@@ -3,6 +3,7 @@ import { OrderStatus, PaymentStatus, PointSource, PointTransactionType } from '@
 import { PrismaService } from '../prisma/prisma.service';
 import { PointPolicyService } from '../point/point-policy.service';
 import { PointService } from '../point/point.service';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class LoyaltyService {
@@ -10,6 +11,7 @@ export class LoyaltyService {
     private readonly prisma: PrismaService,
     private readonly pointPolicy: PointPolicyService,
     private readonly pointService: PointService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async getOrderInfo(paymentCode: string) {
@@ -113,6 +115,14 @@ export class LoyaltyService {
     const expiresAt = policy.expireDays > 0 ? new Date(now + policy.expireDays * 86_400_000) : null;
 
     await this.pointService.earnPoints(userId, points, PointSource.order, order.id, { expiresAt, usableFrom });
+
+    void this.notificationService.createAndEmit({
+      userId,
+      type: 'loyalty',
+      title: 'Bạn vừa nhận được điểm thưởng!',
+      content: `+${points} điểm đã được tích từ đơn hàng #${order.paymentCode}`,
+      data: { paymentCode: order.paymentCode, points, notifKey: 'loyalty_earned' },
+    });
 
     return { points, userId };
   }

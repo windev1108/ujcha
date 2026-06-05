@@ -158,6 +158,17 @@ export class GroupOrderController {
     return state;
   }
 
+  @Post(':token/checkout-split-cash')
+  @HttpCode(200)
+  async checkoutSplitCash(
+    @Param('token') token: string,
+    @Body() dto: SessionActionDto,
+  ) {
+    const result = await this.service.checkoutSplitCash(token, dto.sessionToken);
+    this.gateway.broadcast(token, result.groupOrder);
+    return result;
+  }
+
   @Get('config/discount')
   getConfig() {
     return this.service.getConfig();

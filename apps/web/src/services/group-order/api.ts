@@ -180,6 +180,14 @@ export async function setGroupOrderFulfillment(
   return data
 }
 
+export async function checkoutSplitCash(
+  token: string,
+  sessionToken: string,
+): Promise<{ groupOrder: GroupOrderState; order: unknown }> {
+  const { data } = await api.post(`/group-orders/${token}/checkout-split-cash`, { sessionToken })
+  return data
+}
+
 export async function fetchGroupOrderConfig(): Promise<GroupOrderConfig> {
   const { data } = await api.get<GroupOrderConfig>('/group-orders/config/discount')
   return data

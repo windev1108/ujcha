@@ -6,7 +6,10 @@ import { PrismaService } from '../prisma/prisma.service';
 export type ResolvedPointPolicy = {
   effectiveEarnPercent: Prisma.Decimal;
   earnPercentSource: 'config' | 'campaign';
-  /** 1 điểm = pointRate đồng (vd. 100 → cần 100đ để được 1 điểm). */
+  /**
+   * Giá trị quy đổi khi ĐỔI điểm: 1 point = pointRate đồng giảm giá (vd. 100 → 1pt = 100đ).
+   * Tỉ lệ tích: earn 1 point cần pointRate / (effectiveEarnPercent/100) đồng chi tiêu.
+   */
   pointRate: number;
   delayHours: number;
   expireDays: number;

@@ -81,7 +81,7 @@ export class OtpService {
     const n = raw !== undefined ? Number(raw) : OTP_DEFAULTS.BCRYPT_SALT_ROUNDS;
     if (!Number.isFinite(n)) return OTP_DEFAULTS.BCRYPT_SALT_ROUNDS;
     const rounded = Math.floor(n);
-    if (rounded < 10 || rounded > 15) return OTP_DEFAULTS.BCRYPT_SALT_ROUNDS;
+    if (rounded < 8 || rounded > 15) return OTP_DEFAULTS.BCRYPT_SALT_ROUNDS;
     return rounded;
   }
 

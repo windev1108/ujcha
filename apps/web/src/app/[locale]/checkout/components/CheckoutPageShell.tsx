@@ -17,7 +17,7 @@ import {
 import { useProfileQuery } from "@/services/profile/hooks";
 import { usePublicStoreLocationQuery } from "@/services/store/hooks";
 import { useShippingEstimateQuery } from "@/services/shipping/hooks";
-import { createAddress, fetchPublicTable, type PublicTableInfo, type VoucherPreviewResult } from "@/services/order/api";
+import { fetchPublicTable, type PublicTableInfo, type VoucherPreviewResult } from "@/services/order/api";
 import { normalizeOptionGroups, computeOptionSurcharge } from "@/lib/product-options";
 import { ROUTES } from "@/lib/routes";
 import { useAuthStore } from "@/store/auth-store";
@@ -322,28 +322,31 @@ export function CheckoutPageShell() {
         router.push(ROUTES.ORDER_DETAIL(order.paymentCode));
         return;
       } else if (tab === CHECKOUT_TAB.DELIVERY) {
-        let addressId: string;
-
-        if (isNewAddress) {
-          const addr = await createAddress({
-            fullAddress: deliveryForm.fullAddress.trim(),
-            lat: deliveryForm.lat ?? 0,
-            lng: deliveryForm.lng ?? 0,
-          });
-          addressId = addr.id;
-        } else {
-          addressId = selectedAddressId!;
-        }
-
-        const order = await createOrderMutation.mutateAsync({
-          type: "delivery",
-          paymentType: paymentMethod,
-          addressId,
-          items: orderItems,
-          voucherCode: appliedVoucher?.code,
-          discountAmount: voucherDiscount > 0 ? voucherDiscount : undefined,
-          shippingFee: shippingFee > 0 ? shippingFee : undefined,
-        });
+        const order = await createOrderMutation.mutateAsync(
+          isNewAddress
+            ? {
+                type: "delivery",
+                paymentType: paymentMethod,
+                inlineAddress: {
+                  fullAddress: deliveryForm.fullAddress.trim(),
+                  lat: deliveryForm.lat ?? 0,
+                  lng: deliveryForm.lng ?? 0,
+                },
+                items: orderItems,
+                voucherCode: appliedVoucher?.code,
+                discountAmount: voucherDiscount > 0 ? voucherDiscount : undefined,
+                shippingFee: shippingFee > 0 ? shippingFee : undefined,
+              }
+            : {
+                type: "delivery",
+                paymentType: paymentMethod,
+                addressId: selectedAddressId!,
+                items: orderItems,
+                voucherCode: appliedVoucher?.code,
+                discountAmount: voucherDiscount > 0 ? voucherDiscount : undefined,
+                shippingFee: shippingFee > 0 ? shippingFee : undefined,
+              },
+        );
         await removeCartItemsMutation.mutateAsync(orderedItemIds);
         router.push(ROUTES.ORDER_DETAIL(order.paymentCode));
         return;

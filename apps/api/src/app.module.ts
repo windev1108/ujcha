@@ -31,6 +31,7 @@ import { RedisModule } from './modules/redis/redis.module';
 import { ShipperAuthModule } from './modules/shipper-auth/shipper-auth.module';
 import { ShipperModule } from './modules/shipper/shipper.module';
 import { TrackingModule } from './modules/tracking/tracking.module';
+import { NotificationModule } from './modules/notification/notification.module';
 
 @Module({
   imports: [
@@ -70,6 +71,7 @@ import { TrackingModule } from './modules/tracking/tracking.module';
     ShipperAuthModule,
     ShipperModule,
     TrackingModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

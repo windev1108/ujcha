@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import dynamic from "next/dynamic";
 import { useRouter } from "@/i18n/navigation";
 import {
   ArrowLeft,
   CheckCircle2,
   Loader2,
+  Map,
   MapPin,
   Navigation,
   Pencil,
@@ -26,6 +28,27 @@ import {
 } from "@/services/order/hooks";
 import { revealTransition, easeOutSmooth } from "@/app/[locale]/(landing)/components/RevealSection";
 import type { UserAddress } from "@/services/order/api";
+
+const MapLocationPicker = dynamic(
+  () =>
+    import("@/app/[locale]/checkout/components/MapLocationPicker").then((m) => ({
+      default: m.MapLocationPicker,
+    })),
+  { ssr: false },
+);
+
+async function reverseGeocode(lat: number, lng: number): Promise<string> {
+  try {
+    const resp = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=vi`,
+      { headers: { "User-Agent": "KunRituals/1.0" } },
+    );
+    const data = (await resp.json()) as { display_name?: string };
+    return data.display_name ?? "";
+  } catch {
+    return "";
+  }
+}
 
 const MAX_ADDRESSES = 3;
 
@@ -192,6 +215,7 @@ function AddressModal({
   const [form, setForm] = useState<AddressForm>(initialForm);
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
+  const [showMap, setShowMap] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof AddressForm, string>>>({});
 
   function patch(p: Partial<AddressForm>) {
@@ -212,9 +236,12 @@ function AddressModal({
     setGeoLoading(true);
     setGeoError(null);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
+      async (pos) => {
+        const { latitude: lat, longitude: lng } = pos.coords;
+        patch({ lat, lng });
+        const address = await reverseGeocode(lat, lng);
         setGeoLoading(false);
-        patch({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        if (address) patch({ fullAddress: address });
       },
       () => {
         setGeoLoading(false);
@@ -242,6 +269,7 @@ function AddressModal({
     setForm(initialForm);
     setErrors({});
     setGeoError(null);
+    setShowMap(false);
     onClose();
   }
 
@@ -249,6 +277,17 @@ function AddressModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
+      {showMap && (
+        <MapLocationPicker
+          initialLat={form.lat}
+          initialLng={form.lng}
+          onConfirm={(lat, lng, address) => {
+            patch({ lat, lng, fullAddress: address });
+            setShowMap(false);
+          }}
+          onClose={() => setShowMap(false)}
+        />
+      )}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -280,15 +319,25 @@ function AddressModal({
           <div>
             <div className="mb-1.5 flex items-center justify-between">
               <Label className="text-xs font-medium text-foreground/70">{t("full_address")}</Label>
-              <button
-                type="button"
-                onClick={handleGetLocation}
-                disabled={geoLoading}
-                className="flex items-center gap-1 text-[11px] font-medium text-kun-products-forest hover:opacity-80 disabled:opacity-50"
-              >
-                {geoLoading ? <Loader2 className="size-3 animate-spin" /> : <Navigation className="size-3" />}
-                {t("get_current_location")}
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowMap(true)}
+                  className="flex items-center gap-1 text-[11px] font-medium text-kun-products-forest hover:opacity-80"
+                >
+                  <Map className="size-3" />
+                  {t("select_on_map")}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleGetLocation}
+                  disabled={geoLoading}
+                  className="flex items-center gap-1 text-[11px] font-medium text-kun-products-forest hover:opacity-80 disabled:opacity-50"
+                >
+                  {geoLoading ? <Loader2 className="size-3 animate-spin" /> : <Navigation className="size-3" />}
+                  {t("gps")}
+                </button>
+              </div>
             </div>
             <Input
               placeholder={t("address_placeholder")}

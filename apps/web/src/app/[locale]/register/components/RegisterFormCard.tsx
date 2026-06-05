@@ -151,19 +151,32 @@ function RegisterContent() {
   const register = useRegisterMutation();
 
   const [touched, setTouched] = useState({ name: false, phone: false, password: false });
+  const [submitted, setSubmitted] = useState(false);
   const touch = (field: keyof typeof touched) =>
     setTouched((prev) => ({ ...prev, [field]: true }));
 
-  const pwdMismatch = confirmPwd.length > 0 && password !== confirmPwd;
-  const step1Valid = name.trim().length >= 2 && isValidPhone(phone) && password.length >= 6 && !pwdMismatch;
+  const nameEmpty     = name.trim().length === 0;
+  const phoneEmpty    = !phone.trim();
+  const passwordEmpty = password.length === 0;
+  const pwdMismatch   = confirmPwd.length > 0 && password !== confirmPwd;
+  const step1Valid    = !nameEmpty && name.trim().length >= 2 && isValidPhone(phone) && !passwordEmpty && password.length >= 6 && !pwdMismatch;
 
-  const nameError     = touched.name     && (name.trim().length === 0 ? t("error_name_required") : name.trim().length < 2 ? t("error_name_min") : null);
-  const phoneError    = touched.phone    && (!phone.trim() ? t("error_phone_required") : !isValidPhone(phone) ? t("error_phone_invalid") : null);
-  const passwordError = touched.password && (password.length === 0 ? t("error_password_required") : password.length < 6 ? t("error_password_min") : null);
+  const nameError =
+    (submitted && nameEmpty)                            ? t("error_name_required") :
+    ((submitted || touched.name) && !nameEmpty && name.trim().length < 2) ? t("error_name_min") :
+    null;
+  const phoneError =
+    (submitted && phoneEmpty)                               ? t("error_phone_required") :
+    ((submitted || touched.phone) && !phoneEmpty && !isValidPhone(phone)) ? t("error_phone_invalid") :
+    null;
+  const passwordError =
+    (submitted && passwordEmpty)                                    ? t("error_password_required") :
+    ((submitted || touched.password) && !passwordEmpty && password.length < 6) ? t("error_password_min") :
+    null;
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    setTouched({ name: true, phone: true, password: true });
+    setSubmitted(true);
     if (!step1Valid) return;
     await sendOtp.mutateAsync(phone.trim());
     countdown.start();

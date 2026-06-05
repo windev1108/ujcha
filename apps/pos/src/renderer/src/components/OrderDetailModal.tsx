@@ -2,7 +2,7 @@ import {
     X, Printer, Tag, CheckCircle2, Loader2, AlertCircle,
     MapPin, CreditCard, Clock, ShoppingBag, Percent,
     Star, Receipt, Box, Circle, Ban, ExternalLink, Phone, User,
-    Bike, UtensilsCrossed, Package, Truck, UserPlus,
+    Bike, UtensilsCrossed, Package, Truck, UserPlus, Users, Crown, XCircle,
 } from 'lucide-react'
 import { Fragment, useState, useEffect } from 'react'
 import { DEFAULT_BILL_CONFIG, DEFAULT_LABEL_CONFIG, type AdminOrder, type OrderStatus } from '../types/common'
@@ -186,7 +186,15 @@ const PAYMENT_TYPE_LABEL: Record<string, string> = {
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
-export function OrderDetailModal({ order, onClose }: { order: AdminOrder; onClose: () => void }) {
+export function OrderDetailModal({
+    order,
+    onClose,
+    onStatusChange,
+}: {
+    order: AdminOrder
+    onClose: () => void
+    onStatusChange?: (id: string, status: OrderStatus) => Promise<void>
+}) {
     const [billCfg, setBillCfg] = useState<BillConfig>(DEFAULT_BILL_CONFIG)
     const [labelCfg, setLabelCfg] = useState<LabelConfig>(DEFAULT_LABEL_CONFIG)
     const [billStatus, setBillStatus] = useState<PrintStatus>('idle')
@@ -197,11 +205,15 @@ export function OrderDetailModal({ order, onClose }: { order: AdminOrder; onClos
     const [assignBusy, setAssignBusy] = useState(false)
     const [assignDone, setAssignDone] = useState(false)
     const [distanceKm, setDistanceKm] = useState<number | null>(null)
+    const [actionBusy, setActionBusy] = useState(false)
+    const [localStatus, setLocalStatus] = useState<OrderStatus>(order.status)
 
     useEffect(() => {
         setBillCfg(loadLocal<BillConfig>(KEYS.bill, DEFAULT_BILL_CONFIG))
         setLabelCfg(loadLocal<LabelConfig>(KEYS.label, DEFAULT_LABEL_CONFIG))
     }, [])
+
+    useEffect(() => { setLocalStatus(order.status) }, [order.status])
 
     useEffect(() => {
         if (order.type !== 'delivery') return
@@ -273,6 +285,17 @@ export function OrderDetailModal({ order, onClose }: { order: AdminOrder; onClos
         }
     }
 
+    const handleModalStatus = async (status: OrderStatus) => {
+        if (!onStatusChange || actionBusy) return
+        setActionBusy(true)
+        try {
+            await onStatusChange(order.id, status)
+            setLocalStatus(status)
+        } catch { /* ignore */ } finally {
+            setActionBusy(false)
+        }
+    }
+
     const orderRef = order.orderRef ?? order.id
     const subtotal = computeSubtotal(order.items)
     const discount = Number(order.discountAmount) || 0
@@ -322,14 +345,22 @@ export function OrderDetailModal({ order, onClose }: { order: AdminOrder; onClos
                 <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3.5 shrink-0">
                     <div className="flex items-center gap-3">
                         <div>
-                            <p className="font-mono text-base font-black text-brand leading-tight">{order.paymentCode ?? orderRef}</p>
+                            <div className="flex items-center gap-2">
+                                <p className="font-mono text-base font-black text-brand leading-tight">{order.paymentCode ?? orderRef}</p>
+                                {order.groupOrder && (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-700 ring-1 ring-violet-200">
+                                        <Users className="size-2.5" />
+                                        Đơn nhóm
+                                    </span>
+                                )}
+                                <PaymentBadge status={order.paymentStatus} />
+                            </div>
                             <div className="flex items-center gap-2 mt-0.5">
                                 <span className="text-xs text-gray-400">{ORDER_TYPE_LABEL[order.type] ?? order.type}</span>
                                 <span className="text-gray-200">·</span>
                                 <span className="text-xs text-gray-400">{formatDate(order.createdAt)}</span>
                             </div>
                         </div>
-                        <PaymentBadge status={order.paymentStatus} />
                     </div>
                     <button onClick={onClose} className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors">
                         <X className="size-5" />
@@ -469,17 +500,21 @@ export function OrderDetailModal({ order, onClose }: { order: AdminOrder; onClos
                         </div>
                     )}
 
-                    {/* Items */}
-                    <div className="rounded-2xl border border-gray-100 overflow-hidden">
-                        <p className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
-                            Món đặt · {totalQty} món
-                        </p>
-                        <div className="divide-y divide-gray-50">
-                            {order.items.map((item) => (
-                                <ItemRow key={item.id} item={item} />
-                            ))}
+                    {/* Items — group order shows per-participant breakdown */}
+                    {order.groupOrder ? (
+                        <GroupOrderItemsSection go={order.groupOrder} totalQty={totalQty} />
+                    ) : (
+                        <div className="rounded-2xl border border-gray-100 overflow-hidden">
+                            <p className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                                Món đặt · {totalQty} món
+                            </p>
+                            <div className="divide-y divide-gray-50">
+                                {order.items.map((item) => (
+                                    <ItemRow key={item.id} item={item} />
+                                ))}
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     {/* Pricing */}
                     <div className="rounded-2xl border border-gray-100 overflow-hidden">
@@ -517,6 +552,38 @@ export function OrderDetailModal({ order, onClose }: { order: AdminOrder; onClos
                     </div>
 
                 </div>
+
+                {/* Status action buttons */}
+                {onStatusChange && (['pending', 'confirmed', 'preparing', 'ready', 'delivering', 'arrived'] as OrderStatus[]).includes(localStatus) && (
+                    <div className="border-t border-gray-100 bg-gray-50/50 px-5 py-3.5 shrink-0">
+                        <p className="mb-2.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                            <Box className="size-3" /> Cập nhật trạng thái
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                            {localStatus === 'pending' && (
+                                <ActionBtn color="blue" icon={<CheckCircle2 className="size-3.5" />} label="Xác nhận" busy={actionBusy} onClick={() => void handleModalStatus('confirmed')} />
+                            )}
+                            {localStatus === 'confirmed' && (
+                                <ActionBtn color="violet" icon={<Clock className="size-3.5" />} label="Bắt đầu làm" busy={actionBusy} onClick={() => void handleModalStatus('preparing')} />
+                            )}
+                            {localStatus === 'preparing' && (
+                                <ActionBtn color="teal" icon={<CheckCircle2 className="size-3.5" />} label="Xong" busy={actionBusy} onClick={() => void handleModalStatus('ready')} />
+                            )}
+                            {localStatus === 'ready' && order.type !== 'delivery' && (
+                                <ActionBtn color="emerald" icon={<CheckCircle2 className="size-3.5" />} label="Hoàn thành" busy={actionBusy} onClick={() => void handleModalStatus('completed')} />
+                            )}
+                            {localStatus === 'ready' && order.type === 'delivery' && (
+                                <ActionBtn color="sky" icon={<Bike className="size-3.5" />} label="Đang giao" busy={actionBusy} onClick={() => void handleModalStatus('delivering')} />
+                            )}
+                            {(localStatus === 'delivering' || localStatus === 'arrived') && (
+                                <ActionBtn color="emerald" icon={<CheckCircle2 className="size-3.5" />} label="Hoàn thành" busy={actionBusy} onClick={() => void handleModalStatus('completed')} />
+                            )}
+                            {(['pending', 'confirmed', 'preparing'] as OrderStatus[]).includes(localStatus) && (
+                                <ActionBtn color="red" icon={<XCircle className="size-3.5" />} label="Huỷ đơn" busy={actionBusy} onClick={() => void handleModalStatus('cancelled')} />
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 {/* Print footer */}
                 <div className="border-t border-gray-100 bg-gray-50/50 px-5 py-3.5 shrink-0">
@@ -580,6 +647,139 @@ function PaymentBadge({ status }: { status: string }) {
         <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 ${s.cls}`}>
             {s.label}
         </span>
+    )
+}
+
+// ─── Group order items ─────────────────────────────────────────────────────────
+
+function GroupOrderItemsSection({
+    go,
+    totalQty,
+}: {
+    go: NonNullable<AdminOrder['groupOrder']>
+    totalQty: number
+}) {
+    const withItems = go.participants.filter((p) => p.items.length > 0)
+    return (
+        <div className="rounded-2xl border border-violet-100 overflow-hidden">
+            <div className="flex items-center gap-2 px-4 pt-3 pb-2 bg-violet-50/60">
+                <Users className="size-3.5 text-violet-500 shrink-0" />
+                <p className="text-[10px] font-bold uppercase tracking-widest text-violet-500">
+                    Đơn nhóm · {withItems.length} thành viên · {totalQty} món
+                </p>
+                <span className="ml-auto text-[10px] font-semibold text-violet-400">
+                    {go.paymentMode === 'split' ? 'Chia tiền' : 'Chủ nhóm trả'}
+                </span>
+            </div>
+            <div className="divide-y divide-gray-50">
+                {withItems.map((p) => {
+                    const memberName = p.user?.name ?? p.guestName ?? 'Khách'
+                    const memberSubtotal = p.items.reduce((s, i) => {
+                        const toppings = Array.isArray(i.toppingsJson)
+                            ? (i.toppingsJson as Array<{ price?: number }>).reduce((ts, t) => ts + Number(t.price ?? 0), 0)
+                            : 0
+                        return s + (Number(i.unitPrice) + toppings) * i.quantity
+                    }, 0)
+                    return (
+                        <div key={p.id}>
+                            {/* Participant header */}
+                            <div className="flex items-center gap-2 px-4 py-2 bg-gray-50/70">
+                                <div className={`flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${p.isHost ? 'bg-amber-100 text-amber-700' : 'bg-gray-200 text-gray-500'}`}>
+                                    {p.isHost ? <Crown className="size-3.5" /> : <User className="size-3" />}
+                                </div>
+                                <span className="flex-1 text-xs font-semibold text-gray-700">{memberName}</span>
+                                {p.isHost && (
+                                    <span className="text-[9px] font-bold uppercase tracking-wide text-amber-600">Chủ nhóm</span>
+                                )}
+                                <span className="text-xs font-semibold text-gray-600 tabular-nums">{fmt(memberSubtotal)}</span>
+                            </div>
+                            {/* Participant items */}
+                            <div className="divide-y divide-gray-50">
+                                {p.items.map((item) => {
+                                    const opts = item.selectedOptions && typeof item.selectedOptions === 'object'
+                                        ? Object.entries(item.selectedOptions as Record<string, string>)
+                                            .filter(([, v]) => v)
+                                            .map(([k, v]) => `${k}: ${v}`)
+                                            .join(' · ')
+                                        : ''
+                                    const toppings = Array.isArray(item.toppingsJson)
+                                        ? (item.toppingsJson as Array<{ name?: string; price?: number }>)
+                                            .filter((t) => t.name)
+                                            .map((t) => t.name!)
+                                            .join(', ')
+                                        : ''
+                                    const toppingSum = Array.isArray(item.toppingsJson)
+                                        ? (item.toppingsJson as Array<{ price?: number }>).reduce((s, t) => s + Number(t.price ?? 0), 0)
+                                        : 0
+                                    const lineTotal = (Number(item.unitPrice) + toppingSum) * item.quantity
+                                    return (
+                                        <div key={item.id} className="flex items-start gap-3 pl-12 pr-4 py-2.5">
+                                            {item.product.imageUrls?.[0] ? (
+                                                <img src={item.product.imageUrls[0]} alt={item.product.name} className="size-9 shrink-0 rounded-lg object-cover ring-1 ring-black/6" />
+                                            ) : (
+                                                <div className="size-9 shrink-0 rounded-lg bg-gray-100 flex items-center justify-center ring-1 ring-black/6">
+                                                    <ShoppingBag className="size-3.5 text-gray-300" />
+                                                </div>
+                                            )}
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <p className="text-xs font-semibold text-gray-800 leading-snug">{item.product.name}</p>
+                                                    <div className="shrink-0 text-right">
+                                                        <p className="text-xs font-semibold text-gray-700 tabular-nums">{fmt(lineTotal)}</p>
+                                                        <span className="text-[10px] font-bold text-gray-400">×{item.quantity}</span>
+                                                    </div>
+                                                </div>
+                                                {(opts || toppings || item.note) && (
+                                                    <div className="mt-1 flex flex-wrap gap-1">
+                                                        {opts && opts.split(' · ').map((o, i) => (
+                                                            <span key={i} className="rounded-full bg-gray-100 px-2 py-px text-[10px] text-gray-500">{o}</span>
+                                                        ))}
+                                                        {toppings && (
+                                                            <span className="rounded-full bg-emerald-50 px-2 py-px text-[10px] text-emerald-700">+{toppings}</span>
+                                                        )}
+                                                        {item.note && (
+                                                            <span className="rounded-full bg-amber-50 px-2 py-px text-[10px] italic text-amber-700">&ldquo;{item.note}&rdquo;</span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    )
+                })}
+            </div>
+        </div>
+    )
+}
+
+// ─── Action button ─────────────────────────────────────────────────────────────
+
+type ActionBtnColor = 'blue' | 'violet' | 'teal' | 'emerald' | 'sky' | 'red'
+
+const ACTION_BTN_CLS: Record<ActionBtnColor, string> = {
+    blue:    'bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200',
+    violet:  'bg-violet-50 text-violet-700 hover:bg-violet-100 border-violet-200',
+    teal:    'bg-teal-50 text-teal-700 hover:bg-teal-100 border-teal-200',
+    emerald: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200',
+    sky:     'bg-sky-50 text-sky-700 hover:bg-sky-100 border-sky-200',
+    red:     'bg-red-50 text-red-600 hover:bg-red-100 border-red-200',
+}
+
+function ActionBtn({ color, icon, label, busy, onClick }: {
+    color: ActionBtnColor; icon: React.ReactNode; label: string; busy: boolean; onClick: () => void
+}) {
+    return (
+        <button
+            onClick={onClick}
+            disabled={busy}
+            className={`flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-bold transition-colors disabled:opacity-50 ${ACTION_BTN_CLS[color]}`}
+        >
+            {busy ? <Loader2 className="size-3.5 animate-spin" /> : icon}
+            {label}
+        </button>
     )
 }
 

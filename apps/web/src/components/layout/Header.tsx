@@ -19,6 +19,7 @@ import { useTranslations } from "next-intl";
 import { useAuth } from "@/hooks";
 import { motion, AnimatePresence } from "motion/react";
 import { useProfileQuery } from "@/services/profile/hooks";
+import { NotificationBell, NotificationToast } from "../common/NotificationDropdown";
 import { useAuthStore } from "@/store/auth-store";
 import { useRouter } from "@/i18n/navigation";
 
@@ -32,16 +33,17 @@ export function AppHeader() {
   const router = useRouter();
 
   const NAV: ReadonlyArray<{ href: string; label: string; Icon: React.ElementType }> = [
-    { href: ROUTES.PRODUCTS,    label: t("menu"),              Icon: UtensilsCrossed },
-    { href: ROUTES.PROMOTIONS,  label: t("promotions"),        Icon: Tag },
-    { href: ROUTES.GROUP_ORDERS,label: t("group_orders"),      Icon: Users },
-    { href: ROUTES.REFERRAL,    label: t("referral_and_earn"), Icon: Share2 },
-    { href: ROUTES.BLOG,        label: t("blog"),              Icon: BookOpen },
-    { href: ROUTES.ABOUT,       label: t("about"),             Icon: Info },
+    { href: ROUTES.PRODUCTS, label: t("menu"), Icon: UtensilsCrossed },
+    { href: ROUTES.PROMOTIONS, label: t("promotions"), Icon: Tag },
+    { href: ROUTES.GROUP_ORDERS, label: t("group_orders"), Icon: Users },
+    { href: ROUTES.REFERRAL, label: t("referral_and_earn"), Icon: Share2 },
+    { href: ROUTES.LOYALTY_PAGE, label: t("loyalty_nav_label"), Icon: Star },
+    { href: ROUTES.BLOG, label: t("blog"), Icon: BookOpen },
+    { href: ROUTES.ABOUT, label: t("about"), Icon: Info },
   ];
 
-  const points  = profile?.pointBalance ?? 0;
-  const name    = user?.name?.trim() || "Tài khoản";
+  const points = profile?.pointBalance ?? 0;
+  const name = user?.name?.trim() || "Tài khoản";
   const initial = name.charAt(0).toUpperCase();
 
   function closeMenu() { setMenuOpen(false); }
@@ -71,11 +73,10 @@ export function AppHeader() {
                 <Link
                   key={href}
                   href={href}
-                  className={`relative flex items-center rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-                    isActive
-                      ? "bg-kun-primary/[0.07] text-kun-primary"
-                      : "text-foreground/60 hover:bg-black/[0.04] hover:text-foreground"
-                  }`}
+                  className={`relative flex items-center rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${isActive
+                    ? "bg-kun-primary/[0.07] text-kun-primary"
+                    : "text-foreground/60 hover:bg-black/[0.04] hover:text-foreground"
+                    }`}
                 >
                   {label}
                 </Link>
@@ -87,23 +88,19 @@ export function AppHeader() {
           <div className="flex items-center gap-1 sm:gap-2">
             <SearchSection />
 
-            {/* Desktop only: lang + bell */}
+            {/* Desktop only: lang */}
             <div className="hidden items-center gap-1.5 md:flex">
               <Suspense fallback={<div className="h-7 w-[58px] shrink-0" aria-hidden />}>
                 <HeaderLanguageSelect />
               </Suspense>
-              {!isHydrated ? (
-                <div className="size-8 shrink-0" aria-hidden />
-              ) : isLoggedIn ? (
-                <Link
-                  href={ROUTES.NOTIFICATIONS}
-                  aria-label="Thông báo"
-                  className="flex size-8 items-center justify-center rounded-full text-foreground/60 transition-colors hover:bg-black/[0.05] hover:text-foreground"
-                >
-                  <Bell className="size-[18px]" />
-                </Link>
-              ) : null}
             </div>
+
+            {/* Bell — desktop, next to cart */}
+            {isLoggedIn &&
+              <div className="hidden md:block">
+                <NotificationBell />
+              </div>
+            }
 
             {/* Cart */}
             {isLoggedIn && <CartSection />}
@@ -120,11 +117,10 @@ export function AppHeader() {
                 type="button"
                 onClick={() => setMenuOpen(true)}
                 aria-label="Mở menu điều hướng"
-                className={`flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full transition-colors ${
-                  isHydrated && isLoggedIn
-                    ? "ring-2 ring-kun-primary/30"
-                    : "bg-surface-secondary text-foreground/70 hover:bg-surface-card"
-                }`}
+                className={`flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full transition-colors ${isHydrated && isLoggedIn
+                  ? "ring-2 ring-kun-primary/30"
+                  : "bg-surface-secondary text-foreground/70 hover:bg-surface-card"
+                  }`}
               >
                 {isHydrated && isLoggedIn ? (
                   user?.avatar ? (
@@ -252,11 +248,10 @@ export function AppHeader() {
                         <Link
                           href={href}
                           onClick={closeMenu}
-                          className={`flex items-center gap-3.5 rounded-2xl px-4 py-3.5 text-[15px] font-semibold transition-colors ${
-                            isActive
-                              ? "bg-kun-primary/[0.08] text-kun-primary"
-                              : "text-foreground hover:bg-surface-soft"
-                          }`}
+                          className={`flex items-center gap-3.5 rounded-2xl px-4 py-3.5 text-[15px] font-semibold transition-colors ${isActive
+                            ? "bg-kun-primary/[0.08] text-kun-primary"
+                            : "text-foreground hover:bg-surface-soft"
+                            }`}
                         >
                           <Icon className={`size-[18px] shrink-0 ${isActive ? "text-kun-primary" : "text-foreground/35"}`} />
                           <span className="flex-1">{label}</span>
@@ -276,10 +271,11 @@ export function AppHeader() {
                     </p>
                     <div className="grid grid-cols-2 gap-2">
                       {[
-                        { href: ROUTES.ORDERS,        label: t("order_history"),       Icon: ShoppingBag },
-                        { href: ROUTES.PROFILE,       label: t("my_account"),          Icon: User },
-                        { href: ROUTES.NOTIFICATIONS, label: "Thông báo",              Icon: Bell },
-                        { href: ROUTES.ADDRESSES,     label: t("shipping_addresses"),  Icon: MapPin },
+                        { href: ROUTES.ORDERS, label: t("order_history"), Icon: ShoppingBag },
+                        { href: ROUTES.PROFILE, label: t("my_account"), Icon: User },
+                        { href: ROUTES.LOYALTY_PAGE, label: t("loyalty_nav_label"), Icon: Star },
+                        { href: ROUTES.NOTIFICATIONS, label: "Thông báo", Icon: Bell },
+                        { href: ROUTES.ADDRESSES, label: t("shipping_addresses"), Icon: MapPin },
                       ].map(({ href, label, Icon: Ic }) => (
                         <Link
                           key={href}
@@ -318,7 +314,7 @@ export function AppHeader() {
                       onClick={closeMenu}
                       className="flex items-center gap-1.5 rounded-full bg-kun-primary px-4 py-1.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
                     >
-                      <LogIn className="size-3.5" />
+                      <User className="size-3.5" />
                       Đăng nhập
                     </Link>
                   )}
@@ -331,6 +327,7 @@ export function AppHeader() {
           </>
         )}
       </AnimatePresence>
+      <NotificationToast />
     </>
   );
 }

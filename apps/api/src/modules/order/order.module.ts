@@ -8,10 +8,11 @@ import { OrderController } from './order.controller';
 import { OrderExpiryCronService } from './order-expiry-cron.service';
 import { OrderPointApplyService } from './order-point-apply.service';
 import { OrderService } from './order.service';
+import { NotificationModule } from '../notification/notification.module';
 import { OrderValidationService } from './order-validation.service';
 
 @Module({
-  imports: [PrismaModule, AuthModule, EventsModule, PointModule, ReferralModule],
+  imports: [PrismaModule, AuthModule, EventsModule, PointModule, ReferralModule, NotificationModule],
   controllers: [OrderController],
   providers: [OrderService, OrderValidationService, OrderPointApplyService, OrderExpiryCronService],
   exports: [OrderService, OrderPointApplyService],

@@ -2,7 +2,7 @@
 
 import type React from "react";
 import { Avatar, Button, Dropdown } from "@heroui/react";
-import { Coins, FileText, LogInIcon, LogOut, MapPin, MessageSquare, Star, StoreIcon, Ticket, User, UserIcon } from "lucide-react";
+import { UserIcon, FileText, LogOut, MapPin, MessageSquare, Star, StoreIcon, Ticket, User } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { useAuth } from "@/hooks";
@@ -32,7 +32,7 @@ export const UserProfile = ({ onNavigate }: { onNavigate?: () => void } = {}) =>
         className="text-foreground"
         onPress={() => { onNavigate?.(); router.push(ROUTES.LOGIN); }}
       >
-        <LogInIcon className="size-5" />
+        <UserIcon className="size-5" />
       </Button>
     );
   }
@@ -108,6 +108,16 @@ export const UserProfile = ({ onNavigate }: { onNavigate?: () => void } = {}) =>
               <div className="flex items-center gap-2.5 py-0.5 text-sm text-foreground">
                 <FileText className="size-4 shrink-0 text-foreground/50" />
                 {t('order_history')}
+              </div>
+            </Dropdown.Item>
+            <Dropdown.Item
+              textValue={t('loyalty_nav_label')}
+              onPress={() => router.push(ROUTES.LOYALTY_PAGE)}
+              className="cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5 py-0.5 text-sm text-foreground">
+                <Star className="size-4 shrink-0 text-foreground/50" />
+                {t('loyalty_nav_label')}
               </div>
             </Dropdown.Item>
             <Dropdown.Item

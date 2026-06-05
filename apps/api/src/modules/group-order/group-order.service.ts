@@ -10,6 +10,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { GroupOrderStatus, OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
 import { OrdersGateway } from '../events/orders.gateway';
+import { NotificationService } from '../notification/notification.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import type {
@@ -33,6 +34,7 @@ export class GroupOrderService {
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
     private readonly ordersGateway: OrdersGateway,
+    private readonly notificationService: NotificationService,
   ) { }
 
   private fullInclude() {
@@ -661,7 +663,86 @@ export class GroupOrderService {
 
     this.ordersGateway.emitOrderCreated({ orderId: order.id, type: order.type });
 
+    void this.notifyGroupOrderCreated(go.participants, order.id, paymentCode).catch((err: unknown) =>
+      this.logger.error(`Group order notification failed: ${err}`),
+    );
+
     return { ...order, discountPercent };
+  }
+
+  private async notifyGroupOrderCreated(
+    participants: Array<{ userId: string | null; items: unknown[] }>,
+    orderId: string,
+    paymentCode: string,
+  ) {
+    const userIds = participants
+      .filter((p) => p.userId != null && p.items.length > 0)
+      .map((p) => p.userId!);
+
+    await Promise.allSettled(
+      userIds.map((userId) =>
+        this.notificationService.createAndEmit({
+          userId,
+          type: 'order',
+          title: 'Đơn nhóm đã được đặt',
+          content: `Đơn nhóm đã được đặt thành công! Mã đơn: #${paymentCode}`,
+          data: { orderId, paymentCode, notifKey: 'group_order_placed' },
+        }),
+      ),
+    );
+  }
+
+  async checkoutSplitCash(token: string, sessionToken: string) {
+    const { go, participant } = await this.resolveParticipant(token, sessionToken);
+
+    if (!participant.isHost) throw new ForbiddenException('Chi chu nhom moi co the dat don.');
+    if (go.status !== GroupOrderStatus.collecting) throw new BadRequestException('Don nhom khong o trang thai thu thap.');
+    if ((go as any).paymentMode !== 'split') throw new BadRequestException('Chi ap dung cho don nhom chia tien.');
+    if ((go as any).paymentType !== null && (go as any).paymentType !== 'cash') {
+      throw new BadRequestException('Chi ap dung cho phuong thuc tien mat.');
+    }
+
+    const goFull = await this.prisma.groupOrder.findUnique({
+      where: { token },
+      include: { participants: { include: { items: true } } },
+    });
+
+    const withItems = goFull!.participants.filter((p: any) => p.items.length > 0);
+    if (withItems.length === 0) throw new BadRequestException('Chua co mon nao duoc chon.');
+
+    // Atomically lock group order + mark all participants as cash/paid
+    await this.prisma.$transaction([
+      this.prisma.groupOrder.update({
+        where: { token },
+        data: { status: GroupOrderStatus.locked },
+      }),
+      ...withItems.map((p: any) =>
+        this.prisma.groupOrderParticipant.update({
+          where: { id: p.id },
+          data: { paymentType: 'cash' as any, paymentStatus: 'paid' as any, paidAt: new Date() },
+        }),
+      ),
+    ]);
+
+    // Re-fetch with updated payment fields for createFinalOrder
+    const goForOrder = await this.prisma.groupOrder.findUnique({
+      where: { token },
+      include: { participants: { include: { items: true } } },
+    });
+
+    // Cash delivery: shipper collects on arrival → paymentStatus = pending on the Order
+    const order = await this.createFinalOrder(goForOrder!, 'cash', false);
+
+    await this.prisma.groupOrder.update({
+      where: { token },
+      data: { status: GroupOrderStatus.completed, orderId: order.id },
+    });
+
+    const updated = await this.prisma.groupOrder.findUnique({
+      where: { token },
+      include: this.fullInclude(),
+    });
+    return { groupOrder: this.serialize(updated!), order };
   }
 
   private async generateOrderPaymentCode(): Promise<string> {

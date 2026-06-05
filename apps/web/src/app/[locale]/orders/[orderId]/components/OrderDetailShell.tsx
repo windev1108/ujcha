@@ -295,6 +295,10 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
     order.paymentStatus === "pending" &&
     !isCancelled;
 
+  const canExportInvoice =
+    order.status === "completed" ||
+    (order.paymentType === "bank_transfer" && order.paymentStatus === "paid");
+
   function handlePrint() {
     printReceipt(toReceiptOrder(order!, locale), locale);
   }
@@ -318,14 +322,16 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
             <ArrowLeft className="size-4" />
             {t("order_history")}
           </button>
-          <button
-            type="button"
-            onClick={handlePrint}
-            className="flex items-center gap-1.5 rounded-full border border-black/10 bg-white px-4 py-2 text-sm font-medium text-foreground/65 shadow-[0_2px_8px_-4px_rgba(0,0,0,0.08)] transition hover:bg-surface-soft hover:text-foreground"
-          >
-            <Printer className="size-3.5" />
-            {t("print_invoice")}
-          </button>
+          {canExportInvoice && (
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="flex items-center gap-1.5 rounded-full border border-black/10 bg-white px-4 py-2 text-sm font-medium text-foreground/65 shadow-[0_2px_8px_-4px_rgba(0,0,0,0.08)] transition hover:bg-surface-soft hover:text-foreground"
+            >
+              <Printer className="size-3.5" />
+              {t("print_invoice")}
+            </button>
+          )}
         </motion.div>
 
         <div className="space-y-4">

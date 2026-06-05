@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { useRouter } from "@/i18n/navigation";
 import { ROUTES } from "@/lib/routes";
@@ -55,6 +55,7 @@ import {
   checkoutHostPays,
   initSplitPayment,
   confirmParticipantPaid,
+  checkoutSplitCash,
   fetchGroupOrderConfig,
   type GroupOrderState,
   type GroupOrderItem,
@@ -906,9 +907,9 @@ function PaymentSheet({
   onClose: () => void;
 }) {
   const t = useTranslations();
-  const opts = [
-    { id: "cash" as const, label: t("cash"), desc: t("group_payment_cash_desc_2"), Icon: Banknote },
-    { id: "bank_transfer" as const, label: t("bank_transfer"), desc: t("group_payment_transfer_desc_2"), Icon: QrCode },
+  const opts: { id: "cash" | "bank_transfer"; labelKey: string; descKey: string; Icon: React.ElementType }[] = [
+    { id: "cash", labelKey: "cash", descKey: "cash_desc", Icon: Banknote },
+    { id: "bank_transfer", labelKey: "bank_transfer", descKey: "bank_transfer_desc", Icon: QrCode },
   ];
 
   return (
@@ -922,46 +923,55 @@ function PaymentSheet({
           onClick={(e) => e.target === e.currentTarget && onClose()}
         >
           <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
+            initial={{ y: "100%", opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: "100%", opacity: 0 }}
             transition={{ type: "spring", damping: 30, stiffness: 350 }}
-            className="w-full rounded-t-3xl bg-white p-5 sm:max-w-sm sm:rounded-3xl"
+            className="w-full rounded-t-3xl bg-white p-5 pb-[max(20px,env(safe-area-inset-bottom))] shadow-xl sm:max-w-md sm:rounded-3xl sm:pb-5"
           >
+            {/* Drag handle — mobile only */}
             <div className="mb-4 flex justify-center sm:hidden">
               <div className="h-1 w-10 rounded-full bg-black/12" />
             </div>
 
-            <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-foreground/40">
-              {t("group_payment_sheet_title")}
+            <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
+              {t("payment")}
             </p>
-            <p className="mb-4 text-xs text-foreground/50">{t("group_payment_for_order")}</p>
+            <p className="mb-5 text-lg font-semibold text-foreground">{t("payment_method")}</p>
 
-            <div className="space-y-2">
-              {opts.map(({ id, label, desc, Icon }) => {
-                const isSelected = current === id;
+            <div className="grid grid-cols-2 gap-3">
+              {opts.map(({ id, labelKey, descKey, Icon }) => {
+                const active = current === id;
                 return (
                   <button
                     key={id}
                     type="button"
                     disabled={loading}
                     onClick={() => onSelect(id)}
-                    className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left transition-all disabled:opacity-50 ${isSelected
-                      ? "bg-[#1a3c34] text-white shadow-sm"
-                      : "bg-[#f7f7f7] text-foreground hover:bg-black/6"
-                      }`}
+                    className={`rounded-3xl border-2 p-4 text-left transition-colors disabled:opacity-60 ${
+                      active
+                        ? "border-kun-products-forest bg-kun-mint/15"
+                        : "border-transparent bg-surface-card ring-1 ring-black/6 hover:ring-black/10"
+                    }`}
                   >
-                    <div className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${isSelected ? "bg-white/15" : "bg-white"}`}>
-                      {loading && isSelected
-                        ? <Loader2 className="size-4 animate-spin" />
-                        : <Icon className="size-4" />
-                      }
+                    <div className="flex items-start gap-3">
+                      {loading && active ? (
+                        <Loader2 className="mt-0.5 size-5 shrink-0 animate-spin text-kun-products-forest" />
+                      ) : (
+                        <Icon
+                          className={`mt-0.5 size-5 shrink-0 ${active ? "text-kun-products-forest" : "text-foreground/50"}`}
+                          strokeWidth={1.5}
+                        />
+                      )}
+                      <div className="min-w-0">
+                        <p className={`text-sm font-semibold ${active ? "text-kun-products-forest" : "text-foreground/80"}`}>
+                          {t(labelKey)}
+                        </p>
+                        <p className="mt-0.5 text-[11px] leading-snug text-foreground/55">
+                          {t(descKey)}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold">{label}</p>
-                      <p className={`text-xs leading-snug ${isSelected ? "text-white/65" : "text-foreground/50"}`}>{desc}</p>
-                    </div>
-                    {isSelected && <CheckCircle2 className="size-4 shrink-0 text-white/80" />}
                   </button>
                 );
               })}
@@ -1253,11 +1263,14 @@ export function GroupOrderPageShell() {
     type: "delivery" | "pickup";
     addressId?: string;
     shippingFee?: number;
+    paymentType: "cash" | "bank_transfer";
   }) => {
     if (!sessionToken) throw new Error("Chưa đăng nhập.");
     const newState = await setGroupOrderFulfillment(token, sessionToken, {
-      ...payload,
-      paymentType: state?.paymentType ?? "cash",
+      type: payload.type,
+      addressId: payload.addressId,
+      shippingFee: payload.shippingFee,
+      paymentType: payload.paymentType,
     });
     setState(newState);
     setShowFulfillment(false);
@@ -1419,15 +1432,34 @@ export function GroupOrderPageShell() {
             )}
 
             {state.status === "collecting" && isHost && (
-              <Button
-                size="sm"
-                className="gap-1.5 rounded-full bg-[#1a3c34] px-4 font-semibold text-white"
-                isDisabled={actionLoading || state.participants.length < 2}
-                onPress={() => void withAction(() => lockGroupOrder(token, sessionToken!))}
-              >
-                <Lock className="size-3.5" />
-                {t("group_lock")}
-              </Button>
+              (() => {
+                const isSplitCashReady =
+                  state.paymentMode === "split" &&
+                  state.paymentType === "cash" &&
+                  allReady &&
+                  !(state.type === "delivery" && !state.address);
+                return isSplitCashReady ? (
+                  <Button
+                    size="sm"
+                    className="gap-1.5 rounded-full bg-[#1a3c34] px-4 font-semibold text-white"
+                    isDisabled={actionLoading}
+                    onPress={() => void withAction(() => checkoutSplitCash(token, sessionToken!))}
+                  >
+                    <ShoppingBag className="size-3.5" />
+                    {t("group_place_order_btn")}
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    className="gap-1.5 rounded-full bg-[#1a3c34] px-4 font-semibold text-white"
+                    isDisabled={actionLoading || state.participants.length < 2}
+                    onPress={() => void withAction(() => lockGroupOrder(token, sessionToken!))}
+                  >
+                    <Lock className="size-3.5" />
+                    {t("group_lock")}
+                  </Button>
+                );
+              })()
             )}
           </div>
         </motion.div>

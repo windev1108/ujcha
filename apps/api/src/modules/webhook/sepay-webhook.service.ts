@@ -5,6 +5,7 @@ import { GroupOrderGateway } from '../group-order/group-order.gateway';
 import { GroupOrderService } from '../group-order/group-order.service';
 import { PointService } from '../point/point.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationService } from '../notification/notification.service';
 import type { SepayWebhookPayloadDto } from './dto/sepay-webhook-payload.dto';
 
 @Injectable()
@@ -17,6 +18,7 @@ export class SepayWebhookService {
     private readonly ordersGateway: OrdersGateway,
     private readonly groupOrderService: GroupOrderService,
     private readonly groupOrderGateway: GroupOrderGateway,
+    private readonly notificationService: NotificationService,
   ) { }
 
   async handle(
@@ -173,6 +175,17 @@ export class SepayWebhookService {
         transferAmount: payload.transferAmount,
         transactionId: String(payload.id),
       });
+
+      if (matched.userId) {
+        void this.notificationService.createAndEmit({
+          userId: matched.userId,
+          type: 'payment',
+          title: 'Thanh toán thành công',
+          content: `Đơn #${matched.paymentCode} đã được thanh toán.`,
+          data: { orderId: matched.id, paymentCode: matched.paymentCode, notifKey: 'payment_success' },
+        }).catch(() => null);
+      }
+
       return { success: true, message: 'Order marked as paid' };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);

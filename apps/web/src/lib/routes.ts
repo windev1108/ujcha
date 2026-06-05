@@ -24,6 +24,7 @@ export const ROUTES = {
   VOUCHERS: "/vouchers",
   REFERRAL: "/referral",
   ABOUT: "/about",
+  LOYALTY_PAGE: "/loyalty",
   LOYALTY: (code: string) => `/loyalty?code=${encodeURIComponent(code)}`,
   REWARDS: "/rewards",
   GROUP_ORDERS: "/group-order",

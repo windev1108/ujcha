@@ -6,10 +6,8 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
-  ExternalLink,
   Loader2,
   MonitorDot,
-  Puzzle,
   Settings2,
   Tag,
   UtensilsCrossed,
@@ -19,7 +17,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createAdminCategory } from "@/services/admin/categories-api";
 import {
   fetchGrabMenu,
-  pollGrabAuthRelay,
   pollGrabWebLogin,
   startGrabWebLogin,
 } from "@/services/admin/grab-api";
@@ -228,9 +225,6 @@ function normalizeGrabMenu(raw: unknown): GrabMenuData {
   return { categories, modifierGroups };
 }
 
-const GRAB_LOGIN_URL =
-  "https://weblogin.grab.com/merchant/login?service_id=MEXUSERS&redirect=https%3A%2F%2Fmerchant.grab.com%2Fportal";
-
 // ─── Step machine ─────────────────────────────────────────────────────────────
 
 type Step = "login" | "preview" | "importing" | "done";
@@ -253,12 +247,6 @@ interface ImportStatus {
 
 export function GrabImportDialog({ isOpen, onOpenChange, categories, onImported }: Props) {
   const isLocalDev = typeof window !== "undefined" && window.location.hostname === "localhost";
-  const relayUrl   = typeof window !== "undefined"
-    ? `${window.location.origin}/api/grab/auth-relay`
-    : "/api/grab/auth-relay";
-  const extensionUrl = typeof window !== "undefined"
-    ? `${window.location.origin}/grab-extension`
-    : "/grab-extension";
 
   const [step, setStep]             = useState<Step>("login");
   const [starting, setStarting]     = useState(false);
@@ -296,43 +284,6 @@ export function GrabImportDialog({ isOpen, onOpenChange, categories, onImported 
   // ── Auth ─────────────────────────────────────────────────────────────────
   const handleStartLogin = async () => {
     setStarting(true); setLoginError(null);
-
-    // Cloud (Vercel): open small centered popup + wait for postMessage from extension
-    if (!isLocalDev) {
-      const w = 520, h = 700;
-      const left = Math.round(window.screenX + (window.outerWidth  - w) / 2);
-      const top  = Math.round(window.screenY + (window.outerHeight - h) / 2);
-      // Pass relay URL via window.name as fallback (for when window.opener is unavailable)
-      window.open(
-        GRAB_LOGIN_URL,
-        relayUrl,
-        `width=${w},height=${h},left=${left},top=${top},toolbar=no,menubar=no,scrollbars=yes`,
-      );
-
-      // Primary: postMessage from bookmarklet running on grab.com
-      const handleMsg = (e: MessageEvent) => {
-        if (e.data?.type !== "grab-session") return;
-        if (typeof e.data.cookie !== "string" || !e.data.cookie) return;
-        window.removeEventListener("message", handleMsg);
-        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-        void loadMenu(e.data.cookie as string);
-      };
-      window.addEventListener("message", handleMsg);
-
-      // Fallback: poll auth-relay (user ran console script instead of bookmarklet)
-      pollRef.current = setInterval(async () => {
-        try {
-          const r = await pollGrabAuthRelay();
-          if (!r.ok) return;
-          window.removeEventListener("message", handleMsg);
-          if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-          if (r.cookie) void loadMenu(r.cookie);
-        } catch { /* blip */ }
-      }, 1500);
-      return;
-    }
-
-    // Local dev: puppeteer opens Chrome window
     try {
       const { sessionId } = await startGrabWebLogin();
       pollRef.current = setInterval(async () => {
@@ -623,29 +574,13 @@ export function GrabImportDialog({ isOpen, onOpenChange, categories, onImported 
                   <div className="flex items-start gap-3 rounded-2xl bg-[#f0f7f4] p-5">
                     <MonitorDot className="mt-0.5 size-5 shrink-0 text-[#1a3c34]" />
                     <p className="text-sm text-foreground/70">
-                      Một cửa sổ Chrome sẽ mở ra. Đăng nhập tài khoản GrabFood merchant, rồi bấm nút xanh{" "}
-                      <strong className="text-[#00b14f]">"Xác nhận đã đăng nhập — Lấy session"</strong>.
+                      {isLocalDev ? (
+                        <>Một cửa sổ Chrome sẽ mở ra. Đăng nhập tài khoản GrabFood merchant, rồi bấm nút xanh{" "}<strong className="text-[#00b14f]">"Xác nhận đã đăng nhập — Lấy session"</strong>.</>
+                      ) : (
+                        <>Tính năng này chỉ khả dụng khi chạy web-admin ở local. Hãy mở <code className="rounded bg-black/8 px-1 font-mono text-xs">http://localhost:3001</code> để sử dụng.</>
+                      )}
                     </p>
                   </div>
-
-                  {/* Extension notice — only on cloud */}
-                  {!isLocalDev && (
-                    <div className="flex items-start gap-3 rounded-2xl border border-[#1a3c34]/15 bg-white p-4">
-                      <Puzzle className="mt-0.5 size-4 shrink-0 text-[#1a3c34]" />
-                      <div className="text-sm">
-                        <p className="font-semibold text-foreground">Cần cài Extension Chrome (1 lần duy nhất)</p>
-                        <p className="mt-0.5 text-xs text-foreground/55">
-                          Extension tự động inject nút xanh vào trang GrabFood — không cần thao tác thêm.
-                        </p>
-                        <ol className="mt-2 space-y-1 text-xs text-foreground/70">
-                          <li>1. <a href={extensionUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-[#1a3c34] underline-offset-2 hover:underline inline-flex items-center gap-0.5">Tải thư mục extension <ExternalLink className="size-2.5" /></a></li>
-                          <li>2. Mở <code className="rounded bg-black/6 px-1">chrome://extensions</code> → bật <strong>Developer mode</strong></li>
-                          <li>3. Bấm <strong>Load unpacked</strong> → chọn thư mục vừa tải</li>
-                        </ol>
-                      </div>
-                    </div>
-                  )}
-
                   {(loginError ?? fetchError) && (
                     <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                       <AlertCircle className="mt-0.5 size-4 shrink-0" />
@@ -1082,9 +1017,11 @@ export function GrabImportDialog({ isOpen, onOpenChange, categories, onImported 
               {step === "login" && !starting && (
                 <>
                   <Button variant="ghost" onPress={() => onOpenChange(false)} className="rounded-full">Hủy</Button>
-                  <Button onPress={() => void handleStartLogin()} className="rounded-full bg-[#1a3c34] font-semibold text-white">
-                    Mở cửa sổ đăng nhập GrabFood →
-                  </Button>
+                  {isLocalDev && (
+                    <Button onPress={() => void handleStartLogin()} className="rounded-full bg-[#1a3c34] font-semibold text-white">
+                      Mở cửa sổ đăng nhập GrabFood →
+                    </Button>
+                  )}
                 </>
               )}
               {step === "login" && starting && (

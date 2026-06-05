@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { OrderStatus, OrderType } from '@prisma/client';
+import { OrderStatus, OrderType, PaymentStatus, PaymentType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrdersGateway } from '../events/orders.gateway';
 import { PointOrderRewardService } from '../point/point-order-reward.service';
@@ -211,7 +211,13 @@ export class ShipperService {
 
     const updated = await this.prisma.order.update({
       where: { id: orderId },
-      data: { status: OrderStatus.completed, completedAt: new Date() },
+      data: {
+        status: OrderStatus.completed,
+        completedAt: new Date(),
+        ...(order.paymentType === PaymentType.cash && {
+          paymentStatus: PaymentStatus.paid,
+        }),
+      },
     });
 
     this.ordersGateway.emitOrderStatusUpdated({ orderId, status: OrderStatus.completed });
@@ -227,7 +233,7 @@ export class ShipperService {
   private async assertShipperOwnsOrder(shipperId: string, orderId: string) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
-      select: { id: true, shipperId: true, status: true, type: true },
+      select: { id: true, shipperId: true, status: true, type: true, paymentType: true },
     });
 
     if (!order) {

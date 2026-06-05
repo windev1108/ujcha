@@ -23,10 +23,17 @@ export interface CreatedAddress {
   fullAddress: string
 }
 
+export interface InlineAddressPayload {
+  fullAddress: string
+  lat: number
+  lng: number
+}
+
 export interface CreateOrderPayload {
   type: 'delivery' | 'pickup' | 'table'
   paymentType: 'cash' | 'bank_transfer'
   addressId?: string
+  inlineAddress?: InlineAddressPayload
   pickupTime?: string
   tableId?: string
   items: CreateOrderItem[]

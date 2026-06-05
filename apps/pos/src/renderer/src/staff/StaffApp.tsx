@@ -2,8 +2,8 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { ClipboardList, Settings, Monitor, LogOut, Bell, Bot } from 'lucide-react'
 import { io } from 'socket.io-client'
 import { usePosStore } from '../store/pos-store'
-import { fetchCategories, fetchProducts, fetchTables, fetchPaymentConfig, API_URL, fetchTtsConfig } from '../api'
-import type { Product, PosConfig, CustomerUpdate } from '../types/common'
+import { fetchCategories, fetchProducts, fetchTables, fetchPaymentConfig, API_URL, fetchTtsConfig, fetchOrders } from '../api'
+import type { Product, PosConfig, CustomerUpdate, AdminOrder } from '../types/common'
 import { DEFAULT_CONFIG, DEFAULT_BILL_CONFIG, DEFAULT_LABEL_CONFIG } from '../types/common'
 import type { BillConfig, LabelConfig } from '../../../preload'
 import { KEYS, loadLocal } from '../lib/local-storage'
@@ -113,11 +113,14 @@ export function StaffApp() {
     startAlert(url)
   }
 
-  // New-order handler ref: play alert only when the orders modal is not open
+  // New-order handler ref: badge + audio only when the orders modal is closed
+  // (when modal is open, OrdersModal's own socket drives audio via its queue)
   const newOrderHandlerRef = useRef<() => void>(() => { })
   newOrderHandlerRef.current = () => {
-    setNewOrderBadge((n) => n + 1)
-    if (!ordersOpen) startAlert(newOrderMp3)
+    if (!ordersOpen) {
+      setNewOrderBadge((n) => n + 1)
+      startAlert(newOrderMp3)
+    }
   }
 
   // ── Boot: restore saved session ─────────────────────────────────────────────
@@ -192,8 +195,10 @@ export function StaffApp() {
     if (!isLoggedIn) return
     const load = async () => {
       setIsFetching(true)
-      const [cats, prods, tabs, pay, tts] = await Promise.allSettled([
-        fetchCategories(), fetchProducts(), fetchTables(), fetchPaymentConfig(), fetchTtsConfig()
+      const today = new Date().toISOString().slice(0, 10)
+      const [cats, prods, tabs, pay, tts, initOrders] = await Promise.allSettled([
+        fetchCategories(), fetchProducts(), fetchTables(), fetchPaymentConfig(), fetchTtsConfig(),
+        fetchOrders(1, 200, today, today),
       ])
       if (cats.status === 'fulfilled') setCategories(cats.value)
       if (prods.status === 'fulfilled') {
@@ -205,8 +210,12 @@ export function StaffApp() {
       if (tts.status === 'fulfilled') {
         const fresh = usePosStore.getState().posConfig
         setPosConfig({ ...fresh, ttsConfig: { ...tts.value, token: '' } })
-        // Push config to main process so tts:speak always uses the latest values
         void eAPI?.tts?.setConfig(tts.value as unknown as Record<string, unknown>)
+      }
+      if (initOrders.status === 'fulfilled') {
+        const items = (initOrders.value as { items: AdminOrder[] }).items ?? []
+        const pending = items.filter(o => o.status === 'pending').length
+        if (pending > 0) setNewOrderBadge(pending)
       }
     }
     void load()

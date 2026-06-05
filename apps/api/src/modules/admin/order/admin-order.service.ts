@@ -9,6 +9,7 @@ import {
   OrderType,
   PaymentStatus,
   PointSource,
+  PointTransactionType,
   Prisma,
 } from '@prisma/client';
 import { PointOrderRewardService } from '../../point/point-order-reward.service';
@@ -17,6 +18,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ReferralRewardProcessingService } from '../../referral/referral-reward-processing.service';
 import { OrderService } from '../../order/order.service';
 import { OrdersGateway } from '../../events/orders.gateway';
+import { NotificationService } from '../../notification/notification.service';
 import type { UpdateOrderStatusDto } from '../../order/dto/update-order-status.dto';
 import type { AdminCreateOrderDto } from './dto/admin-create-order.dto';
 import type { AdminOrderMetricsQueryDto } from './dto/admin-order-metrics-query.dto';
@@ -60,11 +62,73 @@ const adminOrderInclude = {
       },
     },
   },
+  groupOrder: {
+    select: {
+      id: true,
+      token: true,
+      paymentMode: true,
+      participants: {
+        orderBy: { joinedAt: 'asc' as const },
+        select: {
+          id: true,
+          userId: true,
+          guestName: true,
+          isHost: true,
+          user: { select: { id: true, name: true } },
+          items: {
+            select: {
+              id: true,
+              productId: true,
+              quantity: true,
+              unitPrice: true,
+              selectedOptions: true,
+              toppingsJson: true,
+              note: true,
+              product: { select: { id: true, name: true, imageUrls: true } },
+            },
+          },
+        },
+      },
+    },
+  },
 } satisfies Prisma.OrderInclude;
 
 export type AdminOrderPayload = Prisma.OrderGetPayload<{
   include: typeof adminOrderInclude;
 }>;
+
+const STATUS_NOTIF: Partial<Record<OrderStatus, (code: string) => { title: string; content: string; notifKey: string }>> = {
+  [OrderStatus.confirmed]: (code) => ({
+    title: 'Đơn hàng đã được xác nhận',
+    content: `Đơn #${code} đã xác nhận và đang được chuẩn bị.`,
+    notifKey: 'order_confirmed',
+  }),
+  [OrderStatus.preparing]: (code) => ({
+    title: 'Đơn đang được pha chế',
+    content: `Đơn #${code} đang được pha chế, vui lòng chờ một chút!`,
+    notifKey: 'order_preparing',
+  }),
+  [OrderStatus.ready]: (code) => ({
+    title: 'Đơn hàng đã sẵn sàng',
+    content: `Đơn #${code} đã sẵn sàng. Đến lấy hoặc chờ giao nhé!`,
+    notifKey: 'order_ready',
+  }),
+  [OrderStatus.delivering]: (code) => ({
+    title: 'Đơn đang trên đường giao',
+    content: `Đơn #${code} đang trên đường đến bạn.`,
+    notifKey: 'order_delivering',
+  }),
+  [OrderStatus.arrived]: (code) => ({
+    title: 'Shipper đã đến nơi',
+    content: `Đơn #${code} đã đến địa chỉ giao hàng.`,
+    notifKey: 'order_arrived',
+  }),
+  [OrderStatus.cancelled]: (code) => ({
+    title: 'Đơn hàng đã bị hủy',
+    content: `Đơn #${code} đã bị hủy.`,
+    notifKey: 'order_cancelled',
+  }),
+};
 
 @Injectable()
 export class AdminOrderService {
@@ -77,6 +141,7 @@ export class AdminOrderService {
     private readonly pointService: PointService,
     private readonly referralRewardProcessing: ReferralRewardProcessingService,
     private readonly ordersGateway: OrdersGateway,
+    private readonly notificationService: NotificationService,
   ) { }
 
   async findAll(query: AdminOrderListQueryDto) {
@@ -339,11 +404,16 @@ export class AdminOrderService {
       });
 
       if (shouldRewardPoints) {
-        void this.pointOrderReward
-          .tryRewardOrderCompletion(updated.id)
-          .catch((err: unknown) => {
-            this.logger.error(err);
-          });
+        this.fireOrderCompletionSideEffects(updated.id, existing.userId, updated.paymentCode);
+      } else if (dto.status !== undefined && existing.userId) {
+        const nFn = STATUS_NOTIF[dto.status];
+        if (nFn) {
+          const { title, content, notifKey } = nFn(updated.paymentCode);
+          void this.notificationService.upsertOrderNotification({
+            userId: existing.userId, type: 'order', title, content,
+            data: { orderId: updated.id, paymentCode: updated.paymentCode, notifKey },
+          }).catch(() => null);
+        }
       }
 
       if (dto.status !== undefined) {
@@ -382,7 +452,16 @@ export class AdminOrderService {
     });
 
     if (shouldRewardPoints) {
-      this.fireOrderCompletionSideEffects(updated.id);
+      this.fireOrderCompletionSideEffects(updated.id, existing.userId, updated.paymentCode);
+    } else if (dto.status !== undefined && existing.userId) {
+      const nFn = STATUS_NOTIF[dto.status];
+      if (nFn) {
+        const { title, content, notifKey } = nFn(updated.paymentCode);
+        void this.notificationService.createAndEmit({
+          userId: existing.userId, type: 'order', title, content,
+          data: { orderId: updated.id, paymentCode: updated.paymentCode, notifKey },
+        }).catch(() => null);
+      }
     }
 
     if (dto.status !== undefined) {
@@ -432,17 +511,38 @@ export class AdminOrderService {
     return this.withTypeDisplay(updated);
   }
 
-  private fireOrderCompletionSideEffects(orderId: string) {
-    void this.pointOrderReward
-      .tryRewardOrderCompletion(orderId)
-      .catch((err: unknown) => {
-        this.logger.error(err);
-      });
+  private fireOrderCompletionSideEffects(orderId: string, userId?: string | null, paymentCode?: string) {
     void this.referralRewardProcessing
       .tryProcessReferralOnOrderCompleted(orderId)
-      .catch((err: unknown) => {
-        this.logger.error(err);
-      });
+      .catch((err: unknown) => { this.logger.error(err); });
+    void this.rewardAndNotifyCompletion(orderId, userId ?? null, paymentCode ?? '')
+      .catch((err: unknown) => { this.logger.error(err); });
+  }
+
+  private async rewardAndNotifyCompletion(orderId: string, userId: string | null, paymentCode: string) {
+    try {
+      await this.pointOrderReward.tryRewardOrderCompletion(orderId);
+    } catch (err) {
+      this.logger.error(err);
+    }
+    if (!userId) return;
+
+    const earnedTxn = await this.prisma.pointTransaction.findFirst({
+      where: { userId, source: PointSource.order, referenceId: orderId, type: PointTransactionType.earn },
+      select: { amount: true },
+    }).catch(() => null);
+
+    const points = earnedTxn ? Math.round(Number(earnedTxn.amount) * 10) / 10 : 0;
+
+    await this.notificationService.createAndEmit({
+      userId,
+      type: 'order',
+      title: 'Đơn hàng hoàn thành',
+      content: points > 0
+        ? `Đơn #${paymentCode} hoàn thành. Bạn tích được ${points} điểm!`
+        : `Đơn #${paymentCode} hoàn thành. Cảm ơn bạn đã sử dụng UjCha!`,
+      data: { orderId, paymentCode, earnedPoints: points, notifKey: 'order_completed' },
+    });
   }
 
   async bulkUpdateStatus(dto: BulkUpdateOrderStatusDto) {
@@ -459,14 +559,28 @@ export class AdminOrderService {
       data: { status: dto.status, ...bulkTs },
     });
 
-    if (dto.status === OrderStatus.completed) {
-      for (const id of dto.orderIds) {
-        this.fireOrderCompletionSideEffects(id);
-      }
-    }
-
     for (const id of dto.orderIds) {
       this.ordersGateway.emitOrderStatusUpdated({ orderId: id, status: dto.status });
+    }
+
+    const bulkOrders = await this.prisma.order.findMany({
+      where: { id: { in: dto.orderIds } },
+      select: { id: true, userId: true, paymentCode: true },
+    });
+
+    for (const o of bulkOrders) {
+      if (dto.status === OrderStatus.completed) {
+        this.fireOrderCompletionSideEffects(o.id, o.userId, o.paymentCode);
+      } else if (o.userId) {
+        const nFn = STATUS_NOTIF[dto.status];
+        if (nFn) {
+          const { title, content, notifKey } = nFn(o.paymentCode);
+          void this.notificationService.createAndEmit({
+            userId: o.userId, type: 'order', title, content,
+            data: { orderId: o.id, paymentCode: o.paymentCode, notifKey },
+          }).catch(() => null);
+        }
+      }
     }
 
     return { updated: updated.count };

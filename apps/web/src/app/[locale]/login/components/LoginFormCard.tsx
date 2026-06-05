@@ -25,25 +25,25 @@ export function LoginFormCard() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
-  const [touched, setTouched] = useState({ phone: false, password: false });
+  const [phoneTouched, setPhoneTouched] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const login = useLoginMutation();
 
-  const touch = (field: keyof typeof touched) =>
-    setTouched((prev) => ({ ...prev, [field]: true }));
-
-  const phoneDigits = phone.replace(/\D/g, "");
   const phoneEmpty    = !phone.trim();
   const phoneInvalid  = !phoneEmpty && !isValidPhone(phone);
   const passwordEmpty = !password;
 
-  const phoneError    = touched.phone    && (phoneEmpty ? t("error_phone_required")    : phoneInvalid ? t("error_phone_invalid") : null);
-  const passwordError = touched.password && (passwordEmpty ? t("error_password_required") : null);
+  const phoneError =
+    (submitted && phoneEmpty) ? t("error_phone_required") :
+    (phoneTouched && phoneInvalid) ? t("error_phone_invalid") :
+    null;
+  const passwordError = submitted && passwordEmpty ? t("error_password_required") : null;
 
   const canSubmit = !phoneEmpty && isValidPhone(phone) && !passwordEmpty;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setTouched({ phone: true, password: true });
+    setSubmitted(true);
     if (!canSubmit) return;
     login.mutate({ phone: phone.trim(), password });
   };
@@ -75,7 +75,7 @@ export function LoginFormCard() {
               placeholder="0912 345 678"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              onBlur={() => touch("phone")}
+              onBlur={() => setPhoneTouched(true)}
               autoComplete="tel"
               autoFocus
               aria-invalid={!!phoneError}
@@ -115,7 +115,7 @@ export function LoginFormCard() {
               placeholder={t("password_placeholder")}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              onBlur={() => touch("password")}
+              onBlur={undefined}
               autoComplete="current-password"
               aria-invalid={!!passwordError}
               aria-describedby={passwordError ? "password-error" : undefined}

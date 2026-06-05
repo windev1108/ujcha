@@ -29,6 +29,19 @@ const MapLocationPicker = dynamic(
   { ssr: false },
 );
 
+async function reverseGeocode(lat: number, lng: number): Promise<string> {
+  try {
+    const resp = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=vi`,
+      { headers: { "User-Agent": "KunRituals/1.0" } },
+    );
+    const data = (await resp.json()) as { display_name?: string };
+    return data.display_name ?? "";
+  } catch {
+    return "";
+  }
+}
+
 // Native <input> style — focus:ring works correctly here (no HeroUI wrapper)
 const inputCls =
   "min-h-12 w-full rounded-xl border-0 bg-kun-filter-pill-bg px-4 text-sm text-foreground outline-none ring-1 ring-black/6 transition-shadow focus:ring-2 focus:ring-kun-products-forest/40 placeholder:text-foreground/35 disabled:opacity-50";
@@ -250,9 +263,12 @@ function DeliveryFulfillmentCard({
     setGeoLoading(true);
     setGeoError(null);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
+      async (pos) => {
+        const { latitude: lat, longitude: lng } = pos.coords;
+        onChange({ lat, lng });
+        const address = await reverseGeocode(lat, lng);
         setGeoLoading(false);
-        onChange({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        if (address) onChange({ fullAddress: address });
       },
       () => {
         setGeoLoading(false);
@@ -506,7 +522,7 @@ function TableOrderCard({
   tableArea?: string | null;
 }) {
   const t = useTranslations();
-  const area = (tableArea ?? "").trim() || "Tầng 1";
+  const area = (tableArea ?? "").trim() || t("default_area");
   return (
     <SectionCard>
       <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
@@ -689,7 +705,7 @@ function PickupDetailsCard({
               </div>
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-foreground/70">
-                  Số điện thoại *
+                  {t("phone_number")} *
                 </label>
                 <input
                   type="tel"

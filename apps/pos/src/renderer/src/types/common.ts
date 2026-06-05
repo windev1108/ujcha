@@ -284,6 +284,29 @@ export interface AdminOrder {
 
   items: AdminOrderItem[]
 
+  groupOrder: {
+    id: string
+    token: string
+    paymentMode: 'host_pays' | 'split'
+    participants: Array<{
+      id: string
+      userId: string | null
+      guestName: string | null
+      isHost: boolean
+      user: { id: string; name: string } | null
+      items: Array<{
+        id: string
+        productId: string
+        quantity: number
+        unitPrice: string
+        selectedOptions: Record<string, string>
+        toppingsJson: unknown[]
+        note: string | null
+        product: { id: string; name: string; imageUrls: string[] }
+      }>
+    }>
+  } | null
+
   /** Helper từ server, dùng để display */
   typeDisplay?: TypeDisplay
 }

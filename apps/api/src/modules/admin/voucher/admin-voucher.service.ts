@@ -1,10 +1,12 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, VoucherDiscountType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationService } from '../../notification/notification.service';
 import { assertVoucherRules } from './voucher-rule.validation';
 import type { CreateVoucherDto } from './dto/create-voucher.dto';
 import type { UpdateVoucherDto } from './dto/update-voucher.dto';
@@ -13,9 +15,18 @@ function normalizeCode(code: string): string {
   return code.trim().toUpperCase();
 }
 
+function fmt(n: number): string {
+  return new Intl.NumberFormat('vi-VN').format(n);
+}
+
 @Injectable()
 export class AdminVoucherService {
-  constructor(private readonly prisma: PrismaService) { }
+  private readonly logger = new Logger(AdminVoucherService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationService: NotificationService,
+  ) { }
 
   validateRulePayload(dto: CreateVoucherDto) {
     const startsAt = dto.startsAt ? new Date(dto.startsAt) : null;
@@ -154,7 +165,7 @@ export class AdminVoucherService {
       });
     }
 
-    return this.prisma.voucher.create({
+    const voucher = await this.prisma.voucher.create({
       data: {
         code,
         name: dto.name.trim(),
@@ -172,6 +183,39 @@ export class AdminVoucherService {
         isActive: dto.isActive ?? true,
         isWelcome: dto.isWelcome ?? false,
       },
+    });
+
+    if (voucher.isActive) {
+      void this.notifyVoucher(voucher).catch((err) => this.logger.error(err));
+    }
+
+    return voucher;
+  }
+
+  private async notifyVoucher(voucher: {
+    code: string;
+    name: string;
+    discountType: VoucherDiscountType;
+    discountValue: Prisma.Decimal;
+    minOrderAmount: Prisma.Decimal;
+    maxDiscountAmount: Prisma.Decimal | null;
+  }) {
+    const val = Number(voucher.discountValue);
+    const min = Number(voucher.minOrderAmount);
+    const max = voucher.maxDiscountAmount ? Number(voucher.maxDiscountAmount) : null;
+
+    const discountStr =
+      voucher.discountType === VoucherDiscountType.percent
+        ? `Giảm ${val}%${max ? ` (tối đa ${fmt(max)}đ)` : ''}`
+        : `Giảm ${fmt(val)}đ`;
+
+    const minStr = min > 0 ? ` khi đặt từ ${fmt(min)}đ` : '';
+
+    await this.notificationService.createAndBroadcastToAll({
+      type: 'promotion',
+      title: `Ưu đãi mới: ${voucher.name}`,
+      content: `${discountStr}${minStr}. Dùng mã ${voucher.code}!`,
+      data: { code: voucher.code },
     });
   }
 

@@ -17,6 +17,21 @@ import {
 import { OrderType, PaymentType } from '@prisma/client';
 import { CreateOrderItemDto } from './create-order-item.dto';
 
+export class InlineAddressDto {
+  @ApiProperty({ description: 'Địa chỉ đầy đủ' })
+  @IsString()
+  @MaxLength(2000)
+  fullAddress!: string;
+
+  @ApiProperty()
+  @IsNumber({ maxDecimalPlaces: 6 })
+  lat!: number;
+
+  @ApiProperty()
+  @IsNumber({ maxDecimalPlaces: 6 })
+  lng!: number;
+}
+
 export class CreateOrderDto {
   @ApiProperty({ enum: OrderType })
   @IsEnum(OrderType)
@@ -37,6 +52,14 @@ export class CreateOrderDto {
   @IsOptional()
   @IsUUID('4')
   addressId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Địa chỉ mới (inline) — tự động lưu nếu user < 3 địa chỉ. Không dùng cùng lúc với addressId.',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => InlineAddressDto)
+  inlineAddress?: InlineAddressDto;
 
   @ApiPropertyOptional({
     description:

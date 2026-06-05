@@ -69,8 +69,8 @@ export const fetchOrders = (page = 1, pageSize = 100, from?: string, to?: string
 export const createOrder = (body: unknown) =>
   api.post<import('./types/common').AdminOrder>('/admin/orders', body).then((r) => r.data)
 
-export const updateOrderStatus = (id: string, status: string) =>
-  api.patch(`/admin/orders/${id}/status`, { status }).then((r) => r.data)
+export const updateOrderStatus = (id: string, status: string, paymentStatus?: string) =>
+  api.patch(`/admin/orders/${id}/status`, { status, ...(paymentStatus ? { paymentStatus } : {}) }).then((r) => r.data)
 
 export const bulkUpdateOrderStatus = (orderIds: string[], status: string) =>
   api.patch<{ updated: number }>('/admin/orders/bulk-status', { orderIds, status }).then((r) => r.data)

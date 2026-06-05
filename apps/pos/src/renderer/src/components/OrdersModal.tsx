@@ -328,9 +328,14 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
 
   const handleStatus = async (id: string, status: OrderStatus) => {
     setBusyIds(prev => new Set(prev).add(id))
+    const order = orders.find(o => o.id === id)
+    const autoPayment = status === 'completed' && order?.type === 'table' && order?.paymentStatus !== 'paid'
+      ? 'paid' : undefined
     try {
-      await updateOrderStatus(id, status)
-      setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o))
+      await updateOrderStatus(id, status, autoPayment)
+      setOrders(prev => prev.map(o =>
+        o.id === id ? { ...o, status, ...(autoPayment ? { paymentStatus: 'paid' as const } : {}) } : o
+      ))
     } catch { /* ignore */ } finally {
       setBusyIds(prev => { const s = new Set(prev); s.delete(id); return s })
     }
@@ -622,6 +627,10 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
         <OrderDetailModal
           order={selectedOrder}
           onClose={() => setSelectedOrder(null)}
+          onStatusChange={async (id, status) => {
+            await handleStatusOrAssign(id, status)
+            setSelectedOrder(prev => prev && prev.id === id ? { ...prev, status } : prev)
+          }}
         />
       )}
 
@@ -675,7 +684,7 @@ function OrderCard({
   const showActions = ['pending', 'confirmed', 'preparing', 'ready', 'delivering', 'arrived'].includes(order.status)
 
   return (
-    <div className={`relative flex flex-col rounded-2xl border bg-white overflow-hidden transition-all duration-200 ${isSelected
+    <div className={`relative flex flex-col rounded-2xl border bg-white transition-all duration-200 ${isSelected
       ? 'border-brand/50 ring-2 ring-brand/15 shadow-lg shadow-brand/10'
       : 'border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-0.5 hover:border-gray-200'
       } ${isBusy ? 'opacity-60' : ''}`}>

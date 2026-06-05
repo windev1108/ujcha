@@ -39,6 +39,7 @@ export class SmsService {
     let status = 'sent';
     let error: string | undefined;
 
+    const t0 = Date.now();
     try {
       const res = await fetch(
         `${TEXTBEE_BASE}/gateway/devices/${deviceId}/send-sms`,
@@ -51,10 +52,11 @@ export class SmsService {
       );
       const json = (await res.json()) as { data?: { _id?: string } };
       textbeeId = json.data?._id;
+      this.logger.log(`[SMS] textbee ack in ${Date.now() - t0}ms → id=${textbeeId ?? 'none'}`);
     } catch (err: unknown) {
       status = 'failed';
       error = err instanceof Error ? err.message : String(err);
-      this.logger.error(`[SMS] Failed → ${phone}: ${error}`);
+      this.logger.error(`[SMS] Failed in ${Date.now() - t0}ms → ${phone}: ${error}`);
     }
 
     await this.prisma.smsLog.create({ data: { phone, message, textbeeId, status, error } });

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '@/store/auth.store';
@@ -79,13 +80,13 @@ export default function RootLayout() {
   }, [accessToken]);
 
   return (
-    <>
+    <GestureHandlerRootView style={{ flex: 1 }}>
       <StatusBar style="light" backgroundColor="#1a3c34" />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(shipper)" />
       </Stack>
       <NewOrderOverlay />
-    </>
+    </GestureHandlerRootView>
   );
 }

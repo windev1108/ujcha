@@ -4,9 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   AlertCircle,
+  Banknote,
+  Check,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Landmark,
   Loader2,
   LocateFixed,
   MapPin,
@@ -15,6 +18,7 @@ import {
   Plus,
   RotateCcw,
   ShoppingBag,
+  StickyNote,
   Trash2,
   Utensils,
   X,
@@ -27,11 +31,11 @@ import { api } from "@/config/server";
 import { fetchPublicTable, type CreatedOrder, type PublicTableInfo } from "@/services/order/api";
 import { fetchProducts } from "@/services/product/api";
 import { fetchCategories } from "@/services/category/api";
-import type { ApiProduct, ApiTopping } from "@/services/product/types";
+import type { ApiProduct } from "@/services/product/types";
 import type { ApiCategory } from "@/services/category/types";
 import { normalizeOptionGroups, computeOptionSurcharge, formatVnd } from "@/lib/product-options";
 import { ROUTES } from "@/lib/routes";
-import { getDisplayName, getValueLabel, getDisplayDescription } from "@/lib/product-name";
+import { getDisplayName, getValueLabel } from "@/lib/product-name";
 
 const TABLE_STORAGE_KEY = "kun_table_id";
 const PAGE_SIZE = 12;
@@ -67,11 +71,6 @@ function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number)
 
 async function fetchStoreLocation(): Promise<StoreLocationConfig> {
   const { data } = await api.get<StoreLocationConfig>("/tables/store-location");
-  return data;
-}
-
-async function fetchToppingsPublic(): Promise<ApiTopping[]> {
-  const { data } = await api.get<ApiTopping[]>("/toppings");
   return data;
 }
 
@@ -372,18 +371,17 @@ function ProductCard({
 
 function ProductPickModal({
   product,
-  toppings,
   onAdd,
   onClose,
 }: {
   product: ApiProduct;
-  toppings: ApiTopping[];
   onAdd: (item: Omit<TableOrderItem, "localId">) => void;
   onClose: () => void;
 }) {
   const t = useTranslations();
   const locale = useLocale();
   const groups = normalizeOptionGroups(product.optionGroups);
+  const productToppings = (product.toppings ?? []).filter((tp) => tp.isActive !== false);
   const base = parseFloat(product.price);
   const disc = product.discountPercent > 0;
   const baseEffective = disc ? base * (1 - product.discountPercent / 100) : base;
@@ -391,7 +389,8 @@ function ProductPickModal({
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     for (const g of groups) {
-      if (g.values.length > 0) init[g.name] = g.values[0].label;
+      const free = g.values.find((v) => v.priceDelta === 0) ?? g.values[0];
+      if (free) init[g.name] = free.label;
     }
     return init;
   });
@@ -400,16 +399,13 @@ function ProductPickModal({
   const [note, setNote] = useState("");
 
   const optionSurcharge = computeOptionSurcharge(groups, selectedOptions);
-  const toppingSum = selectedToppingIds.reduce((s, id) => {
-    const tp = toppings.find((x) => x.id === id);
-    return s + (tp ? parseFloat(tp.price) : 0);
-  }, 0);
+  const toppingSum = productToppings
+    .filter((tp) => selectedToppingIds.includes(tp.id))
+    .reduce((s, tp) => s + tp.price, 0);
   const unitPrice = baseEffective + optionSurcharge + toppingSum;
 
   function toggleTopping(id: string) {
-    setSelectedToppingIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
+    setSelectedToppingIds((prev) => (prev[0] === id ? [] : [id]));
   }
 
   return (
@@ -419,161 +415,195 @@ function ProductPickModal({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onClose}
-        className="fixed inset-0 z-40 bg-black/50"
+        className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[2px]"
       />
       <motion.div
         initial={{ y: "100%" }}
         animate={{ y: 0 }}
         exit={{ y: "100%" }}
         transition={{ type: "spring", damping: 30, stiffness: 350 }}
-        className="fixed bottom-0 left-0 right-0 z-50 max-h-[92dvh] overflow-y-auto rounded-t-3xl bg-white"
+        className="fixed bottom-0 left-0 right-0 z-50 flex max-h-[92dvh] flex-col rounded-t-3xl bg-white shadow-[0_-8px_40px_-8px_rgba(0,0,0,0.2)]"
       >
-        <div className="sticky top-0 z-10 flex items-center justify-center bg-white px-4 pb-2 pt-3">
-          <div className="h-1 w-10 rounded-full bg-black/15" />
-          <button
-            type="button"
-            onClick={onClose}
-            className="absolute right-4 flex size-8 items-center justify-center rounded-full bg-black/[0.06] text-foreground/60"
-          >
-            <X className="size-4" />
-          </button>
-        </div>
-
-        <div className="px-4 pb-8">
-          <div className="flex gap-3">
+        {/* Drag handle + header */}
+        <div className="shrink-0 border-b border-black/[0.06] px-4 pb-3.5 pt-3">
+          <div className="mb-3 flex justify-center">
+            <div className="h-1 w-10 rounded-full bg-black/15" />
+          </div>
+          <div className="flex items-center gap-3">
             {product.imageUrls[0] && (
-              <div className="h-24 w-24 shrink-0 overflow-hidden rounded-3xl bg-surface-card">
+              <div className="size-12 shrink-0 overflow-hidden rounded-2xl bg-surface-card">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={product.imageUrls[0]}
-                  alt={getDisplayName(product, locale)}
-                  className="h-full w-full object-cover"
-                  loading="lazy"
-                />
+                <img src={product.imageUrls[0]} alt={getDisplayName(product, locale)} className="h-full w-full object-cover" loading="lazy" />
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <h3 className="font-bold leading-snug text-kun-primary">{getDisplayName(product, locale)}</h3>
-              {getDisplayDescription(product, locale) && (
-                <p className="mt-1 line-clamp-3 text-xs text-foreground/55">{getDisplayDescription(product, locale)}</p>
-              )}
-              <p className="mt-2 text-base font-bold text-kun-primary">{formatVnd(unitPrice)}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-foreground/40">
+                {getDisplayName(product.category, locale)}
+              </p>
+              <h3 className="truncate text-sm font-bold text-foreground">{getDisplayName(product, locale)}</h3>
             </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex size-8 shrink-0 items-center justify-center rounded-full bg-black/[0.06] text-foreground/60 hover:bg-black/10"
+            >
+              <X className="size-4" />
+            </button>
           </div>
+        </div>
 
-          {groups.map((g) => (
-            <div key={g.id} className="mt-5">
-              <p className="mb-2 text-sm font-bold text-kun-primary">{getDisplayName(g, locale)}</p>
-              <div className="flex flex-wrap gap-2">
-                {g.values.map((v) => (
-                  <button
-                    key={v.label}
-                    type="button"
-                    onClick={() => setSelectedOptions((o) => ({ ...o, [g.name]: v.label }))}
-                    className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors ${selectedOptions[g.name] === v.label
-                      ? "border-kun-primary bg-kun-primary text-white"
-                      : "border-black/12 text-foreground/70 hover:border-kun-primary/40"
-                      }`}
-                  >
-                    {getValueLabel(v, locale)}
-                    {v.priceDelta > 0 && (
-                      <span className="ml-1 opacity-75">+{formatVnd(v.priceDelta)}</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
+        {/* Scrollable body */}
+        <div className="flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4">
 
-          {toppings.length > 0 && (
-            <div className="mt-5">
-              <p className="mb-2 text-sm font-bold text-kun-primary">{t("topping")}</p>
-              <div className="divide-y divide-black/[0.05]">
-                {toppings.map((tp) => {
-                  const checked = selectedToppingIds.includes(tp.id);
-                  return (
-                    <label
-                      key={tp.id}
-                      className="flex cursor-pointer items-center justify-between py-2.5"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className={`flex size-5 shrink-0 items-center justify-center rounded ${checked ? "bg-kun-primary" : "border border-black/20"
-                            }`}
+          {/* Options */}
+          {groups.length > 0 && (
+            <div className="space-y-3 rounded-2xl border border-black/[0.06] bg-[#f9fafb] p-4">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/40">
+                {t("options")}
+              </p>
+              {groups.map((grp) => (
+                <div key={grp.id} className="space-y-1.5">
+                  <p className="text-xs font-semibold text-foreground">
+                    {getDisplayName(grp, locale)}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {grp.values.map((v) => {
+                      const active = selectedOptions[grp.name] === v.label;
+                      return (
+                        <button
+                          key={v.label}
+                          type="button"
+                          onClick={() => setSelectedOptions((o) => ({ ...o, [grp.name]: v.label }))}
+                          className={`rounded-full px-3 py-1 text-xs font-semibold transition-all ${
+                            active
+                              ? "bg-[#1a3c34] text-white"
+                              : "bg-white text-foreground/70 ring-1 ring-black/10 hover:ring-[#1a3c34]/30"
+                          }`}
                         >
-                          {checked && (
-                            <svg viewBox="0 0 10 8" className="size-3">
-                              <path
-                                d="M1 4l2.5 2.5L9 1"
-                                stroke="white"
-                                strokeWidth="1.5"
-                                fill="none"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            </svg>
+                          {getValueLabel(v, locale)}
+                          {v.priceDelta > 0 && (
+                            <span className={`ml-1 ${active ? "text-white/70" : "text-foreground/40"}`}>
+                              +{formatVnd(v.priceDelta)}
+                            </span>
                           )}
-                        </div>
-                        <span className="text-sm text-foreground/80">{getDisplayName(tp, locale)}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Toppings */}
+          {productToppings.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/40">
+                  {t("extra_toppings")}
+                </p>
+                {selectedToppingIds.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedToppingIds([])}
+                    className="text-[10px] font-semibold text-foreground/40 hover:text-foreground transition-colors"
+                  >
+                    {t("remove")}
+                  </button>
+                )}
+              </div>
+              <div className="max-h-[11rem] space-y-1.5 overflow-y-auto overscroll-contain rounded-2xl border border-black/[0.06] bg-[#f9fafb] p-2">
+                {productToppings.map((tp) => {
+                  const active = selectedToppingIds.includes(tp.id);
+                  return (
+                    <button
+                      key={tp.id}
+                      type="button"
+                      onClick={() => toggleTopping(tp.id)}
+                      className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                        active
+                          ? "border-[#1a3c34]/30 bg-[#f0faf6]"
+                          : "border-transparent bg-white hover:border-black/[0.08]"
+                      }`}
+                    >
+                      <div className={`flex size-[18px] shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+                        active ? "border-[#1a3c34] bg-[#1a3c34]" : "border-black/20 bg-white"
+                      }`}>
+                        {active && <div className="size-[7px] rounded-full bg-white" />}
                       </div>
-                      <span className="text-sm font-semibold text-foreground/60">
+                      <span className={`flex-1 text-sm font-medium ${active ? "text-[#1a3c34]" : "text-foreground"}`}>
+                        {tp.nameTranslation?.[locale] ?? tp.name}
+                      </span>
+                      <span className={`text-sm tabular-nums ${active ? "font-semibold text-[#1a3c34]" : "text-foreground/50"}`}>
                         +{formatVnd(tp.price)}
                       </span>
-                      <input
-                        type="checkbox"
-                        className="sr-only"
-                        checked={checked}
-                        onChange={() => toggleTopping(tp.id)}
-                      />
-                    </label>
+                    </button>
                   );
                 })}
               </div>
             </div>
           )}
 
-          <div className="mt-5">
-            <p className="mb-2 text-sm font-bold text-kun-primary">{t("note")}</p>
+          {/* Note */}
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-foreground/40">
+              <StickyNote className="size-3" />
+              {t("note")}
+            </label>
             <input
               type="text"
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder={t("note_placeholder_table")}
               maxLength={500}
-              className="w-full rounded-xl border border-black/12 bg-surface-soft px-3 py-2.5 text-sm outline-none focus:border-kun-primary/40 focus:ring-2 focus:ring-kun-primary/10"
+              className="h-10 w-full rounded-xl border border-black/[0.09] bg-white px-3.5 text-[13px] text-foreground placeholder:text-muted/60 outline-none focus:border-kun-primary focus:ring-2 focus:ring-kun-primary/20 transition"
             />
           </div>
 
-          <div className="mt-6 flex items-center gap-3">
-            <div className="flex items-center gap-3 rounded-2xl border border-black/10 px-3 py-2">
+          {/* Price preview */}
+          <div className="flex items-center justify-between rounded-2xl bg-[#1a3c34]/[0.08] px-4 py-3">
+            <span className="text-sm font-semibold text-[#1a3c34]">{t("total")}</span>
+            <span className="text-xl font-bold tabular-nums text-[#1a3c34]">{formatVnd(unitPrice)}</span>
+          </div>
+        </div>
+
+        {/* Sticky footer */}
+        <div className="shrink-0 border-t border-black/[0.06] bg-white px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="inline-flex items-center rounded-full border border-black/[0.09] bg-surface-card/40">
               <button
                 type="button"
                 onClick={() => setQty((q) => Math.max(1, q - 1))}
-                className="flex size-7 items-center justify-center rounded-full bg-black/[0.06] text-foreground/70"
+                disabled={qty <= 1}
+                className="flex size-10 items-center justify-center rounded-full text-foreground transition hover:bg-black/[0.06] disabled:opacity-40"
               >
-                <Minus className="size-3.5" strokeWidth={2.5} />
+                <Minus className="size-4" />
               </button>
-              <span className="w-5 text-center text-base font-bold">{qty}</span>
+              <span className="w-10 text-center text-sm font-bold tabular-nums">{qty}</span>
               <button
                 type="button"
                 onClick={() => setQty((q) => q + 1)}
-                className="flex size-7 items-center justify-center rounded-full bg-kun-primary/10 text-kun-primary"
+                className="flex size-10 items-center justify-center rounded-full text-foreground transition hover:bg-black/[0.06]"
               >
-                <Plus className="size-3.5" strokeWidth={2.5} />
+                <Plus className="size-4" />
               </button>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                onAdd({ product, quantity: qty, selectedOptions, selectedToppingIds, unitPrice, note });
-                onClose();
-              }}
-              className="flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-kun-primary text-sm font-bold text-white shadow-[0_4px_16px_-4px_rgba(26,60,52,0.4)]"
-            >
-              <ShoppingBag className="size-4" />
-              {t("add_to_cart")} — {formatVnd(unitPrice * qty)}
-            </button>
+            <div className="text-right">
+              <p className="text-[10px] text-muted">{qty > 1 ? `× ${qty}` : ""}</p>
+              <p className="text-lg font-black tabular-nums text-[#1a3c34]">{formatVnd(unitPrice * qty)}</p>
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              onAdd({ product, quantity: qty, selectedOptions, selectedToppingIds, unitPrice, note });
+              onClose();
+            }}
+            className="flex h-13 w-full items-center justify-center gap-2 rounded-full bg-[#1a3c34] text-base font-semibold text-white shadow-[0_4px_20px_-4px_rgba(26,60,52,0.45)] transition hover:opacity-90 active:scale-[0.98]"
+          >
+            <ShoppingBag className="size-5" />
+            {t("add_to_cart")}
+          </button>
         </div>
       </motion.div>
     </>
@@ -584,7 +614,6 @@ function ProductPickModal({
 
 function OrderBasketSheet({
   basket,
-  toppings,
   tableId,
   tableName,
   onClose,
@@ -592,7 +621,6 @@ function OrderBasketSheet({
   onOrderSuccess,
 }: {
   basket: TableOrderItem[];
-  toppings: ApiTopping[];
   tableId: string;
   tableName: string;
   onClose: () => void;
@@ -646,35 +674,48 @@ function OrderBasketSheet({
           <div className="divide-y divide-black/[0.05] px-4">
             {basket.map((b) => {
               const toppingNames = b.selectedToppingIds
-                .map((id) => toppings.find((tp) => tp.id === id)?.name)
+                .map((id) => {
+                  const tp = b.product.toppings?.find((x) => x.id === id);
+                  if (!tp) return null;
+                  return tp.nameTranslation?.[locale] ?? tp.name;
+                })
                 .filter(Boolean)
                 .join(", ");
-              const optionText = Object.values(b.selectedOptions).join(", ");
+              const optionText = Object.entries(b.selectedOptions)
+                .map(([, v]) => v)
+                .join(", ");
               const subtext = [optionText, toppingNames].filter(Boolean).join(" · ");
               return (
-                <div key={b.localId} className="flex items-start gap-3 py-3">
-                  {b.product.imageUrls[0] && (
+                <div key={b.localId} className="flex items-start gap-3 py-4">
+                  {b.product.imageUrls[0] ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={b.product.imageUrls[0]}
                       alt={getDisplayName(b.product, locale)}
-                      className="size-14 shrink-0 rounded-xl object-cover"
+                      className="size-16 shrink-0 rounded-2xl object-cover ring-1 ring-black/[0.06]"
                       loading="lazy"
                     />
+                  ) : (
+                    <div className="flex size-16 shrink-0 items-center justify-center rounded-2xl bg-surface-card ring-1 ring-black/[0.06]">
+                      <Utensils className="size-5 text-black/20" />
+                    </div>
                   )}
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-kun-primary">
+                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted">
+                      {getDisplayName(b.product.category, locale)}
+                    </p>
+                    <p className="mt-0.5 truncate text-sm font-semibold text-foreground">
                       {getDisplayName(b.product, locale)}
                     </p>
                     {subtext && (
-                      <p className="truncate text-xs text-foreground/50">{subtext}</p>
+                      <p className="mt-0.5 truncate text-xs text-foreground/50">{subtext}</p>
                     )}
                     {b.note && (
-                      <p className="truncate text-xs italic text-foreground/40">{b.note}</p>
+                      <p className="mt-0.5 truncate text-[11px] italic text-foreground/35">{b.note}</p>
                     )}
-                    <div className="mt-1 flex items-center gap-2">
+                    <div className="mt-2 flex items-center gap-2">
                       <span className="text-xs text-foreground/50">× {b.quantity}</span>
-                      <span className="text-sm font-bold text-kun-primary">
+                      <span className="text-sm font-bold tabular-nums text-kun-products-forest">
                         {formatVnd(b.unitPrice * b.quantity)}
                       </span>
                     </div>
@@ -682,7 +723,7 @@ function OrderBasketSheet({
                   <button
                     type="button"
                     onClick={() => onRemoveItem(b.localId)}
-                    className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-400"
+                    className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full text-foreground/30 transition-colors hover:bg-red-50 hover:text-red-500"
                   >
                     <Trash2 className="size-3.5" />
                   </button>
@@ -708,12 +749,16 @@ function OrderBasketSheet({
                   key={pm}
                   type="button"
                   onClick={() => setPaymentType(pm)}
-                  className={`flex-1 rounded-xl border py-2.5 text-sm font-semibold transition-colors ${paymentType === pm
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-xl border py-2.5 text-sm font-semibold transition-colors ${paymentType === pm
                     ? "border-kun-primary bg-kun-primary/5 text-kun-primary"
                     : "border-black/10 text-foreground/60"
                     }`}
                 >
-                  {pm === "cash" ? `💵 ${t("cash")}` : `🏦 ${t("bank_transfer")}`}
+                  {pm === "cash" ? (
+                    <><Banknote className="size-4 shrink-0" />{t("cash")}</>
+                  ) : (
+                    <><Landmark className="size-4 shrink-0" />{t("bank_transfer")}</>
+                  )}
                 </button>
               ))}
             </div>
@@ -921,13 +966,6 @@ export function TableLandingShell({ tableId }: { tableId: string }) {
     enabled: menuEnabled,
   });
 
-  const toppingsQuery = useQuery({
-    queryKey: ["toppings"],
-    queryFn: fetchToppingsPublic,
-    staleTime: 10 * 60_000,
-    enabled: menuEnabled,
-  });
-
   // Reset paging when category changes
   useEffect(() => { setVisibleCount(PAGE_SIZE); }, [selectedCategoryId]);
 
@@ -944,8 +982,6 @@ export function TableLandingShell({ tableId }: { tableId: string }) {
     obs.observe(el);
     return () => obs.disconnect();
   }, [visibleCount, productsQuery.data]);
-
-  const toppings = toppingsQuery.data ?? [];
   const basketCount = basket.reduce((s, b) => s + b.quantity, 0);
   const basketTotal = basket.reduce((s, b) => s + b.unitPrice * b.quantity, 0);
 
@@ -1123,7 +1159,6 @@ export function TableLandingShell({ tableId }: { tableId: string }) {
         {pickingProduct && (
           <ProductPickModal
             product={pickingProduct}
-            toppings={toppings}
             onAdd={addToBasket}
             onClose={() => setPickingProduct(null)}
           />
@@ -1135,7 +1170,6 @@ export function TableLandingShell({ tableId }: { tableId: string }) {
         {showBasket && (
           <OrderBasketSheet
             basket={basket}
-            toppings={toppings}
             tableId={table.id}
             tableName={table.name}
             onClose={() => setShowBasket(false)}
