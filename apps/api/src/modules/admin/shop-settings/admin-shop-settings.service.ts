@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RedisService } from '../../redis/redis.service';
 import type { UpdateShopSettingsDto } from './dto/update-shop-settings.dto';
 import type { UpdateTtsConfigDto } from './dto/update-tts-config.dto';
 
@@ -7,7 +8,10 @@ const SETTINGS_ID = 'default';
 
 @Injectable()
 export class AdminShopSettingsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
+  ) {}
 
   async get() {
     return this.ensureRow();
@@ -15,11 +19,13 @@ export class AdminShopSettingsService {
 
   async update(dto: UpdateShopSettingsDto) {
     const v = Math.min(100, Math.max(0, Math.round(dto.globalDiscountPercent)));
-    return this.prisma.shopSettings.upsert({
+    const result = await this.prisma.shopSettings.upsert({
       where: { id: SETTINGS_ID },
       create: { id: SETTINGS_ID, globalDiscountPercent: v },
       update: { globalDiscountPercent: v },
     });
+    void this.redis.del('kun:shop:globalDiscount');
+    return result;
   }
 
   async getTtsConfig() {

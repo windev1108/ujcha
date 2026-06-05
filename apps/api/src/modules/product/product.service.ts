@@ -9,6 +9,8 @@ import { RedisService } from '../redis/redis.service';
 const PRODUCT_LIST_TTL = 300;
 const PRODUCT_LIST_KEY = (categoryId?: string, categorySlug?: string, q?: string) =>
     `kun:products:list:${categoryId ?? ''}:${categorySlug ?? ''}:${q ?? ''}`;
+const GLOBAL_DISCOUNT_KEY = 'kun:shop:globalDiscount';
+const GLOBAL_DISCOUNT_TTL = 60;
 
 @Injectable()
 export class ProductService {
@@ -21,7 +23,8 @@ export class ProductService {
         const qx = q?.trim();
         const cacheKey = PRODUCT_LIST_KEY(categoryId, categorySlug, qx);
         const cached = await this.redis.get(cacheKey);
-        if (cached) return cached;
+        const globalDiscount = await this.getGlobalDiscount();
+        if (cached) return (cached as any[]).map((p: any) => applyLocale(applyGlobalDiscount(p, globalDiscount), locale));
 
         const categoryFilter = categoryId
             ? { categoryId }
@@ -49,7 +52,7 @@ export class ProductService {
         });
         const result = rows.map(normalizeProductRow);
         await this.redis.set(cacheKey, result, PRODUCT_LIST_TTL);
-        return result.map(p => applyLocale(p, locale));
+        return result.map(p => applyLocale(applyGlobalDiscount(p, globalDiscount), locale));
     }
 
     async invalidateListCache() {
@@ -57,31 +60,46 @@ export class ProductService {
     }
 
     async getById(id: string, locale?: string) {
-        const row = await this.prisma.product.findUnique({
-            where: { id },
-            include: { category: { select: { id: true, name: true, nameTranslation: true, slug: true, thumbnail: true } } },
-        });
+        const [row, globalDiscount] = await Promise.all([
+            this.prisma.product.findUnique({
+                where: { id },
+                include: { category: { select: { id: true, name: true, nameTranslation: true, slug: true, thumbnail: true } } },
+            }),
+            this.getGlobalDiscount(),
+        ]);
         if (!row) {
             throw new NotFoundException({
                 message: 'Không tìm thấy sản phẩm.',
                 code: 'PRODUCT_NOT_FOUND',
             });
         }
-        return applyLocale(normalizeProductRow(row), locale);
+        return applyLocale(applyGlobalDiscount(normalizeProductRow(row), globalDiscount), locale);
     }
 
     async getBySlug(slug: string, locale?: string) {
-        const row = await this.prisma.product.findUnique({
-            where: { slug },
-            include: { category: { select: { id: true, name: true, nameTranslation: true, slug: true, thumbnail: true } } },
-        });
+        const [row, globalDiscount] = await Promise.all([
+            this.prisma.product.findUnique({
+                where: { slug },
+                include: { category: { select: { id: true, name: true, nameTranslation: true, slug: true, thumbnail: true } } },
+            }),
+            this.getGlobalDiscount(),
+        ]);
         if (!row) {
             throw new NotFoundException({
                 message: 'Không tìm thấy sản phẩm.',
                 code: 'PRODUCT_NOT_FOUND',
             });
         }
-        return applyLocale(normalizeProductRow(row), locale);
+        return applyLocale(applyGlobalDiscount(normalizeProductRow(row), globalDiscount), locale);
+    }
+
+    private async getGlobalDiscount(): Promise<number> {
+        const cached = await this.redis.get<number>(GLOBAL_DISCOUNT_KEY);
+        if (cached !== null) return cached;
+        const settings = await this.prisma.shopSettings.findFirst();
+        const val = settings?.globalDiscountPercent ?? 0;
+        await this.redis.set(GLOBAL_DISCOUNT_KEY, val, GLOBAL_DISCOUNT_TTL);
+        return val;
     }
 }
 
@@ -94,6 +112,11 @@ function applyLocale<T extends { name: string; nameTranslation: Record<string, s
     const translated = product.nameTranslation?.[locale]?.trim();
     if (!translated) return product;
     return { ...product, name: translated };
+}
+
+function applyGlobalDiscount<T extends { discountPercent: number }>(product: T, globalDiscount: number): T {
+    if (!globalDiscount) return product;
+    return { ...product, discountPercent: Math.min(100, product.discountPercent + globalDiscount) };
 }
 
 function normalizeProductRow<T extends { optionGroups: unknown; toppings: unknown; nameTranslation: unknown; descriptionTranslation: unknown }>(row: T) {
