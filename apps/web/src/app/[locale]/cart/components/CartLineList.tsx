@@ -255,9 +255,11 @@ export function CartLineList({
                       {/* Price */}
                       <div className="shrink-0 text-right">
                         <div className="flex items-center gap-2">
-                          <span className="rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-500">
-                            -{product.discountPercent}%
-                          </span>
+                          {product.discountPercent?.length > 0 &&
+                            <span className="rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-500">
+                              -{product.discountPercent}%
+                            </span>
+                          }
                           <p className="text-lg font-bold tabular-nums text-kun-products-forest sm:text-xl">
                             {formatVnd(lineTotal)}
                           </p>
