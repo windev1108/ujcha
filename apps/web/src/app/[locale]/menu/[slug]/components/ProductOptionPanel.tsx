@@ -45,6 +45,7 @@ export function ProductOptionPanel({ product }: Props) {
       const free = g.values.find((v) => v.priceDelta === 0) ?? g.values[0];
       if (free) init[g.name] = free.label;
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedOptions(init);
   }, [optionGroups]);
 
@@ -91,6 +92,7 @@ export function ProductOptionPanel({ product }: Props) {
           name: product.name,
           slug: product.slug,
           price: product.price,
+          finalPrice: product.finalPrice,
           imageUrls: product.imageUrls,
           discountPercent: product.discountPercent,
           optionGroups: product.optionGroups,
@@ -190,8 +192,8 @@ export function ProductOptionPanel({ product }: Props) {
                             setSelectedOptions((prev) => ({ ...prev, [grp.name]: v.label }))
                           }
                           className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all ${isSelected
-                              ? "border-kun-products-forest bg-kun-products-forest/10 text-kun-products-forest shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
-                              : "border-black/10 bg-white text-foreground hover:border-black/20"
+                            ? "border-kun-products-forest bg-kun-products-forest/10 text-kun-products-forest shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
+                            : "border-black/10 bg-white text-foreground hover:border-black/20"
                             }`}
                         >
                           {getValueLabel(v, locale)}
@@ -239,8 +241,8 @@ export function ProductOptionPanel({ product }: Props) {
                       role="option"
                       aria-selected={isActive}
                       className={`flex items-center gap-2.5 rounded-xl border px-3 py-2 transition-all cursor-pointer ${isActive
-                          ? "border-kun-products-forest/35 bg-kun-mint/15"
-                          : "border-transparent bg-white hover:border-black/8"
+                        ? "border-kun-products-forest/35 bg-kun-mint/15"
+                        : "border-transparent bg-white hover:border-black/8"
                         }`}
                     >
                       <Checkbox
@@ -322,8 +324,8 @@ export function ProductOptionPanel({ product }: Props) {
         isDisabled={product.isSoldOut || isPending}
         onPress={handleAddToCart}
         className={`h-14 w-full rounded-full text-[15px] font-semibold shadow-lg transition-all ${addedFeedback
-            ? "bg-emerald-600 text-white shadow-emerald-200"
-            : "bg-kun-products-forest text-white hover:opacity-90 shadow-kun-products-forest/20"
+          ? "bg-emerald-600 text-white shadow-emerald-200"
+          : "bg-kun-products-forest text-white hover:opacity-90 shadow-kun-products-forest/20"
           }`}
       >
         {isPending ? (
