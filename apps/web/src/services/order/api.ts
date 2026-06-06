@@ -40,6 +40,8 @@ export interface CreateOrderPayload {
   voucherCode?: string
   discountAmount?: number
   shippingFee?: number
+  guestDeliveryName?: string
+  guestDeliveryPhone?: string
 }
 
 export interface PublicTableInfo {

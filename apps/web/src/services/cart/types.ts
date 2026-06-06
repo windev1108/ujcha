@@ -6,6 +6,7 @@ export interface ApiCartProduct {
   price: string
   imageUrls: string[]
   discountPercent: number
+  finalPrice: number
   optionGroups: { id: string; name: string; nameTranslation?: Record<string, string>; values: (string | { label: string; priceDelta?: number; nameTranslation?: Record<string, string> })[] }[]
   toppings?: Array<{ id: string; name: string; nameTranslation?: Record<string, string>; price: number; isActive: boolean }>
   category: { name: string; nameTranslation?: Record<string, string> }

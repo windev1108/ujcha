@@ -22,11 +22,13 @@ import {
   LockOpen,
   MapPin,
   Minus,
+  Pencil,
   Plus,
   QrCode,
   Search,
   ShoppingBag,
 
+  Trash2,
   Truck,
   Users,
   Utensils,
@@ -40,6 +42,7 @@ import { useProductsQuery } from "@/services/product/hooks";
 import type { ApiProduct } from "@/services/product/types";
 import { useCategoriesQuery } from "@/services/category/hooks";
 import { normalizeOptionGroups, computeOptionSurcharge, formatVnd } from "@/lib/product-options";
+
 import { useAddressesQuery } from "@/services/order/hooks";
 import { useShippingEstimateQuery } from "@/services/shipping/hooks";
 import { usePublicPaymentConfigQuery } from "@/services/payment-config/hooks";
@@ -114,7 +117,7 @@ function ProductCustomizeSheet({
   const t = useTranslations();
   const optionGroups = normalizeOptionGroups(product.optionGroups);
   const toppings = (product.toppings ?? []).filter((t) => t.isActive !== false);
-  const basePrice = parseFloat(product.price) * (1 - (product.discountPercent ?? 0) / 100);
+  const basePrice = product.finalPrice ?? parseFloat(product.price);
 
   const [quantity, setQuantity] = useState(initial?.quantity ?? 1);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>(() => {
@@ -476,7 +479,8 @@ function ProductPickerDrawer({
                   {products.map((product) => {
                     const draftVal = draft.get(product.id);
                     const qty = draftVal?.quantity ?? 0;
-                    const price = parseFloat(product.price);
+                    const price = product.finalPrice ?? parseFloat(product.price);
+                    const originalPrice = product.discountPercent > 0 ? parseFloat(product.price) : null;
                     const thumb = product.imageUrls[0];
                     const unavailable = !product.isAvailable || product.isSoldOut;
 
@@ -524,9 +528,16 @@ function ProductPickerDrawer({
                             {getDisplayName(product, locale)}
                           </p>
                           <div className="flex items-center justify-between gap-1">
-                            <span className="text-xs font-bold tabular-nums text-[#26634d]">
-                              {fmtVnd(price)}
-                            </span>
+                            <div className="flex flex-col">
+                              <span className="text-xs font-bold tabular-nums text-[#26634d]">
+                                {fmtVnd(price)}
+                              </span>
+                              {originalPrice && (
+                                <span className="text-[10px] tabular-nums text-muted line-through">
+                                  {fmtVnd(originalPrice)}
+                                </span>
+                              )}
+                            </div>
                             {unavailable ? (
                               <span className="text-[10px] text-foreground/40">{t("group_sold_out")}</span>
                             ) : qty === 0 ? (
@@ -600,6 +611,7 @@ function ParticipantRow({
   isMeHost,
   groupStatus,
   paymentMode,
+  removingProductId,
   onConfirmPaid,
   onOpenPicker,
   onRemoveItem,
@@ -609,6 +621,7 @@ function ParticipantRow({
   isMeHost: boolean;
   groupStatus: GroupOrderState["status"];
   paymentMode: GroupOrderState["paymentMode"];
+  removingProductId?: string | null;
   onConfirmPaid?: (participantId: string) => void;
   onOpenPicker?: () => void;
   onRemoveItem?: (productId: string) => void;
@@ -670,8 +683,10 @@ function ParticipantRow({
               onClick={onOpenPicker}
               className="flex items-center gap-1 rounded-full bg-[#1a3c34] px-3 py-1 text-xs font-semibold text-white transition hover:opacity-90"
             >
-              <Plus className="size-3" />
-              {t('choose_dish')}
+              {participant.items.length > 0
+                ? <><Pencil className="size-3" />{t('edit_dish')}</>
+                : <><Plus className="size-3" />{t('choose_dish')}</>
+              }
             </button>
           )}
           {participant.isReady && groupStatus === "collecting" && (
@@ -706,61 +721,106 @@ function ParticipantRow({
       </div>
 
       {participant.items.length > 0 && (
-        <div className="mt-3 space-y-2 border-t border-black/6 pt-3">
+        <div className="mt-3 space-y-3 border-t border-black/6 pt-3">
           {participant.items.map((item) => {
+            const imageUrl = item.product?.imageUrls[0] ?? null;
+            const displayName = item.product ? getDisplayName(item.product, locale) : "Sản phẩm";
             const groups = normalizeOptionGroups(item.product?.optionGroups);
             const resolvedOptions = Object.entries(item.selectedOptions ?? {})
               .map(([groupName, optionLabel]) => {
                 const grp = groups.find((g) => g.name === groupName);
                 const val = grp?.values.find((v) => v.label === optionLabel);
-                return {
-                  label: val?.nameTranslation?.[locale] ?? val?.label ?? optionLabel,
-                  priceDelta: val?.priceDelta ?? 0,
-                };
+                return { label: val?.nameTranslation?.[locale] ?? val?.label ?? optionLabel, priceDelta: val?.priceDelta ?? 0 };
               })
               .filter((o) => o.label);
             const toppingTotal = item.toppings?.reduce((s, t) => s + t.price, 0) ?? 0;
             const lineTotal = (item.unitPrice + toppingTotal) * item.quantity;
+            const canRemove = isMe && groupStatus === "collecting" && !participant.isReady;
+            const isRemoving = removingProductId === item.productId;
+
             return (
-              <div key={item.id} className="flex items-start gap-2 text-xs">
-                {isMe && groupStatus === "collecting" && !participant.isReady && (
-                  <button
-                    type="button"
-                    onClick={() => onRemoveItem?.(item.productId)}
-                    className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-black/6 text-foreground/35 transition-colors hover:bg-red-50 hover:text-red-500"
+              <div key={item.id} className="flex items-start gap-3">
+                {/* Thumbnail + qty badge */}
+                <div className="relative size-14 shrink-0">
+                  <div
+                    className="absolute inset-0 overflow-hidden rounded-xl ring-1 ring-black/6"
+                    style={{ backgroundColor: imageUrl ? undefined : "#1a3c34" }}
                   >
-                    <X className="size-2.5" />
-                  </button>
-                )}
-                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="flex items-start gap-1.5">
-                    {!(isMe && groupStatus === "collecting" && !participant.isReady) && (
-                      <ChevronRight className="mt-0.5 size-3 shrink-0 text-foreground/25" />
+                    {imageUrl ? (
+                      <Image src={imageUrl} alt={displayName} fill className="object-cover" sizes="56px" />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="select-none text-lg font-black text-white/20">
+                          {displayName.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
                     )}
-                    <span className="font-medium text-foreground/80">
-                      {item.product ? getDisplayName(item.product, locale) : "Sản phẩm"} ×{item.quantity}
-                    </span>
+                  </div>
+                  <span className="absolute -bottom-1.5 -right-1.5 flex size-[18px] items-center justify-center rounded-full bg-[#1a3c34] text-[9px] font-bold text-white ring-2 ring-white">
+                    {item.quantity}
                   </span>
+                </div>
+
+                {/* Info */}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-semibold leading-snug text-foreground">
+                      {displayName}
+                    </p>
+                    <p className="shrink-0 text-sm font-bold tabular-nums text-[#1a3c34]">
+                      {fmtVnd(lineTotal)}
+                    </p>
+                  </div>
+
+                  {/* Options */}
                   {resolvedOptions.length > 0 && (
-                    <p className="pl-[18px] text-[11px] text-foreground/45">
-                      {resolvedOptions.map((o) =>
-                        o.priceDelta > 0 ? `${o.label} +${formatVnd(o.priceDelta)}` : o.label
-                      ).join(" · ")}
+                    <p className="mt-0.5 text-[11px] leading-relaxed text-foreground/50">
+                      {resolvedOptions.map((o, i) => (
+                        <span key={i}>
+                          {i > 0 && <span className="mx-1 text-foreground/25">·</span>}
+                          {o.label}
+                          {o.priceDelta > 0 && <span className="text-foreground/35"> +{fmtVnd(o.priceDelta)}</span>}
+                        </span>
+                      ))}
                     </p>
                   )}
-                  {item.toppings?.map((top) => (
-                    <p key={top.toppingId} className="pl-[18px] text-[11px] text-foreground/45">
-                      {top.nameTranslation?.[locale] ?? top.name}
-                      {top.price > 0 && <span className="ml-1">+{formatVnd(top.price)}</span>}
-                    </p>
-                  ))}
+
+                  {/* Toppings */}
+                  {item.toppings && item.toppings.length > 0 && (
+                    <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5">
+                      {item.toppings.map((top) => (
+                        <span key={top.toppingId} className="text-[11px] text-foreground/50">
+                          + {top.nameTranslation?.[locale] ?? top.name}
+                          {top.price > 0 && <span className="text-foreground/35"> ({fmtVnd(top.price)})</span>}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Note */}
                   {item.note && (
-                    <p className="pl-[18px] text-[11px] italic text-foreground/35">"{item.note}"</p>
+                    <p className="mt-0.5 text-[11px] italic text-foreground/35">"{item.note}"</p>
                   )}
                 </div>
-                <span className="shrink-0 tabular-nums font-medium text-foreground/70">
-                  {fmtVnd(lineTotal)}
-                </span>
+
+                {/* Remove button */}
+                {canRemove && (
+                  <button
+                    type="button"
+                    onClick={() => !isRemoving && onRemoveItem?.(item.productId)}
+                    disabled={!!removingProductId}
+                    className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full transition-colors disabled:pointer-events-none ${
+                      isRemoving
+                        ? "bg-red-50 text-red-400"
+                        : "bg-black/6 text-foreground/35 hover:bg-red-50 hover:text-red-500"
+                    }`}
+                  >
+                    {isRemoving
+                      ? <Loader2 className="size-3.5 animate-spin" />
+                      : <Trash2 className="size-3.5" />
+                    }
+                  </button>
+                )}
               </div>
             );
           })}
@@ -812,7 +872,7 @@ function DiscountBanner({
                 : "bg-white text-foreground/50 ring-black/10"
                 }`}
             >
-              {tier.minParticipants}+ người: -{tier.discountPercent}%
+              {tier.minParticipants}+ {t("group_people")}: -{tier.discountPercent}%
             </div>
           ))}
         </div>
@@ -1014,6 +1074,7 @@ export function GroupOrderPageShell() {
   const [actionLoading, setActionLoading] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [pickerSaving, setPickerSaving] = useState(false);
+  const [removingProductId, setRemovingProductId] = useState<string | null>(null);
   const [showFulfillment, setShowFulfillment] = useState(false);
   const [showPaymentPicker, setShowPaymentPicker] = useState(false);
   const [pendingCheckoutOrder, setPendingCheckoutOrder] = useState<{ id: string; paymentCode: string } | null>(null);
@@ -1237,7 +1298,7 @@ export function GroupOrderPageShell() {
 
   const handleRemoveItem = async (productId: string) => {
     if (!sessionToken || !me) return;
-    setPickerSaving(true);
+    setRemovingProductId(productId);
     try {
       const remaining = me.items
         .filter((item) => item.productId !== productId)
@@ -1255,7 +1316,7 @@ export function GroupOrderPageShell() {
       const msg = err?.response?.data?.message ?? "Có lỗi xảy ra.";
       alert(typeof msg === "string" ? msg : msg.join(", "));
     } finally {
-      setPickerSaving(false);
+      setRemovingProductId(null);
     }
   };
 
@@ -1575,6 +1636,7 @@ export function GroupOrderPageShell() {
                     onConfirmPaid={(participantId) =>
                       void withAction(() => confirmParticipantPaid(token, sessionToken!, participantId))
                     }
+                    removingProductId={removingProductId}
                     onOpenPicker={() => setShowPicker(true)}
                     onRemoveItem={(productId) => void handleRemoveItem(productId)}
                   />

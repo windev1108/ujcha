@@ -9,6 +9,7 @@ export interface AppNotification {
   data: Record<string, unknown> | null;
   isRead: boolean;
   createdAt: string;
+  updatedAt: string;
 }
 
 export async function fetchNotifications(): Promise<AppNotification[]> {

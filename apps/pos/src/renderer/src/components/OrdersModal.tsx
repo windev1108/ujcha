@@ -329,7 +329,7 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
   const handleStatus = async (id: string, status: OrderStatus) => {
     setBusyIds(prev => new Set(prev).add(id))
     const order = orders.find(o => o.id === id)
-    const autoPayment = status === 'completed' && order?.type === 'table' && order?.paymentStatus !== 'paid'
+    const autoPayment = status === 'completed' && (order?.type === 'table' || order?.type === 'pickup') && order?.paymentStatus !== 'paid'
       ? 'paid' : undefined
     try {
       await updateOrderStatus(id, status, autoPayment)

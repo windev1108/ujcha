@@ -8,8 +8,7 @@ const nextConfig: NextConfig = {
     },
   },
   images: {
-    // Admin panel uses very few images — cache aggressively
-    minimumCacheTTL: 86400,
+    minimumCacheTTL: 31536000,
     formats: ["image/avif", "image/webp"],
     remotePatterns: [
       { protocol: "https", hostname: "**" },

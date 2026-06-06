@@ -10,7 +10,7 @@ import { skuFromProductName, slugify, uniqueSlugSuffix } from '../slug.util';
 import type { CreateProductDto } from './dto/create-product.dto';
 import type { ToggleProductAvailabilityDto } from './dto/toggle-product-availability.dto';
 import type { UpdateProductDto } from './dto/update-product.dto';
-import { clampDiscountPercent, normalizeImageUrls, normalizeInlineOptionGroups, normalizeInlineToppings, normalizeTranslation } from '../../../helper/utils';
+import { clampDiscountPercent, computeFinalPrice, normalizeImageUrls, normalizeInlineOptionGroups, normalizeInlineToppings, normalizeTranslation } from '../../../helper/utils';
 import { RedisService } from '../../redis/redis.service';
 
 @Injectable()
@@ -279,12 +279,13 @@ export class AdminProductService {
   }
 }
 
-function normalizeProductRow<T extends { optionGroups: unknown; toppings: unknown; nameTranslation: unknown; descriptionTranslation: unknown }>(row: T) {
+function normalizeProductRow<T extends { price: unknown; discountPercent: number; optionGroups: unknown; toppings: unknown; nameTranslation: unknown; descriptionTranslation: unknown }>(row: T) {
   return {
     ...row,
     optionGroups: normalizeInlineOptionGroups(row.optionGroups as any),
     toppings: normalizeInlineToppings(row.toppings as any),
     nameTranslation: (row.nameTranslation && typeof row.nameTranslation === 'object' ? row.nameTranslation : {}) as Record<string, string>,
     descriptionTranslation: (row.descriptionTranslation && typeof row.descriptionTranslation === 'object' ? row.descriptionTranslation : {}) as Record<string, string>,
+    finalPrice: computeFinalPrice(row.price, row.discountPercent),
   };
 }

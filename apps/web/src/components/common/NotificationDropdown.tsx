@@ -60,10 +60,12 @@ function NotificationItem({
   n,
   onRead,
   onDelete,
+  scrollRoot,
 }: {
   n: AppNotification;
   onRead: (id: string) => void;
   onDelete: (id: string) => void;
+  scrollRoot: React.RefObject<HTMLDivElement | null>;
 }) {
   const t = useTranslations();
   const locale = useLocale();
@@ -85,11 +87,10 @@ function NotificationItem({
           observer.disconnect();
         }
       },
-      { threshold: 0.6 },
+      { root: scrollRoot.current, threshold: 0.5 },
     );
     observer.observe(el);
     return () => observer.disconnect();
-    // onRead excluded — kept in onReadRef to avoid re-creating the observer
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [n.id, n.isRead]);
 
@@ -116,7 +117,7 @@ function NotificationItem({
           {title}
         </p>
         <p className="mt-0.5 text-xs text-muted line-clamp-2">{content}</p>
-        <p className="mt-1 text-[11px] text-foreground/35">{timeAgo(n.createdAt, t as TFn, locale)}</p>
+        <p className="mt-1 text-[11px] text-foreground/35">{timeAgo(n.updatedAt ?? n.createdAt, t as TFn, locale)}</p>
       </div>
       {!n.isRead && (
         <div className="absolute right-4 top-3.5 size-2 shrink-0 rounded-full bg-kun-primary group-hover:hidden" />
@@ -144,7 +145,7 @@ function ToastBody({ n, t }: { n: AppNotification; t: TFn }) {
 }
 
 export function NotificationToast() {
-  const { latest, clearLatest } = useNotificationStore();
+  const { latest, clearLatest, toastSeq } = useNotificationStore();
   const t = useTranslations();
   const [visible, setVisible] = useState(false);
 
@@ -156,13 +157,13 @@ export function NotificationToast() {
       setTimeout(clearLatest, 300);
     }, 4000);
     return () => clearTimeout(t);
-  }, [latest, clearLatest]);
+  }, [toastSeq, clearLatest]);
 
   return (
     <AnimatePresence>
       {visible && latest && (
         <motion.div
-          key={latest.id}
+          key={toastSeq}
           initial={{ opacity: 0, y: -16, scale: 0.96 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -12, scale: 0.96 }}
@@ -196,9 +197,10 @@ export function NotificationBell() {
 
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const { data: unreadCountData } = useUnreadCountQuery(isLoggedIn && isHydrated);
-  const unreadCount = useNotificationStore((s) => s.unreadCount) || unreadCountData || 0;
+  const unreadCount = useNotificationStore((s) => s.unreadCount);
   const { data: notifications = [], isLoading } = useNotificationsQuery(open && isLoggedIn);
 
   const markRead = useMarkReadMutation();
@@ -315,7 +317,7 @@ export function NotificationBell() {
             </div>
 
             {/* Body */}
-            <div className="max-h-[380px] overflow-y-auto overscroll-contain py-1.5">
+            <div ref={listRef} className="max-h-[380px] overflow-y-auto overscroll-contain py-1.5">
               {isLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <div className="size-5 animate-spin rounded-full border-2 border-kun-primary/20 border-t-kun-primary" />
@@ -333,6 +335,7 @@ export function NotificationBell() {
                       n={n}
                       onRead={handleMarkRead}
                       onDelete={handleDelete}
+                      scrollRoot={listRef}
                     />
                   ))}
                 </div>

@@ -18,6 +18,7 @@ import {
 import { useTranslations, useLocale } from "next-intl";
 import { getDisplayName, getValueLabel, getDisplayDescription } from "@/lib/product-name";
 
+
 type Props = { product: ApiProduct };
 
 export function ProductOptionPanel({ product }: Props) {
@@ -51,9 +52,7 @@ export function ProductOptionPanel({ product }: Props) {
 
   const basePrice = parseFloat(product.price);
   const hasProductDiscount = product.discountPercent > 0;
-  const discountedBase = hasProductDiscount
-    ? basePrice * (1 - product.discountPercent / 100)
-    : basePrice;
+  const discountedBase = product.finalPrice;
 
   const optionSurcharge = useMemo(
     () => computeOptionSurcharge(optionGroups, selectedOptions),
@@ -130,7 +129,7 @@ export function ProductOptionPanel({ product }: Props) {
           )}
           {hasProductDiscount && !product.isSoldOut && (
             <span className="rounded-full bg-red-50 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-red-500">
-              -{product.discountPercent}% off
+              -{product.discountPercent}%
             </span>
           )}
         </div>
@@ -190,11 +189,10 @@ export function ProductOptionPanel({ product }: Props) {
                           onClick={() =>
                             setSelectedOptions((prev) => ({ ...prev, [grp.name]: v.label }))
                           }
-                          className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all ${
-                            isSelected
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all ${isSelected
                               ? "border-kun-products-forest bg-kun-products-forest/10 text-kun-products-forest shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
                               : "border-black/10 bg-white text-foreground hover:border-black/20"
-                          }`}
+                            }`}
                         >
                           {getValueLabel(v, locale)}
                           {v.priceDelta > 0 && (
@@ -240,11 +238,10 @@ export function ProductOptionPanel({ product }: Props) {
                       key={top.id}
                       role="option"
                       aria-selected={isActive}
-                      className={`flex items-center gap-2.5 rounded-xl border px-3 py-2 transition-all cursor-pointer ${
-                        isActive
+                      className={`flex items-center gap-2.5 rounded-xl border px-3 py-2 transition-all cursor-pointer ${isActive
                           ? "border-kun-products-forest/35 bg-kun-mint/15"
                           : "border-transparent bg-white hover:border-black/8"
-                      }`}
+                        }`}
                     >
                       <Checkbox
                         isSelected={isActive}
@@ -324,11 +321,10 @@ export function ProductOptionPanel({ product }: Props) {
         size="lg"
         isDisabled={product.isSoldOut || isPending}
         onPress={handleAddToCart}
-        className={`h-14 w-full rounded-full text-[15px] font-semibold shadow-lg transition-all ${
-          addedFeedback
+        className={`h-14 w-full rounded-full text-[15px] font-semibold shadow-lg transition-all ${addedFeedback
             ? "bg-emerald-600 text-white shadow-emerald-200"
             : "bg-kun-products-forest text-white hover:opacity-90 shadow-kun-products-forest/20"
-        }`}
+          }`}
       >
         {isPending ? (
           <Loader2 className="size-5 animate-spin" />

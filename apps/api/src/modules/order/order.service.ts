@@ -401,8 +401,6 @@ export class OrderService {
     const order = await this.prisma.$transaction(async (tx) => {
       const paymentCode = await this.allocPaymentCode(tx);
 
-      const isGuestDelivery = dto.type === OrderType.delivery && userId == null;
-
       // Resolve address for logged-in delivery orders using inlineAddress
       let resolvedAddressId: string | null = null;
       let resolvedGuestAddress: string | null = null;
@@ -453,12 +451,8 @@ export class OrderService {
           type: dto.type,
           addressId: resolvedAddressId,
           guestDeliveryAddress: resolvedGuestAddress,
-          guestDeliveryPhone: isGuestDelivery
-            ? dto.guestDeliveryPhone?.trim() || null
-            : null,
-          guestDeliveryName: isGuestDelivery
-            ? dto.guestDeliveryName?.trim() || null
-            : null,
+          guestDeliveryPhone: dto.guestDeliveryPhone?.trim() || null,
+          guestDeliveryName: dto.guestDeliveryName?.trim() || null,
           tableId: dto.type === OrderType.table ? dto.tableId! : null,
           pickupTime: dto.type === OrderType.pickup ? pickupDate! : null,
           totalAmount,
@@ -738,6 +732,7 @@ export class OrderService {
       orderIds.length > 0
         ? this.prisma.pointTransaction.findMany({
           where: {
+            userId,
             type: PointTransactionType.earn,
             source: PointSource.order,
             referenceId: { in: orderIds },

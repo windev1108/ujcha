@@ -72,9 +72,9 @@ export function parseOptions(raw: unknown): Record<string, string> {
 
 export function serviceLabel(t: AdminOrder['type']): string {
   switch (t) {
-    case 'delivery': return 'Giao hang'
-    case 'table': return 'Tai ban'
-    case 'pickup': return 'Mang di'
+    case 'delivery': return 'Giao hàng'
+    case 'table': return 'Tại bàn'
+    case 'pickup': return 'Mang đi'
     default: return t
   }
 }
@@ -118,6 +118,82 @@ export function buildKunLoyaltyQrUrl(paymentCode: string): string {
 }
 
 // ─── Bill HTML builders ───────────────────────────────────────────────────────
+
+const RECEIPT_I18N = {
+  order: 'Đơn',
+  type: 'Loại',
+  address: 'Địa chỉ',
+  table: 'Bàn',
+  subtotal: 'Tạm tính',
+  discount: 'Giảm giá',
+  points: 'Điểm UjCha',
+  shipping: 'Phí vận chuyển',
+  free: 'Miễn phí',
+  total: 'Tổng cộng',
+  payment: 'Thanh toán',
+  paid: '✓ Đã thanh toán',
+  pending: 'Chờ thanh toán',
+  note: 'Ghi chú',
+  type_delivery: 'Giao hàng',
+  type_table: 'Tại bàn',
+  type_pickup: 'Mang đi',
+  pay_cash: 'Tiền mặt',
+  pay_transfer: 'Chuyển khoản',
+  invoice: 'Hóa đơn',
+  scan_loyalty: 'QUÉT ĐỂ TÍCH ĐIỂM UJCHA',
+  scan_sub: 'Đăng nhập & tích điểm ngay',
+} as const
+
+function receiptServiceLabel(type: AdminOrder['type']): string {
+  if (type === 'delivery') return RECEIPT_I18N.type_delivery
+  if (type === 'table') return RECEIPT_I18N.type_table
+  if (type === 'pickup') return RECEIPT_I18N.type_pickup
+  return type
+}
+
+function receiptPayLabel(type: string): string {
+  return type === 'cash' ? RECEIPT_I18N.pay_cash : RECEIPT_I18N.pay_transfer
+}
+
+function buildBillItems(order: AdminOrder, paperWidth: number): string {
+  const nameFs = paperWidth <= 58 ? 11 : 13
+  const subFs = paperWidth <= 58 ? 10 : 11
+  const grouped = groupOrderItems(order.items)
+  const lines: string[] = []
+  for (let i = 0; i < grouped.length; i++) {
+    const it = grouped[i]
+    const extras = parseExtras(it.extrasJson)
+    const opts = parseOptions(it.optionsJson)
+    const lineTotal = Number.parseFloat(it.price) * it.quantity
+    const optStr = Object.entries(opts).map(([k, v]) => `${k}: ${v}`).join(', ')
+    lines.push(
+      `<div style="display:grid;grid-template-columns:22px minmax(0,1fr) auto;column-gap:6px;align-items:start;margin:4px 0 2px;">` +
+      `<div><span style="display:inline-block;width:20px;height:20px;line-height:18px;background:#fff;border:1.5px solid #000;color:#000;text-align:center;font-weight:bold;font-size:${subFs}px;vertical-align:middle;">${it.quantity}x</span></div>` +
+      `<div style="font-weight:bold;font-size:${nameFs}px;word-break:break-word;line-height:1.3;color:#000;">${esc(it.product.name)}</div>` +
+      `<div style="text-align:right;font-size:${nameFs}px;font-weight:bold;white-space:nowrap;padding-left:4px;min-width:60px;color:#000;">${esc(formatVnd(lineTotal))}</div>` +
+      `</div>`,
+    )
+    if (optStr) {
+      lines.push(`<div style="margin-left:26px;font-size:${subFs}px;margin-bottom:1px;color:#000;">${esc(optStr)}</div>`)
+    }
+    for (const ex of extras) {
+      const exPrice = Number(ex.price ?? 0)
+      lines.push(
+        `<div style="display:flex;justify-content:space-between;margin-left:26px;font-size:${subFs}px;margin-bottom:1px;color:#000;">` +
+        `<span>+ ${esc(ex.name)}</span>` +
+        (exPrice > 0 ? `<span style="white-space:nowrap;padding-left:4px;">${esc(formatVnd(exPrice))}</span>` : '') +
+        `</div>`,
+      )
+    }
+    if (it.note) {
+      lines.push(`<div style="margin-left:26px;font-style:italic;font-size:${subFs}px;color:#000;">${esc(RECEIPT_I18N.note)}: ${esc(it.note)}</div>`)
+    }
+    if (i < grouped.length - 1) {
+      lines.push(`<div style="border-bottom:1px dashed #000;margin:5px 0 4px;"></div>`)
+    }
+  }
+  return lines.join('')
+}
 
 function renderItems(order: AdminOrder, el: ReceiptElement, paperWidth: number): string {
   const lines: string[] = []
@@ -293,36 +369,81 @@ export function buildReceiptDocumentHtml(
   order: AdminOrder,
   loyaltyQrUrl?: string,
   printerCfg?: PrinterConfig | null,
-  fontBase64 = '',
+  _fontBase64 = '',
 ): string {
   const cfg = printerCfg ?? DEFAULT_PRINTER_CONFIG
   const paperWidth = cfg.paperWidth ?? 58
   const printableWidth = paperWidth - 4
-
-  // FIX: font size nhỏ hơn cho 58mm — đây là nguyên nhân chính gây tràn text
   const baseFontSize = paperWidth <= 58 ? 11 : 13
+  const shopNameFs = paperWidth <= 58 ? 18 : 22
+  const qrSize = paperWidth <= 58 ? 120 : 160
 
-  const body = buildReceiptBodyHtml(order, loyaltyQrUrl, cfg)
+  const ref = `#${order.paymentCode ?? order.orderRef}`
+  const date = new Date(order.createdAt).toLocaleString('vi-VN')
+  const subtotal = Number(order.totalAmount) || 0
+  const discount = Number(order.discountAmount) || 0
+  const pointDiscount = Number(order.pointDiscountAmount) || 0
+  const ship = order.type === 'delivery' ? (Number(order.shippingFee) || 0) : 0
+  const total = subtotal - discount - pointDiscount + ship
 
-  const orderTitle = formatOrderRef(order)
-  const fontFace = getFontFaceStyle(fontBase64)
+  const deliveryAddr = order.guestDeliveryAddress ?? order.address?.fullAddress
+  const hasContact = order.guestDeliveryName || order.guestDeliveryPhone
+
+  const body = [
+    `<div style="text-align:center;font-size:${shopNameFs}px;font-weight:bold;letter-spacing:4px;color:#000;">Ujcha</div>`,
+    `<div style="border-top:2px dashed #000;margin:6px 0;"></div>`,
+
+    `<div style="font-size:12px;margin-bottom:1px;color:#000;">${esc(RECEIPT_I18N.order)}: <b>${esc(ref)}</b></div>`,
+    `<div style="font-size:11px;color:#444;margin-bottom:1px;">${esc(date)}</div>`,
+    `<div style="font-size:12px;margin-bottom:1px;color:#000;">${esc(RECEIPT_I18N.type)}: <b>${esc(receiptServiceLabel(order.type))}</b></div>`,
+
+    deliveryAddr ? `<div style="font-size:11px;color:#444;margin-bottom:1px;">${esc(RECEIPT_I18N.address)}: ${esc(deliveryAddr)}</div>` : '',
+    hasContact ? `<div style="font-size:11px;color:#444;margin-bottom:1px;">${[order.guestDeliveryName, order.guestDeliveryPhone].filter(Boolean).map((s) => esc(s!)).join(' · ')}</div>` : '',
+    order.table?.name ? `<div style="font-size:11px;color:#444;margin-bottom:1px;">${esc(RECEIPT_I18N.table)}: ${esc(order.table.name)}</div>` : '',
+
+    `<div style="border-top:2px dashed #000;margin:6px 0;"></div>`,
+
+    buildBillItems(order, paperWidth),
+    `<div style="border-top:2px dashed #000;margin:6px 0;"></div>`,
+
+    `<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;color:#000;"><span>${esc(RECEIPT_I18N.subtotal)}</span><span style="white-space:nowrap;">${esc(formatVnd(subtotal))}</span></div>`,
+    discount > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;color:#000;"><span>${esc(RECEIPT_I18N.discount)}</span><span style="white-space:nowrap;">-${esc(formatVnd(discount))}</span></div>` : '',
+    pointDiscount > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;color:#000;"><span>${esc(RECEIPT_I18N.points)}</span><span style="white-space:nowrap;">-${esc(formatVnd(pointDiscount))}</span></div>` : '',
+    order.type === 'delivery' ? `<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;color:#000;"><span>${esc(RECEIPT_I18N.shipping)}</span><span style="white-space:nowrap;">${ship > 0 ? esc(formatVnd(ship)) : esc(RECEIPT_I18N.free)}</span></div>` : '',
+    `<div style="display:flex;justify-content:space-between;font-weight:bold;font-size:15px;margin-top:3px;color:#000;"><span>${esc(RECEIPT_I18N.total)}</span><span style="white-space:nowrap;">${esc(formatVnd(total))}</span></div>`,
+    `<div style="font-size:12px;margin-top:2px;color:#000;">${esc(RECEIPT_I18N.payment)}: <b>${esc(receiptPayLabel(order.paymentType))}</b></div>`,
+    order.paymentStatus === 'paid'
+      ? `<div style="font-size:12px;font-weight:bold;color:#000;margin-top:1px;">${esc(RECEIPT_I18N.paid)}</div>`
+      : `<div style="font-size:12px;color:#000;margin-top:1px;">${esc(RECEIPT_I18N.pending)}</div>`,
+
+    loyaltyQrUrl
+      ? (
+        `<div style="border-top:2px dashed #000;margin:8px 0 6px;"></div>` +
+        `<div style="text-align:center;font-size:12px;font-weight:bold;letter-spacing:0.5px;margin-bottom:6px;color:#000;">${esc(RECEIPT_I18N.scan_loyalty)}</div>` +
+        `<img src="${loyaltyQrUrl}" style="display:block;margin:0 auto 4px;width:${qrSize}px;height:${qrSize}px;" />` +
+        `<div style="text-align:center;font-size:10px;color:#666;margin-bottom:6px;">${esc(RECEIPT_I18N.scan_sub)}</div>`
+      )
+      : '',
+
+    `<div style="border-top:1px dashed #000;margin:4px 0;"></div>`,
+    WEB_URL ? `<div style="text-align:center;font-size:10px;color:#000;">${esc(WEB_URL)}</div>` : '',
+  ].join('')
+
+  const orderTitle = order.paymentCode ?? formatOrderRef(order)
   return (
     `<!DOCTYPE html><html><head><meta charset="utf-8"/>` +
     `<meta name="viewport" content="width=${printableWidth}mm, initial-scale=1.0, maximum-scale=1.0"/>` +
-    `<title>${esc(orderTitle)}</title>` +
+    `<title>${esc(RECEIPT_I18N.invoice)} ${esc(orderTitle)}</title>` +
     `<style>` +
-    fontFace +
-    `@page { size: ${paperWidth}mm auto; margin: 0; }` +
+    `@page { size: ${paperWidth}mm auto; margin: 2mm; }` +
     `* { box-sizing: border-box; max-width: 100%; }` +
     `html { -webkit-text-size-adjust: none; text-size-adjust: none; }` +
     `body {` +
-    `  font-family: ${FONT_FAMILY};` +
+    `  font-family: ui-sans-serif, system-ui, 'Segoe UI', Arial, sans-serif;` +
     `  font-size: ${baseFontSize}px;` +
-    `  font-weight: 700;` +
-    `  ${FONT_SMOOTHING}` +
     `  width: ${printableWidth}mm;` +
     `  margin: 0 auto;` +
-    `  padding: 1.5mm 0;` +
+    `  padding: 0;` +
     `  color: #000; background: #fff;` +
     `  -webkit-print-color-adjust: exact;` +
     `  print-color-adjust: exact;` +

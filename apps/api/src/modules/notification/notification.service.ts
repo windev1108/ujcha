@@ -57,7 +57,12 @@ export class NotificationService {
       if (existing) {
         notification = await this.prisma.notification.update({
           where: { id: existing.id },
-          data: { title: input.title, content: input.content, isRead: false },
+          data: {
+            title: input.title,
+            content: input.content,
+            isRead: false,
+            data: input.data !== undefined ? (input.data as Prisma.InputJsonValue) : Prisma.JsonNull,
+          },
         });
       }
     }
@@ -76,6 +81,16 @@ export class NotificationService {
 
     this.gateway.emitToUser(input.userId, notification);
     return notification;
+  }
+
+  async upsertOrderNotificationForMany(
+    userIds: string[],
+    input: Omit<CreateNotificationInput, 'userId'>,
+  ) {
+    if (userIds.length === 0) return;
+    await Promise.allSettled(
+      userIds.map((userId) => this.upsertOrderNotification({ ...input, userId })),
+    );
   }
 
   getForUser(userId: string) {

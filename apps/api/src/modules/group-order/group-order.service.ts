@@ -9,6 +9,7 @@ import {
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { GroupOrderStatus, OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
+import { computeFinalPrice } from '../../helper/utils';
 import { OrdersGateway } from '../events/orders.gateway';
 import { NotificationService } from '../notification/notification.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -207,6 +208,8 @@ export class GroupOrderService {
       }
     }
 
+    const globalDiscount = await this.getGlobalDiscount();
+
     await this.prisma.$transaction(async (tx) => {
       await tx.groupOrderParticipantItem.deleteMany({
         where: { participantId: participant.id },
@@ -217,12 +220,14 @@ export class GroupOrderService {
         for (const item of validItems) {
           const product = await tx.product.findUnique({ where: { id: item.productId } });
           if (!product) continue;
+          const effectiveDiscount = Math.min(100, (product.discountPercent ?? 0) + globalDiscount);
+          const finalUnitPrice = computeFinalPrice(product.price, effectiveDiscount);
           await tx.groupOrderParticipantItem.create({
             data: {
               participantId: participant.id,
               productId: item.productId,
               quantity: item.quantity,
-              unitPrice: product.price,
+              unitPrice: new Prisma.Decimal(finalUnitPrice),
               selectedOptions: item.selectedOptions ?? {},
               toppingsJson: (item.toppings ?? []) as any,
               note: item.note ?? null,
@@ -476,6 +481,17 @@ export class GroupOrderService {
       include: this.fullInclude(),
     });
     return this.serialize(updated!);
+  }
+
+  private async getGlobalDiscount(): Promise<number> {
+    try {
+      const cached = await this.redis.get<number>('kun:shop:globalDiscount');
+      if (cached !== null) return cached;
+      const settings = await this.prisma.shopSettings.findFirst();
+      return settings?.globalDiscountPercent ?? 0;
+    } catch {
+      return 0;
+    }
   }
 
   async getConfig() {

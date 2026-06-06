@@ -13,6 +13,7 @@ import { ProductQuickAddModal } from "./ProductQuickAddModal";
 import { useAuth } from "@/hooks";
 import { getDisplayName } from "@/lib/product-name";
 
+
 const PLACEHOLDER_BG = [
   "#1a3c34", "#2d1a0a", "#0d2035", "#1a0d2e",
   "#1a2e0d", "#2e1a0d", "#0d2e2e", "#2e2a0d",
@@ -36,9 +37,7 @@ export function ProductCard({ product, index = 0, eager = false }: Props) {
   const imageUrl = product.imageUrls[0] ?? null;
   const bgColor = PLACEHOLDER_BG[index % PLACEHOLDER_BG.length];
   const hasDiscount = product.discountPercent > 0;
-  const finalPrice = hasDiscount
-    ? parseFloat(product.price) * (1 - product.discountPercent / 100)
-    : parseFloat(product.price);
+  const finalPrice = product.finalPrice;
 
   const { isLoggedIn } = useAuth();
   const [modalOpen, setModalOpen] = useState(false);

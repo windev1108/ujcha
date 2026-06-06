@@ -160,8 +160,13 @@ function OrderCard({ order, index = 0 }: { order: UserOrder; index?: number }) {
           </span>
         </div>
 
+        {/* Payment code */}
+        <p className="mt-2 font-mono text-[11px] font-semibold tracking-wider text-foreground/35">
+          #{order.paymentCode}
+        </p>
+
         {/* Row 2: Item names */}
-        <div className="mt-3 space-y-1">
+        <div className="mt-2 space-y-1">
           {displayItems.map((item, i) => (
             <p key={i} className="truncate text-sm leading-snug">
               <span className="tabular-nums text-foreground/40 text-xs">{item.quantity}×</span>

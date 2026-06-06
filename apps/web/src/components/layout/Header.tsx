@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { ROUTES } from "@/lib/routes";
 import { Header } from "@heroui/react";
 import { HeaderLanguageSelect } from "./HeaderLanguageSelect";
@@ -20,6 +20,8 @@ import { useAuth } from "@/hooks";
 import { motion, AnimatePresence } from "motion/react";
 import { useProfileQuery } from "@/services/profile/hooks";
 import { NotificationBell, NotificationToast } from "../common/NotificationDropdown";
+import { useNotificationStore } from "@/store/notification-store";
+import { applyFaviconBadge } from "@/lib/favicon-badge";
 import { useAuthStore } from "@/store/auth-store";
 import { useRouter } from "@/i18n/navigation";
 
@@ -41,6 +43,21 @@ export function AppHeader() {
     { href: ROUTES.BLOG, label: t("blog"), Icon: BookOpen },
     { href: ROUTES.ABOUT, label: t("about"), Icon: Info },
   ];
+
+  const unreadCount = useNotificationStore((s) => s.unreadCount);
+
+  useEffect(() => {
+    function update() {
+      const away = document.visibilityState === "hidden";
+      const base = document.title.replace(/^\(\d+\)\s*/, "");
+      const show = away && unreadCount > 0;
+      document.title = show ? `(${unreadCount}) ${base}` : base;
+      applyFaviconBadge(show);
+    }
+    update();
+    document.addEventListener("visibilitychange", update);
+    return () => document.removeEventListener("visibilitychange", update);
+  }, [unreadCount]);
 
   const points = profile?.pointBalance ?? 0;
   const name = user?.name?.trim() || "Tài khoản";
@@ -113,6 +130,11 @@ export function AppHeader() {
             {/* ── Mobile trigger ──────────────────────────────── */}
             {/* Always show hamburger; when logged-in + hydrated, also show avatar badge */}
             <div className="relative md:hidden">
+              {isLoggedIn && unreadCount > 0 && (
+                <span className="pointer-events-none absolute -right-0.5 -top-0.5 z-10 flex size-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold leading-none text-white ring-2 ring-white">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
               <button
                 type="button"
                 onClick={() => setMenuOpen(true)}

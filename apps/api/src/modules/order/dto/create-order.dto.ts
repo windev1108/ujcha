@@ -24,11 +24,11 @@ export class InlineAddressDto {
   fullAddress!: string;
 
   @ApiProperty()
-  @IsNumber({ maxDecimalPlaces: 6 })
+  @IsNumber()
   lat!: number;
 
   @ApiProperty()
-  @IsNumber({ maxDecimalPlaces: 6 })
+  @IsNumber()
   lng!: number;
 }
 

@@ -19,6 +19,7 @@ import { usePublicStoreLocationQuery } from "@/services/store/hooks";
 import { useShippingEstimateQuery } from "@/services/shipping/hooks";
 import { fetchPublicTable, type PublicTableInfo, type VoucherPreviewResult } from "@/services/order/api";
 import { normalizeOptionGroups, computeOptionSurcharge } from "@/lib/product-options";
+
 import { ROUTES } from "@/lib/routes";
 import { useAuthStore } from "@/store/auth-store";
 import { VoucherSection } from "./VoucherSection";
@@ -146,11 +147,7 @@ export function CheckoutPageShell() {
   const subtotal = useMemo(
     () =>
       items.reduce((sum, item) => {
-        const base = parseFloat(item.product.price);
-        const discountedBase =
-          item.product.discountPercent > 0
-            ? base * (1 - item.product.discountPercent / 100)
-            : base;
+        const discountedBase = item.product.finalPrice;
         const groups = normalizeOptionGroups(item.product.optionGroups);
         const optionSurcharge = computeOptionSurcharge(groups, item.selectedOptions);
         const toppingTotal = (item.toppings ?? []).reduce(
@@ -271,11 +268,7 @@ export function CheckoutPageShell() {
     }
 
     const orderItems = items.map((item) => {
-      const base = parseFloat(item.product.price);
-      const discountedBase =
-        item.product.discountPercent > 0
-          ? base * (1 - item.product.discountPercent / 100)
-          : base;
+      const discountedBase = item.product.finalPrice;
       const groups = normalizeOptionGroups(item.product.optionGroups);
       const optionSurcharge = computeOptionSurcharge(groups, item.selectedOptions);
       const toppingTotal = item.toppings.reduce(
@@ -332,6 +325,8 @@ export function CheckoutPageShell() {
                   lat: deliveryForm.lat ?? 0,
                   lng: deliveryForm.lng ?? 0,
                 },
+                guestDeliveryName: deliveryForm.name.trim() || undefined,
+                guestDeliveryPhone: deliveryForm.phone.trim() || undefined,
                 items: orderItems,
                 voucherCode: appliedVoucher?.code,
                 discountAmount: voucherDiscount > 0 ? voucherDiscount : undefined,
@@ -360,6 +355,8 @@ export function CheckoutPageShell() {
           type: "pickup",
           paymentType: paymentMethod,
           pickupTime,
+          guestDeliveryName: pickupForm.name.trim() || undefined,
+          guestDeliveryPhone: pickupForm.phone.trim() || undefined,
           items: orderItems,
           voucherCode: appliedVoucher?.code,
           discountAmount: voucherDiscount > 0 ? voucherDiscount : undefined,
@@ -372,7 +369,7 @@ export function CheckoutPageShell() {
       const raw =
         (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
       setOrderError(
-        Array.isArray(raw) ? raw.join(", ") : (raw ?? t("order_failed")),
+        Array.isArray(raw) ? t("order_failed") : (raw ?? t("order_failed")),
       );
     }
   }

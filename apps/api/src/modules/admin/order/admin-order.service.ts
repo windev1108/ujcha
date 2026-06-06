@@ -405,14 +405,16 @@ export class AdminOrderService {
 
       if (shouldRewardPoints) {
         this.fireOrderCompletionSideEffects(updated.id, existing.userId, updated.paymentCode);
-      } else if (dto.status !== undefined && existing.userId) {
+      } else if (dto.status !== undefined) {
         const nFn = STATUS_NOTIF[dto.status];
         if (nFn) {
           const { title, content, notifKey } = nFn(updated.paymentCode);
-          void this.notificationService.upsertOrderNotification({
-            userId: existing.userId, type: 'order', title, content,
-            data: { orderId: updated.id, paymentCode: updated.paymentCode, notifKey },
-          }).catch(() => null);
+          void this.resolveOrderUserIds(updated.id, existing.userId).then((userIds) =>
+            this.notificationService.upsertOrderNotificationForMany(userIds, {
+              type: 'order', title, content,
+              data: { orderId: updated.id, paymentCode: updated.paymentCode, notifKey },
+            }),
+          ).catch(() => null);
         }
       }
 
@@ -453,14 +455,16 @@ export class AdminOrderService {
 
     if (shouldRewardPoints) {
       this.fireOrderCompletionSideEffects(updated.id, existing.userId, updated.paymentCode);
-    } else if (dto.status !== undefined && existing.userId) {
+    } else if (dto.status !== undefined) {
       const nFn = STATUS_NOTIF[dto.status];
       if (nFn) {
         const { title, content, notifKey } = nFn(updated.paymentCode);
-        void this.notificationService.createAndEmit({
-          userId: existing.userId, type: 'order', title, content,
-          data: { orderId: updated.id, paymentCode: updated.paymentCode, notifKey },
-        }).catch(() => null);
+        void this.resolveOrderUserIds(updated.id, existing.userId).then((userIds) =>
+          this.notificationService.upsertOrderNotificationForMany(userIds, {
+            type: 'order', title, content,
+            data: { orderId: updated.id, paymentCode: updated.paymentCode, notifKey },
+          }),
+        ).catch(() => null);
       }
     }
 
@@ -511,6 +515,17 @@ export class AdminOrderService {
     return this.withTypeDisplay(updated);
   }
 
+  private async resolveOrderUserIds(orderId: string, ownerUserId: string | null): Promise<string[]> {
+    const participants = await this.prisma.groupOrderParticipant.findMany({
+      where: { groupOrder: { orderId }, userId: { not: null } },
+      select: { userId: true },
+    });
+    const ids = new Set<string>();
+    if (ownerUserId) ids.add(ownerUserId);
+    for (const p of participants) if (p.userId) ids.add(p.userId);
+    return [...ids];
+  }
+
   private fireOrderCompletionSideEffects(orderId: string, userId?: string | null, paymentCode?: string) {
     void this.referralRewardProcessing
       .tryProcessReferralOnOrderCompleted(orderId)
@@ -519,30 +534,36 @@ export class AdminOrderService {
       .catch((err: unknown) => { this.logger.error(err); });
   }
 
-  private async rewardAndNotifyCompletion(orderId: string, userId: string | null, paymentCode: string) {
+  private async rewardAndNotifyCompletion(orderId: string, ownerId: string | null, paymentCode: string) {
     try {
       await this.pointOrderReward.tryRewardOrderCompletion(orderId);
     } catch (err) {
       this.logger.error(err);
     }
-    if (!userId) return;
 
-    const earnedTxn = await this.prisma.pointTransaction.findFirst({
-      where: { userId, source: PointSource.order, referenceId: orderId, type: PointTransactionType.earn },
-      select: { amount: true },
-    }).catch(() => null);
+    const allUserIds = await this.resolveOrderUserIds(orderId, ownerId);
+    if (allUserIds.length === 0) return;
 
-    const points = earnedTxn ? Math.round(Number(earnedTxn.amount) * 10) / 10 : 0;
+    const points = ownerId
+      ? await this.prisma.pointTransaction.findFirst({
+          where: { userId: ownerId, source: PointSource.order, referenceId: orderId, type: PointTransactionType.earn },
+          select: { amount: true },
+        }).then((t) => (t ? Math.round(Number(t.amount) * 10) / 10 : 0)).catch(() => 0)
+      : 0;
 
-    await this.notificationService.createAndEmit({
-      userId,
-      type: 'order',
-      title: 'Đơn hàng hoàn thành',
-      content: points > 0
-        ? `Đơn #${paymentCode} hoàn thành. Bạn tích được ${points} điểm!`
-        : `Đơn #${paymentCode} hoàn thành. Cảm ơn bạn đã sử dụng UjCha!`,
-      data: { orderId, paymentCode, earnedPoints: points, notifKey: 'order_completed' },
-    });
+    await Promise.allSettled(
+      allUserIds.map((userId) =>
+        this.notificationService.upsertOrderNotification({
+          userId,
+          type: 'order',
+          title: 'Đơn hàng hoàn thành',
+          content: userId === ownerId && points > 0
+            ? `Đơn #${paymentCode} hoàn thành. Bạn tích được ${points} điểm!`
+            : `Đơn #${paymentCode} hoàn thành. Cảm ơn bạn đã sử dụng UjCha!`,
+          data: { orderId, paymentCode, earnedPoints: userId === ownerId ? points : 0, notifKey: 'order_completed' },
+        }),
+      ),
+    );
   }
 
   async bulkUpdateStatus(dto: BulkUpdateOrderStatusDto) {
@@ -571,14 +592,16 @@ export class AdminOrderService {
     for (const o of bulkOrders) {
       if (dto.status === OrderStatus.completed) {
         this.fireOrderCompletionSideEffects(o.id, o.userId, o.paymentCode);
-      } else if (o.userId) {
+      } else {
         const nFn = STATUS_NOTIF[dto.status];
         if (nFn) {
           const { title, content, notifKey } = nFn(o.paymentCode);
-          void this.notificationService.createAndEmit({
-            userId: o.userId, type: 'order', title, content,
-            data: { orderId: o.id, paymentCode: o.paymentCode, notifKey },
-          }).catch(() => null);
+          void this.resolveOrderUserIds(o.id, o.userId).then((userIds) =>
+            this.notificationService.upsertOrderNotificationForMany(userIds, {
+              type: 'order', title, content,
+              data: { orderId: o.id, paymentCode: o.paymentCode, notifKey },
+            }),
+          ).catch(() => null);
         }
       }
     }

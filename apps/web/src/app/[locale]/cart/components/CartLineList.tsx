@@ -13,6 +13,7 @@ import { ItemOptionsDisplay } from "@/components/cart/ItemOptionsDisplay";
 import { useTranslations, useLocale } from "next-intl";
 import { getDisplayName } from "@/lib/product-name";
 
+
 type Props = {
   items: ApiCartItem[];
   selectedIds: Set<string>;
@@ -114,10 +115,7 @@ export function CartLineList({
           const imageUrl = product.imageUrls[0] ?? null;
           const bgColor = PLACEHOLDER_BG[index % PLACEHOLDER_BG.length];
           const basePrice = parseFloat(product.price);
-          const discountedBase =
-            product.discountPercent > 0
-              ? basePrice * (1 - product.discountPercent / 100)
-              : basePrice;
+          const discountedBase = product.finalPrice;
           const groups = normalizeOptionGroups(product.optionGroups);
           const optionSurcharge = computeOptionSurcharge(groups, selectedOptions);
           const toppingTotal = (toppings ?? []).reduce(
@@ -256,13 +254,26 @@ export function CartLineList({
 
                       {/* Price */}
                       <div className="shrink-0 text-right">
-                        <p className="text-lg font-bold tabular-nums text-kun-products-forest sm:text-xl">
-                          {formatVnd(lineTotal)}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <span className="rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-500">
+                            -{product.discountPercent}%
+                          </span>
+                          <p className="text-lg font-bold tabular-nums text-kun-products-forest sm:text-xl">
+                            {formatVnd(lineTotal)}
+                          </p>
+                        </div>
                         {quantity > 1 && (
                           <p className="text-xs text-muted mt-0.5">
                             {formatVnd(unitPrice)} × {quantity}
                           </p>
+                        )}
+                        {product.discountPercent > 0 && (
+                          <div className="mt-1 flex items-center justify-end gap-1.5">
+                            <p className="text-xs text-muted line-through tabular-nums">
+                              {formatVnd(parseFloat(product.price) * quantity)}
+                            </p>
+
+                          </div>
                         )}
                       </div>
                     </div>

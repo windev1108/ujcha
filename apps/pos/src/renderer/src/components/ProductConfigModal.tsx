@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { X, Plus, Minus, Check } from 'lucide-react'
 import type { Product, CartItem } from '../types/common'
 
+
 function fmt(n: number) { return n.toLocaleString('vi-VN') + 'đ' }
 
 type Props = {
@@ -33,6 +34,8 @@ export function ProductConfigModal({ product, onClose, onConfirm }: Props) {
     if (!product) return null
 
     const base = parseFloat(product.price)
+    const hasDiscount = product.discountPercent > 0
+    const discountedBase = product.finalPrice ?? base
 
     const optionDelta = product.optionGroups.reduce((sum, g) => {
         const selected = g.values.find((v) => v.label === options[g.name])
@@ -45,7 +48,7 @@ export function ProductConfigModal({ product, onClose, onConfirm }: Props) {
         return sum + (t ? t.price : 0)
     }, 0)
 
-    const unitPrice = base + optionDelta + toppingDelta
+    const unitPrice = discountedBase + optionDelta + toppingDelta
 
     const toggleTopping = (id: string) => {
         setSelectedToppingIds(prev =>
@@ -61,7 +64,7 @@ export function ProductConfigModal({ product, onClose, onConfirm }: Props) {
         onConfirm({
             productId: product.id,
             name: product.name,
-            basePrice: base,
+            basePrice: discountedBase,
             imageUrl: product.imageUrls[0] ?? null,
             quantity,
             options,
@@ -93,7 +96,15 @@ export function ProductConfigModal({ product, onClose, onConfirm }: Props) {
                 <div className="flex items-start justify-between px-5 pt-5 pb-4 border-b border-gray-100">
                     <div className="min-w-0 pr-3">
                         <h2 className="text-base font-bold text-gray-900 leading-snug">{product.name}</h2>
-                        {/* <p className="mt-0.5 text-sm text-brand font-semibold">{fmt(base)}</p> */}
+                        <div className="mt-1 flex items-center gap-2">
+                            <p className="text-sm font-bold text-brand">{fmt(discountedBase)}</p>
+                            {hasDiscount && (
+                                <>
+                                    <p className="text-xs text-gray-400 line-through">{fmt(base)}</p>
+                                    <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">-{product.discountPercent}%</span>
+                                </>
+                            )}
+                        </div>
                     </div>
                     <button
                         onClick={onClose}

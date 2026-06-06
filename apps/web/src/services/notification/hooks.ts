@@ -38,14 +38,16 @@ export function useMarkReadMutation() {
   return useMutation({
     mutationFn: markNotificationRead,
     onMutate: (id) => {
-      // Flip isRead immediately so the IntersectionObserver in NotificationItem
-      // sees isRead=true and stops watching — prevents the refetch cascade.
       qc.setQueryData<AppNotification[]>(notificationKeys.all, (prev) =>
         prev ? prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)) : prev,
+      );
+      qc.setQueryData<number>(notificationKeys.unreadCount, (prev) =>
+        Math.max(0, (prev ?? 0) - 1),
       );
     },
     onError: () => {
       qc.invalidateQueries({ queryKey: notificationKeys.all });
+      qc.invalidateQueries({ queryKey: notificationKeys.unreadCount });
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: notificationKeys.unreadCount });
@@ -57,6 +59,12 @@ export function useMarkAllReadMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: markAllNotificationsRead,
+    onMutate: () => {
+      qc.setQueryData<AppNotification[]>(notificationKeys.all, (prev) =>
+        prev?.map((n) => ({ ...n, isRead: true })) ?? prev,
+      );
+      qc.setQueryData<number>(notificationKeys.unreadCount, 0);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: notificationKeys.all });
       qc.invalidateQueries({ queryKey: notificationKeys.unreadCount });

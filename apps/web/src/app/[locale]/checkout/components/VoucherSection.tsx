@@ -97,7 +97,7 @@ export function VoucherSection({ subtotal, applied, onApply, onRemove }: Props) 
     );
   }
 
-  if (myVouchers.length === 0) {
+  if (myVouchers.length === 0 || (available.length === 0 && unavailable.length === 0)) {
     return (
       <div className="flex flex-col items-center gap-2 rounded-2xl border border-black/6 bg-surface-soft py-6 text-center">
         <Ticket className="size-7 text-muted/30" />

@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import {
+    computeFinalPrice,
     normalizeInlineOptionGroups,
     normalizeInlineToppings,
 } from '../../helper/utils';
@@ -24,7 +25,7 @@ export class ProductService {
         const cacheKey = PRODUCT_LIST_KEY(categoryId, categorySlug, qx);
         const cached = await this.redis.get(cacheKey);
         const globalDiscount = await this.getGlobalDiscount();
-        if (cached) return (cached as any[]).map((p: any) => applyLocale(applyGlobalDiscount(p, globalDiscount), locale));
+        if (cached) return (cached as any[]).map((p: any) => withFinalPrice(applyLocale(applyGlobalDiscount(p, globalDiscount), locale)));
 
         const categoryFilter = categoryId
             ? { categoryId }
@@ -52,7 +53,7 @@ export class ProductService {
         });
         const result = rows.map(normalizeProductRow);
         await this.redis.set(cacheKey, result, PRODUCT_LIST_TTL);
-        return result.map(p => applyLocale(applyGlobalDiscount(p, globalDiscount), locale));
+        return result.map(p => withFinalPrice(applyLocale(applyGlobalDiscount(p, globalDiscount), locale)));
     }
 
     async invalidateListCache() {
@@ -73,7 +74,7 @@ export class ProductService {
                 code: 'PRODUCT_NOT_FOUND',
             });
         }
-        return applyLocale(applyGlobalDiscount(normalizeProductRow(row), globalDiscount), locale);
+        return withFinalPrice(applyLocale(applyGlobalDiscount(normalizeProductRow(row), globalDiscount), locale));
     }
 
     async getBySlug(slug: string, locale?: string) {
@@ -90,7 +91,7 @@ export class ProductService {
                 code: 'PRODUCT_NOT_FOUND',
             });
         }
-        return applyLocale(applyGlobalDiscount(normalizeProductRow(row), globalDiscount), locale);
+        return withFinalPrice(applyLocale(applyGlobalDiscount(normalizeProductRow(row), globalDiscount), locale));
     }
 
     private async getGlobalDiscount(): Promise<number> {
@@ -101,6 +102,10 @@ export class ProductService {
         await this.redis.set(GLOBAL_DISCOUNT_KEY, val, GLOBAL_DISCOUNT_TTL);
         return val;
     }
+}
+
+function withFinalPrice<T extends { price: unknown; discountPercent: number }>(product: T): T & { finalPrice: number } {
+    return { ...product, finalPrice: computeFinalPrice(product.price, product.discountPercent) };
 }
 
 /** Override `name` with the translation for the given locale (non-vi only). */

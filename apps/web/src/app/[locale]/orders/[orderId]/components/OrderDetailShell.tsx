@@ -786,7 +786,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
           </motion.div>
 
           {/* ── Fulfillment info ─────────────────────────────────── */}
-          {(order.address || order.table || order.pickupTime) && (
+          {(order.address || order.table || order.pickupTime || order.guestDeliveryName || order.guestDeliveryPhone) && (
             <motion.div
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
@@ -797,32 +797,27 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                 {t("fulfillment_info")}
               </p>
               <div className="space-y-3">
-                {order.type === "delivery" && (() => {
-                  const recipientName = order.guestDeliveryName || order.user?.name || null;
-                  const recipientPhone = order.guestDeliveryPhone || order.user?.phone || null;
-                  if (!recipientName && !recipientPhone) return null;
-                  return (
-                    <div className="flex gap-3">
-                      <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-soft">
-                        <Phone className="size-4 text-kun-products-forest" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        {recipientName && (
-                          <p className="text-sm font-medium text-foreground">{recipientName}</p>
-                        )}
-                        {recipientPhone && (
-                          <a
-                            href={`tel:${recipientPhone}`}
-                            className="mt-0.5 inline-flex items-center gap-1 text-sm text-foreground/65 hover:text-kun-products-forest"
-                          >
-                            <Phone className="size-3.5" />
-                            {recipientPhone}
-                          </a>
-                        )}
-                      </div>
+                {(order.type === "delivery" || order.type === "pickup") && (order.guestDeliveryName || order.guestDeliveryPhone) && (
+                  <div className="flex gap-3">
+                    <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-soft">
+                      <Phone className="size-4 text-kun-products-forest" />
                     </div>
-                  );
-                })()}
+                    <div className="min-w-0 flex-1">
+                      {order.guestDeliveryName && (
+                        <p className="text-sm font-medium text-foreground">{order.guestDeliveryName}</p>
+                      )}
+                      {order.guestDeliveryPhone && (
+                        <a
+                          href={`tel:${order.guestDeliveryPhone}`}
+                          className="mt-0.5 inline-flex items-center gap-1 text-sm text-foreground/65 hover:text-kun-products-forest"
+                        >
+                          <Phone className="size-3.5" />
+                          {order.guestDeliveryPhone}
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
                 {order.address && (
                   <div className="flex gap-3">
                     <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-soft">

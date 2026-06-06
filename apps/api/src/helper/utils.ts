@@ -118,3 +118,11 @@ export function clampDiscountPercent(n: number | undefined, fallback = 0): numbe
   if (n === undefined || Number.isNaN(n)) return fallback;
   return Math.min(100, Math.max(0, Math.round(n)));
 }
+
+/** Compute effective discounted price, floored to nearest 1000 VND. */
+export function computeFinalPrice(price: unknown, discountPercent: number): number {
+  const base = parseFloat(String(price));
+  if (!Number.isFinite(base)) return 0;
+  if (!discountPercent) return base;
+  return Math.floor(base * (1 - discountPercent / 100) / 1000) * 1000;
+}

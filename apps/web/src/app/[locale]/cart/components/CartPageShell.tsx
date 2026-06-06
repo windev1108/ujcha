@@ -78,11 +78,7 @@ export function CartPageShell() {
       items
         .filter((item) => selectedIds.has(item.id))
         .reduce((sum, item) => {
-          const base = parseFloat(item.product.price);
-          const discountedBase =
-            item.product.discountPercent > 0
-              ? base * (1 - item.product.discountPercent / 100)
-              : base;
+          const discountedBase = item.product.finalPrice;
           const groups = normalizeOptionGroups(item.product.optionGroups);
           const optionSurcharge = computeOptionSurcharge(groups, item.selectedOptions);
           const toppingTotal = (item.toppings ?? []).reduce(

@@ -3,6 +3,7 @@
 import type { ApiCartItem } from "@/services/cart/types";
 import { normalizeOptionGroups } from "@/lib/product-options";
 
+
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -32,10 +33,7 @@ export function buildWebReceiptHtml(d: WebReceiptData): string {
 
   let itemLines = "";
   for (const item of d.items) {
-    const base = parseFloat(item.product.price);
-    const discounted = item.product.discountPercent > 0
-      ? base * (1 - item.product.discountPercent / 100)
-      : base;
+    const discounted = item.product.finalPrice;
     const groups = normalizeOptionGroups(item.product.optionGroups);
 
     let unitPrice = discounted;

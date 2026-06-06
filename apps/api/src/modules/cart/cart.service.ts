@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Cart } from '@prisma/client';
-import { normalizeInlineOptionGroups, normalizeInlineToppings } from '../../helper/utils';
+import { computeFinalPrice, normalizeInlineOptionGroups, normalizeInlineToppings } from '../../helper/utils';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
 import type { AddToCartDto } from './dto/add-to-cart.dto';
 import type { UpdateCartItemDto } from './dto/update-cart-item.dto';
 
@@ -22,6 +23,9 @@ const CART_ITEM_INCLUDE = {
   },
 } as const;
 
+const GLOBAL_DISCOUNT_KEY = 'kun:shop:globalDiscount';
+const GLOBAL_DISCOUNT_TTL = 60;
+
 /** Build toppingsJson from product.toppings filtered by the selected IDs. */
 function buildToppingsJson(
   productToppings: unknown,
@@ -34,15 +38,18 @@ function buildToppingsJson(
     .map((t) => ({ id: t.id, name: t.name, price: t.price, nameTranslation: t.nameTranslation ?? {} }));
 }
 
-/** Normalize a raw cart item from DB (expand product optionGroups + toppings JSON). */
-function normalizeCartItem(item: any) {
+/** Normalize a raw cart item, merging global discount into finalPrice. */
+function normalizeCartItem(item: any, globalDiscount: number) {
   const rawToppings: { id: string; name: string; price: string | number }[] =
     Array.isArray(item.toppingsJson) ? item.toppingsJson : [];
+
+  const effectiveDiscount = item.product
+    ? Math.min(100, (item.product.discountPercent ?? 0) + globalDiscount)
+    : 0;
 
   return {
     ...item,
     toppingsJson: undefined,
-    // Return in the nested ApiCartTopping shape the client expects
     toppings: rawToppings.map((t) => ({
       toppingId: t.id,
       topping: { id: t.id, name: t.name, price: String(t.price), nameTranslation: (t as any).nameTranslation ?? {} },
@@ -50,8 +57,10 @@ function normalizeCartItem(item: any) {
     product: item.product
       ? {
           ...item.product,
+          discountPercent: effectiveDiscount,
           optionGroups: normalizeInlineOptionGroups(item.product.optionGroups),
           toppings: normalizeInlineToppings(item.product.toppings),
+          finalPrice: computeFinalPrice(item.product.price, effectiveDiscount),
         }
       : item.product,
   };
@@ -59,7 +68,23 @@ function normalizeCartItem(item: any) {
 
 @Injectable()
 export class CartService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
+  ) { }
+
+  private async getGlobalDiscount(): Promise<number> {
+    try {
+      const cached = await this.redis.get<number>(GLOBAL_DISCOUNT_KEY);
+      if (cached !== null) return cached;
+      const settings = await this.prisma.shopSettings.findFirst();
+      const val = settings?.globalDiscountPercent ?? 0;
+      await this.redis.set(GLOBAL_DISCOUNT_KEY, val, GLOBAL_DISCOUNT_TTL);
+      return val;
+    } catch {
+      return 0;
+    }
+  }
 
   private async getOrCreateCart(userId: string): Promise<Cart> {
     const existing = await this.prisma.cart.findUnique({ where: { userId } });
@@ -68,6 +93,7 @@ export class CartService {
   }
 
   async addToCart(userId: string, dto: AddToCartDto) {
+    const globalDiscount = await this.getGlobalDiscount();
     const cart = await this.getOrCreateCart(userId);
 
     const product = await this.prisma.product.findUnique({
@@ -88,10 +114,11 @@ export class CartService {
       include: CART_ITEM_INCLUDE,
     });
 
-    return normalizeCartItem(item);
+    return normalizeCartItem(item, globalDiscount);
   }
 
   async updateItem(userId: string, itemId: string, dto: UpdateCartItemDto) {
+    const globalDiscount = await this.getGlobalDiscount();
     const item = await this.prisma.cartItem.findFirst({
       where: { id: itemId, cart: { userId } },
       include: { product: { select: { toppings: true } } },
@@ -124,7 +151,7 @@ export class CartService {
       include: CART_ITEM_INCLUDE,
     });
 
-    return normalizeCartItem(updated);
+    return normalizeCartItem(updated, globalDiscount);
   }
 
   async removeItem(userId: string, itemId: string): Promise<void> {
@@ -152,6 +179,7 @@ export class CartService {
   }
 
   async getCart(userId: string) {
+    const globalDiscount = await this.getGlobalDiscount();
     const cart = await this.prisma.cart.findUnique({
       where: { userId },
       include: {
@@ -161,10 +189,11 @@ export class CartService {
         },
       },
     });
+
     if (!cart) return null;
     return {
       ...cart,
-      items: cart.items.map(normalizeCartItem),
+      items: cart.items.map((item) => normalizeCartItem(item, globalDiscount)),
     };
   }
 }

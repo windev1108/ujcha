@@ -8,12 +8,9 @@ export class OrderValidationService {
   assertCreateOrderTypeRules(dto: CreateOrderDto): void {
     const { type, addressId, tableId, pickupTime } = dto;
     const guestAddr = dto.guestDeliveryAddress?.trim();
-    const hasGuestMeta =
-      Boolean(guestAddr) ||
-      Boolean(dto.guestDeliveryPhone?.trim()) ||
-      Boolean(dto.guestDeliveryName?.trim());
 
-    if (type !== OrderType.delivery && hasGuestMeta) {
+    // Address is delivery-only; name/phone are allowed for delivery and pickup
+    if (type !== OrderType.delivery && Boolean(guestAddr)) {
       throw new BadRequestException({
         message:
           'Địa chỉ giao khách lẻ chỉ dùng cho đơn giao hàng (delivery).',
@@ -23,18 +20,19 @@ export class OrderValidationService {
 
     if (type === OrderType.delivery) {
       const hasSaved = Boolean(addressId?.trim());
+      const hasInline = Boolean(dto.inlineAddress);
       const hasGuest = Boolean(guestAddr);
-      if (!hasSaved && !hasGuest) {
+      if (!hasSaved && !hasInline && !hasGuest) {
         throw new BadRequestException({
           message:
-            'Giao hàng cần địa chỉ: addressId (đã lưu) hoặc guestDeliveryAddress (khách không tài khoản).',
+            'Giao hàng cần địa chỉ: addressId (đã lưu) hoặc inlineAddress (bản đồ) hoặc guestDeliveryAddress (khách không tài khoản).',
           code: 'ORDER_DELIVERY_ADDRESS_REQUIRED',
         });
       }
-      if (hasSaved && hasGuest) {
+      if ((hasSaved || hasInline) && hasGuest) {
         throw new BadRequestException({
           message:
-            'Chỉ dùng một: addressId hoặc địa chỉ giao khách lẻ (guestDeliveryAddress).',
+            'Chỉ dùng một: addressId/inlineAddress hoặc địa chỉ giao khách lẻ (guestDeliveryAddress).',
           code: 'ORDER_DELIVERY_ADDRESS_CONFLICT',
         });
       }

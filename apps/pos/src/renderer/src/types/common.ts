@@ -43,6 +43,7 @@ export interface Product {
   isAvailable: boolean
   isSoldOut: boolean
   discountPercent: number
+  finalPrice?: number
 }
 
 export interface Topping {

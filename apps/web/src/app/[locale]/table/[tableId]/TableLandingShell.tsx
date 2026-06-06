@@ -34,6 +34,7 @@ import { fetchCategories } from "@/services/category/api";
 import type { ApiProduct } from "@/services/product/types";
 import type { ApiCategory } from "@/services/category/types";
 import { normalizeOptionGroups, computeOptionSurcharge, formatVnd } from "@/lib/product-options";
+
 import { ROUTES } from "@/lib/routes";
 import { getDisplayName, getValueLabel } from "@/lib/product-name";
 
@@ -305,9 +306,7 @@ function ProductCard({
   const img = product.imageUrls[0];
   const sold = product.isSoldOut || !product.isAvailable;
   const disc = product.discountPercent > 0;
-  const discPrice = disc
-    ? parseFloat(product.price) * (1 - product.discountPercent / 100)
-    : null;
+  const discPrice = disc ? product.finalPrice : null;
 
   return (
     <button
@@ -382,9 +381,8 @@ function ProductPickModal({
   const locale = useLocale();
   const groups = normalizeOptionGroups(product.optionGroups);
   const productToppings = (product.toppings ?? []).filter((tp) => tp.isActive !== false);
-  const base = parseFloat(product.price);
   const disc = product.discountPercent > 0;
-  const baseEffective = disc ? base * (1 - product.discountPercent / 100) : base;
+  const baseEffective = product.finalPrice;
 
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};

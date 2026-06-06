@@ -68,7 +68,7 @@ export function BlogPostShell({ slug }: { slug: string }) {
       <section className={`relative overflow-hidden bg-gradient-to-br ${coverGrad} pb-20 pt-14 sm:pb-24 sm:pt-18`}>
         {post.thumbnail && (
           <div className="absolute inset-0">
-            <Image src={post.thumbnail} alt={post.title} fill className="object-cover" sizes="100vw" />
+            <Image src={post.thumbnail} alt={post.title} fill className="object-cover" sizes="100vw" unoptimized />
             <div className={`absolute inset-0 bg-gradient-to-br ${coverGrad} opacity-80`} />
           </div>
         )}

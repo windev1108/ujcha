@@ -5,6 +5,7 @@ import {
   PointTransactionType,
   ReferralRewardStatus,
 } from '@prisma/client';
+import { NotificationService } from '../notification/notification.service';
 import { PointService } from '../point/point.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -19,6 +20,7 @@ export class ReferralRewardProcessingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly pointService: PointService,
+    private readonly notificationService: NotificationService,
   ) { }
 
   async tryProcessReferralOnOrderCompleted(
@@ -121,6 +123,20 @@ export class ReferralRewardProcessingService {
       this.logger.log(
         `Referral commission ${commissionPoints}pts (${cfg.referrerCommissionPercent}%) credited to ${a.id} for order ${orderId}`,
       );
+
+      const referredName = b.name?.trim() || 'bạn bè';
+      void this.notificationService.createAndEmit({
+        userId: a.id,
+        type: 'reward',
+        title: 'Nhận điểm hoa hồng',
+        content: `Bạn vừa nhận ${commissionPoints} điểm hoa hồng từ ${referredName} đặt đơn đầu tiên!`,
+        data: {
+          notifKey: 'referral_commission',
+          points: commissionPoints,
+          referredUserName: referredName,
+        },
+      });
+
       return { status: 'credited', referralRewardId };
     } catch (err) {
       this.logger.error(

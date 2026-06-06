@@ -19,6 +19,7 @@ import type { ApiCartItem } from "@/services/cart/types";
 import { useTranslations, useLocale } from "next-intl";
 import { getDisplayName, getValueLabel, getDisplayDescription } from "@/lib/product-name";
 
+
 const PLACEHOLDER_BG = [
   "#1a3c34", "#2d1a0a", "#0d2035", "#1a0d2e",
   "#1a2e0d", "#2e1a0d", "#0d2e2e", "#2e2a0d",
@@ -33,6 +34,7 @@ type ModalProduct = {
   price: string;
   imageUrls: string[];
   discountPercent: number;
+  finalPrice?: number;
   optionGroups: unknown;
   toppings?: { id: string; name: string; price: number; nameTranslation?: Record<string, string> | null; isActive?: boolean }[];
   category: { name: string; nameTranslation?: Record<string, string> | null };
@@ -125,9 +127,7 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
 
   const basePrice = resolvedProduct ? parseFloat(resolvedProduct.price) : 0;
   const hasDiscount = (resolvedProduct?.discountPercent ?? 0) > 0;
-  const discountedBase = hasDiscount
-    ? basePrice * (1 - (resolvedProduct!.discountPercent) / 100)
-    : basePrice;
+  const discountedBase = resolvedProduct?.finalPrice ?? basePrice;
 
   const optionSurcharge = useMemo(
     () => computeOptionSurcharge(optionGroups, selectedOptions),

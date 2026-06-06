@@ -4,6 +4,7 @@ import { usePosStore } from '../store/pos-store'
 import type { Product, CartItem } from '../types/common'
 import { ProductConfigModal } from './ProductConfigModal'
 
+
 const CARD_COLORS = ['#e8f5e9', '#e3f2fd', '#fce4ec', '#fff3e0', '#f3e5f5', '#e0f7fa']
 function cardColor(name: string) { return CARD_COLORS[name.charCodeAt(0) % CARD_COLORS.length] }
 
@@ -13,6 +14,10 @@ function fmt(price: string | number) {
 
 function ProductCard({ product, onPress }: { product: Product; onPress: (p: Product) => void }) {
   const sold = product.isSoldOut || !product.isAvailable
+  const basePrice = parseFloat(product.price)
+  const hasDiscount = product.discountPercent > 0
+  const finalPrice = product.finalPrice ?? basePrice
+
   return (
     <button
       onClick={() => !sold && onPress(product)}
@@ -35,8 +40,18 @@ function ProductCard({ product, onPress }: { product: Product; onPress: (p: Prod
 
       <div className="flex flex-1 flex-col gap-1 p-3 w-full">
         <p className="text-sm font-semibold leading-snug text-gray-800 line-clamp-2 text-left">{product.name}</p>
-        <div className="mt-auto flex items-center justify-between gap-1">
-          <p className="text-base font-bold text-brand">{fmt(product.price)}</p>
+        <div className="mt-auto flex items-end justify-between gap-1">
+          <div className="flex flex-col">
+            <p className="text-base font-bold text-brand">{fmt(finalPrice)}</p>
+            {hasDiscount && (
+              <p className="text-xs text-gray-400 line-through leading-none">{fmt(basePrice)}</p>
+            )}
+          </div>
+          {hasDiscount && (
+            <span className="shrink-0 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+              -{product.discountPercent}%
+            </span>
+          )}
         </div>
       </div>
 

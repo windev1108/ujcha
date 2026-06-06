@@ -316,13 +316,14 @@ export function OrderDetailModal({
     const labelDisabledReason = !labelCfg.enabled ? 'Chưa bật in tem nhãn trong Cài đặt'
         : !(labelCfg.address || labelCfg.printerId) ? 'Chưa chọn máy in nhãn trong Cài đặt' : undefined
 
-    const deliveryName = order.guestDeliveryName ?? order.user?.name ?? null
-    const deliveryPhone = order.guestDeliveryPhone ?? order.user?.phone ?? null
+    const deliveryName = order.guestDeliveryName ?? null
+    const deliveryPhone = order.guestDeliveryPhone ?? null
     const deliveryAddr = order.guestDeliveryAddress ?? order.address?.fullAddress ?? null
     const mapLat = order.address?.lat
     const mapLng = order.address?.lng
     const hasMap = typeof mapLat === 'number' && typeof mapLng === 'number'
     const hasDelivery = order.type === 'delivery' && (deliveryName || deliveryPhone || deliveryAddr)
+    const hasPickupContact = order.type === 'pickup' && (deliveryName || deliveryPhone)
     const mapsUrl = deliveryAddr
         ? hasMap
             ? `https://www.google.com/maps?q=${mapLat},${mapLng}`
@@ -452,6 +453,29 @@ export function OrderDetailModal({
                                     </a>
                                 </div>
                             )}
+                        </div>
+                    )}
+
+                    {/* Pickup recipient contact */}
+                    {hasPickupContact && (
+                        <div className="rounded-2xl border border-violet-200 bg-violet-50/60 overflow-hidden">
+                            <p className="px-4 pt-3 pb-2 text-[10px] font-bold uppercase tracking-widest text-violet-500/80">
+                                Thông tin người nhận
+                            </p>
+                            <div className="px-4 pb-3 space-y-2">
+                                {deliveryName && (
+                                    <div className="flex items-center gap-2.5 text-sm">
+                                        <User className="size-4 shrink-0 text-violet-500" />
+                                        <span className="font-semibold text-gray-800">{deliveryName}</span>
+                                    </div>
+                                )}
+                                {deliveryPhone && (
+                                    <div className="flex items-center gap-2.5 text-sm">
+                                        <Phone className="size-4 shrink-0 text-violet-500" />
+                                        <span className="font-mono font-medium text-gray-800">{deliveryPhone}</span>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     )}
 

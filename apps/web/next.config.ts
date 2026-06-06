@@ -14,8 +14,8 @@ const nextConfig: NextConfig = {
   images: {
     dangerouslyAllowSVG: true,
     contentDispositionType: "inline",
-    // Cache optimized images for 24 h — reduces repeat transformations on Vercel
-    minimumCacheTTL: 86400,
+    // Cache for 1 year — product/blog images change URL on upload, so long TTL is safe
+    minimumCacheTTL: 31536000,
     // Only generate the breakpoints actually needed by the UI
     deviceSizes: [640, 828, 1080, 1200, 1920],
     imageSizes: [16, 32, 64, 96, 128, 256],

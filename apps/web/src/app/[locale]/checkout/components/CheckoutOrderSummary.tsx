@@ -9,6 +9,7 @@ import { easeOutSmooth, revealTransition } from "@/app/[locale]/(landing)/compon
 import { useTranslations, useLocale } from "next-intl";
 import { useLocalizedHref } from "../../../../i18n/use-localized-href";
 import { getDisplayName } from "@/lib/product-name";
+
 import type { ApiCartItem } from "@/services/cart/types";
 import { normalizeOptionGroups, computeOptionSurcharge } from "@/lib/product-options";
 import { ItemOptionsDisplay } from "@/components/cart/ItemOptionsDisplay";
@@ -94,10 +95,7 @@ export function CheckoutOrderSummary({
             {items.map((item) => {
               const imageUrl = item.product.imageUrls[0] ?? null;
               const base = parseFloat(item.product.price);
-              const discountedBase =
-                item.product.discountPercent > 0
-                  ? base * (1 - item.product.discountPercent / 100)
-                  : base;
+              const discountedBase = item.product.finalPrice;
               const groups = normalizeOptionGroups(item.product.optionGroups);
               const optionSurcharge = computeOptionSurcharge(groups, item.selectedOptions);
               const toppingTotal = (item.toppings ?? []).reduce(
@@ -143,14 +141,28 @@ export function CheckoutOrderSummary({
                       <p className="font-medium leading-snug text-foreground">
                         {getDisplayName(item.product, locale)}
                       </p>
-                      <p className="shrink-0 text-sm font-bold tabular-nums text-kun-primary">
-                        {formatVnd(lineTotal)}
-                      </p>
+                      <div className="shrink-0 text-right">
+                        <div className="flex items-center gap-2">
+                          {item.product.discountPercent > 0 && (
+                            <span className="inline-flex rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-500">
+                              -{item.product.discountPercent}%
+                            </span>
+                          )}
+                          <p className="text-sm font-bold tabular-nums text-kun-primary">{formatVnd(lineTotal)}</p>
+                        </div>
+                        {item.product.discountPercent > 0 && (
+                          <p className="text-xs text-muted line-through tabular-nums">
+                            {formatVnd(base * item.quantity)}
+                          </p>
+                        )}
+
+                      </div>
                     </div>
                     <p className="mt-0.5 text-xs text-foreground/50">
                       {getDisplayName(item.product.category, locale)}
                     </p>
                     <ItemOptionsDisplay item={item} />
+
                   </div>
                 </motion.li>
               );
