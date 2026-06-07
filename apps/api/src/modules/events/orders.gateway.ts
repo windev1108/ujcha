@@ -29,6 +29,8 @@ export class OrdersGateway {
   }
 
   emitOrderCreated(data: { orderId: string; type: string }) {
+    const connected = this.server.sockets.sockets.size;
+    console.log(`[OrdersGateway] emit order:new — orderId=${data.orderId} clients=${connected}`);
     this.server.emit('order:new', data);
   }
 

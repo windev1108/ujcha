@@ -59,6 +59,16 @@ function createStaffWindow() {
     if (isDev) staffWin?.webContents.openDevTools({ mode: 'detach' })
   })
 
+  staffWin.webContents.on('before-input-event', (_event, input) => {
+    if (input.type === 'keyDown' && input.key === 'F12') {
+      if (staffWin?.webContents.isDevToolsOpened()) {
+        staffWin.webContents.closeDevTools()
+      } else {
+        staffWin?.webContents.openDevTools({ mode: 'detach' })
+      }
+    }
+  })
+
   loadWindow(staffWin, 'staff')
 
   staffWin.on('closed', () => {

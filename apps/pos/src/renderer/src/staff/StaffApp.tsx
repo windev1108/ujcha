@@ -72,6 +72,7 @@ export function StaffApp() {
   const [shopeePartnerConnected, setShopeePartnerConnected] = useState(false)
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
   const [appVersion, setAppVersion] = useState('')
+  const [socketConnected, setSocketConnected] = useState(false)
 
   // ── Auto-print dedup: track order IDs already printed this session ─────────
   const autoPrintedIdsRef = useRef<Set<string>>(new Set())
@@ -254,7 +255,23 @@ export function StaffApp() {
     if (!isLoggedIn) return
     const socket = io(API_URL, { transports: ['websocket', 'polling'], reconnectionAttempts: Infinity, reconnectionDelay: 2000 })
 
-    socket.on('order:new', () => newOrderHandlerRef.current())
+    socket.on('connect', () => {
+      setSocketConnected(true)
+      console.log('[socket] connected to', API_URL, 'id:', socket.id)
+    })
+    socket.on('disconnect', (reason) => {
+      setSocketConnected(false)
+      console.warn('[socket] disconnected', reason)
+    })
+    socket.on('connect_error', (err) => {
+      setSocketConnected(false)
+      console.error('[socket] connect_error', err.message)
+    })
+
+    socket.on('order:new', () => {
+      console.log('[socket] order:new received')
+      newOrderHandlerRef.current()
+    })
     socket.on('order:external', (data?: { platform?: string }) => {
       const p = (data?.platform ?? '').toUpperCase()
       if (p.includes('GRAB')) setNewGrabBadge((n) => n + 1)
@@ -384,6 +401,12 @@ export function StaffApp() {
             )}
           </button>
         )}
+
+        {/* Socket connection indicator */}
+        <div
+          title={socketConnected ? `Đã kết nối: ${API_URL}` : `Mất kết nối: ${API_URL}`}
+          className={`ml-1 size-2 rounded-full ${socketConnected ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`}
+        />
 
         <div className="flex-1" />
 
