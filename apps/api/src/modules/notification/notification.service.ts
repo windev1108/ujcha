@@ -96,7 +96,7 @@ export class NotificationService {
   getForUser(userId: string) {
     return this.prisma.notification.findMany({
       where: { userId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { updatedAt: 'desc' },
       take: 20,
     });
   }

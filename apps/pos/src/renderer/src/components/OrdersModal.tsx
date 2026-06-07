@@ -314,6 +314,8 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
     socket.on('order:new', () => fullReload(true))
     socket.on('order:shipper-assigned', () => fullReload(false))
     socket.on('order:external', () => fullReload(true))
+    // Resync on reconnect so events missed during disconnect window are recovered
+    socket.io.on('reconnect', () => fullReload(false))
     return () => { socket.disconnect() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

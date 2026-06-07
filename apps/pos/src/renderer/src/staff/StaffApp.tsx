@@ -265,6 +265,15 @@ export function StaffApp() {
     socket.on('order:paid', () => {
       // handled in CheckoutModal for the active order
     })
+    // On reconnect: resync pending badge in case order:new was missed during disconnect
+    socket.io.on('reconnect', () => {
+      const today = new Date().toISOString().slice(0, 10)
+      void fetchOrders(1, 100, today, today).then((data: unknown) => {
+        const items = ((data as { items: AdminOrder[] }).items ?? [])
+        const pending = items.filter((o: AdminOrder) => o.status === 'pending').length
+        if (pending > 0) setNewOrderBadge((n) => Math.max(n, pending))
+      }).catch(() => {})
+    })
 
     return () => { socket.disconnect() }
   }, [isLoggedIn])

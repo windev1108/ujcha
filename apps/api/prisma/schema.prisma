@@ -861,8 +861,9 @@ model Notification {
   data      Json?
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@index([userId, createdAt])
+  @@index([userId, updatedAt])
   @@index([userId, isRead])
 }
 
