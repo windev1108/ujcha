@@ -1,5 +1,3 @@
-import * as iconv from 'iconv-lite'
-
 const ESC = 0x1b
 const GS = 0x1d
 
@@ -29,14 +27,8 @@ function stripDiacritics(str: string): string {
         .replace(/[^\x00-\x7F]/g, '?')
 }
 
-// Encode Vietnamese text as CP1258 (single-byte Windows Vietnamese codepage).
-// Falls back to ASCII with diacritics stripped for printers that don't support CP1258.
 function vieLn(text: string): Buffer {
-    try {
-        return iconv.encode(text + '\n', 'cp1258')
-    } catch {
-        return Buffer.from(stripDiacritics(text) + '\n', 'ascii')
-    }
+    return Buffer.from(text + '\n', 'utf8')
 }
 
 // ─── Word wrap helper ─────────────────────────────────────────────────────────
@@ -114,6 +106,23 @@ type PrintLine =
     | { t: 'item'; qty: string; name: string; price: string }
     | { t: 'sub'; text: string }
     | { t: 'blank' }
+    | { t: 'qr'; data: string }
+
+function buildEscPosQr(data: string, moduleSize = 5): Buffer {
+    const dataBytes = Buffer.from(data, 'utf8')
+    const storePayload = dataBytes.length + 3
+    const pL = storePayload & 0xFF
+    const pH = (storePayload >> 8) & 0xFF
+    const sz = Math.min(Math.max(moduleSize, 1), 16)
+    return Buffer.concat([
+        Buffer.from([GS, 0x28, 0x6B, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00]),
+        Buffer.from([GS, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x43, sz]),
+        Buffer.from([GS, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x45, 0x31]),
+        Buffer.from([GS, 0x28, 0x6B, pL, pH, 0x31, 0x50, 0x30]),
+        dataBytes,
+        Buffer.from([GS, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x51, 0x30]),
+    ])
+}
 
 // ─── HTML block extractor ─────────────────────────────────────────────────────
 interface Block {
@@ -163,12 +172,29 @@ function extractDivBlocks(html: string): Block[] {
 
 // ─── Main HTML parser ─────────────────────────────────────────────────────────
 function parseHtml(html: string): PrintLine[] {
-    const body = extractBody(html)
+    const rawBody = extractBody(html)
+    // Replace QR <img> tags with sentinel divs so they appear in document order
+    const body = rawBody.replace(
+        /<img[^>]+src="[^"]*[?&]data=([^&"]+)[^"]*"[^>]*\/?>/gi,
+        (_m, encodedData: string) => {
+            try {
+                const data = decodeURIComponent(encodedData).replace(/"/g, '&quot;')
+                return `<div data-qr="${data}"></div>`
+            } catch { return '' }
+        },
+    )
     const result: PrintLine[] = []
     const blocks = extractDivBlocks(body)
 
     for (const block of blocks) {
-        const { style, content } = block
+        const { style, content, openTag } = block
+
+        // QR code sentinel
+        const qrAttr = openTag.match(/data-qr="([^"]*)"/)
+        if (qrAttr) {
+            result.push({ t: 'qr', data: qrAttr[1].replace(/&quot;/g, '"') })
+            continue
+        }
 
         if (
             (hasCss(style, 'border-top') || hasCss(style, 'border-bottom')) &&
@@ -268,7 +294,6 @@ export function buildEscPosFromHtml(
 
     const out: Buffer[] = [
         CMD.init(),
-        Buffer.from([ESC, 0x74, 0x1E]),  // CP1258 — Vietnamese codepage
         CMD.lineSpacing(lineSpacingVal),
     ]
 
@@ -346,11 +371,17 @@ export function buildEscPosFromHtml(
 
             case 'sub':
                 out.push(CMD.align(0))
-                out.push(vieLn('  ' + l.text.substring(0, W - 2)))
+                out.push(vieLn('+ ' + l.text.substring(0, W - 2)))
                 break
 
             case 'blank':
                 out.push(vieLn(''))
+                break
+
+            case 'qr':
+                out.push(CMD.align(1), CMD.defaultSpacing())
+                out.push(buildEscPosQr(l.data))
+                out.push(CMD.lineSpacing(lineSpacingVal), CMD.align(0))
                 break
         }
     }
@@ -374,8 +405,7 @@ export function buildEscPosLabel(
     const lines = parseHtml(html)
     const out: Buffer[] = [
         CMD.init(),
-        Buffer.from([ESC, 0x74, 0x1E]),  // CP1258 — Vietnamese codepage
-        CMD.fontB(true),                  // Font B: nhỏ hơn để vừa khổ giấy nhỏ
+        CMD.fontB(true),
         CMD.lineSpacing(lineSpacingVal),
     ]
 

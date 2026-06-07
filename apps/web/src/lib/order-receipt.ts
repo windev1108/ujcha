@@ -110,25 +110,21 @@ function buildItemsHtml(items: ReceiptOrderItem[], i18n: I18nStrings): string {
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
     const lineTotal = (typeof it.price === "string" ? parseFloat(it.price) : it.price) * it.quantity;
-    const optStr = Object.entries(it.options)
-      .map(([k, v]) => `${k}: ${v}`)
-      .join(", ");
-
     lines.push(
-      `<div style="display:grid;grid-template-columns:22px minmax(0,1fr) auto;column-gap:6px;align-items:start;margin:4px 0 2px;">` +
-      `<div><span style="display:inline-block;width:20px;height:20px;line-height:18px;background:#fff;border:1.5px solid #000;color:#000;text-align:center;font-weight:bold;font-size:11px;vertical-align:middle;">${it.quantity}x</span></div>` +
-      `<div style="font-weight:bold;font-size:13px;word-break:break-word;line-height:1.3;color:#000;">${esc(it.productName)}</div>` +
-      `<div style="text-align:right;font-size:13px;font-weight:bold;white-space:nowrap;padding-left:4px;min-width:60px;color:#000;">${esc(vnd(lineTotal))}</div>` +
+      `<div style="display:grid;grid-template-columns:20px minmax(0,1fr) auto;column-gap:4px;align-items:start;margin:3px 0 2px;">` +
+      `<div><span style="display:inline-block;width:18px;height:18px;line-height:16px;background:#fff;border:1.5px solid #000;color:#000;text-align:center;font-weight:bold;font-size:10px;vertical-align:middle;">${it.quantity}x</span></div>` +
+      `<div style="font-weight:bold;font-size:11px;word-break:break-word;line-height:1.3;color:#000;">${esc(it.productName)}</div>` +
+      `<div style="text-align:right;font-size:11px;font-weight:bold;white-space:nowrap;padding-left:3px;min-width:0;color:#000;">${esc(vnd(lineTotal))}</div>` +
       `</div>`,
     );
 
-    if (optStr) {
-      lines.push(`<div style="margin-left:26px;font-size:11px;margin-bottom:1px;color:#000;">${esc(optStr)}</div>`);
+    for (const [k, v] of Object.entries(it.options)) {
+      lines.push(`<div style="margin-left:26px;font-size:11px;font-weight:bold;margin-bottom:1px;color:#000;">+ ${esc(k)}: ${esc(v)}</div>`);
     }
     for (const ex of it.extras) {
       const exPrice = typeof ex.price === "string" ? parseFloat(ex.price) : ex.price;
       lines.push(
-        `<div style="display:flex;justify-content:space-between;margin-left:26px;font-size:11px;margin-bottom:1px;color:#000;">` +
+        `<div style="display:flex;justify-content:space-between;margin-left:26px;font-size:11px;font-weight:bold;margin-bottom:1px;color:#000;">` +
         `<span>+ ${esc(ex.name)}</span>` +
         (exPrice > 0 ? `<span style="white-space:nowrap;padding-left:4px;">${esc(vnd(exPrice))}</span>` : "") +
         `</div>`,
@@ -160,38 +156,38 @@ export function buildReceiptHtml(order: ReceiptOrder, locale = "vi"): string {
   const total = subtotal - discount - pointDiscount + shipping;
 
   const body = [
-    `<div style="text-align:center;font-size:22px;font-weight:bold;letter-spacing:4px;color:#000;">Ujcha</div>`,
+    `<div style="text-align:center;font-size:18px;font-weight:bold;letter-spacing:4px;color:#000;">Ujcha</div>`,
     `<div style="border-top:2px dashed #000;margin:6px 0;"></div>`,
 
-    `<div style="font-size:12px;margin-bottom:1px;color:#000;">${esc(i18n.order)}: <b>${esc(ref)}</b></div>`,
-    `<div style="font-size:11px;color:#444;margin-bottom:1px;">${esc(date)}</div>`,
-    `<div style="font-size:12px;margin-bottom:1px;color:#000;">${esc(i18n.type)}: <b>${esc(serviceLabel(order.type, i18n))}</b></div>`,
+    `<div style="font-size:11px;margin-bottom:1px;color:#000;">${esc(i18n.order)}: <b>${esc(ref)}</b></div>`,
+    `<div style="font-size:11px;color:#000;font-weight:bold;margin-bottom:1px;">${esc(date)}</div>`,
+    `<div style="font-size:11px;margin-bottom:1px;color:#000;">${esc(i18n.type)}: <b>${esc(serviceLabel(order.type, i18n))}</b></div>`,
     order.deliveryAddress
-      ? `<div style="font-size:11px;color:#444;margin-bottom:1px;">${esc(i18n.address)}: ${esc(order.deliveryAddress)}</div>`
+      ? `<div style="font-size:10px;color:#000;font-weight:bold;margin-bottom:1px;">${esc(i18n.address)}: ${esc(order.deliveryAddress)}</div>`
       : "",
     order.tableName
-      ? `<div style="font-size:11px;color:#444;margin-bottom:1px;">${esc(i18n.table)}: ${esc(order.tableName)}${order.tableArea ? ` — ${esc(order.tableArea)}` : ""}</div>`
+      ? `<div style="font-size:10px;color:#000;font-weight:bold;margin-bottom:1px;">${esc(i18n.table)}: ${esc(order.tableName)}${order.tableArea ? ` — ${esc(order.tableArea)}` : ""}</div>`
       : "",
     `<div style="border-top:2px dashed #000;margin:6px 0;"></div>`,
 
     buildItemsHtml(order.items, i18n),
     `<div style="border-top:2px dashed #000;margin:6px 0;"></div>`,
 
-    `<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;color:#000;"><span>${esc(i18n.subtotal)}</span><span style="white-space:nowrap;">${esc(vnd(subtotal))}</span></div>`,
+    `<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;color:#000;"><span>${esc(i18n.subtotal)}</span><span style="white-space:nowrap;">${esc(vnd(subtotal))}</span></div>`,
     discount > 0
-      ? `<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;color:#000;"><span>${esc(i18n.discount)}</span><span style="white-space:nowrap;">-${esc(vnd(discount))}</span></div>`
+      ? `<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;color:#000;"><span>${esc(i18n.discount)}</span><span style="white-space:nowrap;">-${esc(vnd(discount))}</span></div>`
       : "",
     pointDiscount > 0
-      ? `<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;color:#000;"><span>${esc(i18n.points)}</span><span style="white-space:nowrap;">-${esc(vnd(pointDiscount))}</span></div>`
+      ? `<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;color:#000;"><span>${esc(i18n.points)}</span><span style="white-space:nowrap;">-${esc(vnd(pointDiscount))}</span></div>`
       : "",
     order.type === "delivery"
-      ? `<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;color:#000;"><span>${esc(i18n.shipping)}</span><span style="white-space:nowrap;">${shipping > 0 ? esc(vnd(shipping)) : esc(i18n.free)}</span></div>`
+      ? `<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;color:#000;"><span>${esc(i18n.shipping)}</span><span style="white-space:nowrap;">${shipping > 0 ? esc(vnd(shipping)) : esc(i18n.free)}</span></div>`
       : "",
-    `<div style="display:flex;justify-content:space-between;font-weight:bold;font-size:15px;margin-top:3px;color:#000;"><span>${esc(i18n.total)}</span><span style="white-space:nowrap;">${esc(vnd(total))}</span></div>`,
-    `<div style="font-size:12px;margin-top:2px;color:#000;">${esc(i18n.payment)}: <b>${esc(payLabel(order.paymentType, i18n))}</b></div>`,
+    `<div style="display:flex;justify-content:space-between;font-weight:bold;font-size:13px;margin-top:3px;color:#000;"><span>${esc(i18n.total)}</span><span style="white-space:nowrap;">${esc(vnd(total))}</span></div>`,
+    `<div style="font-size:11px;margin-top:2px;color:#000;">${esc(i18n.payment)}: <b>${esc(payLabel(order.paymentType, i18n))}</b></div>`,
     order.paymentStatus === "paid"
-      ? `<div style="font-size:12px;font-weight:bold;color:#000;margin-top:1px;">${esc(i18n.paid)}</div>`
-      : `<div style="font-size:12px;color:#000;margin-top:1px;">${esc(i18n.pending)}</div>`,
+      ? `<div style="font-size:11px;font-weight:bold;color:#000;margin-top:1px;">${esc(i18n.paid)}</div>`
+      : `<div style="font-size:11px;color:#000;margin-top:1px;">${esc(i18n.pending)}</div>`,
 
     `<div style="border-top:1px dashed #000;margin:4px 0;"></div>`,
     `<div style="text-align:center;font-size:10px;color:#000;">${env.SITE_URL}</div>`,
@@ -201,8 +197,8 @@ export function buildReceiptHtml(order: ReceiptOrder, locale = "vi"): string {
     `<!DOCTYPE html><html><head><meta charset="utf-8"/>` +
     `<title>${esc(i18n.invoice)} ${esc(ref)}</title>` +
     `<style>` +
-    `@page { size: 80mm auto; margin: 4mm; }` +
-    `body { font-family: ui-sans-serif, system-ui, sans-serif; width: 80mm; margin: 0 auto; font-size: 13px; color: #000; }` +
+    `@page { size: auto; margin: 1.5mm; }` +
+    `body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 55mm; width: 100%; margin: 0; font-size: 11px; font-weight: bold; color: #000; }` +
     `* { box-sizing: border-box; }` +
     `</style></head><body>${body}</body></html>`
   );

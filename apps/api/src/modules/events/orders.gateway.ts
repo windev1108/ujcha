@@ -9,7 +9,7 @@ const _wsOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:3000,http://lo
 @WebSocketGateway({
   cors: {
     origin: (origin: string, cb: (err: Error | null, allow?: boolean) => void) => {
-      if (!origin || _wsOrigins.includes(origin) || _wsOrigins.includes('null')) cb(null, true)
+      if (!origin || origin === 'null' || _wsOrigins.includes(origin)) cb(null, true)
       else cb(new Error(`Origin ${origin} not allowed`))
     },
     credentials: true,

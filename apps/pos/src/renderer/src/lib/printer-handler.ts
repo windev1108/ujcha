@@ -370,6 +370,70 @@ try {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// STRATEGY 4 — Windows USB via Electron BrowserWindow.webContents.print()
+//
+// WHY: printRawViaWindowsSpooler writes raw ESC/POS bytes directly to the USB
+//   device, bypassing the Windows driver. For MP583 and similar GDI-based
+//   thermal printers, this means the driver never gets to rasterize Unicode
+//   text or QR images, so Vietnamese diacritics and QR codes are silent-dropped.
+//
+// webContents.print() goes through Chrome's layout engine → Windows GDI driver
+//   → printer — same pipeline as web printing. Unicode and images render at the
+//   printer's native DPI (200–203 DPI on MP583), identical quality to Chrome.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Serialize print jobs — one hidden window at a time prevents renderer process exhaustion
+let _printQueue: Promise<void> = Promise.resolve()
+
+async function printHtmlViaElectronWindow(
+    printerName: string,
+    html: string,
+): Promise<void> {
+    const job = _printQueue.then(() => _doPrint(printerName, html))
+    _printQueue = job.catch(() => { /* keep queue alive on error */ })
+    return job
+}
+
+async function _doPrint(printerName: string, html: string): Promise<void> {
+    const win = new BrowserWindow({
+        show: false,
+        x: -9999,
+        y: -9999,
+        width: 600,
+        height: 900,
+        frame: false,
+        skipTaskbar: true,
+        webPreferences: { contextIsolation: true, nodeIntegration: false },
+    })
+    try {
+        // data: URL loads from memory — faster and more reliable than loadFile for hidden windows
+        const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`
+        await Promise.race([
+            win.loadURL(dataUrl),
+            new Promise<void>((_, reject) =>
+                setTimeout(() => reject(new Error('loadURL timeout (8s) — renderer process failed to start')), 8000)
+            ),
+        ])
+
+        await win.webContents.insertCSS('@page { size: auto !important; margin: 2mm !important; }')
+        win.show()
+        // Brief settle: let the OS compositor register the window before sending the print job
+        await new Promise(r => setTimeout(r, 400))
+
+        // Fire-and-forget: webContents.print() callback is unreliable on Electron 32/Windows
+        // for programmatically-created windows. Submit and wait for spooling to complete.
+        win.webContents.print({ silent: true, deviceName: printerName, printBackground: true })
+        console.log('[print] ✅ job submitted →', printerName)
+
+        // Wait for data to reach the Windows spooler before destroying the window.
+        // Destroying mid-spool cancels the job on Windows.
+        await new Promise(r => setTimeout(r, 3000))
+    } finally {
+        win.destroy()
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // COM PORT DISCOVERY
 // KEY FIX: Query registry for the printer's port assignment directly
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -537,29 +601,31 @@ export async function smartPrint(
     console.log('[smartPrint]', { address, printerName, paperWidthMm, type, labelSize, spacing })
 
     try {
-        if (isComPort(address)) {
-            // Bluetooth COM port → ESC/POS raw
-            const escData = type === 'label'
-                ? buildEscPosLabel(html, paperWidthMm, spacing)
-                : buildEscPosFromHtml(html, paperWidthMm, spacing)
-            await printViaComPort(address, escData)
+        if (type !== 'label') {
+            // Bills always use Electron GDI print path:
+            // webContents.print() → Chrome → Windows driver → rasterized bitmap.
+            // This is the only path that renders Unicode (Vietnamese) + QR images
+            // correctly on GDI-based thermal printers like MP583, regardless of
+            // how the printer is connected (USB, Bluetooth COM port, WiFi/WSD).
+            const winName = printerName || address
+            console.log('[smartPrint] → bill (Electron print):', winName)
+            await printHtmlViaElectronWindow(winName, html)
+
+        } else if (isComPort(address)) {
+            // Label via Bluetooth COM port → ESC/POS raw
+            console.log('[smartPrint] → label COM:', address)
+            await printViaComPort(address, buildEscPosLabel(html, paperWidthMm, spacing))
 
         } else if (isIpAddress(address)) {
-            // WiFi/LAN → TCP 9100 ESC/POS raw
-            const escData = type === 'label'
-                ? buildEscPosLabel(html, paperWidthMm, spacing)
-                : buildEscPosFromHtml(html, paperWidthMm, spacing)
-            await printViaTcp(address, 9100, escData)
+            // Label via WiFi/LAN → TCP 9100 ESC/POS raw
+            console.log('[smartPrint] → label TCP:', address)
+            await printViaTcp(address, 9100, buildEscPosLabel(html, paperWidthMm, spacing))
 
         } else {
-            // Windows printer name (USB) → raw ESC/POS via winspool.drv spooler
+            // Label via Windows USB → winspool RAW
             const targetPrinter = address || printerName
-            console.log('[smartPrint] → USB/Windows printer (raw spooler):', targetPrinter)
-
-            const escData = type === 'label'
-                ? buildEscPosLabel(html, paperWidthMm, spacing)
-                : buildEscPosFromHtml(html, paperWidthMm, spacing)
-            await printRawViaWindowsSpooler(targetPrinter, escData)
+            console.log('[smartPrint] → label USB/spooler:', targetPrinter)
+            await printRawViaWindowsSpooler(targetPrinter, buildEscPosLabel(html, paperWidthMm, spacing))
         }
 
         return { ok: true }

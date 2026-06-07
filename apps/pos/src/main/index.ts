@@ -568,10 +568,9 @@ ipcMain.handle('spfPartner:webLogin', () => {
 ipcMain.handle('font:getBase64', () => {
   try {
     const fontPath = isDev
-      ? join(app.getAppPath(), 'src/renderer/src/assets/fonts/JetBrainsMono-Bold.ttf')
-      : join(__dirname, '../../renderer/assets/fonts/JetBrainsMono-Bold.ttf')
+      ? join(app.getAppPath(), 'src/renderer/src/assets/fonts/static/JetBrainsMono-Bold.ttf')
+      : join(__dirname, '../../renderer/fonts/static/JetBrainsMono-Bold.ttf')
 
-    console.log('[font] loading from:', fontPath) // xóa sau khi test ok
     return `data:font/truetype;base64,${readFileSync(fontPath).toString('base64')}`
   } catch (e) {
     console.error('[font] load failed:', e)
@@ -585,6 +584,7 @@ app.whenReady().then(() => {
   createStaffWindow()
   createCustomerWindow()
   registerPrinterHandlers()
+  console.log('[main] printer-handler v3 (fire-and-forget queue) loaded')
   console.log('📁 Config file path:', join(app.getPath('userData'), 'pos-config.json'))
 
   const saved = readConfig()['connectedPrinters'] as SavedPrinter[] | undefined

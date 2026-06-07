@@ -165,16 +165,16 @@ function buildBillItems(order: AdminOrder, paperWidth: number): string {
     const extras = parseExtras(it.extrasJson)
     const opts = parseOptions(it.optionsJson)
     const lineTotal = Number.parseFloat(it.price) * it.quantity
-    const optStr = Object.entries(opts).map(([k, v]) => `${k}: ${v}`).join(', ')
+    const colGap = paperWidth <= 58 ? 4 : 6
     lines.push(
-      `<div style="display:grid;grid-template-columns:22px minmax(0,1fr) auto;column-gap:6px;align-items:start;margin:4px 0 2px;">` +
+      `<div style="display:grid;grid-template-columns:22px minmax(0,1fr) auto;column-gap:${colGap}px;align-items:start;margin:4px 0 2px;">` +
       `<div><span style="display:inline-block;width:20px;height:20px;line-height:18px;background:#fff;border:1.5px solid #000;color:#000;text-align:center;font-weight:bold;font-size:${subFs}px;vertical-align:middle;">${it.quantity}x</span></div>` +
       `<div style="font-weight:bold;font-size:${nameFs}px;word-break:break-word;line-height:1.3;color:#000;">${esc(it.product.name)}</div>` +
-      `<div style="text-align:right;font-size:${nameFs}px;font-weight:bold;white-space:nowrap;padding-left:4px;min-width:60px;color:#000;">${esc(formatVnd(lineTotal))}</div>` +
+      `<div style="text-align:right;font-size:${nameFs}px;font-weight:bold;white-space:nowrap;padding-left:4px;min-width:0;color:#000;">${esc(formatVnd(lineTotal))}</div>` +
       `</div>`,
     )
-    if (optStr) {
-      lines.push(`<div style="margin-left:26px;font-size:${subFs}px;margin-bottom:1px;color:#000;">${esc(optStr)}</div>`)
+    for (const [k, v] of Object.entries(opts)) {
+      lines.push(`<div style="margin-left:26px;font-size:${subFs}px;font-weight:bold;margin-bottom:1px;color:#000;">+ ${esc(k)}: ${esc(v)}</div>`)
     }
     for (const ex of extras) {
       const exPrice = Number(ex.price ?? 0)
@@ -214,13 +214,12 @@ function renderItems(order: AdminOrder, el: ReceiptElement, paperWidth: number):
       `<div style="display:grid;grid-template-columns:22px minmax(0,1fr) auto;column-gap:4px;align-items:start;margin:4px 0 2px;">` +
       `<div style="padding-top:1px;"><span style="display:inline-block;width:20px;height:20px;line-height:18px;background:#fff;border:1.5px solid #000;color:#000;text-align:center;font-weight:bold;font-size:${subFs}px;vertical-align:middle;">${it.quantity}x</span></div>` +
       `<div style="font-weight:bold;font-size:${nameFs}px;word-break:break-word;line-height:1.3;color:#000;">${esc(it.product.name)}</div>` +
-      `<div style="text-align:right;font-size:${nameFs}px;font-weight:bold;white-space:nowrap;padding-left:2px;min-width:50px;color:#000;">${esc(formatVnd(lineTotal))}</div>` +
+      `<div style="text-align:right;font-size:${nameFs}px;font-weight:bold;white-space:nowrap;padding-left:2px;min-width:0;color:#000;">${esc(formatVnd(lineTotal))}</div>` +
       `</div>`,
     )
 
-    if (Object.keys(opts).length > 0) {
-      const optStr = Object.entries(opts).map(([k, v]) => `${k}: ${v}`).join(', ')
-      lines.push(`<div style="margin-left:26px;font-size:${subFs}px;margin-bottom:1px;color:#000;">${esc(optStr)}</div>`)
+    for (const [k, v] of Object.entries(opts)) {
+      lines.push(`<div style="margin-left:26px;font-size:${subFs}px;font-weight:bold;margin-bottom:1px;color:#000;">+ ${esc(k)}: ${esc(v)}</div>`)
     }
 
     // Extras / Toppings
@@ -340,7 +339,7 @@ function renderElement(
           `<div style="border-top:2px dashed #000;margin:8px 0 6px;"></div>` +
           `<div style="text-align:center;font-size:12px;font-weight:bold;letter-spacing:0.5px;margin-bottom:6px;color:#000;">QUÉT ĐỂ TÍCH ĐIỂM UJCHA</div>` +
           `<img src="${loyaltyQrUrl}" style="display:block;margin:0 auto 4px;width:160px;height:160px;" />` +
-          `<div style="text-align:center;font-size:10px;color:#666;margin-bottom:6px;">Đăng nhập &amp; tích điểm ngay từ đơn hàng này</div>`
+          `<div style="text-align:center;font-size:10px;color:#000;margin-bottom:6px;">Đăng nhập &amp; tích điểm ngay từ đơn hàng này</div>`
         )
       }
       return ''
@@ -394,12 +393,12 @@ export function buildReceiptDocumentHtml(
     `<div style="border-top:2px dashed #000;margin:6px 0;"></div>`,
 
     `<div style="font-size:12px;margin-bottom:1px;color:#000;">${esc(RECEIPT_I18N.order)}: <b>${esc(ref)}</b></div>`,
-    `<div style="font-size:11px;color:#444;margin-bottom:1px;">${esc(date)}</div>`,
+    `<div style="font-size:11px;color:#000;font-weight:bold;margin-bottom:1px;">${esc(date)}</div>`,
     `<div style="font-size:12px;margin-bottom:1px;color:#000;">${esc(RECEIPT_I18N.type)}: <b>${esc(receiptServiceLabel(order.type))}</b></div>`,
 
-    deliveryAddr ? `<div style="font-size:11px;color:#444;margin-bottom:1px;">${esc(RECEIPT_I18N.address)}: ${esc(deliveryAddr)}</div>` : '',
-    hasContact ? `<div style="font-size:11px;color:#444;margin-bottom:1px;">${[order.guestDeliveryName, order.guestDeliveryPhone].filter(Boolean).map((s) => esc(s!)).join(' · ')}</div>` : '',
-    order.table?.name ? `<div style="font-size:11px;color:#444;margin-bottom:1px;">${esc(RECEIPT_I18N.table)}: ${esc(order.table.name)}</div>` : '',
+    deliveryAddr ? `<div style="font-size:11px;color:#000;font-weight:bold;margin-bottom:1px;">${esc(RECEIPT_I18N.address)}: ${esc(deliveryAddr)}</div>` : '',
+    hasContact ? `<div style="font-size:11px;color:#000;font-weight:bold;margin-bottom:1px;">${[order.guestDeliveryName, order.guestDeliveryPhone].filter(Boolean).map((s) => esc(s!)).join(' · ')}</div>` : '',
+    order.table?.name ? `<div style="font-size:11px;color:#000;font-weight:bold;margin-bottom:1px;">${esc(RECEIPT_I18N.table)}: ${esc(order.table.name)}</div>` : '',
 
     `<div style="border-top:2px dashed #000;margin:6px 0;"></div>`,
 
@@ -421,7 +420,7 @@ export function buildReceiptDocumentHtml(
         `<div style="border-top:2px dashed #000;margin:8px 0 6px;"></div>` +
         `<div style="text-align:center;font-size:12px;font-weight:bold;letter-spacing:0.5px;margin-bottom:6px;color:#000;">${esc(RECEIPT_I18N.scan_loyalty)}</div>` +
         `<img src="${loyaltyQrUrl}" style="display:block;margin:0 auto 4px;width:${qrSize}px;height:${qrSize}px;" />` +
-        `<div style="text-align:center;font-size:10px;color:#666;margin-bottom:6px;">${esc(RECEIPT_I18N.scan_sub)}</div>`
+        `<div style="text-align:center;font-size:10px;color:#000;margin-bottom:6px;">${esc(RECEIPT_I18N.scan_sub)}</div>`
       )
       : '',
 
@@ -441,6 +440,7 @@ export function buildReceiptDocumentHtml(
     `body {` +
     `  font-family: ui-sans-serif, system-ui, 'Segoe UI', Arial, sans-serif;` +
     `  font-size: ${baseFontSize}px;` +
+    `  font-weight: bold;` +
     `  width: ${printableWidth}mm;` +
     `  margin: 0 auto;` +
     `  padding: 0;` +

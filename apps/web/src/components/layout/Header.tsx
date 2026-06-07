@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { ROUTES } from "@/lib/routes";
 import { Header } from "@heroui/react";
 import { HeaderLanguageSelect } from "./HeaderLanguageSelect";
@@ -46,12 +46,18 @@ export function AppHeader() {
 
   const unreadCount = useNotificationStore((s) => s.unreadCount);
 
+  const lastSeenCountRef = useRef<number | null>(null);
+
   useEffect(() => {
     function update() {
+      if (document.visibilityState === "visible") {
+        lastSeenCountRef.current = unreadCount;
+      }
       const away = document.visibilityState === "hidden";
+      const newCount = Math.max(0, unreadCount - (lastSeenCountRef.current ?? 0));
+      const show = away && newCount > 0;
       const base = document.title.replace(/^\(\d+\)\s*/, "");
-      const show = away && unreadCount > 0;
-      document.title = show ? `(${unreadCount}) ${base}` : base;
+      document.title = show ? `(${newCount}) ${base}` : base;
       applyFaviconBadge(show);
     }
     update();

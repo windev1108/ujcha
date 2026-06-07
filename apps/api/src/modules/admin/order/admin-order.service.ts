@@ -296,7 +296,6 @@ export class AdminOrderService {
     });
 
     const result = await this.findById(created.id);
-    this.ordersGateway.emitOrderCreated({ orderId: result.id, type: result.type });
     return result;
   }
 
