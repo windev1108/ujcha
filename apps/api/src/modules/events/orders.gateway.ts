@@ -12,7 +12,6 @@ const _wsOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:3000,http://lo
       if (!origin || origin === 'null' || _wsOrigins.includes(origin)) cb(null, true)
       else cb(new Error(`Origin ${origin} not allowed`))
     },
-    credentials: true,
   },
 })
 export class OrdersGateway {
