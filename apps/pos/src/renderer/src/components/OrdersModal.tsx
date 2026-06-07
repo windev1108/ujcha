@@ -289,7 +289,7 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     const socket = io(API_URL, {
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       reconnectionAttempts: Infinity,
       reconnectionDelay: 2000,
     })

@@ -7,7 +7,7 @@ export function getSocket(apiUrl: string): Socket {
 
     socket?.disconnect()
     socket = io(apiUrl, {
-        transports: ['websocket', 'polling'],
+        transports: ['polling', 'websocket'],
         reconnection: true,
         reconnectionAttempts: Infinity,
         reconnectionDelay: 2000,

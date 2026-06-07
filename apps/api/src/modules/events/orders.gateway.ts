@@ -1,18 +1,8 @@
 import { WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
 import type { Server } from 'socket.io';
 
-const _wsOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:3000,http://localhost:3001')
-  .split(',')
-  .map((s) => s.trim())
-  .filter(Boolean)
-
 @WebSocketGateway({
-  cors: {
-    origin: (origin: string, cb: (err: Error | null, allow?: boolean) => void) => {
-      if (!origin || origin === 'null' || _wsOrigins.includes(origin)) cb(null, true)
-      else cb(new Error(`Origin ${origin} not allowed`))
-    },
-  },
+  cors: { origin: '*' },
 })
 export class OrdersGateway {
   @WebSocketServer()

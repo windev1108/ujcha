@@ -253,7 +253,7 @@ export function StaffApp() {
   // ── Socket: real-time events ────────────────────────────────────────────────
   useEffect(() => {
     if (!isLoggedIn) return
-    const socket = io(API_URL, { transports: ['websocket', 'polling'], reconnectionAttempts: Infinity, reconnectionDelay: 2000 })
+    const socket = io(API_URL, { transports: ['polling', 'websocket'], reconnectionAttempts: Infinity, reconnectionDelay: 2000 })
 
     socket.on('connect', () => {
       setSocketConnected(true)
