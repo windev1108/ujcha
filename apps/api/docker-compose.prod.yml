@@ -38,7 +38,7 @@ services:
         -c work_mem=4MB
         -c max_connections=50
     volumes:
-      - kun_pgdata:/var/lib/postgresql/data
+      - ujcha_pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ujcha -d ujcha"]
       interval: 5s
@@ -55,7 +55,7 @@ services:
       - "127.0.0.1:6379:6379"
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --save ""
     volumes:
-      - kun_redis_data:/data
+      - ujcha_redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -102,5 +102,5 @@ networks:
     driver: bridge
 
 volumes:
-  kun_pgdata:
-  kun_redis_data:
+  ujcha_pgdata:
+  ujcha_redis_data:
