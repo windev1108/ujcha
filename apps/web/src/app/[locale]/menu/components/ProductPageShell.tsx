@@ -22,7 +22,7 @@ function Shell() {
       <ProductPageIntro />
 
       {/* Sticky filter bar */}
-      <div className="sticky top-11 sm:top-12 z-30 border-b border-black/6 bg-white/95 backdrop-blur-sm">
+      <div className="sticky top-12 sm:top-16 z-30 border-b border-black/6 bg-white/95 backdrop-blur-sm">
         <div className="container py-2">
           <ProductFilters
             activeCategory={activeCategory}
