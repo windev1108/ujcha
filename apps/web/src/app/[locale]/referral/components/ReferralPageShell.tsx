@@ -1002,10 +1002,6 @@ export function ReferralPageShell() {
             )}
           </div>
 
-          {/* Right / leaderboard sidebar */}
-          <div className="w-full lg:w-[340px] lg:shrink-0 lg:sticky lg:top-20">
-            <LeaderboardSection myReferralCode={profile?.referralCode} />
-          </div>
         </div>
 
         {/* Full-width sections */}
