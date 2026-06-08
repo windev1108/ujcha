@@ -40,7 +40,7 @@ export class ProfileService {
     return this.userService.updateUser(userId, data);
   }
 
-  async uploadAvatar(userId: string, imageBase64: string): Promise<User> {
+  async uploadAvatar(userId: string, avatarUrl: string): Promise<User> {
     const user = await this.userService.findById(userId);
     if (!user) {
       throw new NotFoundException({ message: 'Không tìm thấy người dùng.', code: 'USER_NOT_FOUND' });
@@ -59,48 +59,13 @@ export class ProfileService {
     }
 
     const cloudName = this.config.get<string>('CLOUDINARY_CLOUD_NAME');
-    const uploadPreset = this.config.get<string>('CLOUDINARY_UPLOAD_PRESET');
-
-    let avatarUrl: string;
-
-    if (!cloudName || !uploadPreset) {
-      // Dev fallback: store base64 directly
-      avatarUrl = imageBase64;
-    } else {
-      avatarUrl = await this.uploadToCloudinary(imageBase64, cloudName, uploadPreset);
+    if (cloudName && !avatarUrl.startsWith(`https://res.cloudinary.com/${cloudName}/`)) {
+      throw new BadRequestException({ message: 'URL ảnh không hợp lệ.', code: 'INVALID_AVATAR_URL' });
     }
 
     return this.userService.updateUser(userId, {
       avatar: avatarUrl,
       lastAvatarUploadAt: new Date(),
     });
-  }
-
-  private async uploadToCloudinary(
-    imageBase64: string,
-    cloudName: string,
-    uploadPreset: string,
-  ): Promise<string> {
-    const body = new URLSearchParams();
-    body.set('file', imageBase64);
-    body.set('upload_preset', uploadPreset);
-    body.set('folder', 'kun/avatars');
-
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-      method: 'POST',
-      body,
-      signal: AbortSignal.timeout(30_000),
-    });
-
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new BadRequestException({ message: 'Upload ảnh thất bại. Vui lòng thử lại.', detail: text });
-    }
-
-    const json = (await res.json()) as { secure_url?: string };
-    if (!json.secure_url) {
-      throw new BadRequestException({ message: 'Cloudinary không trả về URL ảnh.' });
-    }
-    return json.secure_url;
   }
 }

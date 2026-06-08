@@ -1,10 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
+import { IsString, IsUrl } from 'class-validator';
 
 export class UploadAvatarDto {
-  @ApiProperty({ description: 'Base64 data URL of the avatar image' })
+  @ApiProperty({ description: 'Cloudinary secure_url của avatar đã upload' })
   @IsString()
-  @IsNotEmpty()
-  @MaxLength(2_000_000)
-  image!: string;
+  @IsUrl({ protocols: ['https'], require_protocol: true })
+  url!: string;
 }

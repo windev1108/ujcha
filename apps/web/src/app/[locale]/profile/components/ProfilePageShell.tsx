@@ -12,6 +12,7 @@ import { useTranslations } from "next-intl";
 import { ROUTES } from "@/lib/routes";
 import { useAuthStore } from "@/store/auth-store";
 import { useProfileQuery, useUpdateProfileMutation, useUploadAvatarMutation } from "@/services/profile/hooks";
+import { env } from "@/config/env";
 
 function formatPhone(phone: string | null | undefined, notUpdated: string): string {
   if (!phone?.trim()) return notUpdated;
@@ -41,7 +42,7 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
   );
 }
 
-function compressImage(file: File, size = 400): Promise<string> {
+function compressImage(file: File, size = 400): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -55,7 +56,10 @@ function compressImage(file: File, size = 400): Promise<string> {
         const sx = (img.width - min) / 2;
         const sy = (img.height - min) / 2;
         ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
-        resolve(canvas.toDataURL("image/jpeg", 0.82));
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error("compressImage: toBlob failed"));
+        }, "image/jpeg", 0.82);
       };
       img.onerror = reject;
       img.src = e.target?.result as string;
@@ -63,6 +67,21 @@ function compressImage(file: File, size = 400): Promise<string> {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+async function uploadToCloudinary(blob: Blob, cloudName: string, uploadPreset: string): Promise<string> {
+  const form = new FormData();
+  form.append("file", blob, "avatar.jpg");
+  form.append("upload_preset", uploadPreset);
+  form.append("folder", "kun/avatars");
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) throw new Error("Tải ảnh lên thất bại. Vui lòng thử lại.");
+  const json = await res.json() as { secure_url?: string };
+  if (!json.secure_url) throw new Error("Cloudinary không trả về URL ảnh.");
+  return json.secure_url;
 }
 
 function axiosErrorMessage(e: unknown, fallback: string): string {
@@ -116,10 +135,21 @@ export function ProfilePageShell() {
     const file = e.target.files?.[0];
     if (!file) return;
     setAvatarError(null);
+    e.target.value = "";
+
+    const ALLOWED = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    if (!ALLOWED.includes(file.type)) {
+      setAvatarError("Chỉ chấp nhận ảnh JPG, PNG, WebP hoặc GIF.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setAvatarError("Ảnh không được vượt quá 5MB.");
+      return;
+    }
+
     if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
     setAvatarPreviewUrl(URL.createObjectURL(file));
     setPendingFile(file);
-    e.target.value = "";
   };
 
   const cancelAvatarPreview = () => {
@@ -133,8 +163,12 @@ export function ProfilePageShell() {
     if (!pendingFile) return;
     setAvatarError(null);
     try {
-      const base64 = await compressImage(pendingFile);
-      await uploadAvatarMutation.mutateAsync(base64);
+      if (!env.CLOUDINARY_CLOUD_NAME || !env.CLOUDINARY_UPLOAD_PRESET) {
+        throw new Error("Chưa cấu hình Cloudinary. Vui lòng liên hệ quản trị viên.");
+      }
+      const blob = await compressImage(pendingFile);
+      const avatarUrl = await uploadToCloudinary(blob, env.CLOUDINARY_CLOUD_NAME, env.CLOUDINARY_UPLOAD_PRESET);
+      await uploadAvatarMutation.mutateAsync(avatarUrl);
       if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
       setAvatarPreviewUrl(null);
       setPendingFile(null);

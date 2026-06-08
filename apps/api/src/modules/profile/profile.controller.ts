@@ -40,6 +40,6 @@ export class ProfileController {
     @CurrentUserId() userId: string,
     @Body() dto: UploadAvatarDto,
   ) {
-    return this.profileService.uploadAvatar(userId, dto.image);
+    return this.profileService.uploadAvatar(userId, dto.url);
   }
 }
