@@ -71,6 +71,9 @@
       ],
       "expo-secure-store"
     ],
+    "autolinking": {
+      "exclude": ["@expo/dom-webview"]
+    },
     "experiments": {
       "typedRoutes": true
     },
