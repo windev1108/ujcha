@@ -45,25 +45,35 @@ export function AppHeader() {
   ];
 
   const unreadCount = useNotificationStore((s) => s.unreadCount);
+  const bgCount = useNotificationStore((s) => s.bgCount);
+  const bgTitle = useNotificationStore((s) => s.bgTitle);
+  const resetBg = useNotificationStore((s) => s.resetBg);
 
-  const lastSeenCountRef = useRef<number | null>(null);
+  const savedTitleRef = useRef<string | null>(null);
 
+  // Update tab title + favicon whenever background notification count changes
   useEffect(() => {
-    function update() {
-      if (document.visibilityState === "visible") {
-        lastSeenCountRef.current = unreadCount;
+    if (bgCount > 0) {
+      if (!savedTitleRef.current) savedTitleRef.current = document.title;
+      document.title = `(${bgCount}) ${bgTitle}`;
+      applyFaviconBadge(true);
+    } else {
+      if (savedTitleRef.current) {
+        document.title = savedTitleRef.current;
+        savedTitleRef.current = null;
       }
-      const away = document.visibilityState === "hidden";
-      const newCount = Math.max(0, unreadCount - (lastSeenCountRef.current ?? 0));
-      const show = away && newCount > 0;
-      const base = document.title.replace(/^\(\d+\)\s*/, "");
-      document.title = show ? `(${newCount}) ${base}` : base;
-      applyFaviconBadge(show);
+      applyFaviconBadge(false);
     }
-    update();
-    document.addEventListener("visibilitychange", update);
-    return () => document.removeEventListener("visibilitychange", update);
-  }, [unreadCount]);
+  }, [bgCount, bgTitle]);
+
+  // Reset count + title when user returns to this tab
+  useEffect(() => {
+    function handleVisibility() {
+      if (document.visibilityState === "visible") resetBg();
+    }
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [resetBg]);
 
   const points = profile?.pointBalance ?? 0;
   const name = user?.name?.trim() || "Tài khoản";

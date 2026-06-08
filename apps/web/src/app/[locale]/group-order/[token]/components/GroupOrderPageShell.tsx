@@ -17,6 +17,7 @@ import {
   Clock,
   Copy,
   Crown,
+  Link2,
   Loader2,
   Lock,
   LockOpen,
@@ -26,8 +27,8 @@ import {
   Plus,
   QrCode,
   Search,
+  Share2,
   ShoppingBag,
-
   Trash2,
   Truck,
   Users,
@@ -809,11 +810,10 @@ function ParticipantRow({
                     type="button"
                     onClick={() => !isRemoving && onRemoveItem?.(item.productId)}
                     disabled={!!removingProductId}
-                    className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full transition-colors disabled:pointer-events-none ${
-                      isRemoving
+                    className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full transition-colors disabled:pointer-events-none ${isRemoving
                         ? "bg-red-50 text-red-400"
                         : "bg-black/6 text-foreground/35 hover:bg-red-50 hover:text-red-500"
-                    }`}
+                      }`}
                   >
                     {isRemoving
                       ? <Loader2 className="size-3.5 animate-spin" />
@@ -881,9 +881,9 @@ function DiscountBanner({
   );
 }
 
-// ── CopyLinkButton ────────────────────────────────────────────────────────────
+// ── ShareLinkBox ──────────────────────────────────────────────────────────────
 
-function CopyLinkButton({ token: _token }: { token: string }) {
+function ShareLinkBox({ token: _token }: { token: string }) {
   const t = useTranslations();
   const [copied, setCopied] = useState(false);
   const url = typeof window !== "undefined" ? window.location.href : "";
@@ -894,19 +894,55 @@ function CopyLinkButton({ token: _token }: { token: string }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // not critical
+      // clipboard not available
+    }
+  };
+
+  const handleShare = async () => {
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({
+          title: "Đặt đồ nhóm cùng mình tại UjCha",
+          text: "Mình đang đặt đồ nhóm tại UjCha, bạn tham gia cùng nhé! Càng nhiều người giảm giá càng sâu.",
+          url,
+        });
+      } catch {
+        // user cancelled
+      }
+    } else {
+      await copy();
     }
   };
 
   return (
-    <Button
-      size="sm"
-      className="gap-1.5 rounded-full border border-black/10 bg-white px-3 py-1 text-xs font-semibold text-foreground/70 hover:bg-black/4"
-      onPress={copy}
-    >
-      {copied ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
-      {copied ? t("group_copied") : t("group_copy_link")}
-    </Button>
+    <div className="flex flex-wrap items-center gap-2">
+      <Button
+        size="sm"
+        className="gap-1.5 rounded-full border border-black/10 bg-white px-3 py-1 text-xs font-semibold text-foreground/70 hover:bg-black/4"
+        onPress={copy}
+      >
+        <AnimatePresence mode="wait" initial={false}>
+          {copied ? (
+            <motion.span key="check" initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.7, opacity: 0 }} transition={{ duration: 0.14 }}>
+              <Check className="size-3.5 text-emerald-500" />
+            </motion.span>
+          ) : (
+            <motion.span key="copy" initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.7, opacity: 0 }} transition={{ duration: 0.14 }}>
+              <Copy className="size-3.5" />
+            </motion.span>
+          )}
+        </AnimatePresence>
+        {copied ? t("group_copied") : t("group_copy_link")}
+      </Button>
+      <Button
+        size="sm"
+        className="gap-1.5 rounded-full bg-kun-primary/10 px-3 py-1 text-xs font-semibold text-kun-primary hover:bg-kun-primary/15"
+        onPress={() => void handleShare()}
+      >
+        <Share2 className="size-3.5" />
+        {t("share")}
+      </Button>
+    </div>
   );
 }
 
@@ -1008,11 +1044,10 @@ function PaymentSheet({
                     type="button"
                     disabled={loading}
                     onClick={() => onSelect(id)}
-                    className={`rounded-3xl border-2 p-4 text-left transition-colors disabled:opacity-60 ${
-                      active
+                    className={`rounded-3xl border-2 p-4 text-left transition-colors disabled:opacity-60 ${active
                         ? "border-kun-products-forest bg-kun-mint/15"
                         : "border-transparent bg-surface-card ring-1 ring-black/6 hover:ring-black/10"
-                    }`}
+                      }`}
                   >
                     <div className="flex items-start gap-3">
                       {loading && active ? (
@@ -1478,7 +1513,7 @@ export function GroupOrderPageShell() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <CopyLinkButton token={token} />
+            <ShareLinkBox token={token} />
 
             {state.status === "locked" && isHost && (
               <Button

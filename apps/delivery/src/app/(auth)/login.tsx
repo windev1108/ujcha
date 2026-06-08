@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -45,9 +46,11 @@ export default function LoginScreen() {
       >
         <View style={s.header}>
           <View style={s.logoOuter}>
-            <View style={s.logoInner}>
-              <Text style={s.logoText}>U</Text>
-            </View>
+            <Image
+              source={require('../../../assets/images/favicon.png')}
+              style={s.logoImg}
+              resizeMode="contain"
+            />
           </View>
           <Text style={s.brand}>UjCha</Text>
           <Text style={s.brandSub}>DELIVERY</Text>
@@ -121,25 +124,20 @@ const s = StyleSheet.create({
 
   header: { alignItems: 'center', marginBottom: 32 },
   logoOuter: {
-    width: 84,
-    height: 84,
+    width: 88,
+    height: 88,
     borderRadius: 28,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-  },
-  logoInner: {
-    width: 60,
-    height: 60,
-    borderRadius: 20,
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 6,
   },
-  logoText: { fontSize: 32, fontWeight: '800', color: PRIMARY, letterSpacing: -1 },
+  logoImg: { width: 64, height: 64 },
   brand: { fontSize: 28, fontWeight: '700', color: '#fff', letterSpacing: -0.5 },
   brandSub: {
     fontSize: 11,

@@ -11,6 +11,10 @@ interface NotificationState {
   latest: AppNotification | null;
   toastSeq: number;
   clearLatest: () => void;
+  bgCount: number;
+  bgTitle: string;
+  addBgNotif: (title: string) => void;
+  resetBg: () => void;
 }
 
 export const useNotificationStore = create<NotificationState>((set) => ({
@@ -21,4 +25,8 @@ export const useNotificationStore = create<NotificationState>((set) => ({
   incrementUnread: () => set((s) => ({ unreadCount: s.unreadCount + 1 })),
   pushNotification: (n) => set((s) => ({ latest: n, toastSeq: s.toastSeq + 1 })),
   clearLatest: () => set({ latest: null }),
+  bgCount: 0,
+  bgTitle: "",
+  addBgNotif: (title) => set((s) => ({ bgCount: s.bgCount + 1, bgTitle: title })),
+  resetBg: () => set({ bgCount: 0, bgTitle: "" }),
 }));

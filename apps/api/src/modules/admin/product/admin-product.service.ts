@@ -13,6 +13,9 @@ import type { UpdateProductDto } from './dto/update-product.dto';
 import { clampDiscountPercent, computeFinalPrice, normalizeImageUrls, normalizeInlineOptionGroups, normalizeInlineToppings, normalizeTranslation } from '../../../helper/utils';
 import { RedisService } from '../../redis/redis.service';
 
+const GLOBAL_DISCOUNT_KEY = 'kun:shop:globalDiscount';
+const GLOBAL_DISCOUNT_TTL = 60;
+
 @Injectable()
 export class AdminProductService {
   constructor(
@@ -22,39 +25,45 @@ export class AdminProductService {
 
   async list(categoryId?: string, q?: string) {
     const qx = q?.trim();
-    const rows = await this.prisma.product.findMany({
-      where: {
-        AND: [
-          categoryId ? { categoryId } : {},
-          qx
-            ? {
-              OR: [
-                { name: { contains: qx, mode: 'insensitive' } },
-                { sku: { contains: qx, mode: 'insensitive' } },
-                { description: { contains: qx, mode: 'insensitive' } },
-              ],
-            }
-            : {},
-        ],
-      },
-      orderBy: [{ name: 'asc' }],
-      include: { category: { select: { id: true, name: true, slug: true } } },
-    });
-    return rows.map(normalizeProductRow);
+    const [rows, globalDiscount] = await Promise.all([
+      this.prisma.product.findMany({
+        where: {
+          AND: [
+            categoryId ? { categoryId } : {},
+            qx
+              ? {
+                OR: [
+                  { name: { contains: qx, mode: 'insensitive' } },
+                  { sku: { contains: qx, mode: 'insensitive' } },
+                  { description: { contains: qx, mode: 'insensitive' } },
+                ],
+              }
+              : {},
+          ],
+        },
+        orderBy: [{ name: 'asc' }],
+        include: { category: { select: { id: true, name: true, slug: true } } },
+      }),
+      this.getGlobalDiscount(),
+    ]);
+    return rows.map((r) => normalizeProductRow(r, globalDiscount));
   }
 
   async getById(id: string) {
-    const row = await this.prisma.product.findUnique({
-      where: { id },
-      include: { category: { select: { id: true, name: true, slug: true } } },
-    });
+    const [row, globalDiscount] = await Promise.all([
+      this.prisma.product.findUnique({
+        where: { id },
+        include: { category: { select: { id: true, name: true, slug: true } } },
+      }),
+      this.getGlobalDiscount(),
+    ]);
     if (!row) {
       throw new NotFoundException({
         message: 'Không tìm thấy sản phẩm.',
         code: 'PRODUCT_NOT_FOUND',
       });
     }
-    return normalizeProductRow(row);
+    return normalizeProductRow(row, globalDiscount);
   }
 
   async create(dto: CreateProductDto) {
@@ -99,7 +108,7 @@ export class AdminProductService {
       include: { category: { select: { id: true, name: true, slug: true } } },
     });
     await this.redis.delByPattern('kun:products:list:*');
-    return normalizeProductRow(created);
+    return normalizeProductRow(created, await this.getGlobalDiscount());
   }
 
   async update(id: string, dto: UpdateProductDto) {
@@ -179,18 +188,21 @@ export class AdminProductService {
       include: { category: { select: { id: true, name: true, slug: true } } },
     });
     await this.redis.delByPattern('kun:products:list:*');
-    return normalizeProductRow(updated);
+    return normalizeProductRow(updated, await this.getGlobalDiscount());
   }
 
   async toggleAvailability(id: string, dto: ToggleProductAvailabilityDto) {
     await this.getById(id);
-    const row = await this.prisma.product.update({
-      where: { id },
-      data: { isAvailable: dto.isAvailable },
-      include: { category: { select: { id: true, name: true, slug: true } } },
-    });
+    const [row, globalDiscount] = await Promise.all([
+      this.prisma.product.update({
+        where: { id },
+        data: { isAvailable: dto.isAvailable },
+        include: { category: { select: { id: true, name: true, slug: true } } },
+      }),
+      this.getGlobalDiscount(),
+    ]);
     await this.redis.delByPattern('kun:products:list:*');
-    return normalizeProductRow(row);
+    return normalizeProductRow(row, globalDiscount);
   }
 
   async remove(id: string) {
@@ -277,15 +289,26 @@ export class AdminProductService {
       code: 'PRODUCT_SLUG_COLLISION',
     });
   }
+
+  async getGlobalDiscount(): Promise<number> {
+    const cached = await this.redis.get<number>(GLOBAL_DISCOUNT_KEY);
+    if (cached !== null) return cached;
+    const settings = await this.prisma.shopSettings.findFirst();
+    const val = settings?.globalDiscountPercent ?? 0;
+    await this.redis.set(GLOBAL_DISCOUNT_KEY, val, GLOBAL_DISCOUNT_TTL);
+    return val;
+  }
 }
 
-function normalizeProductRow<T extends { price: unknown; discountPercent: number; optionGroups: unknown; toppings: unknown; nameTranslation: unknown; descriptionTranslation: unknown }>(row: T) {
+function normalizeProductRow<T extends { price: unknown; discountPercent: number; optionGroups: unknown; toppings: unknown; nameTranslation: unknown; descriptionTranslation: unknown }>(row: T, globalDiscount = 0) {
+  const effectiveDiscount = Math.min(100, row.discountPercent + globalDiscount);
   return {
     ...row,
+    discountPercent: effectiveDiscount,
     optionGroups: normalizeInlineOptionGroups(row.optionGroups as any),
     toppings: normalizeInlineToppings(row.toppings as any),
     nameTranslation: (row.nameTranslation && typeof row.nameTranslation === 'object' ? row.nameTranslation : {}) as Record<string, string>,
     descriptionTranslation: (row.descriptionTranslation && typeof row.descriptionTranslation === 'object' ? row.descriptionTranslation : {}) as Record<string, string>,
-    finalPrice: computeFinalPrice(row.price, row.discountPercent),
+    finalPrice: computeFinalPrice(row.price, effectiveDiscount),
   };
 }

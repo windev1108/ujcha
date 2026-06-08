@@ -60,11 +60,13 @@ function NotificationItem({
   n,
   onRead,
   onDelete,
+  onClose,
   scrollRoot,
 }: {
   n: AppNotification;
   onRead: (id: string) => void;
   onDelete: (id: string) => void;
+  onClose: () => void;
   scrollRoot: React.RefObject<HTMLDivElement | null>;
 }) {
   const t = useTranslations();
@@ -73,7 +75,7 @@ function NotificationItem({
   const itemRef = useRef<HTMLDivElement>(null);
   const onReadRef = useRef(onRead);
   useEffect(() => { onReadRef.current = onRead; });
-  const orderId = n.data?.orderId as string | undefined;
+  const orderId = n.data?.paymentCode as string | undefined;
   const { title, content } = resolveNotif(n, t as TFn);
 
   useEffect(() => {
@@ -96,7 +98,10 @@ function NotificationItem({
 
   function handleClick() {
     if (!n.isRead) onRead(n.id);
-    if (orderId) router.push(ROUTES.ORDERS);
+    if (orderId) {
+      onClose();
+      router.push(ROUTES.ORDER_DETAIL(orderId));
+    }
   }
 
   return (
@@ -145,19 +150,30 @@ function ToastBody({ n, t }: { n: AppNotification; t: TFn }) {
 }
 
 export function NotificationToast() {
-  const { latest, clearLatest, toastSeq } = useNotificationStore();
+  const { latest, clearLatest, toastSeq, addBgNotif } = useNotificationStore();
   const t = useTranslations();
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     if (!latest) return;
     setVisible(true);
-    const t = setTimeout(() => {
+
+    // Play sound on every notification arrival
+    const audio = new Audio("/mp3/ting.mp3");
+    audio.play().catch(() => { });
+
+    // Accumulate count + title only while tab is hidden
+    if (document.visibilityState === "hidden") {
+      const { title } = resolveNotif(latest, t as TFn);
+      addBgNotif(title);
+    }
+
+    const timer = setTimeout(() => {
       setVisible(false);
       setTimeout(clearLatest, 300);
     }, 4000);
-    return () => clearTimeout(t);
-  }, [toastSeq, clearLatest]);
+    return () => clearTimeout(timer);
+  }, [toastSeq, clearLatest, addBgNotif, t]);
 
   return (
     <AnimatePresence>
@@ -335,6 +351,7 @@ export function NotificationBell() {
                       n={n}
                       onRead={handleMarkRead}
                       onDelete={handleDelete}
+                      onClose={() => setOpen(false)}
                       scrollRoot={listRef}
                     />
                   ))}

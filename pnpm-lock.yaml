@@ -88,6 +88,9 @@ importers:
       passport-jwt:
         specifier: ^4.0.1
         version: 4.0.1
+      prisma:
+        specifier: ^5.22.0
+        version: 5.22.0
       puppeteer-core:
         specifier: ^25.1.0
         version: 25.1.0
@@ -161,9 +164,6 @@ importers:
       prettier:
         specifier: ^3.4.2
         version: 3.8.1
-      prisma:
-        specifier: ^5.22.0
-        version: 5.22.0
       source-map-support:
         specifier: ^0.5.21
         version: 0.5.21

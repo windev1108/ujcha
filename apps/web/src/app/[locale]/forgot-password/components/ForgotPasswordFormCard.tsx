@@ -42,11 +42,10 @@ function StepIndicator({ current }: { current: number }) {
       {labels.map((label, i) => (
         <div key={label} className="flex items-center gap-2">
           <div className="flex items-center gap-1.5">
-            <div className={`flex size-6 items-center justify-center rounded-full text-xs font-bold transition-colors ${
-              i < current ? "bg-[#1a3c34] text-white"
-                : i === current ? "bg-[#1a3c34] text-white ring-2 ring-[#1a3c34]/20 ring-offset-2"
+            <div className={`flex size-6 items-center justify-center rounded-full text-xs font-bold transition-colors ${i < current ? "bg-[#1a3c34] text-white"
+              : i === current ? "bg-[#1a3c34] text-white ring-2 ring-[#1a3c34]/20 ring-offset-2"
                 : "bg-black/[0.07] text-foreground/40"
-            }`}>
+              }`}>
               {i < current ? <CheckCircle2 className="size-3.5" /> : i + 1}
             </div>
             <span className={`text-xs font-medium transition-colors ${i <= current ? "text-[#1a3c34]" : "text-foreground/40"}`}>
@@ -130,7 +129,7 @@ function ForgotPasswordContent() {
               <label className="block text-xs font-semibold text-foreground/60">{t("phone_number")}</label>
               <div className="relative">
                 <Phone className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-foreground/35" aria-hidden />
-                <input type="tel" inputMode="tel" placeholder="0912 345 678" value={phone}
+                <input type="tel" inputMode="tel" placeholder={t("phone_placeholder")} value={phone}
                   onChange={(e) => setPhone(e.target.value)} autoFocus autoComplete="tel"
                   className="h-11 w-full rounded-xl border-0 bg-black/[0.04] pl-10 pr-4 text-sm ring-1 ring-black/[0.08] transition placeholder:text-foreground/30 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1a3c34]/40"
                 />
@@ -195,9 +194,8 @@ function ForgotPasswordContent() {
               <label className="block text-xs font-semibold text-foreground/60">{t("confirm_new_password")}</label>
               <input type={showPwd ? "text" : "password"} placeholder={t("confirm_password")} value={confirmPwd}
                 onChange={(e) => setConfirmPwd(e.target.value)} autoComplete="new-password"
-                className={`h-11 w-full rounded-xl border-0 bg-black/[0.04] px-4 text-sm ring-1 transition placeholder:text-foreground/30 focus:bg-white focus:outline-none focus:ring-2 ${
-                  pwdMismatch ? "ring-red-300 focus:ring-red-400" : "ring-black/[0.08] focus:ring-[#1a3c34]/40"
-                }`}
+                className={`h-11 w-full rounded-xl border-0 bg-black/[0.04] px-4 text-sm ring-1 transition placeholder:text-foreground/30 focus:bg-white focus:outline-none focus:ring-2 ${pwdMismatch ? "ring-red-300 focus:ring-red-400" : "ring-black/[0.08] focus:ring-[#1a3c34]/40"
+                  }`}
               />
               {pwdMismatch && <p className="text-xs text-red-500">{t("password_mismatch")}</p>}
             </div>

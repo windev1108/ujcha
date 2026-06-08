@@ -100,11 +100,10 @@ function StepIndicator({ current }: { current: number }) {
       {labels.map((label, i) => (
         <div key={label} className="flex items-center gap-2">
           <div className="flex items-center gap-1.5">
-            <div className={`flex size-6 items-center justify-center rounded-full text-xs font-bold transition-colors ${
-              i < current ? "bg-[#1a3c34] text-white"
-                : i === current ? "bg-[#1a3c34] text-white ring-2 ring-[#1a3c34]/20 ring-offset-2"
+            <div className={`flex size-6 items-center justify-center rounded-full text-xs font-bold transition-colors ${i < current ? "bg-[#1a3c34] text-white"
+              : i === current ? "bg-[#1a3c34] text-white ring-2 ring-[#1a3c34]/20 ring-offset-2"
                 : "bg-black/[0.07] text-foreground/40"
-            }`}>
+              }`}>
               {i < current ? <CheckCircle2 className="size-3.5" /> : i + 1}
             </div>
             <span className={`text-xs font-medium transition-colors ${i <= current ? "text-[#1a3c34]" : "text-foreground/40"}`}>
@@ -155,24 +154,24 @@ function RegisterContent() {
   const touch = (field: keyof typeof touched) =>
     setTouched((prev) => ({ ...prev, [field]: true }));
 
-  const nameEmpty     = name.trim().length === 0;
-  const phoneEmpty    = !phone.trim();
+  const nameEmpty = name.trim().length === 0;
+  const phoneEmpty = !phone.trim();
   const passwordEmpty = password.length === 0;
-  const pwdMismatch   = confirmPwd.length > 0 && password !== confirmPwd;
-  const step1Valid    = !nameEmpty && name.trim().length >= 2 && isValidPhone(phone) && !passwordEmpty && password.length >= 6 && !pwdMismatch;
+  const pwdMismatch = confirmPwd.length > 0 && password !== confirmPwd;
+  const step1Valid = !nameEmpty && name.trim().length >= 2 && isValidPhone(phone) && !passwordEmpty && password.length >= 6 && !pwdMismatch;
 
   const nameError =
-    (submitted && nameEmpty)                            ? t("error_name_required") :
-    ((submitted || touched.name) && !nameEmpty && name.trim().length < 2) ? t("error_name_min") :
-    null;
+    (submitted && nameEmpty) ? t("error_name_required") :
+      ((submitted || touched.name) && !nameEmpty && name.trim().length < 2) ? t("error_name_min") :
+        null;
   const phoneError =
-    (submitted && phoneEmpty)                               ? t("error_phone_required") :
-    ((submitted || touched.phone) && !phoneEmpty && !isValidPhone(phone)) ? t("error_phone_invalid") :
-    null;
+    (submitted && phoneEmpty) ? t("error_phone_required") :
+      ((submitted || touched.phone) && !phoneEmpty && !isValidPhone(phone)) ? t("error_phone_invalid") :
+        null;
   const passwordError =
-    (submitted && passwordEmpty)                                    ? t("error_password_required") :
-    ((submitted || touched.password) && !passwordEmpty && password.length < 6) ? t("error_password_min") :
-    null;
+    (submitted && passwordEmpty) ? t("error_password_required") :
+      ((submitted || touched.password) && !passwordEmpty && password.length < 6) ? t("error_password_min") :
+        null;
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -219,7 +218,7 @@ function RegisterContent() {
               <label className="block text-xs font-semibold text-foreground/60">{t("phone_number")}</label>
               <div className="relative">
                 <Phone className={`pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 transition-colors ${phoneError ? "text-red-400" : "text-foreground/35"}`} aria-hidden />
-                <input type="tel" inputMode="tel" placeholder="0912 345 678" value={phone}
+                <input type="tel" inputMode="tel" placeholder={t('phone_placeholder')} value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   onBlur={() => touch("phone")}
                   autoComplete="tel"
@@ -258,9 +257,8 @@ function RegisterContent() {
               <label className="block text-xs font-semibold text-foreground/60">{t("confirm_password")}</label>
               <input type={showPwd ? "text" : "password"} placeholder={t("confirm_password")} value={confirmPwd}
                 onChange={(e) => setConfirmPwd(e.target.value)} autoComplete="new-password"
-                className={`h-11 w-full rounded-xl border-0 bg-black/[0.04] px-4 text-sm ring-1 transition placeholder:text-foreground/30 focus:bg-white focus:outline-none focus:ring-2 ${
-                  pwdMismatch ? "ring-red-300 focus:ring-red-400" : "ring-black/[0.08] focus:ring-[#1a3c34]/40"
-                }`}
+                className={`h-11 w-full rounded-xl border-0 bg-black/[0.04] px-4 text-sm ring-1 transition placeholder:text-foreground/30 focus:bg-white focus:outline-none focus:ring-2 ${pwdMismatch ? "ring-red-300 focus:ring-red-400" : "ring-black/[0.08] focus:ring-[#1a3c34]/40"
+                  }`}
               />
               {pwdMismatch && <p className="text-xs text-red-500">{t("password_mismatch")}</p>}
             </div>

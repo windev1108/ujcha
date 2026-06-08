@@ -391,6 +391,7 @@
   "login_welcome": "Welcome back! Enter your details to continue.",
   "no_account": "Don't have an account?",
   "password_placeholder": "Your password",
+  "phone_placeholder": "Your phone number",
   "privacy": "Privacy",
   "register_now": "Sign up now",
   "show_password": "Show password",

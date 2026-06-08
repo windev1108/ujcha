@@ -38,19 +38,18 @@ function ProductCard({ product, onPress }: { product: Product; onPress: (p: Prod
         )}
       </div>
 
+      {hasDiscount && !sold && (
+        <span className="absolute left-2 top-2 z-10 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white shadow-sm">
+          -{product.discountPercent}%
+        </span>
+      )}
+
       <div className="flex flex-1 flex-col gap-1 p-3 w-full">
         <p className="text-sm font-semibold leading-snug text-gray-800 line-clamp-2 text-left">{product.name}</p>
-        <div className="mt-auto flex items-end justify-between gap-1">
-          <div className="flex flex-col">
-            <p className="text-base font-bold text-brand">{fmt(finalPrice)}</p>
-            {hasDiscount && (
-              <p className="text-xs text-gray-400 line-through leading-none">{fmt(basePrice)}</p>
-            )}
-          </div>
+        <div className="mt-auto flex items-baseline gap-1.5">
+          <p className="text-base font-bold text-brand tabular-nums">{fmt(finalPrice)}</p>
           {hasDiscount && (
-            <span className="shrink-0 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
-              -{product.discountPercent}%
-            </span>
+            <p className="text-xs text-gray-400 line-through tabular-nums leading-none">{fmt(basePrice)}</p>
           )}
         </div>
       </div>

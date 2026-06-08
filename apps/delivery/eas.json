@@ -12,7 +12,13 @@
       }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "npm_config_legacy_peer_deps": "true"
+      }
     },
     "production": {
       "autoIncrement": true

@@ -196,8 +196,8 @@ export function ProductConfigModal({ product, onClose, onConfirm }: Props) {
                         <div className="space-y-1">
                             {optionDelta > 0 && (
                                 <div className="flex items-center justify-between text-xs text-gray-400">
-                                    <span>Giá gốc + tuỳ chọn</span>
-                                    <span className="font-medium text-gray-600">{fmt(base)} + {fmt(optionDelta)}</span>
+                                    <span>Giá món + tuỳ chọn</span>
+                                    <span className="font-medium text-gray-600">{fmt(discountedBase)} + {fmt(optionDelta)}</span>
                                 </div>
                             )}
                             {toppingDelta > 0 && (

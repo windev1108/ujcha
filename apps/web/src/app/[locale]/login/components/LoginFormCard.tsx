@@ -29,14 +29,14 @@ export function LoginFormCard() {
   const [submitted, setSubmitted] = useState(false);
   const login = useLoginMutation();
 
-  const phoneEmpty    = !phone.trim();
-  const phoneInvalid  = !phoneEmpty && !isValidPhone(phone);
+  const phoneEmpty = !phone.trim();
+  const phoneInvalid = !phoneEmpty && !isValidPhone(phone);
   const passwordEmpty = !password;
 
   const phoneError =
     (submitted && phoneEmpty) ? t("error_phone_required") :
-    (phoneTouched && phoneInvalid) ? t("error_phone_invalid") :
-    null;
+      (phoneTouched && phoneInvalid) ? t("error_phone_invalid") :
+        null;
   const passwordError = submitted && passwordEmpty ? t("error_password_required") : null;
 
   const canSubmit = !phoneEmpty && isValidPhone(phone) && !passwordEmpty;
@@ -72,7 +72,7 @@ export function LoginFormCard() {
             <input
               type="tel"
               inputMode="tel"
-              placeholder="0912 345 678"
+              placeholder={t("phone_placeholder")}
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               onBlur={() => setPhoneTouched(true)}
@@ -80,11 +80,10 @@ export function LoginFormCard() {
               autoFocus
               aria-invalid={!!phoneError}
               aria-describedby={phoneError ? "phone-error" : undefined}
-              className={`h-11 w-full rounded-xl border-0 bg-black/[0.04] pl-10 pr-4 text-sm ring-1 transition placeholder:text-foreground/30 focus:bg-white focus:outline-none focus:ring-2 ${
-                phoneError
-                  ? "ring-red-300 focus:ring-red-400"
-                  : "ring-black/[0.08] focus:ring-[#1a3c34]/40"
-              }`}
+              className={`h-11 w-full rounded-xl border-0 bg-black/[0.04] pl-10 pr-4 text-sm ring-1 transition placeholder:text-foreground/30 focus:bg-white focus:outline-none focus:ring-2 ${phoneError
+                ? "ring-red-300 focus:ring-red-400"
+                : "ring-black/[0.08] focus:ring-[#1a3c34]/40"
+                }`}
             />
           </div>
           {phoneError && (
@@ -119,11 +118,10 @@ export function LoginFormCard() {
               autoComplete="current-password"
               aria-invalid={!!passwordError}
               aria-describedby={passwordError ? "password-error" : undefined}
-              className={`h-11 w-full rounded-xl border-0 bg-black/[0.04] pl-10 pr-11 text-sm ring-1 transition placeholder:text-foreground/30 focus:bg-white focus:outline-none focus:ring-2 ${
-                passwordError
-                  ? "ring-red-300 focus:ring-red-400"
-                  : "ring-black/[0.08] focus:ring-[#1a3c34]/40"
-              }`}
+              className={`h-11 w-full rounded-xl border-0 bg-black/[0.04] pl-10 pr-11 text-sm ring-1 transition placeholder:text-foreground/30 focus:bg-white focus:outline-none focus:ring-2 ${passwordError
+                ? "ring-red-300 focus:ring-red-400"
+                : "ring-black/[0.08] focus:ring-[#1a3c34]/40"
+                }`}
             />
             <button
               type="button"
