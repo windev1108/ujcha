@@ -811,8 +811,8 @@ function ParticipantRow({
                     onClick={() => !isRemoving && onRemoveItem?.(item.productId)}
                     disabled={!!removingProductId}
                     className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full transition-colors disabled:pointer-events-none ${isRemoving
-                        ? "bg-red-50 text-red-400"
-                        : "bg-black/6 text-foreground/35 hover:bg-red-50 hover:text-red-500"
+                      ? "bg-red-50 text-red-400"
+                      : "bg-black/6 text-foreground/35 hover:bg-red-50 hover:text-red-500"
                       }`}
                   >
                     {isRemoving
@@ -902,7 +902,7 @@ function ShareLinkBox({ token: _token }: { token: string }) {
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
         await navigator.share({
-          title: "Đặt đồ nhóm cùng mình tại UjCha",
+          title: "Đặt đơn nhóm cùng mình tại UjCha",
           text: "Mình đang đặt đồ nhóm tại UjCha, bạn tham gia cùng nhé! Càng nhiều người giảm giá càng sâu.",
           url,
         });
@@ -1045,8 +1045,8 @@ function PaymentSheet({
                     disabled={loading}
                     onClick={() => onSelect(id)}
                     className={`rounded-3xl border-2 p-4 text-left transition-colors disabled:opacity-60 ${active
-                        ? "border-kun-products-forest bg-kun-mint/15"
-                        : "border-transparent bg-surface-card ring-1 ring-black/6 hover:ring-black/10"
+                      ? "border-kun-products-forest bg-kun-mint/15"
+                      : "border-transparent bg-surface-card ring-1 ring-black/6 hover:ring-black/10"
                       }`}
                   >
                     <div className="flex items-start gap-3">
