@@ -408,11 +408,18 @@ export function PostsPageClient() {
                         <Table.Cell className="px-5 py-3">
                           <div className="flex items-center gap-2">
                             <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_oklab,#71b394_14%,transparent)] text-[10px] font-bold text-[#14532d]">
-                              {authorInitials(p.author.phone)}
+                              {authorInitials(p.author.name)}
                             </span>
-                            <span className="truncate text-sm text-foreground/80">
-                              {p.author.phone}
-                            </span>
+                            <div className="min-w-0">
+                              <span className="block truncate text-sm text-foreground/80">
+                                {p.author.name ?? "—"}
+                              </span>
+                              {p.author.phone && (
+                                <span className="block truncate text-xs text-foreground/50">
+                                  {p.author.phone}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </Table.Cell>
                         <Table.Cell className="px-5 py-3">

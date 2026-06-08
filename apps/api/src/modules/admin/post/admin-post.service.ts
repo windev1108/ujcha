@@ -13,7 +13,7 @@ import type { CreatePostDto } from './dto/create-post.dto';
 import type { UpdatePostDto } from './dto/update-post.dto';
 
 const authorInclude = {
-  author: { select: { id: true, email: true, role: true } },
+  author: { select: { id: true, name: true, phone: true, role: true } },
 } as const;
 
 @Injectable()
