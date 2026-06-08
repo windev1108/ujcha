@@ -73,7 +73,7 @@ export function CartPanel({ onCheckout }: { onCheckout: () => void }) {
           >
             <option value="">Mang về / Pickup</option>
             {tables.filter((t) => t.isActive).map((t) => (
-              <option key={t.id} value={t.id}>{t.name}</option>
+              <option key={t.id} value={t.id}>{`Bàn ${t.name}`}</option>
             ))}
           </select>
         </div>
