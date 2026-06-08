@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Patch, Post, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -33,8 +33,18 @@ export class ProfileController {
     return this.profileService.updateProfile(userId, dto);
   }
 
+  @Get('avatar/check')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Kiểm tra user có thể upload avatar hôm nay không' })
+  @ApiResponse({ status: 200, description: 'Có thể upload' })
+  @ApiResponse({ status: 429, description: 'Đã upload hôm nay rồi' })
+  async checkAvatarUpload(@CurrentUserId() userId: string) {
+    await this.profileService.checkAvatarUploadAllowed(userId);
+    return { ok: true };
+  }
+
   @Post('avatar')
-  @ApiOperation({ summary: 'Upload avatar lên Cloudinary (giới hạn 1 lần/ngày)' })
+  @ApiOperation({ summary: 'Lưu URL avatar sau khi đã upload lên Cloudinary' })
   @ApiResponse({ status: 429, description: 'Đã upload hôm nay rồi' })
   uploadAvatar(
     @CurrentUserId() userId: string,

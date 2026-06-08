@@ -11,7 +11,7 @@ import {
 import { useTranslations } from "next-intl";
 import { ROUTES } from "@/lib/routes";
 import { useAuthStore } from "@/store/auth-store";
-import { useProfileQuery, useUpdateProfileMutation, useUploadAvatarMutation } from "@/services/profile/hooks";
+import { useProfileQuery, useUpdateProfileMutation, useUploadAvatarMutation, useCheckAvatarUploadAllowed } from "@/services/profile/hooks";
 import { env } from "@/config/env";
 
 function formatPhone(phone: string | null | undefined, notUpdated: string): string {
@@ -97,6 +97,7 @@ export function ProfilePageShell() {
   const { data: profile } = useProfileQuery();
   const updateMutation = useUpdateProfileMutation();
   const uploadAvatarMutation = useUploadAvatarMutation();
+  const checkAvatarAllowed = useCheckAvatarUploadAllowed();
 
   const displayUser = profile ?? user;
   const name = displayUser?.name?.trim() || t("guest");
@@ -166,6 +167,8 @@ export function ProfilePageShell() {
       if (!env.CLOUDINARY_CLOUD_NAME || !env.CLOUDINARY_UPLOAD_PRESET) {
         throw new Error("Chưa cấu hình Cloudinary. Vui lòng liên hệ quản trị viên.");
       }
+      // Check daily limit trước khi tốn băng thông upload lên Cloudinary
+      await checkAvatarAllowed.mutateAsync();
       const blob = await compressImage(pendingFile);
       const avatarUrl = await uploadToCloudinary(blob, env.CLOUDINARY_CLOUD_NAME, env.CLOUDINARY_UPLOAD_PRESET);
       await uploadAvatarMutation.mutateAsync(avatarUrl);
@@ -175,7 +178,7 @@ export function ProfilePageShell() {
     } catch (e) {
       setAvatarError(axiosErrorMessage(e, t("generic_error")));
     }
-  }, [pendingFile, avatarPreviewUrl, uploadAvatarMutation]);
+  }, [pendingFile, avatarPreviewUrl, checkAvatarAllowed, uploadAvatarMutation]);
 
   const startEditName = () => {
     setNameInput(name);

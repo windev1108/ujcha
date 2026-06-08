@@ -40,6 +40,23 @@ export class ProfileService {
     return this.userService.updateUser(userId, data);
   }
 
+  async checkAvatarUploadAllowed(userId: string): Promise<void> {
+    const user = await this.userService.findById(userId);
+    if (!user) {
+      throw new NotFoundException({ message: 'Không tìm thấy người dùng.', code: 'USER_NOT_FOUND' });
+    }
+    if (user.lastAvatarUploadAt) {
+      const todayStart = new Date();
+      todayStart.setUTCHours(0, 0, 0, 0);
+      if (user.lastAvatarUploadAt >= todayStart) {
+        throw new HttpException(
+          { message: 'Bạn chỉ có thể cập nhật ảnh đại diện 1 lần mỗi ngày.', code: 'AVATAR_DAILY_LIMIT' },
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+    }
+  }
+
   async uploadAvatar(userId: string, avatarUrl: string): Promise<User> {
     const user = await this.userService.findById(userId);
     if (!user) {

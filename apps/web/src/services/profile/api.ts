@@ -28,6 +28,10 @@ export async function updateProfile(payload: UpdateProfilePayload): Promise<User
   return data
 }
 
+export async function checkAvatarUploadAllowed(): Promise<void> {
+  await api.get('/profile/avatar/check')
+}
+
 export async function uploadAvatar(avatarUrl: string): Promise<UserProfileData> {
   const { data } = await api.post<UserProfileData>('/profile/avatar', { url: avatarUrl })
   return data
