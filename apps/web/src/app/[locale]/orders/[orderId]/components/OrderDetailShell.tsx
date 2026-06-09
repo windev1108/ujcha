@@ -232,9 +232,12 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
   const isShipperActive = ["picked_up", "arrived", "delivering"].includes(order?.status ?? "");
 
   useOrderStatusSocket({
-    onStatusChange: ({ orderId }) => {
+    onStatusChange: ({ orderId, status }) => {
       if (orderId === order?.id) {
         queryClient.invalidateQueries({ queryKey: orderKeys.detail(paymentCode) });
+        if (status === 'completed') {
+          queryClient.invalidateQueries({ queryKey: ['profile'] });
+        }
       }
     },
     enabled: !isTerminal,

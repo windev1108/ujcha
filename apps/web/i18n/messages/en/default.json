@@ -28,7 +28,7 @@
   "group_shipping_free": "Free",
   "group_no_coords_warn": "This address has no coordinates. Shipping fee will be confirmed later.",
   "group_pickup_title": "Pick up at store",
-  "group_pickup_desc": "The group picks up at UjCha Matcha & Tea.",
+  "group_pickup_desc": "The group picks up at UjCha Matcha & More.",
   "group_order_total_label": "Order total",
   "group_incl_ship": "Includes shipping {fee}",
   "group_save_delivery": "Save delivery settings",

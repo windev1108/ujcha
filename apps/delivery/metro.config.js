@@ -1,3 +1,9 @@
+// Prevent Metro from using the monorepo workspace root as serverRoot.
+// Without this, release builds fail: Metro resolves './index.js' from the
+// workspace root (E:\startup\ujcha) instead of apps/delivery.
+// watchFolders + nodeModulesPaths below handle monorepo resolution manually.
+process.env.EXPO_NO_METRO_WORKSPACE_ROOT = '1';
+
 const { getDefaultConfig } = require('expo/metro-config');
 const path = require('path');
 
@@ -28,13 +34,24 @@ config.resolver.blockList = [
   ),
 ];
 
-// Ensure react-native always resolves to this app's copy (0.81.x)
+// Ensure react and react-native always resolve to this app's copies (no duplicate instances)
 config.resolver.extraNodeModules = {
+  'react': path.resolve(projectRoot, 'node_modules', 'react'),
   'react-native': path.resolve(projectRoot, 'node_modules', 'react-native'),
 };
 
+const reactSingletonPath = path.resolve(projectRoot, 'node_modules', 'react');
+const reactNativeSingletonPath = path.resolve(projectRoot, 'node_modules', 'react-native');
+
 const originalResolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  // Force all react/react-native imports from any nested package to the same singleton
+  if (moduleName === 'react') {
+    return { filePath: path.join(reactSingletonPath, 'index.js'), type: 'sourceFile' };
+  }
+  if (moduleName === 'react-native') {
+    return { filePath: path.join(reactNativeSingletonPath, 'index.js'), type: 'sourceFile' };
+  }
   if (moduleName === '@expo/metro-runtime/error-overlay') {
     return {
       filePath: path.resolve(projectRoot, 'src/mocks/error-overlay.js'),

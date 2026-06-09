@@ -3,6 +3,7 @@ import { OrderStatus, OrderType, PaymentStatus, PaymentType } from '@prisma/clie
 import { PrismaService } from '../prisma/prisma.service';
 import { OrdersGateway } from '../events/orders.gateway';
 import { PointOrderRewardService } from '../point/point-order-reward.service';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class ShipperService {
@@ -12,6 +13,7 @@ export class ShipperService {
     private readonly prisma: PrismaService,
     private readonly ordersGateway: OrdersGateway,
     private readonly pointOrderReward: PointOrderRewardService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async getAvailableOrders() {
@@ -170,10 +172,16 @@ export class ShipperService {
     const updated = await this.prisma.order.update({
       where: { id: orderId },
       data: { status: OrderStatus.delivering, deliveringAt: new Date() },
+      select: { userId: true, paymentCode: true },
     });
 
     this.ordersGateway.emitOrderStatusUpdated({ orderId, status: OrderStatus.delivering });
     this.ordersGateway.emitShipperOrderStatusUpdated({ orderId, status: OrderStatus.delivering, shipperId });
+    void this.notifyOrderUsers(updated, orderId, {
+      title: 'Đơn đang trên đường giao',
+      content: `Đơn #${updated.paymentCode} đang trên đường đến bạn.`,
+      notifKey: 'order_delivering',
+    });
     return updated;
   }
 
@@ -191,10 +199,16 @@ export class ShipperService {
     const updated = await this.prisma.order.update({
       where: { id: orderId },
       data: { status: OrderStatus.arrived, arrivedAt: new Date() },
+      select: { userId: true, paymentCode: true },
     });
 
     this.ordersGateway.emitOrderStatusUpdated({ orderId, status: OrderStatus.arrived });
     this.ordersGateway.emitShipperOrderStatusUpdated({ orderId, status: OrderStatus.arrived, shipperId });
+    void this.notifyOrderUsers(updated, orderId, {
+      title: 'Shipper đã đến nơi',
+      content: `Đơn #${updated.paymentCode} đã đến địa chỉ giao hàng.`,
+      notifKey: 'order_arrived',
+    });
     return updated;
   }
 
@@ -218,6 +232,7 @@ export class ShipperService {
           paymentStatus: PaymentStatus.paid,
         }),
       },
+      select: { userId: true, paymentCode: true },
     });
 
     this.ordersGateway.emitOrderStatusUpdated({ orderId, status: OrderStatus.completed });
@@ -227,7 +242,31 @@ export class ShipperService {
       this.logger.error(`Point reward failed for order ${orderId}: ${err instanceof Error ? err.message : err}`);
     });
 
+    void this.notifyOrderUsers(updated, orderId, {
+      title: 'Đơn hàng đã hoàn thành',
+      content: `Đơn #${updated.paymentCode} đã được giao thành công. Cảm ơn bạn!`,
+      notifKey: 'order_completed',
+    });
+
     return updated;
+  }
+
+  private async notifyOrderUsers(
+    order: { userId: string | null; paymentCode: string },
+    orderId: string,
+    notif: { title: string; content: string; notifKey: string },
+  ) {
+    if (!order.userId) return;
+    await this.notificationService
+      .upsertOrderNotificationForMany([order.userId], {
+        type: 'order',
+        title: notif.title,
+        content: notif.content,
+        data: { orderId, paymentCode: order.paymentCode, notifKey: notif.notifKey },
+      })
+      .catch((err: unknown) => {
+        this.logger.error(`Notification failed for order ${orderId}: ${err instanceof Error ? err.message : err}`);
+      });
   }
 
   private async assertShipperOwnsOrder(shipperId: string, orderId: string) {

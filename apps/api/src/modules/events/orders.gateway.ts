@@ -29,6 +29,8 @@ export class OrdersGateway {
 
   emitOrderStatusUpdated(data: { orderId: string; status: string }) {
     this.server.emit('order:status', data);
+    // Also push into /tracking so ShipperLiveMap (which joins order:{id} room there) receives it
+    this.server.of('/tracking').to(`order:${data.orderId}`).emit('order:status', data);
   }
 
   emitExternalOrderCreated(data: { orderId: string; platform: string }) {

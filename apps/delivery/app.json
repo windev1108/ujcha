@@ -1,11 +1,11 @@
 {
   "expo": {
     "name": "UjCha Delivery",
-    "slug": "mobile-delivery",
+    "slug": "ujcha-delivery",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mobiledelivery",
+    "scheme": "ujcha-delivery",
     "userInterfaceStyle": "light",
     "ios": {
       "bundleIdentifier": "com.ujcha.delivery",
@@ -72,7 +72,9 @@
       "expo-secure-store"
     ],
     "autolinking": {
-      "exclude": ["@expo/dom-webview"]
+      "exclude": [
+        "@expo/dom-webview"
+      ]
     },
     "experiments": {
       "typedRoutes": true
@@ -80,8 +82,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "609259d6-3937-4667-a231-442d22b0ec20"
+        "projectId": "d37f79cf-702a-4882-8c30-ff8efcd99c00"
       }
-    }
+    },
+    "owner": "win1108"
   }
 }

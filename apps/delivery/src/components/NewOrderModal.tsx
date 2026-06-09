@@ -201,9 +201,13 @@ export function NewOrderModal({
     };
   }, []);
 
+  async function stopSound() {
+    try { await soundRef.current?.stopAsync(); } catch {}
+    try { await soundRef.current?.unloadAsync(); } catch {}
+  }
+
   async function handleDismiss() {
-    await soundRef.current?.stopAsync();
-    await soundRef.current?.unloadAsync();
+    await stopSound();
     onDismiss();
   }
 
@@ -211,20 +215,17 @@ export function NewOrderModal({
     setAccepting(true);
     try {
       await shipperApi.acceptOrder(order.orderId);
-      await soundRef.current?.stopAsync();
-      await soundRef.current?.unloadAsync();
-      onAccepted?.();
-      onDismiss();
     } catch (e: any) {
       setAccepting(false);
+      const status = e?.response?.status;
       const code = e?.response?.data?.code;
-      if (code === 'ORDER_ALREADY_TAKEN') {
-        Alert.alert('Không kịp rồi', 'Shipper khác vừa nhận đơn này.');
-        void handleDismiss();
-      } else {
-        Alert.alert('Lỗi', 'Không thể nhận đơn. Thử lại sau.');
-      }
+      const msg = e?.response?.data?.message ?? e?.message ?? 'unknown';
+      Alert.alert('Lỗi nhận đơn', `status=${status} code=${code}\n${msg}`);
+      return;
     }
+    await stopSound();
+    onAccepted?.();
+    onDismiss();
   }
 
   const hasMap = order.lat != null && order.lng != null;

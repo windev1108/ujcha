@@ -1,8 +1,11 @@
 import { useEffect, useRef } from 'react';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as SplashScreen from 'expo-splash-screen';
 import { useAuthStore } from '@/store/auth.store';
+
+SplashScreen.preventAutoHideAsync();
 import { socketService } from '@/services/socket.service';
 import { locationService } from '@/services/location.service';
 import { useNewOrder, enqueueAvailableOrders } from '@/hooks/use-new-order';
@@ -49,6 +52,8 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (!hydrated) return;
+    SplashScreen.hideAsync();
+
 
     const inAuth = segments[0] === '(auth)';
     const isAuthed = !!accessToken && !!shipper;
@@ -80,13 +85,13 @@ export default function RootLayout() {
   }, [accessToken]);
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <View style={{ flex: 1 }}>
       <StatusBar style="dark" backgroundColor="#ffffff" />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(shipper)" />
       </Stack>
       <NewOrderOverlay />
-    </GestureHandlerRootView>
+    </View>
   );
 }

@@ -6,16 +6,14 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { User, Phone, LogOut, Pencil, Check, X, Settings, ChevronRight } from '@/components/icons';
+import { User, Phone, LogOut, Settings, ChevronRight } from '@/components/icons';
 import { useAuth } from '@/hooks/use-auth';
 import { useAuthStore } from '@/store/auth.store';
 import { socketService } from '@/services/socket.service';
-import { shipperApi } from '@/services/api.service';
 
 const PRIMARY = '#1a3c34';
 const MINT = '#99d6b3';
@@ -30,26 +28,9 @@ export default function ProfileScreen() {
   const updateShipper = useAuthStore((s) => s.updateShipper);
 
   const [logoutLoading, setLogoutLoading] = useState(false);
-  const [editingPhone, setEditingPhone] = useState(false);
-  const [phoneInput, setPhoneInput] = useState(shipper?.phone ?? '');
-  const [savingPhone, setSavingPhone] = useState(false);
 
   const socketOnline = socketService.isConnected;
   const initial = shipper?.name?.[0]?.toUpperCase() ?? '?';
-
-  async function handleSavePhone() {
-    if (!phoneInput.trim()) return;
-    setSavingPhone(true);
-    try {
-      const { data } = await shipperApi.updatePhone(phoneInput.trim());
-      updateShipper({ phone: data.phone });
-      setEditingPhone(false);
-    } catch {
-      Alert.alert('Lỗi', 'Không thể cập nhật số điện thoại. Thử lại sau.');
-    } finally {
-      setSavingPhone(false);
-    }
-  }
 
   async function handleLogout() {
     Alert.alert('Đăng xuất', 'Bạn có chắc muốn đăng xuất?', [
@@ -112,48 +93,9 @@ export default function ProfileScreen() {
             <View style={s.infoIconWrap}><Phone size={16} color={PRIMARY} /></View>
             <View style={s.infoBody}>
               <Text style={s.infoLabel}>Số điện thoại</Text>
-              {editingPhone ? (
-                <View style={s.phoneEditRow}>
-                  <TextInput
-                    style={s.phoneInput}
-                    value={phoneInput}
-                    onChangeText={setPhoneInput}
-                    keyboardType="phone-pad"
-                    placeholder="Nhập số điện thoại"
-                    placeholderTextColor="#b0b0b0"
-                    autoFocus
-                  />
-                  <Pressable
-                    style={[s.iconBtn, s.iconBtnPrimary]}
-                    onPress={handleSavePhone}
-                    disabled={savingPhone}
-                  >
-                    {savingPhone
-                      ? <ActivityIndicator size="small" color="#fff" />
-                      : <Check size={14} color="#fff" />
-                    }
-                  </Pressable>
-                  <Pressable
-                    style={s.iconBtn}
-                    onPress={() => { setEditingPhone(false); setPhoneInput(shipper?.phone ?? ''); }}
-                  >
-                    <X size={14} color={MUTED} />
-                  </Pressable>
-                </View>
-              ) : (
-                <View style={s.phoneDisplayRow}>
-                  <Text style={[s.infoValue, !shipper?.phone && { color: '#b0b0b0' }]}>
-                    {shipper?.phone ?? 'Chưa cập nhật'}
-                  </Text>
-                  <Pressable
-                    style={s.editPhoneBtn}
-                    onPress={() => { setEditingPhone(true); setPhoneInput(shipper?.phone ?? ''); }}
-                  >
-                    <Pencil size={13} color={PRIMARY} />
-                    <Text style={s.editPhoneTxt}>Sửa</Text>
-                  </Pressable>
-                </View>
-              )}
+              <Text style={[s.infoValue, !shipper?.phone && { color: '#b0b0b0' }]}>
+                {shipper?.phone ?? 'Chưa cập nhật'}
+              </Text>
             </View>
           </View>
         </View>
@@ -229,17 +171,6 @@ const s = StyleSheet.create({
   infoBody: { flex: 1, gap: 2 },
   infoLabel: { fontSize: 10, fontWeight: '600', color: '#b0b0b0', textTransform: 'uppercase', letterSpacing: 0.5 },
   infoValue: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
-
-  phoneDisplayRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  phoneEditRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  phoneInput: {
-    flex: 1, height: 36, borderRadius: 10, borderWidth: 1.5, borderColor: PRIMARY,
-    paddingHorizontal: 10, fontSize: 14, color: '#1a1a1a', backgroundColor: '#f0fdf4',
-  },
-  editPhoneBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 100, backgroundColor: 'rgba(26,60,52,0.08)' },
-  editPhoneTxt: { fontSize: 12, fontWeight: '600', color: PRIMARY },
-  iconBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center' },
-  iconBtnPrimary: { backgroundColor: PRIMARY },
 
   quickRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   quickLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },

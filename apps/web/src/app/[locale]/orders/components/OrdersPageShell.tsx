@@ -299,8 +299,11 @@ export function OrdersPageShell() {
   const { data: profile } = useProfileQuery();
 
   useOrderStatusSocket({
-    onStatusChange: () => {
+    onStatusChange: ({ status }) => {
       queryClient.invalidateQueries({ queryKey: orderKeys.myOrders(page) });
+      if (status === 'completed') {
+        queryClient.invalidateQueries({ queryKey: ['profile'] });
+      }
     },
   });
 
