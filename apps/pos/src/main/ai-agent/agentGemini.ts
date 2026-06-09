@@ -1,8 +1,49 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
-import type { Content, Part } from '@google/generative-ai'
+import type { Content, Part, GenerateContentStreamResult } from '@google/generative-ai'
 import { buildSystemPrompt } from './prompts/systemPrompt'
 import { resolveCartItems } from './tools/addToCart'
 import type { AgentRunParams } from './types'
+
+// Models tried in order when primary is overloaded
+const MODEL_CASCADE = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'] as const
+
+function isTransientError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err)
+  return msg.includes('503') || msg.includes('429') || msg.includes('overloaded') || msg.includes('RESOURCE_EXHAUSTED')
+}
+
+function sleep(ms: number) { return new Promise<void>(r => setTimeout(r, ms)) }
+
+async function generateWithFallback(
+  genai: GoogleGenerativeAI,
+  contents: Content[],
+  systemInstruction: string,
+  tools: Parameters<ReturnType<GoogleGenerativeAI['getGenerativeModel']>['generateContentStream']>[0]['tools'],
+  generationConfig: Record<string, unknown>,
+): Promise<{ result: GenerateContentStreamResult; model: string }> {
+  for (let mi = 0; mi < MODEL_CASCADE.length; mi++) {
+    const modelName = MODEL_CASCADE[mi]
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const m = genai.getGenerativeModel({ model: modelName, systemInstruction, tools, generationConfig })
+        const result = await m.generateContentStream({ contents })
+        if (mi > 0) console.warn(`[Gemini] Using fallback model: ${modelName}`)
+        return { result, model: modelName }
+      } catch (err) {
+        if (!isTransientError(err)) throw err
+        if (attempt < 2) {
+          console.warn(`[Gemini] ${modelName} overloaded (attempt ${attempt + 1}), retrying in ${2 ** attempt}s…`)
+          await sleep(1000 * 2 ** attempt)
+        } else if (mi < MODEL_CASCADE.length - 1) {
+          console.warn(`[Gemini] ${modelName} exhausted, falling back to ${MODEL_CASCADE[mi + 1]}`)
+        } else {
+          throw new Error(`[Gemini] All models unavailable: ${err instanceof Error ? err.message : err}`)
+        }
+      }
+    }
+  }
+  throw new Error('[Gemini] All models unavailable')
+}
 
 const confirmOrderDecl = {
   name: 'confirm_order',
@@ -80,12 +121,9 @@ export async function runAgentTurnGemini(
 
   try {
     const genai = new GoogleGenerativeAI(apiKey)
-    const model = genai.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      systemInstruction: buildSystemPrompt(menu, toppingCache, aiName),
-      tools: [{ functionDeclarations: [confirmOrderDecl, addToCartDecl, updateCartItemDecl] }],
-      generationConfig: { maxOutputTokens: 512 },
-    })
+    const systemInstruction = buildSystemPrompt(menu, toppingCache, aiName)
+    const tools = [{ functionDeclarations: [confirmOrderDecl, addToCartDecl, updateCartItemDecl] }]
+    const generationConfig = { maxOutputTokens: 512 }
 
     if (!geminiSessions.has(sessionId)) geminiSessions.set(sessionId, [])
     const history = geminiSessions.get(sessionId)!
@@ -93,7 +131,7 @@ export async function runAgentTurnGemini(
     history.push({ role: 'user', parts: [{ text: userMessage }] })
 
     while (true) {
-      const result = await model.generateContentStream({ contents: history })
+      const { result } = await generateWithFallback(genai, history, systemInstruction, tools, generationConfig)
 
       for await (const chunk of result.stream) {
         const text = chunk.text()

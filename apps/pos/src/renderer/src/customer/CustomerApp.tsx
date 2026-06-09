@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { QrCode } from 'lucide-react'
 import { motion, AnimatePresence } from 'motion/react'
 import type { CustomerUpdate } from '../types/common'
@@ -284,6 +284,177 @@ const STARS = Array.from({ length: 28 }, (_, i) => ({
   dur: 2 + ((i * 0.17) % 2),
 }))
 
+// ── Camera presence preview (customer-side) ────────────────────────────────────
+
+const CAM_W = 80
+const CAM_H = 60
+
+function CameraPreviewPanel() {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [isPresent, setIsPresent] = useState(false)
+  const [isReady, setIsReady] = useState(false)
+
+  const stopRef = useRef<(() => void) | null>(null)
+
+  const start = useCallback(async () => {
+    const canvas = document.createElement('canvas')
+    canvas.width = CAM_W; canvas.height = CAM_H
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })!
+
+    let stream: MediaStream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 320 }, height: { ideal: 240 } },
+      })
+    } catch { return }
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream
+      await videoRef.current.play().catch(() => {})
+    }
+
+    const startedAt = Date.now()
+    // Float32Array lets us lerp without integer quantization drift
+    let bg: Float32Array | null = null
+    let presenceSince: number | null = null
+    let absenceSince: number | null = null
+
+    const PRESENCE_RATIO = 0.06
+    const DIFF_THRESHOLD = 25
+    const PRESENCE_HOLD = 600
+    const ABSENCE_HOLD = 1200   // faster than before
+    // Adaptive rates: fast update when empty (handles auto-exposure), very slow when occupied
+    const ADAPT_ABSENT = 0.15
+    const ADAPT_PRESENT = 0.008
+
+    const interval = setInterval(() => {
+      if (!videoRef.current) return
+      ctx.drawImage(videoRef.current, 0, 0, CAM_W, CAM_H)
+      const cur = ctx.getImageData(0, 0, CAM_W, CAM_H).data
+
+      if (!bg) {
+        if (Date.now() - startedAt >= 1500) bg = new Float32Array(cur)
+        return
+      }
+
+      let changed = 0
+      for (let i = 0; i < bg.length; i += 4) {
+        const d = (Math.abs(cur[i] - bg[i]) + Math.abs(cur[i + 1] - bg[i + 1]) + Math.abs(cur[i + 2] - bg[i + 2])) / 3
+        if (d > DIFF_THRESHOLD) changed++
+      }
+
+      const ratio = changed / (CAM_W * CAM_H)
+      const now = Date.now()
+
+      // Continuously drift background toward current frame — fast when empty,
+      // very slow when occupied so the empty-scene model stays fresh for auto-exposure.
+      const rate = ratio > PRESENCE_RATIO ? ADAPT_PRESENT : ADAPT_ABSENT
+      for (let i = 0; i < bg.length; i++) bg[i] = bg[i] * (1 - rate) + cur[i] * rate
+
+      if (ratio > PRESENCE_RATIO) {
+        absenceSince = null
+        if (presenceSince === null) presenceSince = now
+        if (now - presenceSince >= PRESENCE_HOLD) setIsPresent(true)
+      } else {
+        presenceSince = null
+        if (absenceSince === null) absenceSince = now
+        if (now - absenceSince >= ABSENCE_HOLD) {
+          absenceSince = now  // reset so it doesn't fire every subsequent tick
+          setIsPresent(false)
+        }
+      }
+    }, 400)
+
+    setIsReady(true)
+
+    stopRef.current = () => {
+      clearInterval(interval)
+      stream.getTracks().forEach(t => t.stop())
+    }
+  }, [])
+
+  useEffect(() => {
+    void start()
+    return () => stopRef.current?.()
+  }, [start])
+
+  if (!isReady) return null
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -16 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.5, delay: 0.4 }}
+      className="flex flex-col items-center gap-2"
+    >
+      {/* Preview window */}
+      <div
+        className={`relative overflow-hidden rounded-2xl shadow-2xl transition-all duration-500
+          ${isPresent
+            ? 'ring-2 ring-[#2d8a62] shadow-[#2d8a62]/35'
+            : 'ring-1 ring-black/10 shadow-black/15'
+          }`}
+        style={{ width: 180, height: 135 }}
+      >
+        {/* Mirrored video */}
+        <video
+          ref={videoRef}
+          autoPlay muted playsInline
+          className="h-full w-full object-cover"
+          style={{ transform: 'scaleX(-1)' }}
+        />
+
+        {/* Viewfinder corner brackets */}
+        <div className="pointer-events-none absolute inset-0">
+          {/* top-left */}
+          <div className="absolute left-3 top-3">
+            <div className={`absolute left-0 top-0 h-px w-5 transition-colors ${isPresent ? 'bg-[#4ade80]' : 'bg-white/70'}`} />
+            <div className={`absolute left-0 top-0 h-5 w-px transition-colors ${isPresent ? 'bg-[#4ade80]' : 'bg-white/70'}`} />
+          </div>
+          {/* top-right */}
+          <div className="absolute right-3 top-3">
+            <div className={`absolute right-0 top-0 h-px w-5 transition-colors ${isPresent ? 'bg-[#4ade80]' : 'bg-white/70'}`} />
+            <div className={`absolute right-0 top-0 h-5 w-px transition-colors ${isPresent ? 'bg-[#4ade80]' : 'bg-white/70'}`} />
+          </div>
+          {/* bottom-left */}
+          <div className="absolute bottom-9 left-3">
+            <div className={`absolute bottom-0 left-0 h-px w-5 transition-colors ${isPresent ? 'bg-[#4ade80]' : 'bg-white/70'}`} />
+            <div className={`absolute bottom-0 left-0 h-5 w-px transition-colors ${isPresent ? 'bg-[#4ade80]' : 'bg-white/70'}`} />
+          </div>
+          {/* bottom-right */}
+          <div className="absolute bottom-9 right-3">
+            <div className={`absolute bottom-0 right-0 h-px w-5 transition-colors ${isPresent ? 'bg-[#4ade80]' : 'bg-white/70'}`} />
+            <div className={`absolute bottom-0 right-0 h-5 w-px transition-colors ${isPresent ? 'bg-[#4ade80]' : 'bg-white/70'}`} />
+          </div>
+        </div>
+
+        {/* Status bar */}
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/65 to-transparent px-3 py-2">
+          <div className="flex items-center justify-center gap-1.5">
+            <div className={`h-1.5 w-1.5 rounded-full transition-colors ${isPresent ? 'bg-[#4ade80] animate-pulse' : 'bg-white/40'}`} />
+            <p className={`text-[10px] font-bold tracking-wide transition-colors ${isPresent ? 'text-[#4ade80]' : 'text-white/55'}`}>
+              {isPresent ? 'Đã nhận diện' : 'Nhìn vào camera'}
+            </p>
+          </div>
+        </div>
+
+        {/* Presence glow ring */}
+        {isPresent && (
+          <div className="pointer-events-none absolute inset-0 animate-pulse rounded-2xl ring-2 ring-inset ring-[#2d8a62]/50" />
+        )}
+      </div>
+
+      {/* Caption */}
+      <p className={`text-[11px] font-semibold tracking-wide transition-colors duration-300
+        ${isPresent ? 'text-[#2d8a62]' : 'text-[#8abfaa]/70'}`}>
+        {isPresent ? 'Sẵn sàng đặt hàng!' : 'Đứng vào đây để order'}
+      </p>
+    </motion.div>
+  )
+}
+
+// ── AiModeScreen ──────────────────────────────────────────────────────────────
+
 function AiModeScreen({ bot, aiName }: { bot: BotState; aiName: string }) {
   return (
     <div
@@ -364,6 +535,16 @@ function AiModeScreen({ bot, aiName }: { bot: BotState; aiName: string }) {
 
         {/* Shiba 3D character */}
         <KunBot3D bot={bot} size={300} />
+      </motion.div>
+
+      {/* Camera presence preview — bottom-left overlay */}
+      <motion.div
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.6, delay: 0.2 }}
+        className="absolute bottom-16 left-8 z-10"
+      >
+        <CameraPreviewPanel />
       </motion.div>
 
       {/* Bottom watermark */}

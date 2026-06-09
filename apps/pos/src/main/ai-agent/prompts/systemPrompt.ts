@@ -13,7 +13,7 @@ export function buildSystemPrompt(
     const opts = m.options.map((g) => {
       const vals = g.values.map((v) =>
         v.priceDelta !== 0
-          ? `${v.label} [+${v.priceDelta.toLocaleString('vi-VN')}đ]`
+          ? `${v.label}(+${v.priceDelta.toLocaleString('vi-VN')}đ)`
           : v.label
       )
       return `${g.name}: [${vals.join(', ')}]`

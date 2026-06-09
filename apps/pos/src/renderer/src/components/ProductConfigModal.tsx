@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X, Plus, Minus, Check } from 'lucide-react'
 import type { Product, CartItem } from '../types/common'
+import { applyProductDiscount } from '../lib/utils'
 
 
 function fmt(n: number) { return n.toLocaleString('vi-VN') + 'đ' }
@@ -35,7 +36,7 @@ export function ProductConfigModal({ product, onClose, onConfirm }: Props) {
 
     const base = parseFloat(product.price)
     const hasDiscount = product.discountPercent > 0
-    const discountedBase = product.finalPrice ?? base
+    const discountedBase = product.finalPrice ?? applyProductDiscount(base, product.discountPercent)
 
     const optionDelta = product.optionGroups.reduce((sum, g) => {
         const selected = g.values.find((v) => v.label === options[g.name])

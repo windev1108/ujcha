@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { X, Mic, MicOff, Send, Trash2, Bot, Loader2, Power, AlertCircle, SlidersHorizontal, ChevronLeft, Plus } from 'lucide-react'
+import { X, Mic, MicOff, Send, Trash2, Bot, Loader2, Power, AlertCircle, SlidersHorizontal, ChevronLeft, Plus, Camera, CameraOff } from 'lucide-react'
 import { usePosStore } from '../store/pos-store'
 import logoUrl from '../assets/logo.png'
 import { setAudioVolume } from '../customer/kunbot/audioVolume'
+import { useCameraPresence } from '../customer/kunbot/useCameraPresence'
+import { applyProductDiscount } from '../lib/utils'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -96,15 +98,25 @@ function playBuffer(buf: ArrayBuffer, onEnded?: () => void): void {
   } catch { onEnded?.() }
 }
 
-// Known Whisper hallucination phrases to discard
-const HALLUCINATIONS = [
+// Whisper hallucinations: substring match (block even if inside longer text)
+const HALLUCINATION_CONTAINS = [
   'subscribe', 'ghiền mì gõ', 'cảm ơn bạn đã xem', 'like và share',
   'đừng quên like', 'kênh youtube', 'bấm vào chuông', 'ủng hộ kênh',
   'hãy subscribe', 'xem video', 'xin chào các bạn', 'hẹn gặp lại',
 ]
+// Whisper hallucinations: exact short phrases generated when hearing English/noise
+// Kept separate so "cảm ơn" inside a real order sentence is NOT blocked
+const HALLUCINATION_EXACT = new Set([
+  'cảm ơn', 'cảm ơn.', 'cảm ơn!', 'cảm ơn ạ', 'cảm ơn ạ.',
+  'hello', 'hello.', 'hi', 'hi.', 'okay', 'ok', 'yes', 'no',
+  'thank you', 'thanks', 'bye', 'goodbye',
+  'xin chào', 'xin chào.', 'xin chào!',
+  'ừ', 'ừm', 'uh', 'um', 'hmm',
+])
 function isHallucination(text: string): boolean {
-  const lower = text.toLowerCase()
-  return HALLUCINATIONS.some((h) => lower.includes(h))
+  const lower = text.toLowerCase().trim().replace(/[.,!?]+$/, '')
+  if (HALLUCINATION_EXACT.has(lower)) return true
+  return HALLUCINATION_CONTAINS.some((h) => lower.includes(h))
 }
 
 function float32ToWav(pcm: Float32Array, sampleRate: number): ArrayBuffer {
@@ -195,6 +207,13 @@ export function AIOrderPanel({ isOpen, onClose, onCheckout, onListeningChange, o
   const isProcessingRef = useRef(false)
   const enabledRef = useRef(enabled)
   useEffect(() => { enabledRef.current = enabled }, [enabled])
+
+  // ── Camera presence detection ────────────────────────────────────────────────
+  const cameraPresence = useCameraPresence()
+  const isPresentRef = useRef(cameraPresence.isPresent)
+  const isCameraReadyRef = useRef(cameraPresence.isReady)
+  useEffect(() => { isPresentRef.current = cameraPresence.isPresent }, [cameraPresence.isPresent])
+  useEffect(() => { isCameraReadyRef.current = cameraPresence.isReady }, [cameraPresence.isReady])
 
   // ── Boot ────────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -305,7 +324,16 @@ export function AIOrderPanel({ isOpen, onClose, onCheckout, onListeningChange, o
     })
 
     const unsubCart = ai.onAddToCart((items) => {
-      for (const item of items) addToCart(item)
+      const products = usePosStore.getState().products
+      for (const item of items) {
+        // Re-derive basePrice from the renderer's products store so discount is
+        // always identical to the manual-add path (ProductConfigModal).
+        const product = products.find((p) => p.id === item.productId)
+        const basePrice = product
+          ? (product.finalPrice ?? applyProductDiscount(parseFloat(product.price), product.discountPercent))
+          : item.basePrice
+        addToCart({ ...item, basePrice })
+      }
       showToast(`Đã thêm: ${items.map((i) => `${i.quantity}× ${i.name}`).join(', ')}`)
     })
 
@@ -395,7 +423,12 @@ export function AIOrderPanel({ isOpen, onClose, onCheckout, onListeningChange, o
           const transcript = await eAPI?.ai?.transcribe(wav)
           if (transcript && !isHallucination(transcript)) await sendMessage(transcript)
           else { isProcessingRef.current = false; showToast('Không nhận ra — thử lại hoặc nhập tay') }
-        } catch (e) { isProcessingRef.current = false; showToast('Lỗi ghi âm: ' + String(e)) }
+        } catch (e) {
+          isProcessingRef.current = false
+          const raw = String(e)
+          const ipcMatch = /Error invoking remote method[^:]+:\s*(.+)$/.exec(raw)
+          showToast('Lỗi STT: ' + (ipcMatch?.[1] ?? raw).slice(0, 100))
+        }
         finally { setIsTranscribing(false) }
       }
       mr.start()
@@ -441,12 +474,14 @@ export function AIOrderPanel({ isOpen, onClose, onCheckout, onListeningChange, o
       const speechMinBin = Math.max(1, Math.floor(400 / binWidth))
       const speechMaxBin = Math.ceil(2800 / binWidth)
 
-      const THRESHOLD = 72         // keyboard avg ≈ 35-55, voice avg ≈ 70-120
-      const SILENCE_MS = 700
+      const THRESHOLD = 58         // keyboard avg ≈ 35-50, voice avg ≈ 60-120
+      const SILENCE_MS = 900
       const MAX_RECORD_MS = 8000
-      const CONFIRM_TICKS = 10     // 10 × 80ms = 800ms sustained voice required
+      const CONFIRM_TICKS = 3      // 3 × 80ms = 240ms sustained voice to trigger
+      const NO_CAM_PROMPT_COOLDOWN = 6000  // ms between "please stand in front" prompts
 
       let confirmTicks = 0
+      let lastNoCamPromptMs = 0
 
       const s: AutoListenState = {
         stream, ctx, analyser, data,
@@ -471,13 +506,36 @@ export function AIOrderPanel({ isOpen, onClose, onCheckout, onListeningChange, o
           const totalBins = st.speechMaxBin - st.speechMinBin + 1
           const avg = sum / totalBins
           // Voice spreads energy across many bins; keyboard click concentrates in few bins
-          const isSpeechLike = avg > THRESHOLD && activeBins > totalBins * 0.25
+          const isSpeechLike = avg > THRESHOLD && activeBins > totalBins * 0.15
 
           if (!st.isSpeaking) {
             if (isSpeechLike && enabledRef.current && !isProcessingRef.current && !isLoadingRef.current) {
               confirmTicks++
               if (confirmTicks >= CONFIRM_TICKS) {
                 confirmTicks = 0
+
+                // ── Camera presence guard ────────────────────────────────────
+                if (isCameraReadyRef.current && !isPresentRef.current) {
+                  const now = Date.now()
+                  if (now - lastNoCamPromptMs > NO_CAM_PROMPT_COOLDOWN) {
+                    lastNoCamPromptMs = now
+                    isProcessingRef.current = true
+                    const msg = 'Vui lòng đứng trước camera để đặt hàng ạ!'
+                    eAPI?.customer?.update({ type: 'ai', text: msg, state: 'speaking' })
+                    const done = () => {
+                      isProcessingRef.current = false
+                      if (enabledRef.current) eAPI?.customer?.update({ type: 'ai', text: '', state: 'listening' })
+                    }
+                    if (eAPI?.tts) {
+                      eAPI.tts.speak(msg).then(buf => buf ? playBuffer(buf, done) : done()).catch(done)
+                    } else {
+                      done()
+                    }
+                  }
+                  return
+                }
+                // ─────────────────────────────────────────────────────────────
+
                 st.isSpeaking = true
                 st.silenceStart = null
                 st.recordStart = Date.now()
@@ -513,7 +571,9 @@ export function AIOrderPanel({ isOpen, onClose, onCheckout, onListeningChange, o
                     } catch (e) {
                       console.error('[VAD] error:', e)
                       isProcessingRef.current = false
-                      showToast('Lỗi xử lý âm thanh: ' + String(e).slice(0, 60))
+                      const raw = String(e)
+                      const ipcMatch = /Error invoking remote method[^:]+:\s*(.+)$/.exec(raw)
+                      showToast('Lỗi STT: ' + (ipcMatch?.[1] ?? raw).slice(0, 100))
                       if (enabledRef.current) eAPI?.customer?.update({ type: 'ai', text: '', state: 'listening' })
                     } finally {
                       setIsTranscribing(false)
@@ -704,6 +764,22 @@ export function AIOrderPanel({ isOpen, onClose, onCheckout, onListeningChange, o
                         '🎙 Đang lắng nghe'}
               </p>
             </div>
+
+            {/* Camera presence indicator */}
+            {cameraPresence.isReady && (
+              <div
+                title={cameraPresence.isPresent ? 'Phát hiện khách' : 'Chưa có khách trước camera'}
+                className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-medium ${
+                  cameraPresence.isPresent
+                    ? 'bg-green-50 text-green-600'
+                    : 'bg-gray-100 text-gray-400'
+                }`}
+              >
+                {cameraPresence.isPresent
+                  ? <Camera className="size-3" />
+                  : <CameraOff className="size-3" />}
+              </div>
+            )}
 
             {!hasKey && (
               <div className="flex items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 text-[10px] font-medium text-amber-600">

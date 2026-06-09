@@ -29,10 +29,13 @@ export function resolveCartItems(
     for (const group of product.options) {
       const chosen = rawOptions[group.name]
       if (!chosen) continue
-      // Exact match first; then strip trailing "(+X.XXXđ)" / "(X.XXXđ)" added by AI
+      // Exact match first; then strip trailing price annotations like "(+5.000đ)" or "[+5.000đ]" added by AI
       let valueObj = group.values.find((v) => v.label === chosen)
       if (!valueObj) {
-        const stripped = chosen.replace(/\s*\([^)]*\)\s*$/, '').trim()
+        const stripped = chosen
+          .replace(/\s*\([^)]*\)\s*$/, '')
+          .replace(/\s*\[[^\]]*\]\s*$/, '')
+          .trim()
         valueObj = group.values.find(
           (v) => v.label.toLowerCase() === stripped.toLowerCase(),
         )

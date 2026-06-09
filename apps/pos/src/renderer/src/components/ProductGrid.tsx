@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { usePosStore } from '../store/pos-store'
 import type { Product, CartItem } from '../types/common'
 import { ProductConfigModal } from './ProductConfigModal'
+import { applyProductDiscount } from '../lib/utils'
 
 
 const CARD_COLORS = ['#e8f5e9', '#e3f2fd', '#fce4ec', '#fff3e0', '#f3e5f5', '#e0f7fa']
@@ -16,7 +17,7 @@ function ProductCard({ product, onPress }: { product: Product; onPress: (p: Prod
   const sold = product.isSoldOut || !product.isAvailable
   const basePrice = parseFloat(product.price)
   const hasDiscount = product.discountPercent > 0
-  const finalPrice = product.finalPrice ?? basePrice
+  const finalPrice = product.finalPrice ?? applyProductDiscount(basePrice, product.discountPercent)
 
   return (
     <button
