@@ -6,6 +6,7 @@ import {
   type ReceiptElement,
 } from "@/lib/printer-config";
 import type { AdminOrder, AdminOrderItem, OrderItemExtraSnapshot, PaymentConfig } from "@/services/admin/types";
+import { env } from "@/config/env";
 
 export function buildVietQrUrl(
   cfg: PaymentConfig,
@@ -200,7 +201,7 @@ function renderElement(
           `<div style="border-top:2px dashed #000;margin:8px 0 6px;"></div>` +
           `<div style="text-align:center;font-size:12px;font-weight:bold;letter-spacing:0.5px;margin-bottom:6px;color:#000;">QUÉT ĐỂ TÍCH ĐIỂM Ujcha</div>` +
           `<img src="${loyaltyQrUrl}" style="display:block;margin:0 auto 4px;width:160px;height:160px;" />` +
-          `<div style="text-align:center;font-size:10px;color:#666;margin-bottom:6px;">Đăng nhập &amp; tích điểm ngay từ đơn hàng này</div>`
+          `<div style="text-align:center;font-size:10px;color:#666;margin-bottom:6px;">${process.env.NEXT_PUBLIC_WEB_URL ?? 'https://ujcha.vn'}</div>`
         );
       }
       return "";
