@@ -113,7 +113,7 @@ export function groupOrderItems(items: AdminOrderItem[]): AdminOrderItem[] {
 const WEB_URL = (import.meta.env.VITE_WEB_URL as string | undefined) ?? ''
 
 export function buildKunLoyaltyQrUrl(paymentCode: string): string {
-  const loyaltyUrl = `${WEB_URL}/vi/loyalty?code=${encodeURIComponent(paymentCode)}`
+  const loyaltyUrl = `${WEB_URL}/loyalty?code=${encodeURIComponent(paymentCode)}`
   return `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(loyaltyUrl)}&size=160x160&margin=4`
 }
 

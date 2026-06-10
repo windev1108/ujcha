@@ -28,10 +28,15 @@ export class SmsService {
   private async sendRaw(phone: string, message: string): Promise<void> {
     const apiKey = this.config.get<string>('TEXTBEE_API_KEY');
     const deviceId = this.config.get<string>('TEXTBEE_DEVICE_ID');
+    const simSubscriptionId = this.config.get<string>(
+      'TEXTBEE_SIM_SUBSCRIPTION_ID',
+    );
 
     if (!apiKey || !deviceId) {
       this.logger.warn(`[SMS-MOCK] → ${phone} | ${message}`);
-      await this.prisma.smsLog.create({ data: { phone, message, status: 'mock' } });
+      await this.prisma.smsLog.create({
+        data: { phone, message, status: 'mock' },
+      });
       return;
     }
 
@@ -46,7 +51,11 @@ export class SmsService {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
-          body: JSON.stringify({ recipients: [phone], message }),
+          body: JSON.stringify({
+            recipients: [phone],
+            message,
+            simSubscriptionId,
+          }),
           signal: AbortSignal.timeout(10_000),
         },
       );

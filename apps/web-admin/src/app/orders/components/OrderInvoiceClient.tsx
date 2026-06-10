@@ -20,7 +20,7 @@ import { buildReceiptBodyHtml } from "./receipt-shared";
 const WEB_URL = process.env.NEXT_PUBLIC_WEB_URL ?? "";
 
 function buildLoyaltyQrUrl(paymentCode: string): string {
-  const loyaltyUrl = `${WEB_URL}/vi/loyalty?code=${encodeURIComponent(paymentCode)}`;
+  const loyaltyUrl = `${WEB_URL}/loyalty?code=${encodeURIComponent(paymentCode)}`;
   return `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(loyaltyUrl)}&size=160x160&margin=4`;
 }
 

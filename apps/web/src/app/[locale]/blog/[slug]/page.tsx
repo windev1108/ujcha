@@ -33,9 +33,9 @@ export async function generateMetadata(
       alternates: {
         canonical: canonicalUrl,
         languages: {
-          vi: `${SITE_URL}/vi/blog/${slug}`,
-          en: `${SITE_URL}/en/blog/${slug}`,
-          "x-default": `${SITE_URL}/vi/blog/${slug}`,
+          vi: `${SITE_URL}/blog/${slug}`,
+          en: `${SITE_URL}/blog/${slug}`,
+          "x-default": `${SITE_URL}/blog/${slug}`,
         },
       },
       openGraph: {
@@ -50,24 +50,24 @@ export async function generateMetadata(
         ...(post.thumbnail
           ? { images: [{ url: post.thumbnail, alt: post.title, width: 1200, height: 630 }] }
           : {
-              images: [
-                {
-                  url: `/api/og?title=${encodeURIComponent(post.title)}&description=${encodeURIComponent(description)}`,
-                  width: 1200,
-                  height: 630,
-                  alt: post.title,
-                },
-              ],
-            }),
+            images: [
+              {
+                url: `/api/og?title=${encodeURIComponent(post.title)}&description=${encodeURIComponent(description)}`,
+                width: 1200,
+                height: 630,
+                alt: post.title,
+              },
+            ],
+          }),
       },
       twitter: {
         card: "summary_large_image",
         title: post.title,
         description,
         images: [
-        post.thumbnail ??
+          post.thumbnail ??
           `/api/og?title=${encodeURIComponent(post.title)}&description=${encodeURIComponent(description)}`,
-      ],
+        ],
       },
     };
   } catch {

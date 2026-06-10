@@ -63,7 +63,7 @@ const organizationJsonLd = {
         "@type": "SearchAction",
         target: {
           "@type": "EntryPoint",
-          urlTemplate: `${SITE_URL}/vi/menu?q={search_term_string}`,
+          urlTemplate: `${SITE_URL}/menu?q={search_term_string}`,
         },
         "query-input": "required name=search_term_string",
       },
@@ -85,7 +85,7 @@ const organizationJsonLd = {
         addressCountry: "VN",
       },
       servesCuisine: ["Matcha", "Coffee", "Tea", "Beverages"],
-      hasMenu: `${SITE_URL}/vi/menu`,
+      hasMenu: `${SITE_URL}/menu`,
       priceRange: "$$",
       currenciesAccepted: "VND",
     },
