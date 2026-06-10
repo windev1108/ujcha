@@ -44,7 +44,7 @@ function normalizeCartItem(item: any, globalDiscount: number) {
     Array.isArray(item.toppingsJson) ? item.toppingsJson : [];
 
   const effectiveDiscount = item.product
-    ? Math.min(100, (item.product.discountPercent ?? 0) + globalDiscount)
+    ? (globalDiscount > 0 ? globalDiscount : (item.product.discountPercent ?? 0))
     : 0;
 
   return {

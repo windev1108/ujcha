@@ -220,7 +220,7 @@ export class GroupOrderService {
         for (const item of validItems) {
           const product = await tx.product.findUnique({ where: { id: item.productId } });
           if (!product) continue;
-          const effectiveDiscount = Math.min(100, (product.discountPercent ?? 0) + globalDiscount);
+          const effectiveDiscount = globalDiscount > 0 ? globalDiscount : (product.discountPercent ?? 0);
           const finalUnitPrice = computeFinalPrice(product.price, effectiveDiscount);
           await tx.groupOrderParticipantItem.create({
             data: {

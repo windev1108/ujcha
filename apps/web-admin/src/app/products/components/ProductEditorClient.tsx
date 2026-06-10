@@ -24,7 +24,7 @@ import {
   adminSelectTriggerClass,
   adminSelectValueClass,
 } from "@/lib/admin-form-classes";
-import { formatVnd } from "@/lib/product-display";
+import { computeAdminFinalPrice, formatVnd } from "@/lib/product-display";
 import { ROUTES } from "@/lib/routes";
 import { adminKeys } from "@/services/admin/keys";
 import { fetchAdminCategories } from "@/services/admin/categories-api";
@@ -510,10 +510,26 @@ export function ProductEditorClient({ mode, productId }: Props) {
                   className={`w-full ${adminInputClass}`}
                   disabled={pending}
                 />
-                <Description className="text-xs text-foreground/50">
-                  0–100%. Cộng với % giảm giá toàn shop (trang danh sách sản
-                  phẩm), tối đa 100% tổng giảm.
-                </Description>
+                {(() => {
+                  const disc = Number.parseInt(discountPercent, 10);
+                  const basePrice = Number.parseFloat(price);
+                  if (Number.isFinite(disc) && disc > 0 && Number.isFinite(basePrice) && basePrice > 0) {
+                    return (
+                      <Description className="text-xs text-foreground/50">
+                        Giá sau giảm riêng:{" "}
+                        <span className="font-semibold tabular-nums text-[#1a3c34]">
+                          {formatVnd(computeAdminFinalPrice(basePrice, disc))}
+                        </span>
+                        . Nếu giảm giá toàn shop đang bật, mức toàn shop sẽ ghi đè.
+                      </Description>
+                    );
+                  }
+                  return (
+                    <Description className="text-xs text-foreground/50">
+                      0–100%. Nếu giảm giá toàn shop đang bật, mức toàn shop sẽ ghi đè mức này.
+                    </Description>
+                  );
+                })()}
               </div>
               <div className={adminFieldStack}>
                 <Label className={adminLabelClassProduct}>Mô tả sản phẩm</Label>

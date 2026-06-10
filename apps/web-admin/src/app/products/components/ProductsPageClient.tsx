@@ -37,6 +37,7 @@ import {
 } from "@/lib/admin-form-classes";
 import {
   categoryBadgeClass,
+  computeAdminFinalPrice,
   effectiveDiscountPercent,
   formatVnd,
   getProductDisplayStatus,
@@ -484,7 +485,7 @@ export function ProductsPageClient() {
                   Giảm giá toàn bộ sản phẩm (%)
                 </Label>
                 <Description className="text-[11px] text-foreground/50">
-                  Cộng thêm vào % giảm giá riêng từng sản phẩm. Tổng tối đa 100%.
+                  Khi được bật, ghi đè % giảm giá riêng từng sản phẩm. Khi tắt (0%), từng sản phẩm dùng mức giảm riêng.
                 </Description>
               </div>
               <div className="flex items-center gap-2">
@@ -659,9 +660,16 @@ export function ProductsPageClient() {
                     {p.name}
                   </p>
                   <div className="mt-auto flex items-center justify-between pt-2">
-                    <span className="text-sm font-bold tabular-nums text-[#1a3c34]">
-                      {formatVnd(p.price)}
-                    </span>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold tabular-nums text-[#1a3c34]">
+                        {eff > 0 ? formatVnd(computeAdminFinalPrice(p.price, eff)) : formatVnd(p.price)}
+                      </span>
+                      {eff > 0 && (
+                        <span className="text-[11px] tabular-nums text-foreground/40 line-through">
+                          {formatVnd(p.price)}
+                        </span>
+                      )}
+                    </div>
                     <Chip
                       size="sm"
                       variant="soft"
@@ -774,9 +782,16 @@ export function ProductsPageClient() {
 
                         {/* Price */}
                         <Table.Cell className="px-5 py-3.5 align-middle">
-                          <span className="text-sm font-bold tabular-nums text-[#1a3c34]">
-                            {formatVnd(p.price)}
-                          </span>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-sm font-bold tabular-nums text-[#1a3c34]">
+                              {eff > 0 ? formatVnd(computeAdminFinalPrice(p.price, eff)) : formatVnd(p.price)}
+                            </span>
+                            {eff > 0 && (
+                              <span className="text-[11px] tabular-nums text-foreground/35 line-through">
+                                {formatVnd(p.price)}
+                              </span>
+                            )}
+                          </div>
                         </Table.Cell>
 
                         {/* Discount */}
