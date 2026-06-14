@@ -10,7 +10,6 @@ const nextConfig: NextConfig = {
     root: monorepoRoot,
   },
   typescript: { ignoreBuildErrors: true },
-  eslint: { ignoreDuringBuilds: true },
   experimental: {
     webpackMemoryOptimizations: true,
     parallelServerCompiles: false,
