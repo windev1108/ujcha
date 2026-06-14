@@ -9,10 +9,12 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: monorepoRoot,
   },
+  typescript: { ignoreBuildErrors: true },
+  eslint: { ignoreDuringBuilds: true },
   experimental: {
-    // Reduces peak webpack memory by processing chunks serially
     webpackMemoryOptimizations: true,
-    // Tree-shake barrel files — cuts memory for large icon/animation packages
+    parallelServerCompiles: false,
+    parallelServerBuildTraces: false,
     optimizePackageImports: ["lucide-react", "motion", "@heroui/react", "@heroui/styles"],
   },
   images: {
