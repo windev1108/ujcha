@@ -25,6 +25,7 @@ export function ShippingConfigClient() {
   const [feePerKm, setFeePerKm] = useState("5000");
   const [maxDistanceKm, setMaxDistanceKm] = useState("15");
   const [freeThreshold, setFreeThreshold] = useState("200000");
+  const [freeShipDistanceKm, setFreeShipDistanceKm] = useState("1");
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -35,6 +36,7 @@ export function ShippingConfigClient() {
       setFeePerKm(String(data.feePerKm));
       setMaxDistanceKm(String(data.maxDistanceKm));
       setFreeThreshold(String(data.freeThreshold));
+      setFreeShipDistanceKm(String(data.freeShipDistanceKm ?? 1));
     }
   }, [data]);
 
@@ -55,6 +57,7 @@ export function ShippingConfigClient() {
       feePerKm: parseInt(feePerKm) || 0,
       maxDistanceKm: parseFloat(maxDistanceKm) || 1,
       freeThreshold: parseInt(freeThreshold) || 0,
+      freeShipDistanceKm: parseFloat(freeShipDistanceKm) || 0,
     });
   }
 
@@ -158,7 +161,7 @@ export function ShippingConfigClient() {
               <p className="text-[11px] text-foreground/45">Đơn vượt quá khoảng cách này sẽ từ chối giao</p>
             </div>
 
-            <div className={`${adminFieldStack} sm:col-span-2`}>
+            <div className={adminFieldStack}>
               <label className={adminLabelClass}>Miễn phí từ (đ)</label>
               <Input
                 type="number"
@@ -171,6 +174,23 @@ export function ShippingConfigClient() {
               />
               <p className="text-[11px] text-foreground/45">
                 Đặt 0 để không có miễn phí. Đơn hàng ≥ mức này được miễn phí ship.
+              </p>
+            </div>
+
+            <div className={adminFieldStack}>
+              <label className={adminLabelClass}>Freeship trong bán kính (km)</label>
+              <Input
+                type="number"
+                min={0}
+                step={0.1}
+                value={freeShipDistanceKm}
+                onChange={(e) => setFreeShipDistanceKm(e.target.value)}
+                placeholder="1"
+                className={adminInputClass}
+                disabled={isLoading || mutation.isPending}
+              />
+              <p className="text-[11px] text-foreground/45">
+                Đặt 0 để tắt. Đơn hàng trong bán kính này được miễn phí ship bất kể giá trị đơn.
               </p>
             </div>
           </div>
@@ -193,11 +213,19 @@ export function ShippingConfigClient() {
                 </div>
               ))}
             </div>
-            {parseInt(freeThreshold) > 0 && (
-              <p className="text-[11px] text-foreground/55">
-                Miễn phí với đơn ≥ {formatVnd(parseInt(freeThreshold) || 0)}
-              </p>
-            )}
+            <div className="space-y-1">
+              {parseFloat(freeShipDistanceKm) > 0 && (
+                <p className="flex items-center gap-1 text-[11px] text-emerald-700">
+                  <Truck className="size-3 shrink-0" />
+                  Freeship trong {freeShipDistanceKm} km đầu
+                </p>
+              )}
+              {parseInt(freeThreshold) > 0 && (
+                <p className="text-[11px] text-foreground/55">
+                  Freeship với đơn ≥ {formatVnd(parseInt(freeThreshold) || 0)}
+                </p>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-3 pt-1">

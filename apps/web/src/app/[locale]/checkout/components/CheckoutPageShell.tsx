@@ -430,6 +430,7 @@ export function CheckoutPageShell() {
               shippingIsOutOfRange={shippingIsOutOfRange}
               shippingIsDisabled={shippingIsDisabled}
               distanceKm={shippingEstimate?.distanceKm}
+              freeShipDistanceKm={shippingEstimate?.freeShipDistanceKm}
               total={total}
               isDelivery={isDelivery}
               isSubmitting={isSubmitting}

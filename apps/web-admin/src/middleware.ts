@@ -30,9 +30,9 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  if (typeof payload.exp === "number" && payload.exp * 1000 < Date.now()) {
-    return NextResponse.redirect(new URL("/login", request.url));
-  }
+  // Do NOT check exp here — the client-side axios interceptor handles token
+  // refresh on 401. Checking exp in middleware would kick users out before they
+  // have a chance to refresh, since the cookie max-age outlives the JWT lifespan.
 
   // Super admin: full access to everything
   if (payload.role === "super_admin") return NextResponse.next();

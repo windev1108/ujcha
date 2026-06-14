@@ -254,15 +254,35 @@ function DiscountTierCard({ tier, index, isMax, isActive, activeCount }: {
 
 // ─── Main shell ────────────────────────────────────────────────────────────────
 
+function fmtExpiry(minutes: number, locale: string): string {
+  if (minutes >= 60 && minutes % 60 === 0) {
+    const h = minutes / 60;
+    return locale === "vi" ? `${h} giờ` : `${h} hour${h !== 1 ? "s" : ""}`;
+  }
+  if (minutes >= 60) {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return locale === "vi" ? `${h} giờ ${m} phút` : `${h}h ${m}m`;
+  }
+  return locale === "vi" ? `${minutes} phút` : `${minutes} min`;
+}
+
 export function GroupOrderLandingShell() {
   const t = useTranslations();
+  const locale = typeof window !== "undefined"
+    ? (document.documentElement.lang || "vi")
+    : "vi";
   const [showModal, setShowModal] = useState(false);
   const [tiers, setTiers] = useState<GroupDiscountTier[]>([]);
+  const [expiryMinutes, setExpiryMinutes] = useState(120);
   const [configLoaded, setConfigLoaded] = useState(false);
 
   useEffect(() => {
     fetchGroupOrderConfig()
-      .then((cfg) => setTiers(cfg.discountTiers))
+      .then((cfg) => {
+        setTiers(cfg.discountTiers);
+        if (cfg.expiryMinutes) setExpiryMinutes(cfg.expiryMinutes);
+      })
       .catch(() => {})
       .finally(() => setConfigLoaded(true));
   }, []);
@@ -281,7 +301,7 @@ export function GroupOrderLandingShell() {
     { icon: <Share2 className="size-4.5 text-[#1a3c34]" />,      title: t("feature_fraud_title"),    desc: t("feature_fraud_desc") },
     { icon: <Zap className="size-4.5 text-[#1a3c34]" />,         title: t("feature_realtime_title"), desc: t("feature_realtime_desc") },
     { icon: <ShoppingBag className="size-4.5 text-[#1a3c34]" />, title: t("feature_payment_title"),  desc: t("feature_payment_desc") },
-    { icon: <Timer className="size-4.5 text-[#1a3c34]" />,       title: t("feature_expiry_title"),   desc: t("feature_expiry_desc") },
+    { icon: <Timer className="size-4.5 text-[#1a3c34]" />,       title: t("feature_expiry_title", { time: fmtExpiry(expiryMinutes, locale) }),   desc: t("feature_expiry_desc") },
   ];
 
   return (
@@ -326,7 +346,7 @@ export function GroupOrderLandingShell() {
                 {[
                   { label: t("max_discount_label"), value: <><CountUp to={maxDiscount} />%</> },
                   { label: t("one_per_account"),    value: t("fair_value") },
-                  { label: t("time_limit_label"),   value: t("time_limit_2h") },
+                  { label: t("time_limit_label"),   value: fmtExpiry(expiryMinutes, locale) },
                 ].map((s) => (
                   <div key={s.label} className="text-center">
                     <p className="text-2xl font-bold text-white sm:text-3xl">{s.value}</p>

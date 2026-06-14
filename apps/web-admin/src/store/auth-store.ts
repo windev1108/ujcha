@@ -60,6 +60,9 @@ export const useAuthStore = create<AuthState>()(
         accessToken: s.accessToken,
         refreshToken: s.refreshToken,
       }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHydrated(true);
+      },
     },
   ),
 );

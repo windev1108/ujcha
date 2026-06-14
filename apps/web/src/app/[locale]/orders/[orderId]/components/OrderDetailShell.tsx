@@ -22,6 +22,7 @@ import { printReceipt, type ReceiptOrder } from "@/lib/order-receipt";
 import { fetchGroupOrder, type GroupOrderState } from "@/services/group-order/api";
 import { useTranslations, useLocale } from "next-intl";
 import { getDisplayName } from "@/lib/product-name";
+import { usePublicStoreLocationQuery } from "@/services/store/hooks";
 
 // ── formatters ────────────────────────────────────────────────────────────────
 
@@ -260,6 +261,8 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
     enabled: !!groupToken,
     staleTime: 60_000,
   });
+
+  const { data: storeLocation } = usePublicStoreLocationQuery();
 
   if (isLoading) {
     return (
@@ -503,6 +506,31 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
               <div>
                 <p className="text-sm font-semibold text-red-700">{t("order_cancelled_title")}</p>
                 <p className="mt-0.5 text-xs text-red-500/80">{t("order_cancelled_desc")}</p>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ── Pending call-to-confirm hint ─────────────────────── */}
+          {order.status === "pending" && storeLocation?.phone && (
+            <motion.div
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ ...revealTransition, delay: 0.1 }}
+              className="flex items-start gap-3 rounded-3xl border border-amber-200 bg-amber-50 px-5 py-4 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.08)]"
+            >
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-amber-100">
+                <Phone className="size-4 text-amber-700" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-amber-800">{t("pending_too_long_title")}</p>
+                <p className="mt-0.5 text-xs text-amber-700/80">{t("pending_too_long_desc")}</p>
+                <a
+                  href={`tel:${storeLocation.phone}`}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-amber-600 px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+                >
+                  <Phone className="size-3" />
+                  {t("pending_too_long_call")} — {storeLocation.phone}
+                </a>
               </div>
             </motion.div>
           )}

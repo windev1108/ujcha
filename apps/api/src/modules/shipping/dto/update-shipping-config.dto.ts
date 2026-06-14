@@ -35,4 +35,10 @@ export class UpdateShippingConfigDto {
   @IsInt()
   @Min(0)
   freeThreshold?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  freeShipDistanceKm?: number;
 }

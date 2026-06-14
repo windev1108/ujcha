@@ -8,6 +8,7 @@ export interface ShippingConfig {
   feePerKm: number;
   maxDistanceKm: number;
   freeThreshold: number;
+  freeShipDistanceKm: number;
   updatedAt: string;
 }
 
@@ -18,6 +19,7 @@ export interface UpdateShippingConfigBody {
   feePerKm?: number;
   maxDistanceKm?: number;
   freeThreshold?: number;
+  freeShipDistanceKm?: number;
 }
 
 export async function fetchShippingConfig(): Promise<ShippingConfig> {

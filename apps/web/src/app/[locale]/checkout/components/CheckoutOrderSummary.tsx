@@ -3,6 +3,8 @@
 import { Button, Card, CardContent } from "@heroui/react";
 import { motion } from "motion/react";
 import { AlertCircle, ArrowRight, CheckCircle2, Loader2, Navigation, Printer } from "lucide-react";
+import { ShippingFeeTooltip } from "@/components/common/ShippingFeeTooltip";
+import { usePublicShippingConfigQuery } from "@/services/shipping/hooks";
 import Image from "next/image";
 import Link from "next/link";
 import { easeOutSmooth, revealTransition } from "@/app/[locale]/(landing)/components/RevealSection";
@@ -28,6 +30,7 @@ type Props = {
   shippingIsOutOfRange: boolean;
   shippingIsDisabled: boolean;
   distanceKm?: number;
+  freeShipDistanceKm?: number;
   total: number;
   isDelivery: boolean;
   isSubmitting: boolean;
@@ -59,6 +62,7 @@ export function CheckoutOrderSummary({
   shippingIsOutOfRange,
   shippingIsDisabled,
   distanceKm,
+  freeShipDistanceKm,
   total,
   isDelivery,
   isSubmitting,
@@ -72,6 +76,7 @@ export function CheckoutOrderSummary({
   const t = useTranslations();
   const locale = useLocale();
   const { route } = useLocalizedHref();
+  const { data: shippingConfig } = usePublicShippingConfigQuery();
 
   return (
     <motion.aside
@@ -177,7 +182,10 @@ export function CheckoutOrderSummary({
             {isDelivery && (
               <div className="space-y-1">
                 <div className="flex justify-between text-foreground/70">
-                  <span>{t("shipping_fee")}</span>
+                  <span className="flex items-center gap-1">
+                    {t("shipping_fee")}
+                    {shippingConfig && <ShippingFeeTooltip config={shippingConfig} />}
+                  </span>
                   {shippingIsDisabled || !isDelivery ? (
                     <span className="text-xs font-medium text-muted">{t("shipping_undetermined")}</span>
                   ) : shippingIsOutOfRange ? (
@@ -192,6 +200,12 @@ export function CheckoutOrderSummary({
                   <div className="flex items-center justify-end gap-1 text-[11px] tabular-nums text-muted">
                     <Navigation className="size-3 shrink-0" />
                     {t("distance_from_store", { distance: distanceKm.toFixed(1) })}
+                  </div>
+                )}
+                {!shippingIsDisabled && freeShipDistanceKm !== undefined && freeShipDistanceKm > 0 && (
+                  <div className="flex items-center justify-end gap-1 text-[11px] text-kun-products-forest">
+                    <Navigation className="size-3 shrink-0" />
+                    {t("free_ship_within_km", { km: freeShipDistanceKm })}
                   </div>
                 )}
               </div>

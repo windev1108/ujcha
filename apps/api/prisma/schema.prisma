@@ -832,8 +832,10 @@ model ShippingConfig {
   /// Khoảng cách tối đa hỗ trợ giao hàng (km).
   maxDistanceKm Float    @default(15)
   /// Giá trị đơn tối thiểu để miễn phí giao hàng (0 = không có). VND.
-  freeThreshold Int      @default(200000)
-  updatedAt     DateTime @updatedAt
+  freeThreshold      Int      @default(200000)
+  /// Khoảng cách tối đa được miễn phí giao hàng (km). 0 = không có. Default 1km.
+  freeShipDistanceKm Float    @default(1)
+  updatedAt          DateTime @updatedAt
 }
 
 /// Nhật ký SMS gửi qua TextBee — dùng để theo dõi và debug OTP.

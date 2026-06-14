@@ -56,8 +56,26 @@ export function PosReleaseClient() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <Loader2 className="size-6 animate-spin text-muted" />
+      <div className="max-w-2xl space-y-6 mx-auto w-full">
+        {/* Header skeleton */}
+        <div className="flex items-center gap-3">
+          <div className="h-11 w-11 animate-pulse rounded-2xl bg-surface-card" />
+          <div className="space-y-2">
+            <div className="h-5 w-44 animate-pulse rounded-lg bg-surface-card" />
+            <div className="h-3.5 w-64 animate-pulse rounded-md bg-surface-card" />
+          </div>
+        </div>
+        <div className="h-3 w-48 animate-pulse rounded-md bg-surface-card" />
+        {/* Form card skeleton */}
+        <div className="rounded-2xl border border-black/8 bg-white p-6 shadow-sm space-y-5">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="space-y-2">
+              <div className="h-3 w-28 animate-pulse rounded-md bg-surface-card" />
+              <div className={`animate-pulse rounded-xl bg-surface-card ${i === 2 ? "h-28" : "h-11"}`} />
+            </div>
+          ))}
+          <div className="h-11 animate-pulse rounded-xl bg-surface-card" />
+        </div>
       </div>
     );
   }

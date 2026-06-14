@@ -554,6 +554,29 @@ async function tryComPort(comPort: string): Promise<boolean> {
     }
 }
 
+/**
+ * Check if a Windows printer is online via WMIC.
+ * PrinterStatus 7 = Offline. WorkOffline = TRUE means user set it offline manually.
+ * Returns { online: false, reason } only when we can positively confirm it's offline.
+ * On WMIC failure we return online=true to avoid blocking valid prints.
+ */
+async function checkWindowsPrinterOnline(printerName: string): Promise<{ online: boolean; reason?: string }> {
+    try {
+        const escaped = printerName.replace(/'/g, "\\'")
+        const { stdout } = await execAsync(
+            `wmic printer where "Name='${escaped}'" get PrinterStatus,WorkOffline /format:list 2>nul`,
+            { timeout: 5000 }
+        )
+        const workOffline = stdout.match(/WorkOffline=(\w+)/i)?.[1]?.toLowerCase() === 'true'
+        const status = parseInt(stdout.match(/PrinterStatus=(\d+)/i)?.[1] ?? '3', 10)
+        if (workOffline) return { online: false, reason: `Máy in "${printerName}" đang ở chế độ offline` }
+        if (status === 7) return { online: false, reason: `Máy in "${printerName}" không có tín hiệu (offline)` }
+        return { online: true }
+    } catch {
+        return { online: true }
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN SMART PRINT ROUTER
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -609,6 +632,20 @@ export async function smartPrint(
             // how the printer is connected (USB, Bluetooth COM port, WiFi/WSD).
             const winName = printerName || address
             console.log('[smartPrint] → bill (Electron print):', winName)
+
+            // Pre-flight: verify the printer is actually reachable before submitting.
+            // Windows spooler silently accepts jobs even when the printer is off,
+            // so we must check proactively — the print callback is unreliable.
+            if (isComPort(winName)) {
+                // Pure COM-port printer (no Windows driver) — try opening the port
+                const reachable = await tryComPort(winName)
+                if (!reachable) throw new Error(`Cổng ${winName} không kết nối được — kiểm tra bluetooth/máy in`)
+            } else {
+                // Windows printer entry — check WMIC status
+                const { online, reason } = await checkWindowsPrinterOnline(winName)
+                if (!online) throw new Error(reason)
+            }
+
             await printHtmlViaElectronWindow(winName, html)
 
         } else if (isComPort(address)) {
@@ -738,9 +775,24 @@ async function scanAllComPorts(): Promise<{ com: string; name: string; isBluetoo
     } catch (e) {
         console.warn('[scanCOM] failed:', e)
     }
-    return results.sort((a, b) =>
+
+    const sorted = results.sort((a, b) =>
         parseInt(a.com.replace(/\D/g, '')) - parseInt(b.com.replace(/\D/g, ''))
     )
+
+    // WMIC lists all paired Bluetooth devices regardless of whether they're currently
+    // on and connected. Filter by actually trying to open each BT COM port in parallel —
+    // only ports that respond (device is on + in range) are returned.
+    const btPorts = sorted.filter(r => r.isBluetooth)
+    if (btPorts.length > 0) {
+        console.log('[scanCOM] checking reachability for BT ports:', btPorts.map(p => p.com))
+        const reachable = await Promise.all(btPorts.map(p => tryComPort(p.com)))
+        const reachableSet = new Set(btPorts.filter((_, i) => reachable[i]).map(p => p.com))
+        console.log('[scanCOM] reachable BT ports:', [...reachableSet])
+        return sorted.filter(r => !r.isBluetooth || reachableSet.has(r.com))
+    }
+
+    return sorted
 }
 
 // ─── IPC handlers ─────────────────────────────────────────────────────────────

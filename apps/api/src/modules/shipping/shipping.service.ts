@@ -8,6 +8,17 @@ export type ShippingEstimate = {
   isFree: boolean;
   isOutOfRange: boolean;
   isDisabled: boolean;
+  freeShipDistanceKm: number;
+};
+
+export type PublicShippingConfig = {
+  isActive: boolean;
+  baseFee: number;
+  baseKm: number;
+  feePerKm: number;
+  maxDistanceKm: number;
+  freeThreshold: number;
+  freeShipDistanceKm: number;
 };
 
 @Injectable()
@@ -20,6 +31,19 @@ export class ShippingService {
       create: {},
       update: {},
     });
+  }
+
+  async getPublicConfig(): Promise<PublicShippingConfig> {
+    const cfg = await this.getConfig();
+    return {
+      isActive: cfg.isActive,
+      baseFee: cfg.baseFee,
+      baseKm: cfg.baseKm,
+      feePerKm: cfg.feePerKm,
+      maxDistanceKm: cfg.maxDistanceKm,
+      freeThreshold: cfg.freeThreshold,
+      freeShipDistanceKm: cfg.freeShipDistanceKm,
+    };
   }
 
   async updateConfig(dto: UpdateShippingConfigDto) {
@@ -49,25 +73,27 @@ export class ShippingService {
     ]);
 
     if (!cfg.isActive) {
-      return { distanceKm: 0, fee: 0, isFree: false, isOutOfRange: false, isDisabled: true };
+      return { distanceKm: 0, fee: 0, isFree: false, isOutOfRange: false, isDisabled: true, freeShipDistanceKm: cfg.freeShipDistanceKm };
     }
 
     const storeLat = store?.lat ?? 0;
     const storeLng = store?.lng ?? 0;
 
     if (storeLat === 0 && storeLng === 0) {
-      return { distanceKm: 0, fee: 0, isFree: false, isOutOfRange: false, isDisabled: true };
+      return { distanceKm: 0, fee: 0, isFree: false, isOutOfRange: false, isDisabled: true, freeShipDistanceKm: cfg.freeShipDistanceKm };
     }
 
     const distanceKm = this.haversineKm(lat, lng, storeLat, storeLng);
 
     if (distanceKm > cfg.maxDistanceKm) {
-      return { distanceKm, fee: 0, isFree: false, isOutOfRange: true, isDisabled: false };
+      return { distanceKm, fee: 0, isFree: false, isOutOfRange: true, isDisabled: false, freeShipDistanceKm: cfg.freeShipDistanceKm };
     }
 
     const extraKm = Math.max(0, distanceKm - cfg.baseKm);
     const rawFee = cfg.baseFee + Math.ceil(extraKm) * cfg.feePerKm;
-    const isFree = cfg.freeThreshold > 0 && orderAmount >= cfg.freeThreshold;
+    const isFreeByAmount = cfg.freeThreshold > 0 && orderAmount >= cfg.freeThreshold;
+    const isFreeByDistance = cfg.freeShipDistanceKm > 0 && distanceKm <= cfg.freeShipDistanceKm;
+    const isFree = isFreeByAmount || isFreeByDistance;
 
     return {
       distanceKm,
@@ -75,6 +101,7 @@ export class ShippingService {
       isFree,
       isOutOfRange: false,
       isDisabled: false,
+      freeShipDistanceKm: cfg.freeShipDistanceKm,
     };
   }
 }

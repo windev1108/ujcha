@@ -7,6 +7,12 @@ import { ShippingService } from './shipping.service';
 export class ShippingController {
   constructor(private readonly shippingService: ShippingService) {}
 
+  @Get('config')
+  @ApiOperation({ summary: 'Cấu hình phí giao hàng (public — chỉ đọc)' })
+  getPublicConfig() {
+    return this.shippingService.getPublicConfig();
+  }
+
   @Get('estimate')
   @ApiOperation({ summary: 'Ước tính phí giao hàng theo toạ độ GPS' })
   @ApiQuery({ name: 'lat', type: Number })

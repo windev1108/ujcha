@@ -4,7 +4,6 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from "react"
 import { useParams } from "next/navigation";
 import { useRouter } from "@/i18n/navigation";
 import { ROUTES } from "@/lib/routes";
-import { GroupOrderCheckoutModal } from "./GroupOrderCheckoutModal";
 import { motion, AnimatePresence } from "motion/react";
 import { io, Socket } from "socket.io-client";
 import Image from "next/image";
@@ -45,9 +44,17 @@ import { useCategoriesQuery } from "@/services/category/hooks";
 import { normalizeOptionGroups, computeOptionSurcharge, formatVnd } from "@/lib/product-options";
 
 import { useAddressesQuery } from "@/services/order/hooks";
-import { useShippingEstimateQuery } from "@/services/shipping/hooks";
+import { createAddress } from "@/services/order/api";
+import { useShippingEstimateQuery, usePublicShippingConfigQuery } from "@/services/shipping/hooks";
 import { usePublicPaymentConfigQuery } from "@/services/payment-config/hooks";
+import { useProfileQuery } from "@/services/profile/hooks";
+import { usePublicStoreLocationQuery } from "@/services/store/hooks";
 import { BankTransferQR } from "@/app/[locale]/checkout/components/BankTransferQR";
+import { CheckoutFulfillmentSection } from "@/app/[locale]/checkout/components/CheckoutFulfillmentSection";
+import { PaymentMethodSection } from "@/app/[locale]/checkout/components/PaymentMethodSection";
+import { CHECKOUT_TAB } from "@/app/[locale]/checkout/components/checkout-tab";
+import type { DeliveryForm, PickupForm, PaymentMethod } from "@/app/[locale]/checkout/components/checkout-types";
+import { ShippingFeeTooltip } from "@/components/common/ShippingFeeTooltip";
 import {
   fetchGroupOrder,
   joinGroupOrder,
@@ -987,104 +994,7 @@ function LoginRequired({ token }: { token: string }) {
   );
 }
 
-// ── PaymentSheet ─────────────────────────────────────────────────────────────
 
-function PaymentSheet({
-  open,
-  current,
-  loading,
-  onSelect,
-  onClose,
-}: {
-  open: boolean;
-  current: "cash" | "bank_transfer";
-  loading: boolean;
-  onSelect: (t: "cash" | "bank_transfer") => void;
-  onClose: () => void;
-}) {
-  const t = useTranslations();
-  const opts: { id: "cash" | "bank_transfer"; labelKey: string; descKey: string; Icon: React.ElementType }[] = [
-    { id: "cash", labelKey: "cash", descKey: "cash_desc", Icon: Banknote },
-    { id: "bank_transfer", labelKey: "bank_transfer", descKey: "bank_transfer_desc", Icon: QrCode },
-  ];
-
-  return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm sm:items-center sm:p-4"
-          onClick={(e) => e.target === e.currentTarget && onClose()}
-        >
-          <motion.div
-            initial={{ y: "100%", opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: "100%", opacity: 0 }}
-            transition={{ type: "spring", damping: 30, stiffness: 350 }}
-            className="w-full rounded-t-3xl bg-white p-5 pb-[max(20px,env(safe-area-inset-bottom))] shadow-xl sm:max-w-md sm:rounded-3xl sm:pb-5"
-          >
-            {/* Drag handle — mobile only */}
-            <div className="mb-4 flex justify-center sm:hidden">
-              <div className="h-1 w-10 rounded-full bg-black/12" />
-            </div>
-
-            <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-              {t("payment")}
-            </p>
-            <p className="mb-5 text-lg font-semibold text-foreground">{t("payment_method")}</p>
-
-            <div className="grid grid-cols-2 gap-3">
-              {opts.map(({ id, labelKey, descKey, Icon }) => {
-                const active = current === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    disabled={loading}
-                    onClick={() => onSelect(id)}
-                    className={`rounded-3xl border-2 p-4 text-left transition-colors disabled:opacity-60 ${active
-                      ? "border-kun-products-forest bg-kun-mint/15"
-                      : "border-transparent bg-surface-card ring-1 ring-black/6 hover:ring-black/10"
-                      }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      {loading && active ? (
-                        <Loader2 className="mt-0.5 size-5 shrink-0 animate-spin text-kun-products-forest" />
-                      ) : (
-                        <Icon
-                          className={`mt-0.5 size-5 shrink-0 ${active ? "text-kun-products-forest" : "text-foreground/50"}`}
-                          strokeWidth={1.5}
-                        />
-                      )}
-                      <div className="min-w-0">
-                        <p className={`text-sm font-semibold ${active ? "text-kun-products-forest" : "text-foreground/80"}`}>
-                          {t(labelKey)}
-                        </p>
-                        <p className="mt-0.5 text-[11px] leading-snug text-foreground/55">
-                          {t(descKey)}
-                        </p>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            <button
-              type="button"
-              onClick={onClose}
-              className="mt-4 flex h-10 w-full items-center justify-center rounded-full border border-black/8 text-sm text-foreground/60 transition hover:bg-black/4"
-            >
-              {t("group_close")}
-            </button>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-}
 
 // ── GroupOrderPageShell ───────────────────────────────────────────────────────
 
@@ -1097,6 +1007,8 @@ export function GroupOrderPageShell() {
 
   const user = useAuthStore((s) => s.user);
   const { data: savedAddresses = [] } = useAddressesQuery();
+  const { data: profile } = useProfileQuery();
+  const { data: storeLocation } = usePublicStoreLocationQuery();
 
   const [state, setState] = useState<GroupOrderState | null>(null);
   const [config, setConfig] = useState<GroupDiscountTier[]>([]);
@@ -1110,11 +1022,21 @@ export function GroupOrderPageShell() {
   const [showPicker, setShowPicker] = useState(false);
   const [pickerSaving, setPickerSaving] = useState(false);
   const [removingProductId, setRemovingProductId] = useState<string | null>(null);
-  const [showFulfillment, setShowFulfillment] = useState(false);
-  const [showPaymentPicker, setShowPaymentPicker] = useState(false);
   const [pendingCheckoutOrder, setPendingCheckoutOrder] = useState<{ id: string; paymentCode: string } | null>(null);
+
+  // ── Inline fulfillment form state (host only, collecting) ─────────────────
+  const [localType, setLocalType] = useState<"delivery" | "pickup">("delivery");
+  const [localSelectedAddressId, setLocalSelectedAddressId] = useState<string | null>(null);
+  const [localDeliveryForm, setLocalDeliveryForm] = useState<DeliveryForm>({
+    fullAddress: "", name: "", phone: "", note: "", lat: null, lng: null,
+  });
+  const [localPickupForm, setLocalPickupForm] = useState<PickupForm>({
+    mode: "asap", scheduledTime: "", name: "", phone: "",
+  });
+  const [localPaymentType, setLocalPaymentType] = useState<PaymentMethod>("cash");
   const splitInitRef = useRef(false);
   const splitCashConfirmRef = useRef(false);
+  const autoSavePendingRef = useRef(false);
 
   const socketRef = useRef<Socket | null>(null);
 
@@ -1128,6 +1050,7 @@ export function GroupOrderPageShell() {
   const addrLng = matchedAddress?.lng && matchedAddress.lng !== 0 ? matchedAddress.lng : null;
   const { data: shippingEstimate } = useShippingEstimateQuery(addrLat, addrLng, 0);
   const { data: payConfig } = usePublicPaymentConfigQuery();
+  const { data: shippingConfig } = usePublicShippingConfigQuery();
 
   const load = useCallback(async () => {
     try {
@@ -1283,7 +1206,111 @@ export function GroupOrderPageShell() {
     }
   };
 
+  // Sync local form from server state (when group order first loads or changes)
+  useEffect(() => {
+    if (!state) return;
+    setLocalType((state.type === "table" ? "pickup" : state.type) as "delivery" | "pickup");
+    setLocalSelectedAddressId(state.address?.id ?? null);
+    setLocalPaymentType((state.paymentType ?? "cash") as PaymentMethod);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state?.id]);
+
+  // Auto-select default address for delivery
+  useEffect(() => {
+    if (localType !== "delivery" || localSelectedAddressId !== null) return;
+    const def = savedAddresses.find((a) => a.isDefault) ?? savedAddresses[0];
+    if (def) setLocalSelectedAddressId(def.id);
+  }, [localType, savedAddresses, localSelectedAddressId]);
+
+  // Sync profile into form fields (once)
+  useEffect(() => {
+    if (!profile) return;
+    setLocalDeliveryForm((p) => ({
+      ...p,
+      name: p.name || profile.name || "",
+      phone: p.phone || profile.phone || "",
+    }));
+    setLocalPickupForm((p) => ({
+      ...p,
+      name: p.name || profile.name || "",
+      phone: p.phone || profile.phone || "",
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id]);
+
   // Hooks must be before any early returns ─────────────────────────────────
+
+  // Inline shipping estimate for the fulfillment form
+  const localShowNewForm = localSelectedAddressId === "__new__" || savedAddresses.length === 0;
+  const localTotalAmount = (state?.participants ?? []).reduce((s, p) => s + p.subtotal, 0);
+
+  const localShippingLat = useMemo(() => {
+    if (localType !== "delivery") return null;
+    if (localShowNewForm) return localDeliveryForm.lat;
+    const addr = savedAddresses.find((a) => a.id === localSelectedAddressId);
+    return addr?.lat && addr.lat !== 0 ? addr.lat : null;
+  }, [localType, localShowNewForm, localDeliveryForm.lat, savedAddresses, localSelectedAddressId]);
+
+  const localShippingLng = useMemo(() => {
+    if (localType !== "delivery") return null;
+    if (localShowNewForm) return localDeliveryForm.lng;
+    const addr = savedAddresses.find((a) => a.id === localSelectedAddressId);
+    return addr?.lng && addr.lng !== 0 ? addr.lng : null;
+  }, [localType, localShowNewForm, localDeliveryForm.lng, savedAddresses, localSelectedAddressId]);
+
+  const { data: localShippingEstimate, isFetching: localShippingFetching } =
+    useShippingEstimateQuery(localShippingLat, localShippingLng, localTotalAmount);
+
+  const localShippingFee = localType === "delivery" ? (localShippingEstimate?.fee ?? 0) : 0;
+  const localShippingIsFree = localType === "delivery" && (localShippingEstimate?.isFree ?? false);
+  const localShippingIsOutOfRange = localType === "delivery" && (localShippingEstimate?.isOutOfRange ?? false);
+
+  // Mark auto-save pending whenever the user changes type, address, or payment
+  useEffect(() => {
+    autoSavePendingRef.current = true;
+  }, [localType, localSelectedAddressId, localPaymentType]);
+
+  // Trigger auto-save once shipping estimate settles (or immediately for pickup)
+  useEffect(() => {
+    if (!autoSavePendingRef.current || !isHost || state?.status !== "collecting" || !sessionToken) return;
+    if (localType === "delivery") {
+      if (localShippingFetching || localShippingIsOutOfRange) return;
+      if (!localShowNewForm && !localSelectedAddressId) return;
+      if (localShowNewForm && !localDeliveryForm.lat) return;
+    }
+    autoSavePendingRef.current = false;
+    void (async () => {
+      try {
+        let addressId: string | undefined;
+        if (localType === "delivery") {
+          if (localShowNewForm) {
+            const created = await createAddress({
+              fullAddress: localDeliveryForm.fullAddress.trim(),
+              lat: localDeliveryForm.lat ?? 0,
+              lng: localDeliveryForm.lng ?? 0,
+            });
+            addressId = created.id;
+          } else {
+            addressId = localSelectedAddressId ?? undefined;
+          }
+        }
+        const pickupTime = localType === "pickup"
+          ? new Date(Date.now() + 20 * 60_000).toISOString()
+          : undefined;
+        const newState = await setGroupOrderFulfillment(token, sessionToken, {
+          type: localType,
+          addressId,
+          shippingFee: localType === "delivery" ? localShippingFee : 0,
+          paymentType: localPaymentType,
+          pickupTime,
+        });
+        setState(newState);
+      } catch {
+        // Silent fail — user can retry via the lock action
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localShippingFetching, localShippingFee]);
 
   // Per-participant amount for split mode (discount proportional, shipping split evenly)
   const myAmount = useMemo(() => {
@@ -1355,44 +1382,6 @@ export function GroupOrderPageShell() {
     }
   };
 
-  const handleSetFulfillment = async (payload: {
-    type: "delivery" | "pickup";
-    addressId?: string;
-    shippingFee?: number;
-    paymentType: "cash" | "bank_transfer";
-  }) => {
-    if (!sessionToken) throw new Error("Chưa đăng nhập.");
-    const newState = await setGroupOrderFulfillment(token, sessionToken, {
-      type: payload.type,
-      addressId: payload.addressId,
-      shippingFee: payload.shippingFee,
-      paymentType: payload.paymentType,
-    });
-    setState(newState);
-    setShowFulfillment(false);
-  };
-
-  const handleChangePaymentType = async (paymentType: "cash" | "bank_transfer") => {
-    if (!sessionToken || !state) return;
-    setActionLoading(true);
-    try {
-      const newState = await setGroupOrderFulfillment(token, sessionToken, {
-        type: state.type as "delivery" | "pickup",
-        addressId: state.address?.id,
-        shippingFee: state.shippingFee,
-        paymentType,
-      });
-      setState(newState);
-      setShowPaymentPicker(false);
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { message?: string | string[] } } };
-      const msg = err?.response?.data?.message ?? "Có lỗi xảy ra.";
-      alert(typeof msg === "string" ? msg : msg.join(", "));
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -1443,14 +1432,6 @@ export function GroupOrderPageShell() {
 
   return (
     <>
-      <PaymentSheet
-        open={showPaymentPicker}
-        current={state?.paymentType ?? "cash"}
-        loading={actionLoading}
-        onSelect={(t) => void handleChangePaymentType(t)}
-        onClose={() => setShowPaymentPicker(false)}
-      />
-
       {showPicker && me && (
         <ProductPickerDrawer
           open={showPicker}
@@ -1458,17 +1439,6 @@ export function GroupOrderPageShell() {
           initialItems={me.items}
           onSave={handleSaveItems}
           saving={pickerSaving}
-        />
-      )}
-
-      {showFulfillment && isHost && state.status === "collecting" && (
-        <GroupOrderCheckoutModal
-          open={showFulfillment}
-          onClose={() => setShowFulfillment(false)}
-          state={state}
-          savedAddresses={savedAddresses}
-          onSave={handleSetFulfillment}
-          totalAmount={totalAmount}
         />
       )}
 
@@ -1574,42 +1544,90 @@ export function GroupOrderPageShell() {
               </motion.div>
             )}
 
-            {/* Fulfillment row for host (collecting only) */}
+            {/* Inline fulfillment + payment for host (collecting only) */}
             {isHost && state.status === "collecting" && (
-              <>
-                <motion.button
-                  type="button"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.06 }}
-                  onClick={() => setShowFulfillment(true)}
-                  className={`flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition hover:shadow-sm ${needsAddress
-                    ? "border-amber-200 bg-amber-50 hover:border-amber-300"
-                    : "border-black/6 bg-white hover:border-[#1a3c34]/20"
-                    }`}
-                >
-                  <div className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${needsAddress ? "bg-amber-100" : "bg-[#1a3c34]/8"}`}>
-                    <FulfillmentIcon className={`size-4.5 ${needsAddress ? "text-amber-600" : "text-[#1a3c34]"}`} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className={`text-sm font-semibold ${needsAddress ? "text-amber-800" : "text-foreground"}`}>
-                      {fulfillmentLabel}
-                      {needsAddress && <span className="ml-1.5 text-amber-600">· Chưa chọn địa chỉ</span>}
-                    </p>
-                    {state.address && (
-                      <p className="truncate text-xs text-foreground/55">{state.address.fullAddress}</p>
-                    )}
-                    {!state.address && state.type !== "delivery" && (
-                      <p className="text-xs text-foreground/45">Nhấn để thay đổi hình thức</p>
-                    )}
-                    {needsAddress && (
-                      <p className="text-xs text-amber-600/80">{t("group_need_addr_hint")}</p>
-                    )}
-                  </div>
-                  <ChevronRight className={`size-4 shrink-0 ${needsAddress ? "text-amber-400" : "text-foreground/25"}`} />
-                </motion.button>
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.06 }}
+                className="flex flex-col gap-4"
+              >
+                {/* Delivery / Pickup tab switcher */}
+                <div className="flex gap-2">
+                  {([{ id: "delivery", label: t("type_delivery"), Icon: Truck }, { id: "pickup", label: t("type_pickup"), Icon: ShoppingBag }] as const).map(({ id, label, Icon }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setLocalType(id)}
+                      className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${localType === id ? "bg-kun-primary text-white shadow-sm" : "bg-surface-card text-foreground/60 hover:bg-black/6"}`}
+                    >
+                      <Icon className="size-4" />
+                      {label}
+                    </button>
+                  ))}
+                </div>
 
-              </>
+                <CheckoutFulfillmentSection
+                  tab={localType === "delivery" ? CHECKOUT_TAB.DELIVERY : CHECKOUT_TAB.PICKUP}
+                  deliveryForm={localDeliveryForm}
+                  onDeliveryFormChange={(patch) => setLocalDeliveryForm((p) => ({ ...p, ...patch }))}
+                  pickupForm={localPickupForm}
+                  onPickupFormChange={(patch) => setLocalPickupForm((p) => ({ ...p, ...patch }))}
+                  savedAddresses={savedAddresses}
+                  selectedAddressId={localSelectedAddressId}
+                  onSelectAddress={setLocalSelectedAddressId}
+                  storeLocation={storeLocation ? { lat: storeLocation.lat, lng: storeLocation.lng, address: storeLocation.address } : null}
+                  profileName={profile?.name}
+                  profilePhone={profile?.phone}
+                />
+
+                {/* Shipping estimate badge (delivery only) */}
+                <AnimatePresence initial={false}>
+                  {localType === "delivery" && (localShippingFetching || localShippingEstimate) && (
+                    <motion.div
+                      key="ship-badge"
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden"
+                    >
+                      <div className={`flex items-center justify-between rounded-2xl px-4 py-3 text-sm ${
+                        localShippingFetching
+                          ? "bg-surface-card text-foreground/50"
+                          : localShippingIsOutOfRange
+                            ? "bg-red-50 text-red-700"
+                            : localShippingIsFree
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-kun-mint/20 text-kun-products-forest"
+                      }`}>
+                        <div className="flex items-center gap-1.5">
+                          {localShippingFetching ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            <Bike className="size-4" />
+                          )}
+                          <span className="font-medium">
+                            {localShippingFetching
+                              ? t("group_calculating_ship")
+                              : localShippingIsOutOfRange
+                                ? t("group_out_of_range_badge")
+                                : `${localShippingEstimate!.distanceKm.toFixed(1)} km`
+                            }
+                          </span>
+                        </div>
+                        {!localShippingFetching && !localShippingIsOutOfRange && (
+                          <span className="font-bold tabular-nums">
+                            {localShippingIsFree ? t("group_shipping_free") : formatVnd(localShippingFee)}
+                          </span>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <PaymentMethodSection selected={localPaymentType} onSelect={setLocalPaymentType} />
+              </motion.div>
             )}
 
             {/* Fulfilled info (read-only, locked/completed) */}
@@ -1853,57 +1871,58 @@ export function GroupOrderPageShell() {
                     <span className="flex-1 text-xs font-medium text-foreground/70">
                       {state.paymentType === "cash" ? t("cash") : t("bank_transfer")}
                     </span>
-                    {isHost && state.status === "collecting" && (
-                      <button
-                        type="button"
-                        onClick={() => setShowPaymentPicker(true)}
-                        className="shrink-0 text-[11px] font-semibold text-[#1a3c34] hover:underline"
-                      >
-                        {t("group_change")}
-                      </button>
-                    )}
                   </div>
                 </div>
-
-                {needsAddress && isHost && state.status === "collecting" && (
-                  <button
-                    type="button"
-                    onClick={() => setShowFulfillment(true)}
-                    className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-amber-300 bg-amber-50 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100"
-                  >
-                    <MapPin className="size-3.5" />
-                    {t("group_set_address_btn")}
-                  </button>
-                )}
 
                 {/* Totals */}
-                <div className="space-y-2 text-sm text-foreground/70">
-                  <div className="flex justify-between">
-                    <span>{t("group_subtotal_n", { count: totalItems })}</span>
-                    <span className="tabular-nums font-medium text-foreground">{fmtVnd(totalAmount)}</span>
-                  </div>
-                  {discountAmount > 0 && (
-                    <div className="flex justify-between text-emerald-700">
-                      <span>{t("group_group_discount", { pct: discountPercent })}</span>
-                      <span className="tabular-nums font-medium">-{fmtVnd(discountAmount)}</span>
-                    </div>
-                  )}
-                  {state.shippingFee > 0 && (
-                    <div className="flex justify-between">
-                      <span>{t("shipping_fee")}</span>
-                      <span className="tabular-nums font-medium">{fmtVnd(state.shippingFee)}</span>
-                    </div>
-                  )}
-                </div>
+                {(() => {
+                  const displayShippingFee = isHost && state.status === "collecting"
+                    ? localShippingFee
+                    : state.shippingFee;
+                  const displayFinalAmount = totalAmount - discountAmount + displayShippingFee;
+                  return (
+                    <>
+                      <div className="space-y-2 text-sm text-foreground/70">
+                        <div className="flex justify-between">
+                          <span>{t("group_subtotal_n", { count: totalItems })}</span>
+                          <span className="tabular-nums font-medium text-foreground">{fmtVnd(totalAmount)}</span>
+                        </div>
+                        {discountAmount > 0 && (
+                          <div className="flex justify-between text-emerald-700">
+                            <span>{t("group_group_discount", { pct: discountPercent })}</span>
+                            <span className="tabular-nums font-medium">-{fmtVnd(discountAmount)}</span>
+                          </div>
+                        )}
+                        {(displayShippingFee > 0 || (isHost && state.status === "collecting" && localType === "delivery")) && (
+                          <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-1">
+                              {t("shipping_fee")}
+                              {shippingConfig && <ShippingFeeTooltip config={shippingConfig} />}
+                            </span>
+                            {isHost && state.status === "collecting" && localShippingFetching ? (
+                              <span className="text-xs text-muted">{t("group_calculating_ship")}</span>
+                            ) : isHost && state.status === "collecting" && localShippingIsOutOfRange ? (
+                              <span className="text-xs font-medium text-danger">{t("out_of_delivery_range")}</span>
+                            ) : isHost && state.status === "collecting" && localShippingIsFree ? (
+                              <span className="text-xs font-semibold uppercase text-kun-products-forest">{t("free")}</span>
+                            ) : (
+                              <span className="tabular-nums font-medium">{fmtVnd(displayShippingFee)}</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
 
-                <div className="border-t border-black/6 pt-3">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-sm font-medium text-foreground/70">{t("group_grand_total")}</span>
-                    <span className="text-2xl font-bold tabular-nums text-[#1a3c34]">
-                      {fmtVnd(finalAmount)}
-                    </span>
-                  </div>
-                </div>
+                      <div className="border-t border-black/6 pt-3">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-sm font-medium text-foreground/70">{t("group_grand_total")}</span>
+                          <span className="text-2xl font-bold tabular-nums text-[#1a3c34]">
+                            {fmtVnd(displayFinalAmount)}
+                          </span>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
 
                 {/* Host pays checkout */}
                 {state.status === "locked" && state.paymentMode === "host_pays" && isHost && !pendingCheckoutOrder && (

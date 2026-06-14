@@ -565,7 +565,7 @@ function PickupStoreCard({ storeLocation }: { storeLocation?: StoreLocationInfo 
           <MapPin className="size-6" strokeWidth={1.75} aria-hidden />
         </div>
         <div className="min-w-0 flex-1">
-          <h2 className="text-lg font-semibold text-foreground sm:text-xl">UjCha Matcha &amp; Tea</h2>
+          <h2 className="text-lg font-semibold text-foreground sm:text-xl">UjCha Matcha &amp; More</h2>
 
           {address ? (
             <p className="mt-1 text-sm leading-relaxed text-foreground/65">{address}</p>
@@ -575,11 +575,11 @@ function PickupStoreCard({ storeLocation }: { storeLocation?: StoreLocationInfo 
             </p>
           )}
 
-          {hasCoords && (
+          {/* {hasCoords && (
             <p className="mt-1 text-xs tabular-nums text-foreground/40">
               {storeLocation.lat.toFixed(6)}, {storeLocation.lng.toFixed(6)}
             </p>
-          )}
+          )} */}
 
           {mapsUrl ? (
             <a

@@ -58,6 +58,7 @@ export interface GroupDiscountTier {
 export interface GroupOrderConfig {
   id: string
   isEnabled: boolean
+  expiryMinutes: number
   discountTiers: GroupDiscountTier[]
 }
 
