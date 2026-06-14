@@ -1,5 +1,5 @@
 {
   "framework": "nextjs",
-  "installCommand": "bun install",
-  "buildCommand": "NODE_OPTIONS='--max-old-space-size=4096' next build"
+  "installCommand": "cd apps/web-admin && bun install",
+  "buildCommand": "cd apps/web-admin && NODE_OPTIONS='--max-old-space-size=4096' next build"
 }
