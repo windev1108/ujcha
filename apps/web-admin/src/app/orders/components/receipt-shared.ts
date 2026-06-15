@@ -106,7 +106,7 @@ function renderItems(order: AdminOrder, el: ReceiptElement): string {
       `<div style="display:grid;grid-template-columns:22px minmax(0,1fr) auto;column-gap:6px;align-items:start;margin:4px 0 2px;">` +
       `<div style="padding-top:1px;"><span style="display:inline-block;width:20px;height:20px;line-height:18px;background:#fff;border:1.5px solid #000;color:#000;text-align:center;font-weight:bold;font-size:11px;vertical-align:middle;">${it.quantity}x</span></div>` +
       `<div style="font-weight:bold;font-size:${nameFs}px;word-break:break-word;line-height:1.3;color:#000;">${esc(it.product.name)}</div>` +
-      `<div style="text-align:right;font-size:${nameFs}px;font-weight:bold;white-space:nowrap;padding-left:4px;min-width:60px;color:#000;">${esc(formatVnd(lineTotal))}</div>` +
+      `<div style="text-align:right;font-size:${nameFs}px;font-weight:bold;white-space:nowrap;padding-left:4px;color:#000;">${esc(formatVnd(lineTotal))}</div>` +
       `</div>`,
     );
 
@@ -196,9 +196,9 @@ function renderElement(
       if (loyaltyQrUrl) {
         return (
           `<div style="border-top:2px dashed #000;margin:8px 0 6px;"></div>` +
-          `<div style="text-align:center;font-size:12px;font-weight:bold;letter-spacing:0.5px;margin-bottom:6px;color:#000;">QUÉT ĐỂ TÍCH ĐIỂM Ujcha</div>` +
+          `<div style="text-align:center;font-size:12px;font-weight:bold;letter-spacing:0.5px;margin-bottom:6px;color:#000;">QUÉT ĐỂ TÍCH ĐIỂM</div>` +
           `<img src="${loyaltyQrUrl}" style="display:block;margin:0 auto 4px;width:160px;height:160px;" />` +
-          `<div style="text-align:center;font-size:10px;color:#666;margin-bottom:6px;">${process.env.NEXT_PUBLIC_WEB_URL ?? 'https://ujcha.vn'}</div>`
+          `<div style="text-align:center;font-size:10px;color:#000;margin-bottom:6px;">${process.env.NEXT_PUBLIC_WEB_URL ?? 'https://ujcha.vn'}</div>`
         );
       }
       return "";
@@ -236,8 +236,8 @@ export function buildReceiptDocumentHtml(
     `<!DOCTYPE html><html><head><meta charset="utf-8"/>` +
     `<title>Hóa đơn ${esc(formatOrderRef(order))}</title>` +
     `<style>` +
-    `@page { size: ${cfg.paperWidth}mm auto; margin: 4mm; }` +
-    `body { font-family: ${ff}; font-size: 17px; width: ${cfg.paperWidth}mm; margin: 0 auto; color: #000; }` +
+    `@page { size: ${cfg.paperWidth}mm auto; margin: 2mm; }` +
+    `body { font-family: ${ff}; font-size: 17px; width: 100%; margin: 0; box-sizing: border-box; color: #000; }` +
     `@media print { body { font-size: 19px !important; } }` +
     `</style></head><body>${body}</body></html>`
   );
