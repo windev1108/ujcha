@@ -236,8 +236,8 @@ export function buildReceiptDocumentHtml(
     `<!DOCTYPE html><html><head><meta charset="utf-8"/>` +
     `<title>Hóa đơn ${esc(formatOrderRef(order))}</title>` +
     `<style>` +
-    `@page { size: ${cfg.paperWidth}mm auto; margin: 2mm; }` +
-    `body { font-family: ${ff}; font-size: 17px; width: 100%; margin: 0; box-sizing: border-box; color: #000; }` +
+    `@page { size: ${cfg.paperWidth}mm auto; margin: 0; }` +
+    `body { font-family: ${ff}; font-size: 17px; width: ${Math.max(cfg.paperWidth - 8, 42)}mm; margin: 0 auto; padding: 1mm 1mm; box-sizing: border-box; color: #000; }` +
     `@media print { body { font-size: 19px !important; } }` +
     `</style></head><body>${body}</body></html>`
   );
