@@ -10,7 +10,9 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ujcha.vercel.app";
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations();
   return {
-    title: t("home_page_title"),
+    title: {
+      absolute: t("home_page_title"),
+    },
     description:
       "Khám phá matcha ceremonial grade, cà phê, trà thủ công và đồ uống theo mùa. Nguồn gốc bền vững — giao hàng tận nơi - khu vực thành phố Đà Nẵng.",
     openGraph: {

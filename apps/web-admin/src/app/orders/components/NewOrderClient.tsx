@@ -23,7 +23,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useAppDialog } from "@/components/common/app-dialog-provider";
 import {
   formatPosOptionsSubtitle,
-  maxConfigurableOptionSurcharge,
   normalizeProductOptionGroups,
   toppingsByIdMap,
 } from "@/lib/pos-line-price";
