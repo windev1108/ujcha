@@ -1,0 +1,6 @@
+{
+  "framework": "nextjs",
+  "installCommand": "npx pnpm@9 install --filter web-admin --no-frozen-lockfile",
+  "buildCommand": "NODE_OPTIONS='--max-old-space-size=4096' next build",
+  "outputDirectory": ".next"
+}
