@@ -100,9 +100,6 @@ function renderItems(order: AdminOrder, el: ReceiptElement): string {
     const it = grouped[i];
     const extras = parseExtras(it.extrasJson);
     const opts = parseOptions(it.optionsJson);
-    const optStr = Object.keys(opts).length > 0
-      ? Object.entries(opts).map(([k, v]) => `${k}: ${v}`).join(", ")
-      : "";
     const lineTotal = Number.parseFloat(it.price) * it.quantity;
 
     lines.push(
@@ -113,8 +110,8 @@ function renderItems(order: AdminOrder, el: ReceiptElement): string {
       `</div>`,
     );
 
-    if (optStr) {
-      lines.push(`<div style="margin-left:26px;font-size:${subFs}px;margin-bottom:1px;color:#000;">${esc(optStr)}</div>`);
+    for (const [k, v] of Object.entries(opts)) {
+      lines.push(`<div style="margin-left:26px;font-size:${subFs}px;margin-bottom:1px;color:#000;">+ ${esc(k)}: ${esc(v)}</div>`);
     }
     for (const ex of extras) {
       const exPrice = Number(ex.price ?? 0);
