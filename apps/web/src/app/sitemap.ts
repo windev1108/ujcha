@@ -33,7 +33,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticEntries: MetadataRoute.Sitemap = staticPages.flatMap(
     ({ path, priority, changeFrequency }) =>
       locales.map((locale) => ({
-        url: `${SITE_URL}/${locale}${path}`,
+        url: `${SITE_URL}/${path}`,
         lastModified: now,
         changeFrequency,
         priority,
@@ -46,7 +46,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const posts = await getBlogPosts();
   const blogEntries: MetadataRoute.Sitemap = posts.flatMap((post) =>
     locales.map((locale) => ({
-      url: `${SITE_URL}/${locale}/blog/${post.slug}`,
+      url: `${SITE_URL}/blog/${post.slug}`,
       lastModified: post.updatedAt ?? post.publishedAt ?? now,
       changeFrequency: "weekly" as const,
       priority: 0.7,

@@ -26,7 +26,7 @@ export async function generateMetadata(
     if (!res.ok) return { title: "Bài viết" };
     const post = await res.json();
     const description = stripHtml(post.content ?? "").slice(0, 155);
-    const canonicalUrl = `${SITE_URL}/${locale}/blog/${slug}`;
+    const canonicalUrl = `${SITE_URL}/blog/${slug}`;
     return {
       title: post.title,
       description,
@@ -101,12 +101,12 @@ export default async function BlogPostPage({
       structuredData = {
         "@context": "https://schema.org",
         "@type": "BlogPosting",
-        "@id": `${SITE_URL}/${locale}/blog/${slug}`,
+        "@id": `${SITE_URL}/blog/${slug}`,
         headline: post.title,
         description,
         datePublished: post.publishedAt,
         dateModified: post.updatedAt ?? post.publishedAt,
-        url: `${SITE_URL}/${locale}/blog/${slug}`,
+        url: `${SITE_URL}/blog/${slug}`,
         image:
           post.thumbnail ??
           `${SITE_URL}/api/og?title=${encodeURIComponent(post.title ?? "")}&description=${encodeURIComponent(stripHtml(post.content ?? "").slice(0, 120))}`,
@@ -127,12 +127,12 @@ export default async function BlogPostPage({
         },
         mainEntityOfPage: {
           "@type": "WebPage",
-          "@id": `${SITE_URL}/${locale}/blog/${slug}`,
+          "@id": `${SITE_URL}/blog/${slug}`,
         },
         isPartOf: {
           "@type": "Blog",
           name: "UjCha Blog",
-          url: `${SITE_URL}/${locale}/blog`,
+          url: `${SITE_URL}/blog`,
         },
       };
     }
