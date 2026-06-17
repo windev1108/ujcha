@@ -197,7 +197,7 @@ export function buildReceiptHtml(order: ReceiptOrder, locale = "vi"): string {
     `<div style="border-top:1px dashed #000;margin:4px 0;"></div>`,
     !(order.earnedPoints) ? (
       `<div style="text-align:center;margin:6px 0 4px;">` +
-      `<img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(`${env.SITE_URL}/${locale}/register?order=${order.paymentCode}`)}" width="80" height="80" style="display:block;margin:0 auto;" alt="QR"/>` +
+      `<img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(`${env.SITE_URL}/${locale}/loyalty?code=${order.paymentCode}`)}" width="80" height="80" style="display:block;margin:0 auto;" alt="QR"/>` +
       `<div style="font-size:10px;font-weight:bold;color:#000;margin-top:3px;">${esc(i18n.loyalty_qr_label)}</div>` +
       `<div style="font-size:9px;color:#444;margin-top:1px;">${esc(i18n.loyalty_qr_sub)}</div>` +
       `</div>` +

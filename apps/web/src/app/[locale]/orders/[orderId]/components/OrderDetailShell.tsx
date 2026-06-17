@@ -465,8 +465,12 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                 </div>
               )}
 
-              {/* Claim points CTA — not shown for group orders (handled automatically per participant) */}
-              {order.earnedPoints === 0 && !isCancelled && !isGroupOrder && (
+              {/* Claim points CTA — guest only, completed+paid, no points yet, not a group order */}
+              {order.earnedPoints === 0 &&
+                !accessToken &&
+                order.status === "completed" &&
+                order.paymentStatus === "paid" &&
+                !isGroupOrder && (
                 <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-[#f0faf6] px-4 py-3 ring-1 ring-[#1a3c34]/15">
                   <div className="flex items-center gap-2.5">
                     <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#1a3c34]/10">
