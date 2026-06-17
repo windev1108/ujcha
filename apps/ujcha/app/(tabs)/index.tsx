@@ -141,7 +141,7 @@ export default function HomeScreen() {
           <View className="flex-row flex-wrap gap-4">
             {featured.map((p) => (
               <View key={p.id} className="w-[47%]">
-                <ProductCard product={p} />
+                <ProductCard product={p} onAddPress={() => router.push(`/menu/${p.slug}`)} />
               </View>
             ))}
           </View>

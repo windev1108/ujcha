@@ -33,7 +33,7 @@ model User {
   orders       Order[]
   groupOrdersHosted          GroupOrder[]               @relation("GroupOrderHost")
   groupOrderParticipations   GroupOrderParticipant[]    @relation("GroupOrderParticipant")
-  pointBalance Float                @default(0)
+  pointBalance Int                  @default(0)
   pointTransactions PointTransaction[]
   userVouchers      UserVoucher[]
 
@@ -81,16 +81,16 @@ model PointTransaction {
   userId      String               @db.Uuid
   user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   type        PointTransactionType
-  /// Luôn > 0 (độ lớn giao dịch).
-  amount      Float
+  /// Luôn > 0 (độ lớn giao dịch), số nguyên.
+  amount      Int
   source      PointSource
   referenceId String?              @db.Uuid
   /// Chỉ type earn: thời điểm lô điểm hết hạn; null = không hết hạn.
   expiresAt   DateTime?
   /// Chỉ type earn: đến thời điểm này mới được spend (FIFO); null = dùng ngay.
   usableFrom  DateTime?
-  /// Chỉ type earn: điểm còn lại trong lô (trừ dần khi spend FIFO).
-  remainingAmount Float?
+  /// Chỉ type earn: điểm còn lại trong lô (trừ dần khi spend FIFO), số nguyên.
+  remainingAmount Int?
   createdAt   DateTime             @default(now())
 
   @@index([userId, createdAt])
@@ -936,11 +936,14 @@ model GroupOrderParticipant {
   paymentQrToken String?                       @unique
   paidAt         DateTime?
   joinedAt       DateTime                      @default(now())
+  /// Fingerprint thiết bị — chặn cùng device join nhiều lần để trục lợi discount.
+  deviceId       String?
   items          GroupOrderParticipantItem[]
 
   @@index([groupOrderId])
   @@index([userId])
   @@index([sessionToken])
+  @@unique([groupOrderId, deviceId])
 }
 
 model GroupOrderParticipantItem {

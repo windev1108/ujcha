@@ -22,38 +22,45 @@ export class OrderExpiryCronService {
   /** Runs every 2 minutes — auto-cancels unpaid bank_transfer orders past the expiry window */
   @Cron('*/2 * * * *')
   async handleExpireOrders() {
-    const cutoff = new Date(Date.now() - this.expiryMinutes * 60_000);
+    try {
+      const cutoff = new Date(Date.now() - this.expiryMinutes * 60_000);
 
-    const expiring = await this.prisma.order.findMany({
-      where: {
-        paymentType: PaymentType.bank_transfer,
-        paymentStatus: PaymentStatus.pending,
-        status: OrderStatus.pending,
-        createdAt: { lt: cutoff },
-      },
-      select: { id: true },
-    });
+      const expiring = await this.prisma.order.findMany({
+        where: {
+          paymentType: PaymentType.bank_transfer,
+          paymentStatus: PaymentStatus.pending,
+          status: OrderStatus.pending,
+          createdAt: { lt: cutoff },
+        },
+        select: { id: true },
+      });
 
-    if (expiring.length === 0) return;
+      if (expiring.length === 0) return;
 
-    const ids = expiring.map((o) => o.id);
+      const ids = expiring.map((o) => o.id);
 
-    await this.prisma.order.updateMany({
-      where: { id: { in: ids } },
-      data: { status: OrderStatus.cancelled },
-    });
+      // Batch both updates in one transaction so they share a single connection
+      await this.prisma.$transaction([
+        this.prisma.order.updateMany({
+          where: { id: { in: ids } },
+          data: { status: OrderStatus.cancelled },
+        }),
+        // Revert any group orders whose final order just expired back to locked so host can retry
+        this.prisma.groupOrder.updateMany({
+          where: { orderId: { in: ids }, status: GroupOrderStatus.completed },
+          data: { status: GroupOrderStatus.locked, orderId: null },
+        }),
+      ]);
 
-    // Revert any group orders whose final order just expired back to locked so host can retry
-    await this.prisma.groupOrder.updateMany({
-      where: {
-        orderId: { in: ids },
-        status: GroupOrderStatus.completed,
-      },
-      data: { status: GroupOrderStatus.locked, orderId: null },
-    });
-
-    this.logger.log(
-      `Auto-cancelled ${ids.length} expired bank_transfer order(s) (>${this.expiryMinutes} min unpaid)`,
-    );
+      this.logger.log(
+        `Auto-cancelled ${ids.length} expired bank_transfer order(s) (>${this.expiryMinutes} min unpaid)`,
+      );
+    } catch (err: any) {
+      if (err?.code === 'P2024') {
+        this.logger.warn('Connection pool busy during expiry cron — will retry next cycle');
+        return;
+      }
+      this.logger.error('Expiry cron failed', err);
+    }
   }
 }

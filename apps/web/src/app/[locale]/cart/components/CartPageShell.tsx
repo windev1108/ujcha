@@ -12,6 +12,7 @@ import {
   useRemoveCartItemMutation,
 } from "@/services/cart/hooks";
 import { useAuthStore } from "@/store/auth-store";
+import { useCartStore } from "@/store/cart-store";
 import type { ApiCartItem } from "@/services/cart/types";
 import { normalizeOptionGroups, computeOptionSurcharge } from "@/lib/product-options";
 
@@ -44,18 +45,27 @@ function CartSkeleton() {
 
 export function CartPageShell() {
   const accessToken = useAuthStore((s) => s.accessToken);
-  const { data: cart, isLoading } = useCartQuery();
-  const updateItem = useUpdateCartItemMutation();
-  const removeItem = useRemoveCartItemMutation();
+  const isGuest = !accessToken;
+
+  // Server cart (members only)
+  const { data: serverCart, isLoading: serverCartLoading } = useCartQuery();
+  const updateServerItem = useUpdateCartItemMutation();
+  const removeServerItem = useRemoveCartItemMutation();
+
+  // Local cart (guests) — always available from Zustand persist
+  const localItems = useCartStore((s) => s.items);
+  const updateLocalItem = useCartStore((s) => s.updateItem);
+  const removeLocalItem = useCartStore((s) => s.removeItem);
 
   const [editingItem, setEditingItem] = useState<ApiCartItem | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  const items = cart?.items ?? [];
+  const items = isGuest ? localItems : (serverCart?.items ?? []);
+  const isLoading = isGuest ? false : serverCartLoading;
 
   useEffect(() => {
     setSelectedIds(new Set(items.map((i) => i.id)));
-  }, [cart]);
+  }, [items.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isAllSelected = items.length > 0 && selectedIds.size === items.length;
 
@@ -78,11 +88,11 @@ export function CartPageShell() {
       items
         .filter((item) => selectedIds.has(item.id))
         .reduce((sum, item) => {
-          const discountedBase = item.product.finalPrice;
+          const discountedBase = Number(item.product.finalPrice) || Number(item.product.price) || 0;
           const groups = normalizeOptionGroups(item.product.optionGroups);
           const optionSurcharge = computeOptionSurcharge(groups, item.selectedOptions);
           const toppingTotal = (item.toppings ?? []).reduce(
-            (s, t) => s + parseFloat(t.topping.price),
+            (s, t) => s + Number(t.topping?.price ?? 0),
             0,
           );
           return sum + (discountedBase + optionSurcharge + toppingTotal) * item.quantity;
@@ -92,21 +102,19 @@ export function CartPageShell() {
 
   function handleQuantityChange(itemId: string, next: number) {
     if (next < 1) return;
-    updateItem.mutate({ itemId, quantity: next });
+    if (isGuest) {
+      updateLocalItem({ itemId, quantity: next });
+    } else {
+      updateServerItem.mutate({ itemId, quantity: next });
+    }
   }
 
   function handleRemove(itemId: string) {
-    removeItem.mutate(itemId);
-  }
-
-  if (!accessToken) {
-    return (
-      <div className="min-h-[60vh] bg-surface-soft">
-        <div className="container mx-auto max-w-2xl px-4 py-10 sm:px-6">
-          <EmptyCart />
-        </div>
-      </div>
-    );
+    if (isGuest) {
+      removeLocalItem(itemId);
+    } else {
+      removeServerItem.mutate(itemId);
+    }
   }
 
   if (isLoading) return <CartSkeleton />;
@@ -138,7 +146,11 @@ export function CartPageShell() {
               onQuantityChange={handleQuantityChange}
               onRemove={handleRemove}
               onEdit={setEditingItem}
-              isUpdating={updateItem.isPending || removeItem.isPending}
+              isUpdating={
+                isGuest
+                  ? false
+                  : updateServerItem.isPending || removeServerItem.isPending
+              }
             />
             <OrderSummary
               subtotal={subtotal}

@@ -9,7 +9,7 @@ import { ROUTES } from "@/lib/routes";
 import { X, ShoppingCart, Check, Loader2, Minus, Plus, ArrowRight, StickyNote } from "lucide-react";
 import { useAddToCartMutation, useUpdateCartItemMutation } from "@/services/cart/hooks";
 import { useAuthStore } from "@/store/auth-store";
-import { useRouter } from "@/i18n/navigation";
+import { useCartStore } from "@/store/cart-store";
 import {
   normalizeOptionGroups,
   computeOptionSurcharge,
@@ -56,7 +56,6 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
   const isEditMode = !!editItem;
   const t = useTranslations();
   const locale = useLocale();
-  const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
 
   const resolvedProduct: ModalProduct | null = product ?? editItem?.product ?? null;
@@ -123,6 +122,7 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
 
   const { mutate: addToCart, isPending: isAdding } = useAddToCartMutation();
   const { mutate: updateItem, isPending: isUpdating } = useUpdateCartItemMutation();
+  const addLocalItem = useCartStore((s) => s.addItem);
   const isPending = isAdding || isUpdating;
 
   const basePrice = resolvedProduct ? parseFloat(resolvedProduct.price) : 0;
@@ -168,47 +168,42 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
       return;
     }
 
+    const productSnapshot = {
+      id: resolvedProduct.id,
+      name: resolvedProduct.name,
+      nameTranslation: resolvedProduct.nameTranslation ?? undefined,
+      slug: resolvedProduct.slug,
+      price: resolvedProduct.price,
+      finalPrice: resolvedProduct.finalPrice!,
+      imageUrls: resolvedProduct.imageUrls,
+      discountPercent: resolvedProduct.discountPercent,
+      optionGroups: resolvedProduct.optionGroups as any,
+      category: {
+        name: resolvedProduct.category.name,
+        nameTranslation: resolvedProduct.category.nameTranslation ?? undefined,
+      },
+    };
+    const toppingSnapshots = toppings
+      .filter((top) => selectedToppings.has(top.id))
+      .map((top) => ({
+        toppingId: top.id,
+        topping: { id: top.id, name: top.name, price: String(top.price), nameTranslation: top.nameTranslation ?? {} },
+      }));
+    const toppingIds = Array.from(selectedToppings);
+
     if (!accessToken) {
-      onClose();
-      router.push(ROUTES.LOGIN);
+      addLocalItem({ productId: resolvedProduct.id, quantity, selectedOptions, toppingIds, product: productSnapshot, toppingSnapshots });
+      setAddedFeedback(true);
+      setTimeout(() => { setAddedFeedback(false); onClose(); }, 300);
       return;
     }
 
     addToCart(
-      {
-        productId: resolvedProduct.id,
-        quantity,
-        selectedOptions,
-        toppingIds: Array.from(selectedToppings),
-        product: {
-          id: resolvedProduct.id,
-          name: resolvedProduct.name,
-          nameTranslation: resolvedProduct.nameTranslation!,
-          slug: resolvedProduct.slug,
-          price: resolvedProduct.price,
-          finalPrice: resolvedProduct.finalPrice!,
-          imageUrls: resolvedProduct.imageUrls,
-          discountPercent: resolvedProduct.discountPercent,
-          optionGroups: resolvedProduct.optionGroups as any,
-          category: {
-            name: resolvedProduct.category.name,
-            nameTranslation: resolvedProduct.category.nameTranslation!,
-          },
-        },
-        toppingSnapshots: toppings
-          .filter((top) => selectedToppings.has(top.id))
-          .map((top) => ({
-            toppingId: top.id,
-            topping: { id: top.id, name: top.name, price: String(top.price), nameTranslation: top.nameTranslation ?? {} },
-          })),
-      },
+      { productId: resolvedProduct.id, quantity, selectedOptions, toppingIds, product: productSnapshot, toppingSnapshots },
       {
         onSuccess: () => {
           setAddedFeedback(true);
-          setTimeout(() => {
-            setAddedFeedback(false);
-            onClose();
-          }, 300);
+          setTimeout(() => { setAddedFeedback(false); onClose(); }, 300);
         },
       },
     );

@@ -17,7 +17,9 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { CurrentUserId } from '../auth/decorators/current-user-id.decorator';
+import { OptionalCurrentUserId } from '../auth/decorators/optional-current-user-id.decorator';
 import { JwtAuthGuard } from '../auth/jwt.guard';
+import { OptionalJwtAuthGuard } from '../auth/optional-jwt.guard';
 import { OrdersGateway } from '../events/orders.gateway';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
@@ -57,14 +59,13 @@ export class OrderController {
     return this.orderService.previewVoucher(dto.code, dto.orderAmount);
   }
 
-  @ApiBearerAuth('access-token')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(OptionalJwtAuthGuard)
   @Post()
   @HttpCode(201)
-  @ApiOperation({ summary: 'Tạo đơn (delivery / table / pickup)' })
+  @ApiOperation({ summary: 'Tạo đơn (delivery / table / pickup) — hỗ trợ guest không đăng nhập' })
   @ApiResponse({ status: 201 })
   async createOrder(
-    @CurrentUserId() userId: string,
+    @OptionalCurrentUserId() userId: string | null,
     @Body() dto: CreateOrderDto,
   ) {
     const order = await this.orderService.createOrder(userId, dto);
@@ -72,12 +73,11 @@ export class OrderController {
     return order;
   }
 
-  @ApiBearerAuth('access-token')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(OptionalJwtAuthGuard)
   @Get('by-code/:paymentCode')
-  @ApiOperation({ summary: 'Chi tiết đơn (tra theo paymentCode)' })
+  @ApiOperation({ summary: 'Chi tiết đơn theo paymentCode — public vì mã không đoán được' })
   getOrderDetail(
-    @CurrentUserId() userId: string,
+    @OptionalCurrentUserId() userId: string | null,
     @Param('paymentCode') paymentCode: string,
   ) {
     return this.orderService.getOrderDetail(userId, paymentCode);

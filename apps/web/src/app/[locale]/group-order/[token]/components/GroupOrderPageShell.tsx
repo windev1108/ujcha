@@ -30,6 +30,7 @@ import {
   ShoppingBag,
   Trash2,
   Truck,
+  UserX,
   Users,
   Utensils,
   X,
@@ -49,12 +50,12 @@ import { useShippingEstimateQuery, usePublicShippingConfigQuery } from "@/servic
 import { usePublicPaymentConfigQuery } from "@/services/payment-config/hooks";
 import { useProfileQuery } from "@/services/profile/hooks";
 import { usePublicStoreLocationQuery } from "@/services/store/hooks";
-import { BankTransferQR } from "@/app/[locale]/checkout/components/BankTransferQR";
 import { CheckoutFulfillmentSection } from "@/app/[locale]/checkout/components/CheckoutFulfillmentSection";
 import { PaymentMethodSection } from "@/app/[locale]/checkout/components/PaymentMethodSection";
 import { CHECKOUT_TAB } from "@/app/[locale]/checkout/components/checkout-tab";
 import type { DeliveryForm, PickupForm, PaymentMethod } from "@/app/[locale]/checkout/components/checkout-types";
 import { ShippingFeeTooltip } from "@/components/common/ShippingFeeTooltip";
+import { clearGroupOrderSession } from "@/hooks/useGroupOrderSessions";
 import {
   fetchGroupOrder,
   joinGroupOrder,
@@ -64,9 +65,12 @@ import {
   unlockGroupOrder,
   setGroupOrderFulfillment,
   checkoutHostPays,
+  initHostBankTransfer,
   initSplitPayment,
   confirmParticipantPaid,
   checkoutSplitCash,
+  kickGroupOrderParticipant,
+  dissolveGroupOrder,
   fetchGroupOrderConfig,
   type GroupOrderState,
   type GroupOrderItem,
@@ -74,9 +78,39 @@ import {
 } from "@/services/group-order/api";
 import { useLocale, useTranslations } from "next-intl";
 import { getDisplayName } from "@/lib/product-name";
+import { getDeviceId } from "@/hooks/useDeviceId";
 
 const SESSION_KEY = (token: string) => `group_order_session_${token}`;
 const PARTICIPANT_KEY = (token: string) => `group_order_participant_${token}`;
+const JOIN_LOCK_KEY = (token: string) => `group_order_joining_${token}`;
+const JOIN_LOCK_TTL = 15_000;
+const GROUP_ORDER_BC = "ujcha-group-order";
+
+/** Kiểm tra tab trùng lặp qua BroadcastChannel. Trả về `true` nếu phát hiện tab khác đã join token này. */
+async function detectDuplicateTab(token: string): Promise<boolean> {
+  if (typeof BroadcastChannel === "undefined") return false;
+  return new Promise((resolve) => {
+    const bc = new BroadcastChannel(GROUP_ORDER_BC);
+    let found = false;
+    const handler = (e: MessageEvent<{ type: string; token: string }>) => {
+      if (e.data.type === "ALREADY_HERE" && e.data.token === token) {
+        found = true;
+        bc.removeEventListener("message", handler);
+        bc.close();
+        resolve(true);
+      }
+    };
+    bc.addEventListener("message", handler);
+    bc.postMessage({ type: "CHECK_TOKEN", token });
+    setTimeout(() => {
+      if (!found) {
+        bc.removeEventListener("message", handler);
+        bc.close();
+        resolve(false);
+      }
+    }, 250);
+  });
+}
 
 
 function fmtVnd(n: number) {
@@ -146,11 +180,7 @@ function ProductCustomizeSheet({
   const unitPrice = basePrice + optionSurcharge + toppingTotal;
 
   const toggleTopping = (id: string, checked: boolean) => {
-    setSelectedToppings((prev) => {
-      const next = new Set(prev);
-      checked ? next.add(id) : next.delete(id);
-      return next;
-    });
+    setSelectedToppings(checked ? new Set([id]) : new Set());
   };
 
   const handleConfirm = () => {
@@ -620,7 +650,9 @@ function ParticipantRow({
   groupStatus,
   paymentMode,
   removingProductId,
+  isKicking,
   onConfirmPaid,
+  onKick,
   onOpenPicker,
   onRemoveItem,
 }: {
@@ -630,7 +662,9 @@ function ParticipantRow({
   groupStatus: GroupOrderState["status"];
   paymentMode: GroupOrderState["paymentMode"];
   removingProductId?: string | null;
+  isKicking?: boolean;
   onConfirmPaid?: (participantId: string) => void;
+  onKick?: (participantId: string) => void;
   onOpenPicker?: () => void;
   onRemoveItem?: (productId: string) => void;
 }) {
@@ -648,10 +682,7 @@ function ParticipantRow({
     (isMe || isMeHost);
 
   return (
-    <div
-      className={`rounded-2xl border p-4 transition-all ${isMe ? "border-[#1a3c34]/20 bg-[#f0faf6]" : "border-black/6 bg-white"
-        }`}
-    >
+    <div className="transition-all">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           {participant.avatar ? (
@@ -685,6 +716,17 @@ function ParticipantRow({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {isMeHost && !participant.isHost && !isMe && groupStatus === "collecting" && (
+            <button
+              type="button"
+              disabled={isKicking}
+              onClick={() => onKick?.(participant.id)}
+              className="flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 ring-1 ring-red-200 transition hover:bg-red-100 disabled:cursor-wait disabled:opacity-60"
+            >
+              {isKicking ? <Loader2 className="size-3 animate-spin" /> : <UserX className="size-3" />}
+              {isKicking ? t("group_kicking") : t("group_kick_btn")}
+            </button>
+          )}
           {isMe && groupStatus === "collecting" && (
             <button
               type="button"
@@ -780,26 +822,28 @@ function ParticipantRow({
                     </p>
                   </div>
 
-                  {/* Options */}
-                  {resolvedOptions.length > 0 && (
-                    <p className="mt-0.5 text-[11px] leading-relaxed text-foreground/50">
+                  {(resolvedOptions.length > 0 || (item.toppings && item.toppings.length > 0)) && (
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
                       {resolvedOptions.map((o, i) => (
-                        <span key={i}>
-                          {i > 0 && <span className="mx-1 text-foreground/25">·</span>}
+                        <span
+                          key={i}
+                          className="inline-flex items-center gap-1 rounded-full bg-surface-card px-2.5 py-0.5 text-[11px] font-medium text-foreground/70"
+                        >
                           {o.label}
-                          {o.priceDelta > 0 && <span className="text-foreground/35"> +{fmtVnd(o.priceDelta)}</span>}
+                          {o.priceDelta > 0 && (
+                            <span className="text-[10px] text-muted">+{fmtVnd(o.priceDelta)}</span>
+                          )}
                         </span>
                       ))}
-                    </p>
-                  )}
-
-                  {/* Toppings */}
-                  {item.toppings && item.toppings.length > 0 && (
-                    <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5">
-                      {item.toppings.map((top) => (
-                        <span key={top.toppingId} className="text-[11px] text-foreground/50">
+                      {item.toppings?.map((top) => (
+                        <span
+                          key={top.toppingId}
+                          className="inline-flex items-center gap-1 rounded-full bg-kun-mint/20 px-2.5 py-0.5 text-[11px] font-medium text-kun-products-forest"
+                        >
                           + {top.nameTranslation?.[locale] ?? top.name}
-                          {top.price > 0 && <span className="text-foreground/35"> ({fmtVnd(top.price)})</span>}
+                          {top.price > 0 && (
+                            <span className="text-[10px] text-kun-products-forest/60">+{fmtVnd(top.price)}</span>
+                          )}
                         </span>
                       ))}
                     </div>
@@ -953,49 +997,6 @@ function ShareLinkBox({ token: _token }: { token: string }) {
   );
 }
 
-// ── LoginRequired ─────────────────────────────────────────────────────────────
-
-function LoginRequired({ token }: { token: string }) {
-  const t = useTranslations();
-  const handleLogin = () => {
-    sessionStorage.setItem("pendingGroupOrderJoin", token);
-    window.location.href = "/login";
-  };
-
-  return (
-    <div className="flex min-h-[60vh] items-center justify-center px-4">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="w-full max-w-sm"
-      >
-        <Card className="rounded-3xl border border-black/6 bg-white shadow-[0_12px_40px_-20px_rgba(0,0,0,0.12)]">
-          <CardContent className="space-y-5 p-7">
-            <div className="flex flex-col items-center gap-2 text-center">
-              <div className="flex size-14 items-center justify-center rounded-2xl bg-[#1a3c34]/8">
-                <Users className="size-7 text-[#1a3c34]" />
-              </div>
-              <p className="text-lg font-bold text-foreground">{t("group_login_title")}</p>
-              <p className="text-sm text-foreground/55">{t("group_login_desc")}</p>
-            </div>
-            <div className="rounded-xl border border-dashed border-[#1a3c34]/20 bg-[#f0faf6] px-4 py-3 text-center">
-              <p className="text-xs text-foreground/55">{t("group_login_note")}</p>
-            </div>
-            <Button
-              className="w-full rounded-full bg-[#1a3c34] py-3 font-semibold text-white"
-              onPress={handleLogin}
-            >
-              {t("group_login_btn")}
-            </Button>
-          </CardContent>
-        </Card>
-      </motion.div>
-    </div>
-  );
-}
-
-
-
 // ── GroupOrderPageShell ───────────────────────────────────────────────────────
 
 export function GroupOrderPageShell() {
@@ -1016,13 +1017,27 @@ export function GroupOrderPageShell() {
   const [error, setError] = useState<string | null>(null);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [myParticipantId, setMyParticipantId] = useState<string | null>(null);
+  const myParticipantIdRef = useRef<string | null>(null);
+  const prevParticipantIdsRef = useRef<Set<string>>(new Set());
+  const [isKicked, setIsKicked] = useState(false);
+  const [isDissolved, setIsDissolved] = useState(false);
+  const [showDissolveConfirm, setShowDissolveConfirm] = useState(false);
+  const [kickingId, setKickingId] = useState<string | null>(null);
+  const [joinNotif, setJoinNotif] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
-  const [needsLogin, setNeedsLogin] = useState(false);
+  useEffect(() => { myParticipantIdRef.current = myParticipantId; }, [myParticipantId]);
+  useEffect(() => {
+    if (!joinNotif) return;
+    const id = setTimeout(() => setJoinNotif(null), 3000);
+    return () => clearTimeout(id);
+  }, [joinNotif]);
+  const [needsGuestName, setNeedsGuestName] = useState(false);
+  const [guestNameInput, setGuestNameInput] = useState("");
+  const [duplicateTab, setDuplicateTab] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [pickerSaving, setPickerSaving] = useState(false);
   const [removingProductId, setRemovingProductId] = useState<string | null>(null);
-  const [pendingCheckoutOrder, setPendingCheckoutOrder] = useState<{ id: string; paymentCode: string } | null>(null);
 
   // ── Inline fulfillment form state (host only, collecting) ─────────────────
   const [localType, setLocalType] = useState<"delivery" | "pickup">("delivery");
@@ -1036,6 +1051,7 @@ export function GroupOrderPageShell() {
   const [localPaymentType, setLocalPaymentType] = useState<PaymentMethod>("cash");
   const splitInitRef = useRef(false);
   const splitCashConfirmRef = useRef(false);
+  const hostBankTransferInitRef = useRef(false);
   const autoSavePendingRef = useRef(false);
 
   const socketRef = useRef<Socket | null>(null);
@@ -1059,7 +1075,12 @@ export function GroupOrderPageShell() {
         fetchGroupOrderConfig().catch(() => ({ id: "default", isEnabled: true, discountTiers: [] })),
       ]);
       setState(go);
+      prevParticipantIdsRef.current = new Set(go.participants.map((p) => p.id));
       setConfig(cfg.discountTiers);
+      localStorage.setItem(
+        `group_order_meta_${token}`,
+        JSON.stringify({ token: go.token, expiresAt: go.expiresAt, type: go.type, status: go.status }),
+      );
     } catch {
       setError("Không tìm thấy đơn nhóm này.");
     } finally {
@@ -1071,13 +1092,49 @@ export function GroupOrderPageShell() {
     void load();
   }, [load]);
 
+  // BroadcastChannel: respond to duplicate-tab probe once we have a session
+  useEffect(() => {
+    if (!sessionToken || typeof BroadcastChannel === "undefined") return;
+    const bc = new BroadcastChannel(GROUP_ORDER_BC);
+    const handler = (e: MessageEvent<{ type: string; token: string }>) => {
+      if (e.data.type === "CHECK_TOKEN" && e.data.token === token) {
+        bc.postMessage({ type: "ALREADY_HERE", token });
+      }
+    };
+    bc.addEventListener("message", handler);
+    return () => {
+      bc.removeEventListener("message", handler);
+      bc.close();
+    };
+  }, [sessionToken, token]);
+
   useEffect(() => {
     if (!state) return;
     const storedSession = localStorage.getItem(SESSION_KEY(token));
     const storedParticipant = localStorage.getItem(PARTICIPANT_KEY(token));
     if (storedSession) {
+      // Verify the stored participant still exists — if not, they were kicked.
+      // Clear the stale session so they go through the join flow again.
+      const wasKicked = storedParticipant && !state.participants.some((p) => p.id === storedParticipant);
+      if (wasKicked) {
+        localStorage.removeItem(SESSION_KEY(token));
+        localStorage.removeItem(PARTICIPANT_KEY(token));
+        if (state.status === "collecting") {
+          if (user) {
+            void handleJoin();
+          } else {
+            setNeedsGuestName(true);
+          }
+        }
+        return;
+      }
       setSessionToken(storedSession);
       if (storedParticipant) setMyParticipantId(storedParticipant);
+      // Sync deviceId for logged-in users so incognito bypass is blocked.
+      // alreadyJoined path: no broadcast, just a DB update if deviceId was null.
+      if (user) {
+        getDeviceId().then((deviceId) => joinGroupOrder(token, { deviceId }).catch(() => {}));
+      }
       return;
     }
     if (user) {
@@ -1085,6 +1142,7 @@ export function GroupOrderPageShell() {
       if (existing) {
         setMyParticipantId(existing.id);
         localStorage.setItem(PARTICIPANT_KEY(token), existing.id);
+        getDeviceId().then((deviceId) => joinGroupOrder(token, { deviceId }).catch(() => {}));
         return;
       }
     }
@@ -1092,28 +1150,57 @@ export function GroupOrderPageShell() {
       if (user) {
         void handleJoin();
       } else {
-        setNeedsLogin(true);
+        // Guest: ask for display name before joining
+        setNeedsGuestName(true);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.id, user?.id]);
 
-  const handleJoin = useCallback(async () => {
+  const handleJoin = useCallback(async (guestName?: string) => {
+    // Layer 1: localStorage lock — guards concurrent same-browser joins before BC listener is active
+    const lockTs = localStorage.getItem(JOIN_LOCK_KEY(token));
+    if (lockTs && Date.now() - parseInt(lockTs) < JOIN_LOCK_TTL) {
+      setDuplicateTab(true);
+      return;
+    }
+    localStorage.setItem(JOIN_LOCK_KEY(token), Date.now().toString());
+
+    // Layer 2: BroadcastChannel — detect already-joined tab
+    const isDuplicate = await detectDuplicateTab(token);
+    if (isDuplicate) {
+      localStorage.removeItem(JOIN_LOCK_KEY(token));
+      setDuplicateTab(true);
+      return;
+    }
+
     setJoining(true);
     try {
-      const res = await joinGroupOrder(token);
+      const deviceId = await getDeviceId();
+      const res = await joinGroupOrder(token, {
+        deviceId,
+        guestName: guestName?.trim() || undefined,
+      });
       setSessionToken(res.sessionToken);
       setMyParticipantId(res.participantId);
       localStorage.setItem(SESSION_KEY(token), res.sessionToken);
       localStorage.setItem(PARTICIPANT_KEY(token), res.participantId);
+      localStorage.removeItem(JOIN_LOCK_KEY(token));
+      setNeedsGuestName(false);
       const go = await fetchGroupOrder(token);
       setState(go);
-    } catch {
-      setError("Không thể tham gia đơn nhóm.");
+    } catch (err: unknown) {
+      localStorage.removeItem(JOIN_LOCK_KEY(token));
+      const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code;
+      if (code === "GROUP_ORDER_DEVICE_ALREADY_JOINED") {
+        setDuplicateTab(true);
+      } else {
+        setError(t((code as Parameters<typeof t>[0]) ?? "GROUP_ORDER_NOT_FOUND"));
+      }
     } finally {
       setJoining(false);
     }
-  }, [token]);
+  }, [token, t]);
 
   useEffect(() => {
     const socket = io(`${env.API_URL}/group`, {
@@ -1124,35 +1211,45 @@ export function GroupOrderPageShell() {
     socketRef.current = socket;
     socket.emit("join-room", { token });
     socket.on("updated", (newState: GroupOrderState) => {
+      const prevIds = prevParticipantIdsRef.current;
+      const pid = myParticipantIdRef.current;
+      const newOthers = newState.participants.filter((p) => !prevIds.has(p.id) && p.id !== pid);
+      if (newOthers.length > 0) setJoinNotif(newOthers[0].name);
+      prevParticipantIdsRef.current = new Set(newState.participants.map((p) => p.id));
       setState(newState);
+      if (pid && !newState.participants.some((p) => p.id === pid)) {
+        localStorage.removeItem(SESSION_KEY(token));
+        localStorage.removeItem(PARTICIPANT_KEY(token));
+        setIsKicked(true);
+      }
+      // Keep nav meta in sync — UserProfile reads this to show active sessions
+      localStorage.setItem(
+        `group_order_meta_${token}`,
+        JSON.stringify({ token: newState.token, expiresAt: newState.expiresAt, type: newState.type, status: newState.status }),
+      );
+    });
+    socket.on("kicked", (data: { participantId: string }) => {
+      if (myParticipantIdRef.current && data.participantId === myParticipantIdRef.current) {
+        localStorage.removeItem(SESSION_KEY(token));
+        localStorage.removeItem(PARTICIPANT_KEY(token));
+        setIsKicked(true);
+      }
+    });
+    socket.on("dissolved", () => {
+      clearGroupOrderSession(token);
+      setIsDissolved(true);
     });
     return () => {
       socket.disconnect();
     };
   }, [token]);
 
-  // Polling fallback: socket có thể bị miss trên mobile/proxy — poll mỗi 5 giây
-  // khi vẫn còn người đang chờ xác nhận chuyển khoản trong đơn nhóm split.
-  const hasPendingBankTransfer =
-    state?.status === "locked" &&
-    state?.paymentMode === "split" &&
-    Boolean(state?.participants?.some(
-      (p) => p.paymentStatus === "pending" && p.paymentType === "bank_transfer",
-    ));
 
   useEffect(() => {
-    if (!hasPendingBankTransfer) return;
-    const id = setInterval(() => {
-      fetchGroupOrder(token).then(setState).catch(() => { });
-    }, 5000);
-    return () => clearInterval(id);
-  }, [hasPendingBankTransfer, token]);
-
-  useEffect(() => {
-    if (state?.status === "completed" && state.order?.paymentCode && !pendingCheckoutOrder) {
+    if (state?.status === "completed" && state.order?.paymentCode) {
       router.push(ROUTES.ORDER_DETAIL(state.order.paymentCode));
     }
-  }, [state?.status, state?.order?.paymentCode, router, pendingCheckoutOrder]);
+  }, [state?.status, state?.order?.paymentCode, router]);
 
   // Auto-initiate split payment with host's chosen method when order is locked
   useEffect(() => {
@@ -1190,6 +1287,24 @@ export function GroupOrderPageShell() {
     }
   }, [state?.status, state?.paymentMode, me?.paymentStatus, me?.paymentType, me?.items.length, me?.id, sessionToken, token]);
 
+  // Auto-generate QR token for host_pays + bank_transfer when order is locked
+  useEffect(() => {
+    if (
+      state?.status === "locked" &&
+      state.paymentMode === "host_pays" &&
+      state.paymentType === "bank_transfer" &&
+      me?.isHost &&
+      !me.paymentQrToken &&
+      sessionToken &&
+      !hostBankTransferInitRef.current
+    ) {
+      hostBankTransferInitRef.current = true;
+      void initHostBankTransfer(token, sessionToken)
+        .then((newState) => setState(newState))
+        .catch(() => { hostBankTransferInitRef.current = false; });
+    }
+  }, [state?.status, state?.paymentMode, state?.paymentType, me?.isHost, me?.paymentQrToken, sessionToken, token]);
+
   const withAction = async (fn: () => Promise<GroupOrderState | { groupOrder: GroupOrderState }>) => {
     if (!sessionToken) return;
     setActionLoading(true);
@@ -1201,6 +1316,23 @@ export function GroupOrderPageShell() {
       const err = e as { response?: { data?: { message?: string | string[] } } };
       const msg = err?.response?.data?.message ?? "Có lỗi xảy ra.";
       alert(typeof msg === "string" ? msg : msg.join(", "));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDissolve = async () => {
+    if (!sessionToken) return;
+    setActionLoading(true);
+    try {
+      await dissolveGroupOrder(token, sessionToken);
+      clearGroupOrderSession(token);
+      router.push(ROUTES.HOME);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string | string[] } } };
+      const msg = err?.response?.data?.message ?? "Có lỗi xảy ra.";
+      alert(typeof msg === "string" ? msg : msg.join(", "));
+      setShowDissolveConfirm(false);
     } finally {
       setActionLoading(false);
     }
@@ -1330,8 +1462,8 @@ export function GroupOrderPageShell() {
       const res = await checkoutHostPays(token, sessionToken, paymentType);
       const go = res.groupOrder;
       setState(go);
-      if (paymentType === "bank_transfer" && go.order) {
-        setPendingCheckoutOrder({ id: go.order.id, paymentCode: go.order.paymentCode });
+      if (go.order?.paymentCode) {
+        router.push(ROUTES.ORDER_DETAIL(go.order.paymentCode));
       }
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string | string[] } } };
@@ -1340,7 +1472,26 @@ export function GroupOrderPageShell() {
     } finally {
       setActionLoading(false);
     }
-  }, [sessionToken, state, token]);
+  }, [sessionToken, state, token, router]);
+
+  const handleSplitCashCheckout = useCallback(async () => {
+    if (!sessionToken || !state) return;
+    setActionLoading(true);
+    try {
+      const res = await checkoutSplitCash(token, sessionToken);
+      const go = res.groupOrder;
+      setState(go);
+      if (go.order?.paymentCode) {
+        router.push(ROUTES.ORDER_DETAIL(go.order.paymentCode));
+      }
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string | string[] } } };
+      const msg = err?.response?.data?.message ?? "Có lỗi xảy ra.";
+      alert(typeof msg === "string" ? msg : msg.join(", "));
+    } finally {
+      setActionLoading(false);
+    }
+  }, [sessionToken, state, token, router]);
 
   const handleSaveItems = async (items: DraftItem[]) => {
     if (!sessionToken) return;
@@ -1400,8 +1551,56 @@ export function GroupOrderPageShell() {
     );
   }
 
-  if (needsLogin && !sessionToken) {
-    return <LoginRequired token={token} />;
+  if (duplicateTab) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center px-4">
+        <div className="max-w-sm space-y-4 rounded-3xl border border-red-100 bg-white p-8 text-center shadow-[0_4px_20px_-8px_rgba(0,0,0,0.10)]">
+          <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-red-50">
+            <UserX className="size-6 text-red-500" />
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-base font-bold text-foreground">{t("group_order_duplicate_tab")}</p>
+            <p className="text-sm text-foreground/55">{t("group_order_duplicate_tab_desc")}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (needsGuestName && !sessionToken) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center px-4">
+        <div className="w-full max-w-sm rounded-3xl border border-black/6 bg-white p-8 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.10)]">
+          <div className="mb-5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{t("group_order_session_title")}</p>
+            <h2 className="mt-1 text-lg font-bold text-foreground">{t("group_order_guest_name_label")}</h2>
+            <p className="mt-1 text-sm text-muted">{t("group_order_guest_name_desc")}</p>
+          </div>
+          <form
+            onSubmit={(e) => { e.preventDefault(); if (guestNameInput.trim()) void handleJoin(guestNameInput); }}
+            className="space-y-3"
+          >
+            <input
+              type="text"
+              autoFocus
+              value={guestNameInput}
+              onChange={(e) => setGuestNameInput(e.target.value)}
+              placeholder={t("group_order_guest_name_placeholder")}
+              maxLength={60}
+              className="w-full rounded-2xl border border-black/10 bg-surface-soft px-4 py-3 text-sm outline-none focus:border-[#1a3c34] focus:ring-2 focus:ring-[#1a3c34]/20"
+            />
+            <button
+              type="submit"
+              disabled={joining || !guestNameInput.trim()}
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-[#1a3c34] py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {joining ? <Loader2 className="size-4 animate-spin" /> : <Users className="size-4" />}
+              {joining ? t("group_joining") : t("group_order_join_as_guest")}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
   }
 
   if (joining) {
@@ -1420,7 +1619,7 @@ export function GroupOrderPageShell() {
   const finalAmount = totalAmount - discountAmount + state.shippingFee;
 
   const allReady =
-    state.participants.length > 1 && state.participants.every((p) => p.isReady || p.items.length === 0);
+    state.participants.length > 1 && state.participants.every((p) => p.isReady);
 
   const FulfillmentIcon =
     state.type === "delivery" ? Truck : state.type === "table" ? Utensils : ShoppingBag;
@@ -1432,6 +1631,25 @@ export function GroupOrderPageShell() {
 
   return (
     <>
+      {/* New participant join toast */}
+      <AnimatePresence>
+        {joinNotif && (
+          <motion.div
+            key="join-notif"
+            initial={{ opacity: 0, y: -16, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -16, scale: 0.95 }}
+            transition={{ type: "spring", damping: 22, stiffness: 380 }}
+            className="fixed left-1/2 top-5 z-50 -translate-x-1/2"
+          >
+            <div className="flex items-center gap-2.5 rounded-full bg-[#1a3c34] px-4 py-2.5 text-sm font-semibold text-white shadow-lg">
+              <Users className="size-4 shrink-0" />
+              <span>{t("group_joined_notif", { name: joinNotif })}</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {showPicker && me && (
         <ProductPickerDrawer
           open={showPicker}
@@ -1485,47 +1703,53 @@ export function GroupOrderPageShell() {
           <div className="flex flex-wrap items-center gap-2">
             <ShareLinkBox token={token} />
 
-            {state.status === "locked" && isHost && (
+            {state.status === "locked" && isHost && (() => {
+              const anyPaid = state.participants.some((p) => p.paymentStatus === "paid");
+              return !anyPaid ? (
+                <Button
+                  size="sm"
+                  className="gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-4 font-semibold text-amber-700 hover:bg-amber-100"
+                  isDisabled={actionLoading}
+                  onPress={() => void withAction(() => unlockGroupOrder(token, sessionToken!))}
+                >
+                  <LockOpen className="size-3.5" />
+                  {t("group_unlock")}
+                </Button>
+              ) : null;
+            })()}
+
+            {state.status === "collecting" && isHost && (
               <Button
                 size="sm"
-                className="gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-4 font-semibold text-amber-700 hover:bg-amber-100"
+                className="gap-1.5 rounded-full border border-red-200 bg-red-50 px-4 font-semibold text-red-600 hover:bg-red-100"
                 isDisabled={actionLoading}
-                onPress={() => void withAction(() => unlockGroupOrder(token, sessionToken!))}
+                onPress={() => setShowDissolveConfirm(true)}
               >
-                <LockOpen className="size-3.5" />
-                {t("group_unlock")}
+                <UserX className="size-3.5" />
+                {t("group_dissolve_btn")}
               </Button>
             )}
 
             {state.status === "collecting" && isHost && (
-              (() => {
-                const isSplitCashReady =
-                  state.paymentMode === "split" &&
-                  state.paymentType === "cash" &&
-                  allReady &&
-                  !(state.type === "delivery" && !state.address);
-                return isSplitCashReady ? (
-                  <Button
-                    size="sm"
-                    className="gap-1.5 rounded-full bg-[#1a3c34] px-4 font-semibold text-white"
-                    isDisabled={actionLoading}
-                    onPress={() => void withAction(() => checkoutSplitCash(token, sessionToken!))}
-                  >
-                    <ShoppingBag className="size-3.5" />
-                    {t("group_place_order_btn")}
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    className="gap-1.5 rounded-full bg-[#1a3c34] px-4 font-semibold text-white"
-                    isDisabled={actionLoading || state.participants.length < 2}
-                    onPress={() => void withAction(() => lockGroupOrder(token, sessionToken!))}
-                  >
-                    <Lock className="size-3.5" />
-                    {t("group_lock")}
-                  </Button>
-                );
-              })()
+              <Button
+                size="sm"
+                className="gap-1.5 rounded-full bg-[#1a3c34] px-4 font-semibold text-white disabled:opacity-60"
+                isDisabled={actionLoading || !allReady}
+                title={!allReady ? t("group_waiting_hint") : undefined}
+                onPress={
+                  state.paymentMode === "split" && localPaymentType === "cash"
+                    ? () => void handleSplitCashCheckout()
+                    : () => void withAction(() => lockGroupOrder(token, sessionToken!))
+                }
+              >
+                <Lock className="size-3.5" />
+                {t("group_lock")}
+                {!allReady && (
+                  <span className="ml-0.5 rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] tabular-nums leading-none">
+                    {state.participants.filter((p) => p.isReady).length}/{state.participants.length}
+                  </span>
+                )}
+              </Button>
             )}
           </div>
         </motion.div>
@@ -1546,88 +1770,116 @@ export function GroupOrderPageShell() {
 
             {/* Inline fulfillment + payment for host (collecting only) */}
             {isHost && state.status === "collecting" && (
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.06 }}
-                className="flex flex-col gap-4"
-              >
-                {/* Delivery / Pickup tab switcher */}
-                <div className="flex gap-2">
-                  {([{ id: "delivery", label: t("type_delivery"), Icon: Truck }, { id: "pickup", label: t("type_pickup"), Icon: ShoppingBag }] as const).map(({ id, label, Icon }) => (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => setLocalType(id)}
-                      className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${localType === id ? "bg-kun-primary text-white shadow-sm" : "bg-surface-card text-foreground/60 hover:bg-black/6"}`}
-                    >
-                      <Icon className="size-4" />
-                      {label}
-                    </button>
-                  ))}
-                </div>
+              <>
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.06 }}
+                  className="overflow-hidden rounded-3xl border border-black/6 bg-white"
+                >
+                  <div className="flex items-center gap-3 border-b border-black/6 px-5 py-4">
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-[#1a3c34]/8">
+                      <FulfillmentIcon className="size-4 text-[#1a3c34]" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{t("group_fulfillment_card_eyebrow")}</p>
+                      <p className="text-sm font-semibold text-foreground">{t("group_fulfillment_card_title")}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-4 p-5">
+                    <div className="flex gap-2">
+                      {([{ id: "delivery", label: t("type_delivery"), Icon: Truck }, { id: "pickup", label: t("type_pickup"), Icon: ShoppingBag }] as const).map(({ id, label, Icon }) => (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => setLocalType(id)}
+                          className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${localType === id ? "bg-kun-primary text-white shadow-sm" : "bg-surface-card text-foreground/60 hover:bg-black/6"}`}
+                        >
+                          <Icon className="size-4" />
+                          {label}
+                        </button>
+                      ))}
+                    </div>
 
-                <CheckoutFulfillmentSection
-                  tab={localType === "delivery" ? CHECKOUT_TAB.DELIVERY : CHECKOUT_TAB.PICKUP}
-                  deliveryForm={localDeliveryForm}
-                  onDeliveryFormChange={(patch) => setLocalDeliveryForm((p) => ({ ...p, ...patch }))}
-                  pickupForm={localPickupForm}
-                  onPickupFormChange={(patch) => setLocalPickupForm((p) => ({ ...p, ...patch }))}
-                  savedAddresses={savedAddresses}
-                  selectedAddressId={localSelectedAddressId}
-                  onSelectAddress={setLocalSelectedAddressId}
-                  storeLocation={storeLocation ? { lat: storeLocation.lat, lng: storeLocation.lng, address: storeLocation.address } : null}
-                  profileName={profile?.name}
-                  profilePhone={profile?.phone}
-                />
+                    <CheckoutFulfillmentSection
+                      tab={localType === "delivery" ? CHECKOUT_TAB.DELIVERY : CHECKOUT_TAB.PICKUP}
+                      deliveryForm={localDeliveryForm}
+                      onDeliveryFormChange={(patch) => setLocalDeliveryForm((p) => ({ ...p, ...patch }))}
+                      pickupForm={localPickupForm}
+                      onPickupFormChange={(patch) => setLocalPickupForm((p) => ({ ...p, ...patch }))}
+                      savedAddresses={savedAddresses}
+                      selectedAddressId={localSelectedAddressId}
+                      onSelectAddress={setLocalSelectedAddressId}
+                      storeLocation={storeLocation ? { lat: storeLocation.lat, lng: storeLocation.lng, address: storeLocation.address } : null}
+                      profileName={profile?.name}
+                      profilePhone={profile?.phone}
+                    />
 
-                {/* Shipping estimate badge (delivery only) */}
-                <AnimatePresence initial={false}>
-                  {localType === "delivery" && (localShippingFetching || localShippingEstimate) && (
-                    <motion.div
-                      key="ship-badge"
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="overflow-hidden"
-                    >
-                      <div className={`flex items-center justify-between rounded-2xl px-4 py-3 text-sm ${
-                        localShippingFetching
-                          ? "bg-surface-card text-foreground/50"
-                          : localShippingIsOutOfRange
-                            ? "bg-red-50 text-red-700"
-                            : localShippingIsFree
-                              ? "bg-emerald-50 text-emerald-700"
-                              : "bg-kun-mint/20 text-kun-products-forest"
-                      }`}>
-                        <div className="flex items-center gap-1.5">
-                          {localShippingFetching ? (
-                            <Loader2 className="size-4 animate-spin" />
-                          ) : (
-                            <Bike className="size-4" />
-                          )}
-                          <span className="font-medium">
-                            {localShippingFetching
-                              ? t("group_calculating_ship")
+                    <AnimatePresence initial={false}>
+                      {localType === "delivery" && (localShippingFetching || localShippingEstimate) && (
+                        <motion.div
+                          key="ship-badge"
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="overflow-hidden"
+                        >
+                          <div className={`flex items-center justify-between rounded-2xl px-4 py-3 text-sm ${localShippingFetching
+                              ? "bg-surface-card text-foreground/50"
                               : localShippingIsOutOfRange
-                                ? t("group_out_of_range_badge")
-                                : `${localShippingEstimate!.distanceKm.toFixed(1)} km`
-                            }
-                          </span>
-                        </div>
-                        {!localShippingFetching && !localShippingIsOutOfRange && (
-                          <span className="font-bold tabular-nums">
-                            {localShippingIsFree ? t("group_shipping_free") : formatVnd(localShippingFee)}
-                          </span>
-                        )}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                                ? "bg-red-50 text-red-700"
+                                : localShippingIsFree
+                                  ? "bg-emerald-50 text-emerald-700"
+                                  : "bg-kun-mint/20 text-kun-products-forest"
+                            }`}>
+                            <div className="flex items-center gap-1.5">
+                              {localShippingFetching ? (
+                                <Loader2 className="size-4 animate-spin" />
+                              ) : (
+                                <Bike className="size-4" />
+                              )}
+                              <span className="font-medium">
+                                {localShippingFetching
+                                  ? t("group_calculating_ship")
+                                  : localShippingIsOutOfRange
+                                    ? t("group_out_of_range_badge")
+                                    : `${localShippingEstimate!.distanceKm.toFixed(1)} km`
+                                }
+                              </span>
+                            </div>
+                            {!localShippingFetching && !localShippingIsOutOfRange && (
+                              <span className="font-bold tabular-nums">
+                                {localShippingIsFree ? t("group_shipping_free") : formatVnd(localShippingFee)}
+                              </span>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </motion.div>
 
-                <PaymentMethodSection selected={localPaymentType} onSelect={setLocalPaymentType} />
-              </motion.div>
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.08 }}
+                  className="overflow-hidden rounded-3xl border border-black/6 bg-white"
+                >
+                  <div className="flex items-center gap-3 border-b border-black/6 px-5 py-4">
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-[#1a3c34]/8">
+                      <Banknote className="size-4 text-[#1a3c34]" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{t("group_payment_card_eyebrow")}</p>
+                      <p className="text-sm font-semibold text-foreground">{t("group_payment_card_title")}</p>
+                    </div>
+                  </div>
+                  <div className="p-5">
+                    <PaymentMethodSection selected={localPaymentType} onSelect={setLocalPaymentType} hideHeader />
+                  </div>
+                </motion.div>
+              </>
             )}
 
             {/* Fulfilled info (read-only, locked/completed) */}
@@ -1637,12 +1889,18 @@ export function GroupOrderPageShell() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.06 }}
-                  className="flex items-center gap-3 rounded-2xl border border-black/6 bg-white p-4"
+                  className="overflow-hidden rounded-3xl border border-black/6 bg-white"
                 >
-                  <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#1a3c34]/8">
-                    <FulfillmentIcon className="size-4.5 text-[#1a3c34]" />
+                  <div className="flex items-center gap-3 border-b border-black/6 px-5 py-4">
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-[#1a3c34]/8">
+                      <FulfillmentIcon className="size-4 text-[#1a3c34]" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{t("group_fulfillment_card_eyebrow")}</p>
+                      <p className="text-sm font-semibold text-foreground">{t("group_fulfillment_card_title")}</p>
+                    </div>
                   </div>
-                  <div className="min-w-0 flex-1">
+                  <div className="px-5 py-4 space-y-1">
                     <p className="text-sm font-semibold text-foreground">{fulfillmentLabel}</p>
                     {state.address && (
                       <p className="truncate text-xs text-foreground/55">{state.address.fullAddress}</p>
@@ -1653,7 +1911,7 @@ export function GroupOrderPageShell() {
                       </p>
                     )}
                     {isHost && state.paymentMode === "host_pays" && (
-                      <p className="mt-1 flex items-center gap-1 text-xs text-foreground/50">
+                      <p className="flex items-center gap-1 text-xs text-foreground/50">
                         {state.paymentType === "cash" ? (
                           <Banknote className="size-3 shrink-0" />
                         ) : (
@@ -1662,39 +1920,59 @@ export function GroupOrderPageShell() {
                         {state.paymentType === "cash" ? "Tiền mặt" : "Chuyển khoản"}
                       </p>
                     )}
+                    {state.shippingFee > 0 && (
+                      <div className="flex items-center justify-between pt-2">
+                        <span className="text-xs text-foreground/50">{t("shipping_fee")}</span>
+                        <span className="text-sm font-semibold tabular-nums text-foreground/70">+{fmtVnd(state.shippingFee)}</span>
+                      </div>
+                    )}
                   </div>
-                  {state.shippingFee > 0 && (
-                    <span className="text-sm font-semibold tabular-nums text-foreground/70">
-                      +{fmtVnd(state.shippingFee)}
-                    </span>
-                  )}
                 </motion.div>
               )}
 
             {/* Participants */}
-            <div className="flex flex-col gap-3">
-              {state.participants.map((p, i) => (
-                <motion.div
-                  key={p.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.07 + i * 0.04 }}
-                >
-                  <ParticipantRow
-                    participant={p}
-                    isMe={p.id === me?.id}
-                    isMeHost={isHost}
-                    groupStatus={state.status}
-                    paymentMode={state.paymentMode}
-                    onConfirmPaid={(participantId) =>
-                      void withAction(() => confirmParticipantPaid(token, sessionToken!, participantId))
-                    }
-                    removingProductId={removingProductId}
-                    onOpenPicker={() => setShowPicker(true)}
-                    onRemoveItem={(productId) => void handleRemoveItem(productId)}
-                  />
-                </motion.div>
-              ))}
+            <div className="overflow-hidden rounded-3xl border border-black/6 bg-white">
+              <div className="flex items-center justify-between gap-2 border-b border-black/6 px-5 py-4">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{t("group_participants_card_eyebrow")}</p>
+                  <p className="text-sm font-semibold text-foreground">{t("group_participants_card_title")}</p>
+                </div>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-card px-2.5 py-1 text-xs font-semibold text-foreground/60">
+                  <Users className="size-3" />
+                  {state.participants.length}
+                </span>
+              </div>
+              <div className="divide-y divide-black/6">
+                {state.participants.map((p, i) => (
+                  <motion.div
+                    key={p.id}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.07 + i * 0.04 }}
+                    className={`p-4 transition-colors ${p.id === me?.id ? "bg-[#f0faf6]" : ""}`}
+                  >
+                    <ParticipantRow
+                      participant={p}
+                      isMe={p.id === me?.id}
+                      isMeHost={isHost}
+                      groupStatus={state.status}
+                      paymentMode={state.paymentMode}
+                      onConfirmPaid={(participantId) =>
+                        void withAction(() => confirmParticipantPaid(token, sessionToken!, participantId))
+                      }
+                      isKicking={kickingId === p.id}
+                      onKick={async (participantId) => {
+                        setKickingId(participantId);
+                        await withAction(() => kickGroupOrderParticipant(token, sessionToken!, participantId));
+                        setKickingId(null);
+                      }}
+                      removingProductId={removingProductId}
+                      onOpenPicker={() => setShowPicker(true)}
+                      onRemoveItem={(productId) => void handleRemoveItem(productId)}
+                    />
+                  </motion.div>
+                ))}
+              </div>
             </div>
 
             {/* My actions — pick / ready */}
@@ -1730,19 +2008,39 @@ export function GroupOrderPageShell() {
               </div>
             )}
 
-            {/* Split payment section */}
+            {/* Split payment section — cash participants skip this; they're confirmed atomically on lock */}
             {me &&
               state.status === "locked" &&
               state.paymentMode === "split" &&
               me.paymentStatus === "pending" &&
+              me.paymentType !== "cash" &&
               me.items.length > 0 && (
-                <div className="rounded-2xl border border-black/6 bg-white p-4">
-                  {me.paymentType === null ? (
-                    <div className="flex items-center justify-center gap-2 py-4">
-                      <Loader2 className="size-4 animate-spin text-[#1a3c34]" />
-                      <span className="text-sm text-foreground/55">{t("group_init_payment")}</span>
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.12 }}
+                  className="overflow-hidden rounded-3xl border border-black/6 bg-white"
+                >
+                  <div className="flex items-center gap-3 border-b border-black/6 px-5 py-4">
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-[#1a3c34]/8">
+                      {me.paymentType === "cash" ? (
+                        <Banknote className="size-4 text-[#1a3c34]" />
+                      ) : (
+                        <QrCode className="size-4 text-[#1a3c34]" />
+                      )}
                     </div>
-                  ) : me.paymentType === "cash" ? (
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{t("group_split_payment_card_eyebrow")}</p>
+                      <p className="text-sm font-semibold text-foreground">{t("group_split_payment_card_title")}</p>
+                    </div>
+                  </div>
+                  <div className="p-5">
+                    {me.paymentType === null ? (
+                      <div className="flex items-center justify-center gap-2 py-4">
+                        <Loader2 className="size-4 animate-spin text-[#1a3c34]" />
+                        <span className="text-sm text-foreground/55">{t("group_init_payment")}</span>
+                      </div>
+                    ) : me.paymentType === "cash" ? (
                     <>
                       <div className="mb-3 flex items-center gap-2">
                         <Banknote className="size-4 text-[#1a3c34]" />
@@ -1774,7 +2072,7 @@ export function GroupOrderPageShell() {
                         {payConfig?.bankCode && payConfig?.accountNumber ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
-                            src={`https://qr.sepay.vn/img?${new URLSearchParams({ bank: payConfig.bankCode, acc: payConfig.accountNumber, template: "", amount: String(myAmount), des: me.paymentQrToken.slice(0, 12).toUpperCase() }).toString()}`}
+                            src={`https://qr.sepay.vn/img?${new URLSearchParams({ bank: payConfig.bankCode, acc: payConfig.accountNumber, template: "", amount: String(myAmount), des: me.paymentQrToken.replace(/-/g, "").slice(0, 12).toUpperCase() }).toString()}`}
                             alt="QR chuyển khoản"
                             className="h-44 w-44 rounded-2xl ring-1 ring-black/8"
                           />
@@ -1788,7 +2086,7 @@ export function GroupOrderPageShell() {
                             {payConfig.bankCode && <div className="flex justify-between"><span className="text-foreground/50">{t("group_bank")}</span><span className="font-semibold">{payConfig.bankCode}</span></div>}
                             {payConfig.accountNumber && <div className="flex justify-between"><span className="text-foreground/50">{t("group_account_no")}</span><span className="font-mono font-semibold">{payConfig.accountNumber}</span></div>}
                             <div className="flex justify-between"><span className="text-foreground/50">{t("group_amount")}</span><span className="font-bold text-[#1a3c34]">{fmtVnd(myAmount)}</span></div>
-                            <div className="flex justify-between"><span className="text-foreground/50">{t("group_transfer_note")}</span><span className="font-mono font-semibold">{me.paymentQrToken.slice(0, 12).toUpperCase()}</span></div>
+                            <div className="flex justify-between"><span className="text-foreground/50">{t("group_transfer_note")}</span><span className="font-mono font-semibold">{me.paymentQrToken.replace(/-/g, "").slice(0, 12).toUpperCase()}</span></div>
                           </div>
                         )}
                         {discountPercent > 0 && (
@@ -1810,7 +2108,8 @@ export function GroupOrderPageShell() {
                       <span className="text-sm text-foreground/55">{t("group_gen_qr")}</span>
                     </div>
                   )}
-                </div>
+                  </div>
+                </motion.div>
               )}
           </div>
 
@@ -1925,40 +2224,51 @@ export function GroupOrderPageShell() {
                 })()}
 
                 {/* Host pays checkout */}
-                {state.status === "locked" && state.paymentMode === "host_pays" && isHost && !pendingCheckoutOrder && (
+                {state.status === "locked" && state.paymentMode === "host_pays" && isHost && (
                   <div className="space-y-2 pt-2">
-                    <p className="text-xs text-foreground/55">{t("group_host_pays_desc")}</p>
-                    <Button
-                      className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#1a3c34] text-sm font-semibold text-white"
-                      isDisabled={actionLoading}
-                      onPress={() => void handleHostCheckout()}
-                    >
-                      {state.paymentType === "cash" ? (
-                        <Banknote className="size-4" />
+                    {state.paymentType === "bank_transfer" ? (
+                      me?.paymentQrToken ? (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <QrCode className="size-4 text-[#1a3c34]" />
+                            <p className="text-sm font-semibold text-foreground">{t("group_scan_qr")}</p>
+                          </div>
+                          {payConfig?.bankCode && payConfig?.accountNumber ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={`https://qr.sepay.vn/img?${new URLSearchParams({ bank: payConfig.bankCode, acc: payConfig.accountNumber, template: "", amount: String(finalAmount), des: me!.paymentQrToken!.replace(/-/g, "").slice(0, 12).toUpperCase() }).toString()}`}
+                              alt="QR chuyển khoản"
+                              className="mx-auto h-44 w-44 rounded-2xl ring-1 ring-black/8"
+                            />
+                          ) : null}
+                          {payConfig && (
+                            <div className="space-y-1.5 rounded-xl bg-[#f0faf6] p-3 text-xs">
+                              {payConfig.bankCode && <div className="flex justify-between"><span className="text-foreground/50">{t("group_bank")}</span><span className="font-semibold">{payConfig.bankCode}</span></div>}
+                              {payConfig.accountNumber && <div className="flex justify-between"><span className="text-foreground/50">{t("group_account_no")}</span><span className="font-mono font-semibold">{payConfig.accountNumber}</span></div>}
+                              <div className="flex justify-between"><span className="text-foreground/50">{t("group_amount")}</span><span className="font-bold text-[#1a3c34]">{fmtVnd(finalAmount)}</span></div>
+                              <div className="flex justify-between"><span className="text-foreground/50">{t("group_transfer_note")}</span><span className="font-mono font-semibold">{me!.paymentQrToken!.replace(/-/g, "").slice(0, 12).toUpperCase()}</span></div>
+                            </div>
+                          )}
+                        </>
                       ) : (
-                        <QrCode className="size-4" />
-                      )}
-                      {state.paymentType === "cash" ? t("group_pay_cash_btn") : t("group_pay_transfer_btn")}
-                    </Button>
-                  </div>
-                )}
-
-                {pendingCheckoutOrder && state.paymentMode === "host_pays" && (
-                  <div className="pt-2">
-                    <BankTransferQR
-                      orderId={pendingCheckoutOrder.id}
-                      paymentCode={pendingCheckoutOrder.paymentCode}
-                      total={finalAmount}
-                      createdAt={new Date()}
-                      onPaid={() => {
-                        setPendingCheckoutOrder(null);
-                        router.push(ROUTES.ORDER_DETAIL(pendingCheckoutOrder.paymentCode));
-                      }}
-                      onExpired={() => {
-                        setPendingCheckoutOrder(null);
-                        router.push(ROUTES.ORDER_DETAIL(pendingCheckoutOrder.paymentCode));
-                      }}
-                    />
+                        <div className="flex items-center justify-center gap-2 py-4">
+                          <Loader2 className="size-4 animate-spin text-[#1a3c34]" />
+                          <span className="text-sm text-foreground/55">{t("group_generating_qr")}</span>
+                        </div>
+                      )
+                    ) : (
+                      <>
+                        <p className="text-xs text-foreground/55">{t("group_host_pays_desc")}</p>
+                        <Button
+                          className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#1a3c34] text-sm font-semibold text-white"
+                          isDisabled={actionLoading}
+                          onPress={() => void handleHostCheckout()}
+                        >
+                          <Banknote className="size-4" />
+                          {t("group_pay_cash_btn")}
+                        </Button>
+                      </>
+                    )}
                   </div>
                 )}
 
@@ -1980,6 +2290,95 @@ export function GroupOrderPageShell() {
           </motion.aside>
         </div>
       </div>
+
+      {/* Dissolve confirm modal */}
+      <AnimatePresence>
+        {showDissolveConfirm && (
+          <motion.div
+            key="dissolve-modal"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm"
+            onClick={(e) => e.target === e.currentTarget && setShowDissolveConfirm(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 12 }}
+              transition={{ type: "spring", damping: 24, stiffness: 380 }}
+              className="w-full max-w-sm rounded-3xl border border-black/6 bg-white shadow-[0_4px_20px_-8px_rgba(0,0,0,0.18)]"
+            >
+              {/* Modal body */}
+              <div className="px-6 pb-6 pt-8 text-center">
+                <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-red-50 ring-1 ring-red-200">
+                  <UserX className="size-7 text-red-500" />
+                </div>
+                <h3 className="text-base font-bold text-foreground">{t("group_dissolve_modal_title")}</h3>
+                <p className="mt-1.5 text-sm text-muted">{t("group_dissolve_modal_desc")}</p>
+              </div>
+              {/* Modal footer — divider + side-by-side buttons */}
+              <div className="flex divide-x divide-black/6 border-t border-black/6">
+                <button
+                  type="button"
+                  disabled={actionLoading}
+                  onClick={() => setShowDissolveConfirm(false)}
+                  className="cursor-pointer flex h-13 flex-1 items-center justify-center rounded-bl-3xl text-sm font-semibold text-foreground/70 transition hover:bg-surface-soft disabled:opacity-50"
+                >
+                  {t("cancel")}
+                </button>
+                <button
+                  type="button"
+                  disabled={actionLoading}
+                  onClick={() => void handleDissolve()}
+                  className="cursor-pointer flex h-13 flex-1 items-center justify-center gap-1.5 rounded-br-3xl text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                >
+                  {actionLoading && <Loader2 className="size-3.5 animate-spin" />}
+                  {actionLoading ? t("group_dissolving") : t("group_dissolve_confirm_btn")}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {isKicked && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-3xl border border-black/6 bg-white p-8 text-center shadow-[0_4px_20px_-8px_rgba(0,0,0,0.18)]">
+            <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-red-50 ring-1 ring-red-200">
+              <UserX className="size-8 text-red-500" />
+            </div>
+            <h3 className="text-lg font-bold text-foreground">{t("group_kicked_title")}</h3>
+            <p className="mt-2 text-sm text-muted">{t("group_kicked_desc")}</p>
+            <button
+              type="button"
+              onClick={() => router.push(ROUTES.HOME)}
+              className="mt-6 w-full rounded-full bg-[#1a3c34] px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+            >
+              {t("group_go_home")}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isDissolved && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-3xl border border-black/6 bg-white p-8 text-center shadow-[0_4px_20px_-8px_rgba(0,0,0,0.18)]">
+            <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-amber-50 ring-1 ring-amber-200">
+              <Users className="size-8 text-amber-500" />
+            </div>
+            <h3 className="text-lg font-bold text-foreground">{t("group_dissolved_title")}</h3>
+            <p className="mt-2 text-sm text-muted">{t("group_dissolved_desc")}</p>
+            <button
+              type="button"
+              onClick={() => router.push(ROUTES.HOME)}
+              className="mt-6 w-full rounded-full bg-[#1a3c34] px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+            >
+              {t("group_go_home")}
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }

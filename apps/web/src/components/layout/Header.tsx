@@ -13,7 +13,7 @@ import { Logo } from "../common/Logo";
 import {
   Bell, Menu, X,
   UtensilsCrossed, Tag, Users, Share2, BookOpen, Info,
-  LogIn, LogOut, Star, ShoppingBag, User, MapPin,
+  LogOut, Star, ShoppingBag, User, MapPin, ClipboardList, ArrowRight,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useAuth } from "@/hooks";
@@ -24,12 +24,15 @@ import { useNotificationStore } from "@/store/notification-store";
 import { applyFaviconBadge } from "@/lib/favicon-badge";
 import { useAuthStore } from "@/store/auth-store";
 import { useRouter } from "@/i18n/navigation";
+import { useGuestOrders } from "@/hooks/useGuestOrders";
+import { GuestOrdersDropdown } from "../common/GuestOrdersDropdown";
 
 export function AppHeader() {
   const pathname = usePathname();
   const t = useTranslations();
   const { isLoggedIn, isHydrated, user } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [ordersOpen, setOrdersOpen] = useState(false);
   const { data: profile } = useProfileQuery();
   const clearSession = useAuthStore((s) => s.clearSession);
   const router = useRouter();
@@ -74,6 +77,8 @@ export function AppHeader() {
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, [resetBg]);
+
+  const [guestOrders, removeGuestOrder, clearAllGuestOrders] = useGuestOrders();
 
   const points = profile?.pointBalance ?? 0;
   const name = user?.name?.trim() || "Tài khoản";
@@ -136,7 +141,29 @@ export function AppHeader() {
             }
 
             {/* Cart */}
-            {isLoggedIn && <CartSection />}
+            <CartSection />
+
+            {/* Mobile: guest orders icon → opens drawer */}
+            {!isLoggedIn && guestOrders.length > 0 && (
+              <div className="relative md:hidden">
+                <button
+                  type="button"
+                  onClick={() => setOrdersOpen(true)}
+                  aria-label="Đơn hàng gần đây"
+                  className="flex size-8 shrink-0 items-center justify-center rounded-full text-foreground/70 transition-colors hover:bg-black/6"
+                >
+                  <ClipboardList className="size-[18px]" />
+                </button>
+                <span className="pointer-events-none absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-[#1a3c34] text-[9px] font-bold text-white">
+                  {guestOrders.length > 9 ? "9+" : guestOrders.length}
+                </span>
+              </div>
+            )}
+
+            {/* Desktop: guest orders dropdown */}
+            <div className="hidden md:block">
+              <GuestOrdersDropdown />
+            </div>
 
             {/* Desktop: full dropdown profile */}
             <div className="hidden md:block">
@@ -300,6 +327,8 @@ export function AppHeader() {
                   })}
                 </nav>
 
+
+
                 {/* Quick account links — logged-in only */}
                 {isLoggedIn && (
                   <div className="px-4 pb-4">
@@ -365,6 +394,129 @@ export function AppHeader() {
         )}
       </AnimatePresence>
       <NotificationToast />
+
+      {/* ── Guest orders mobile drawer ───────────────────────── */}
+      <AnimatePresence>
+        {ordersOpen && (
+          <>
+            <motion.div
+              key="orders-overlay"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              className="fixed inset-0 z-40 bg-black/35 backdrop-blur-sm md:hidden"
+              onClick={() => setOrdersOpen(false)}
+            />
+
+            <motion.div
+              key="orders-sheet"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 30, stiffness: 320 }}
+              className="fixed bottom-0 left-0 right-0 z-50 flex max-h-[88dvh] flex-col overflow-hidden rounded-t-[28px] bg-white shadow-2xl md:hidden"
+            >
+              {/* Drag handle */}
+              <div className="flex shrink-0 justify-center pt-3 pb-1">
+                <div className="h-1 w-10 rounded-full bg-black/10" />
+              </div>
+
+              {/* Header */}
+              <div className="flex shrink-0 items-center justify-between px-5 pb-4 pt-2">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
+                    {t("guest_orders_eyebrow")}
+                  </p>
+                  <p className="mt-0.5 text-base font-semibold text-foreground">
+                    {guestOrders.length} đơn hàng
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {guestOrders.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={clearAllGuestOrders}
+                      className="rounded-full px-3 py-1.5 text-xs font-semibold text-red-500 transition-colors hover:bg-red-50"
+                    >
+                      Xóa tất cả
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setOrdersOpen(false)}
+                    aria-label="Đóng"
+                    className="flex size-8 items-center justify-center rounded-full bg-surface-card text-foreground/50 transition-colors hover:bg-surface-tertiary"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="mx-5 h-px shrink-0 bg-black/[0.06]" />
+
+              {/* Scrollable order list */}
+              <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-2">
+                {guestOrders.map((o, i) => {
+                  const diffMs = Date.now() - new Date(o.createdAt).getTime();
+                  const mins = Math.floor(diffMs / 60_000);
+                  const timeLabel = mins < 60
+                    ? `${mins} phút trước`
+                    : mins < 1440
+                      ? `${Math.floor(mins / 60)} giờ trước`
+                      : new Date(o.createdAt).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
+                  const typeLabel: Record<string, string> = { delivery: "Giao hàng", pickup: "Mang về", table: "Tại bàn" };
+                  return (
+                    <motion.div
+                      key={o.paymentCode}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.04 }}
+                      className="flex w-full items-center gap-1 rounded-2xl pr-1 transition-colors hover:bg-surface-soft"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOrdersOpen(false);
+                          router.push(ROUTES.ORDER_DETAIL(o.paymentCode));
+                        }}
+                        className="flex flex-1 items-center gap-3.5 px-4 py-3.5 text-left active:bg-surface-card"
+                      >
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-[#1a3c34]/8">
+                          <ClipboardList className="size-4.5 text-[#1a3c34]" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-mono text-[15px] font-semibold tracking-tight text-foreground">
+                            #{o.paymentCode}
+                          </p>
+                          <p className="mt-0.5 truncate text-sm text-muted">
+                            {typeLabel[o.type] ?? o.type}
+                            <span className="mx-1.5 opacity-40">·</span>
+                            {new Intl.NumberFormat("vi-VN").format(Math.round(o.totalAmount))}đ
+                            <span className="mx-1.5 opacity-40">·</span>
+                            {timeLabel}
+                          </p>
+                        </div>
+                        <ArrowRight className="size-4 shrink-0 text-foreground/25" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeGuestOrder(o.paymentCode)}
+                        aria-label="Xoá đơn hàng"
+                        className="flex size-8 shrink-0 items-center justify-center rounded-full text-foreground/30 transition-colors hover:bg-red-50 hover:text-red-500"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    </motion.div>
+                  );
+                })}
+              </div>
+
+              <div className="h-[max(env(safe-area-inset-bottom),8px)] shrink-0" />
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </>
   );
 }

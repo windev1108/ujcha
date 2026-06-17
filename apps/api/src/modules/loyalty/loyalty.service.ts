@@ -105,8 +105,8 @@ export class LoyaltyService {
       .mul(policy.effectiveEarnPercent)
       .div(100)
       .div(policy.pointRate);
-    const points = Math.round(Number(earned.toString()) * 10) / 10;
-    if (points < 0.1) {
+    const points = Math.floor(Number(earned.toString()));
+    if (points < 1) {
       throw new BadRequestException({ message: 'Điểm tích lũy quá nhỏ.', code: 'INSUFFICIENT_POINTS' });
     }
 

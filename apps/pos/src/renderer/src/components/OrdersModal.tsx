@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   ArrowLeft, Bell, Clock, CheckCircle2, XCircle, RefreshCw,
   ShoppingBag, CreditCard, ChevronRight, Search,
-  Loader2, Calendar, Check, ListChecks, X, Bike, Truck, Utensils,
+  Loader2, Calendar, Check, ListChecks, X, Bike, Truck, Utensils, Users,
 } from 'lucide-react'
 import { io } from 'socket.io-client'
 import { fetchOrders, updateOrderStatus, bulkUpdateOrderStatus, fetchShippers, assignShipper, API_URL } from '../api'
@@ -331,7 +331,7 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
   const handleStatus = async (id: string, status: OrderStatus) => {
     setBusyIds(prev => new Set(prev).add(id))
     const order = orders.find(o => o.id === id)
-    const autoPayment = status === 'completed' && (order?.type === 'table' || order?.type === 'pickup') && order?.paymentStatus !== 'paid'
+    const autoPayment = status === 'completed' && order?.paymentStatus !== 'paid'
       ? 'paid' : undefined
     try {
       await updateOrderStatus(id, status, autoPayment)
@@ -744,6 +744,12 @@ function OrderCard({
             {order.paymentStatus === 'paid' && (
               <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
                 <CheckCircle2 className="size-2.5" /> Đã TT
+              </span>
+            )}
+            {order.groupOrder && (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-bold text-purple-700">
+                <Users className="size-2.5" />
+                {order.groupOrder.paymentMode === 'split' ? 'Nhóm · Chia đều' : 'Nhóm · Chủ trả'}
               </span>
             )}
           </div>

@@ -38,12 +38,11 @@ export const orderKeys = {
 }
 
 export function useOrderDetailQuery(paymentCode: string) {
-  const accessToken = useAuthStore((s) => s.accessToken)
   return useQuery({
     queryKey: orderKeys.detail(paymentCode),
     queryFn: () => fetchOrderDetail(paymentCode),
     staleTime: 0,
-    enabled: !!accessToken && !!paymentCode,
+    enabled: !!paymentCode,
     refetchInterval: (query) => {
       const data = query.state.data
       if (!data) return false

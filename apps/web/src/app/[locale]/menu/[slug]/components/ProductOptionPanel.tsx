@@ -7,8 +7,7 @@ import { ShoppingCart, Check, Loader2, Minus, Plus, StickyNote } from "lucide-re
 import { Button, Checkbox } from "@heroui/react";
 import { useAddToCartMutation } from "@/services/cart/hooks";
 import { useAuthStore } from "@/store/auth-store";
-import { useRouter } from "@/i18n/navigation";
-import { ROUTES } from "@/lib/routes";
+import { useCartStore } from "@/store/cart-store";
 import type { ApiProduct } from "@/services/product/types";
 import {
   normalizeOptionGroups,
@@ -24,7 +23,6 @@ type Props = { product: ApiProduct };
 export function ProductOptionPanel({ product }: Props) {
   const t = useTranslations();
   const locale = useLocale();
-  const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
   const toppings = (product.toppings ?? []).filter((t) => t.isActive !== false);
 
@@ -50,6 +48,7 @@ export function ProductOptionPanel({ product }: Props) {
   }, [optionGroups]);
 
   const { mutate: addToCart, isPending } = useAddToCartMutation();
+  const addLocalItem = useCartStore((s) => s.addItem);
 
   const basePrice = parseFloat(product.price);
   const hasProductDiscount = product.discountPercent > 0;
@@ -76,32 +75,31 @@ export function ProductOptionPanel({ product }: Props) {
   }
 
   function handleAddToCart() {
+    const selectedToppingIds = Array.from(selectedToppings);
+    const productSnapshot = {
+      id: product.id,
+      name: product.name,
+      slug: product.slug,
+      price: product.price,
+      finalPrice: product.finalPrice,
+      imageUrls: product.imageUrls,
+      discountPercent: product.discountPercent,
+      optionGroups: product.optionGroups as any,
+      category: { name: product.category.name },
+    };
+    const toppingSnapshots = toppings
+      .filter((t) => selectedToppings.has(t.id))
+      .map((t) => ({ toppingId: t.id, topping: { id: t.id, name: t.name, price: String(t.price), nameTranslation: t.nameTranslation ?? {} } }));
+
     if (!accessToken) {
-      router.push(ROUTES.LOGIN);
+      addLocalItem({ productId: product.id, quantity, selectedOptions, toppingIds: selectedToppingIds, product: productSnapshot, toppingSnapshots });
+      setAddedFeedback(true);
+      setTimeout(() => setAddedFeedback(false), 2200);
       return;
     }
-    const selectedToppingIds = Array.from(selectedToppings);
+
     addToCart(
-      {
-        productId: product.id,
-        quantity,
-        selectedOptions,
-        toppingIds: selectedToppingIds,
-        product: {
-          id: product.id,
-          name: product.name,
-          slug: product.slug,
-          price: product.price,
-          finalPrice: product.finalPrice,
-          imageUrls: product.imageUrls,
-          discountPercent: product.discountPercent,
-          optionGroups: product.optionGroups,
-          category: { name: product.category.name },
-        },
-        toppingSnapshots: toppings
-          .filter((t) => selectedToppings.has(t.id))
-          .map((t) => ({ toppingId: t.id, topping: { id: t.id, name: t.name, price: String(t.price), nameTranslation: t.nameTranslation ?? {} } })),
-      },
+      { productId: product.id, quantity, selectedOptions, toppingIds: selectedToppingIds, product: productSnapshot, toppingSnapshots },
       {
         onSuccess: () => {
           setAddedFeedback(true);
@@ -343,11 +341,6 @@ export function ProductOptionPanel({ product }: Props) {
         )}
       </Button>
 
-      {!accessToken && (
-        <p className="text-center text-xs text-muted">
-          {t("login_to_add")}
-        </p>
-      )}
     </motion.div>
   );
 }

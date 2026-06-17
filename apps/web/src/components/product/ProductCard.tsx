@@ -10,7 +10,6 @@ import { ShoppingBag, ExternalLink } from "lucide-react";
 import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { ProductQuickAddModal } from "./ProductQuickAddModal";
-import { useAuth } from "@/hooks";
 import { getDisplayName } from "@/lib/product-name";
 
 
@@ -39,7 +38,6 @@ export function ProductCard({ product, index = 0, eager = false }: Props) {
   const hasDiscount = product.discountPercent > 0;
   const finalPrice = product.finalPrice;
 
-  const { isLoggedIn } = useAuth();
   const [modalOpen, setModalOpen] = useState(false);
 
   const animProps = eager
@@ -56,51 +54,39 @@ export function ProductCard({ product, index = 0, eager = false }: Props) {
       <motion.div className="h-full" {...animProps}>
         <div className="group flex h-full flex-col overflow-hidden rounded-xl border border-black/[0.06] bg-white shadow-[0_2px_12px_-4px_rgba(0,0,0,0.07)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.14)]">
 
-          {/* Image — logged-in: opens quick-add modal; guest: links to detail page */}
-          {isLoggedIn ? (
-            <button
-              type="button"
-              onClick={() => !product.isSoldOut && setModalOpen(true)}
-              disabled={product.isSoldOut}
-              className="relative aspect-[4/3] w-full overflow-hidden text-left disabled:cursor-not-allowed"
-              style={{ backgroundColor: imageUrl ? undefined : bgColor }}
-              aria-label={`${t("add_to_cart")} ${displayName}`}
-            >
-              <ProductCardImage imageUrl={imageUrl} name={displayName} bgColor={bgColor} />
+          {/* Image — opens quick-add modal for all users */}
+          <button
+            type="button"
+            onClick={() => !product.isSoldOut && setModalOpen(true)}
+            disabled={product.isSoldOut}
+            className="relative aspect-[4/3] w-full overflow-hidden text-left disabled:cursor-not-allowed"
+            style={{ backgroundColor: imageUrl ? undefined : bgColor }}
+            aria-label={`${t("add_to_cart")} ${displayName}`}
+          >
+            <ProductCardImage imageUrl={imageUrl} name={displayName} bgColor={bgColor} />
 
-              {/* Hover overlay */}
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/55 via-black/5 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-              <div className="absolute inset-x-0 bottom-3 flex translate-y-2 items-center justify-center gap-2 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
-                {!product.isSoldOut && (
-                  <span className="pointer-events-none flex items-center gap-1.5 rounded-full bg-white/95 px-4 py-1.5 text-[11px] font-semibold text-[#1a3c34] shadow-lg backdrop-blur-sm">
-                    <ShoppingBag className="size-3.5" />
-                    {t("add_to_cart")}
-                  </span>
-                )}
-              </div>
-
-              {/* Mobile quick-add badge */}
+            {/* Hover overlay */}
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/55 via-black/5 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+            <div className="absolute inset-x-0 bottom-3 flex translate-y-2 items-center justify-center gap-2 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
               {!product.isSoldOut && (
-                <div className="absolute bottom-2.5 right-2.5 sm:hidden">
-                  <span className="flex size-7 items-center justify-center rounded-full bg-white/90 shadow-md backdrop-blur-sm">
-                    <ShoppingBag className="size-3.5 text-[#1a3c34]" />
-                  </span>
-                </div>
+                <span className="pointer-events-none flex items-center gap-1.5 rounded-full bg-white/95 px-4 py-1.5 text-[11px] font-semibold text-[#1a3c34] shadow-lg backdrop-blur-sm">
+                  <ShoppingBag className="size-3.5" />
+                  {t("add_to_cart")}
+                </span>
               )}
+            </div>
 
-              <ProductCardBadges hasDiscount={hasDiscount} discountPercent={product.discountPercent} isSoldOut={product.isSoldOut} />
-            </button>
-          ) : (
-            <Link
-              href={`${ROUTES.MENU}/${product.slug}`}
-              className="relative block aspect-[4/3] w-full overflow-hidden"
-              style={{ backgroundColor: imageUrl ? undefined : bgColor }}
-              aria-label={`${t("view_menu")} ${displayName}`}
-            >
-              <ProductCardImage imageUrl={imageUrl} name={displayName} bgColor={bgColor} />
-              <ProductCardBadges hasDiscount={hasDiscount} discountPercent={product.discountPercent} isSoldOut={product.isSoldOut} />
-            </Link>
-          )}
+            {/* Mobile quick-add badge */}
+            {!product.isSoldOut && (
+              <div className="absolute bottom-2.5 right-2.5 sm:hidden">
+                <span className="flex size-7 items-center justify-center rounded-full bg-white/90 shadow-md backdrop-blur-sm">
+                  <ShoppingBag className="size-3.5 text-[#1a3c34]" />
+                </span>
+              </div>
+            )}
+
+            <ProductCardBadges hasDiscount={hasDiscount} discountPercent={product.discountPercent} isSoldOut={product.isSoldOut} />
+          </button>
 
           {/* Info */}
           <div className="flex flex-1 flex-col px-3 pb-3.5 pt-2.5 sm:px-4 sm:pb-4 sm:pt-3">

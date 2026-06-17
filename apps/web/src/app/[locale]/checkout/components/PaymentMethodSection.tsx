@@ -11,6 +11,7 @@ import type { PaymentMethod } from "./checkout-types";
 type Props = {
   selected: PaymentMethod;
   onSelect: (method: PaymentMethod) => void;
+  hideHeader?: boolean;
 };
 
 type MethodDef = { id: PaymentMethod; labelKey: string; descriptionKey: string; Icon: LucideIcon };
@@ -30,7 +31,7 @@ const methodDefs: MethodDef[] = [
   },
 ];
 
-export function PaymentMethodSection({ selected, onSelect }: Props) {
+export function PaymentMethodSection({ selected, onSelect, hideHeader }: Props) {
   const t = useTranslations();
 
   return (
@@ -38,14 +39,18 @@ export function PaymentMethodSection({ selected, onSelect }: Props) {
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ ...revealTransition, delay: 0.1 }}
-      className="mt-6 sm:mt-8"
+      className={hideHeader ? undefined : "mt-6 sm:mt-8"}
     >
-      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-        {t("payment")}
-      </p>
-      <h2 className="mb-4 text-lg font-semibold text-foreground sm:text-xl">
-        {t("payment_method")}
-      </h2>
+      {!hideHeader && (
+        <>
+          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
+            {t("payment")}
+          </p>
+          <h2 className="mb-4 text-lg font-semibold text-foreground sm:text-xl">
+            {t("payment_method")}
+          </h2>
+        </>
+      )}
       <div className="grid grid-cols-2 gap-3">
         {methodDefs.map(({ id, labelKey, descriptionKey, Icon }) => {
           const active = selected === id;

@@ -114,12 +114,12 @@ export function CartLineList({
           const productDisplayName = getDisplayName(product, locale);
           const imageUrl = product.imageUrls[0] ?? null;
           const bgColor = PLACEHOLDER_BG[index % PLACEHOLDER_BG.length];
-          const basePrice = parseFloat(product.price);
-          const discountedBase = product.finalPrice;
+          const basePrice = Number(product.price) || 0;
+          const discountedBase = Number(product.finalPrice) || basePrice;
           const groups = normalizeOptionGroups(product.optionGroups);
           const optionSurcharge = computeOptionSurcharge(groups, selectedOptions);
           const toppingTotal = (toppings ?? []).reduce(
-            (sum, t) => sum + parseFloat(t.topping.price),
+            (sum, t) => sum + Number(t.topping?.price ?? 0),
             0,
           );
           const unitPrice = discountedBase + optionSurcharge + toppingTotal;
@@ -272,7 +272,7 @@ export function CartLineList({
                         {Number(product?.discountPercent) > 0 && (
                           <div className="mt-1 flex items-center justify-end gap-1.5">
                             <p className="text-xs text-muted line-through tabular-nums">
-                              {formatVnd(parseFloat(product.price) * quantity)}
+                              {formatVnd(basePrice * quantity)}
                             </p>
 
                           </div>

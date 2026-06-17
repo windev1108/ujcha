@@ -29,6 +29,7 @@ export const ROUTES = {
   REWARDS: "/rewards",
   GROUP_ORDERS: "/group-order",
   GROUP_ORDER: (token: string) => `/group-order/${token}`,
+  GROUP_ORDER_SESSIONS: "/group-order/sessions",
   BLOG: "/blog",
   BLOG_POST: (slug: string) => `/blog/${slug}`,
 } as const;

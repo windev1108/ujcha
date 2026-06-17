@@ -3,6 +3,7 @@
 import { motion } from "motion/react";
 import { CheckCircle2, Clock, QrCode } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { usePublicPaymentConfigQuery } from "@/services/payment-config/hooks";
 import { useOrderPaymentSocket } from "@/hooks/useOrderPaymentSocket";
 import { revealTransition } from "@/app/[locale]/(landing)/components/RevealSection";
@@ -37,6 +38,7 @@ type Props = {
 };
 
 export function BankTransferQR({ orderId, paymentCode, total, createdAt, onPaid, onExpired }: Props) {
+  const t = useTranslations();
   const { data: payConfig } = usePublicPaymentConfigQuery();
   const { isPaid } = useOrderPaymentSocket({
     orderId,
@@ -62,9 +64,10 @@ export function BankTransferQR({ orderId, paymentCode, total, createdAt, onPaid,
     return () => clearInterval(timer);
   }, [expireAt, isPaid, onExpired]);
 
+  const cleanCode = paymentCode.replace(/-/g, "");
   const qrUrl =
     payConfig?.bankCode && payConfig?.accountNumber
-      ? buildQrUrl(payConfig.bankCode, payConfig.accountNumber, total, paymentCode)
+      ? buildQrUrl(payConfig.bankCode, payConfig.accountNumber, total, cleanCode)
       : null;
 
   const isExpired = remaining === 0 && !isPaid;
@@ -77,25 +80,21 @@ export function BankTransferQR({ orderId, paymentCode, total, createdAt, onPaid,
       className="rounded-3xl border border-black/6 bg-white p-6 shadow-[0_8px_32px_-16px_rgba(0,0,0,0.1)]"
     >
       <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-        Thanh toán chuyển khoản
+        {t("bt_qr_eyebrow")}
       </p>
 
       {isPaid ? (
         <div className="mt-4 flex items-center gap-3 rounded-2xl bg-kun-mint/20 p-4">
           <CheckCircle2 className="size-8 shrink-0 text-kun-products-forest" />
           <div>
-            <p className="font-semibold text-kun-products-forest">Thanh toán thành công!</p>
-            <p className="text-sm text-foreground/60">
-              Đơn hàng đang được xử lý.
-            </p>
+            <p className="font-semibold text-kun-products-forest">{t("bt_qr_paid_title")}</p>
+            <p className="text-sm text-foreground/60">{t("bt_qr_paid_desc")}</p>
           </div>
         </div>
       ) : isExpired ? (
         <div className="mt-4 rounded-2xl bg-red-50 p-4">
-          <p className="font-semibold text-red-600">Đơn hàng đã hết hạn</p>
-          <p className="mt-1 text-sm text-red-500">
-            Quá 15 phút không thanh toán — đơn đã bị huỷ.
-          </p>
+          <p className="font-semibold text-red-600">{t("bt_qr_expired_title")}</p>
+          <p className="mt-1 text-sm text-red-500">{t("bt_qr_expired_desc")}</p>
         </div>
       ) : (
         <>
@@ -103,9 +102,9 @@ export function BankTransferQR({ orderId, paymentCode, total, createdAt, onPaid,
           <div className="mt-3 flex items-center gap-2">
             <Clock className="size-4 text-amber-500 shrink-0" />
             <span className="text-sm font-medium text-amber-600">
-              Thanh toán trong{" "}
+              {t("bt_qr_countdown_prefix")}{" "}
               <span className="tabular-nums font-bold">{formatCountdown(remaining)}</span>
-              {" "}— hết hạn sau {EXPIRE_MINUTES} phút
+              {" "}{t("bt_qr_countdown_suffix")}
             </span>
           </div>
 
@@ -116,7 +115,7 @@ export function BankTransferQR({ orderId, paymentCode, total, createdAt, onPaid,
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={qrUrl}
-                  alt="SePay QR thanh toán"
+                  alt={t("bt_qr_alt")}
                   className="h-52 w-52 rounded-2xl object-contain ring-1 ring-black/8"
                 />
               ) : (
@@ -130,27 +129,27 @@ export function BankTransferQR({ orderId, paymentCode, total, createdAt, onPaid,
             {payConfig && (
               <div className="flex-1 space-y-1.5 rounded-3xl bg-kun-sage/10 px-4 py-4 text-sm">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/45 mb-2">
-                  Thông tin chuyển khoản
+                  {t("bt_qr_bank_details_eyebrow")}
                 </p>
                 <div className="space-y-2">
-                  <Row label="Ngân hàng" value={payConfig.bankCode} />
-                  <Row label="Số tài khoản" value={payConfig.accountNumber} mono />
+                  <Row label={t("bt_qr_bank_label")} value={payConfig.bankCode} />
+                  <Row label={t("bt_qr_account_label")} value={payConfig.accountNumber} mono />
                   {payConfig.accountName && (
-                    <Row label="Chủ tài khoản" value={payConfig.accountName} />
+                    <Row label={t("bt_qr_account_name_label")} value={payConfig.accountName} />
                   )}
                   <Row
-                    label="Số tiền"
+                    label={t("bt_qr_amount_label")}
                     value={new Intl.NumberFormat("vi-VN").format(Math.round(total)) + "đ"}
                     highlight
                   />
-                  <Row label="Nội dung CK" value={paymentCode} mono highlight />
+                  <Row label={t("bt_qr_transfer_note_label")} value={cleanCode} mono highlight />
                 </div>
               </div>
             )}
           </div>
 
           <p className="mt-4 text-center text-xs text-foreground/50">
-            Quét mã QR bằng app ngân hàng và chuyển đúng số tiền + nội dung. Hệ thống tự xác nhận.
+            {t("bt_qr_instruction")}
           </p>
         </>
       )}

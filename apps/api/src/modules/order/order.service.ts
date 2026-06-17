@@ -183,7 +183,7 @@ export class OrderService {
       });
       if (!product) {
         throw new BadRequestException({
-          message: 'Sản phẩm không tồn tại.',
+          message: `Sản phẩm không tồn tại (id: ${item.productId}).`,
           code: 'ORDER_PRODUCT_NOT_FOUND',
         });
       }
@@ -652,7 +652,7 @@ export class OrderService {
       select: { amount: true },
     }).catch(() => null);
 
-    const points = earnedTxn ? Math.round(Number(earnedTxn.amount) * 10) / 10 : 0;
+    const points = earnedTxn?.amount ?? 0;
 
     await this.notificationService.createAndEmit({
       userId,
@@ -769,7 +769,7 @@ export class OrderService {
     };
   }
 
-  async getOrderDetail(userId: string, paymentCode: string): Promise<OrderDetail & { isGroupOrder: boolean; groupOrderToken: string | null; earnedPoints: number }> {
+  async getOrderDetail(userId: string | null, paymentCode: string): Promise<OrderDetail & { isGroupOrder: boolean; groupOrderToken: string | null; earnedPoints: number }> {
     const order = await this.prisma.order.findFirst({
       where: { paymentCode },
       include: {
@@ -789,6 +789,15 @@ export class OrderService {
         message: 'Không tìm thấy đơn.',
         code: 'ORDER_NOT_FOUND',
       });
+    }
+
+    // Guest (userId = null): paymentCode là đủ xác thực vì mã không đoán được.
+    if (!userId) {
+      const groupOrderLink = await this.prisma.groupOrder.findFirst({
+        where: { orderId: order.id },
+        select: { token: true },
+      });
+      return { ...order, isGroupOrder: !!groupOrderLink, groupOrderToken: groupOrderLink?.token ?? null, earnedPoints: 0 };
     }
 
     // Allow host (userId match) or any group order participant

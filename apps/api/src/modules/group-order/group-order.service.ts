@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   InternalServerErrorException,
@@ -114,6 +115,26 @@ export class GroupOrderService {
   }
 
   async create(hostUserId: string, dto: CreateGroupOrderDto) {
+    // One active group order per host — return the existing one instead of creating a duplicate.
+    const existing = await this.prisma.groupOrder.findFirst({
+      where: { hostUserId, status: 'collecting', expiresAt: { gt: new Date() } },
+      include: this.fullInclude(),
+    });
+    if (existing) {
+      const hostParticipant = existing.participants.find((p) => p.isHost);
+      if (dto.deviceId && hostParticipant && !(hostParticipant as any).deviceId) {
+        await this.prisma.groupOrderParticipant.update({
+          where: { id: hostParticipant.id },
+          data: { deviceId: dto.deviceId },
+        }).catch(() => {});
+      }
+      return {
+        ...this.serialize(existing),
+        hostSessionToken: hostParticipant?.sessionToken ?? '',
+        hostParticipantId: hostParticipant?.id ?? null,
+      };
+    }
+
     const token = generateShortToken();
     const sessionToken = randomUUID();
     const cfg = await this.getConfig();
@@ -136,6 +157,7 @@ export class GroupOrderService {
             userId: hostUserId,
             sessionToken,
             isHost: true,
+            deviceId: dto.deviceId ?? null,
           },
         },
       },
@@ -159,31 +181,120 @@ export class GroupOrderService {
     return this.serialize(go);
   }
 
-  async join(token: string, userId: string, dto: JoinGroupOrderDto) {
+  async findActiveByUser(userId: string) {
+    const rows = await this.prisma.groupOrder.findMany({
+      where: {
+        hostUserId: userId,
+        status: { notIn: ['completed', 'cancelled'] },
+        expiresAt: { gt: new Date() },
+      },
+      select: {
+        token: true,
+        type: true,
+        status: true,
+        expiresAt: true,
+        paymentMode: true,
+        _count: { select: { participants: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    return rows.map((r) => ({
+      token: r.token,
+      type: r.type,
+      status: r.status,
+      expiresAt: r.expiresAt.toISOString(),
+      paymentMode: r.paymentMode,
+      participantCount: r._count.participants,
+    }));
+  }
+
+  async dissolveGroupOrder(token: string, sessionToken: string) {
     const go = await this.prisma.groupOrder.findUnique({
       where: { token },
       include: { participants: true },
     });
-    if (!go) throw new NotFoundException('Khong tim thay don nhom.');
+    if (!go) throw new NotFoundException('Không tìm thấy đơn nhóm.');
+    if (go.status !== 'collecting') {
+      throw new BadRequestException({ message: 'Chỉ có thể giải tán khi đơn nhóm đang thu thập.', code: 'GROUP_ORDER_NOT_COLLECTING' });
+    }
+    const host = go.participants.find((p) => p.isHost && p.sessionToken === sessionToken);
+    if (!host) throw new ForbiddenException('Chỉ chủ nhóm mới có thể giải tán nhóm.');
+    const updated = await this.prisma.groupOrder.update({
+      where: { id: go.id },
+      data: { status: GroupOrderStatus.cancelled },
+      include: this.fullInclude(),
+    });
+    return this.serialize(updated);
+  }
+
+  async kickParticipant(token: string, sessionToken: string, participantId: string) {
+    const go = await this.prisma.groupOrder.findUnique({
+      where: { token },
+      include: { participants: true },
+    });
+    if (!go) throw new NotFoundException('Không tìm thấy đơn nhóm.');
+    if (go.status !== 'collecting') {
+      throw new BadRequestException({ message: 'Chỉ có thể xóa thành viên khi đơn nhóm đang thu thập.', code: 'GROUP_ORDER_NOT_COLLECTING' });
+    }
+    const host = go.participants.find((p) => p.isHost && p.sessionToken === sessionToken);
+    if (!host) throw new ForbiddenException('Chỉ chủ nhóm mới có thể xóa thành viên.');
+    const target = go.participants.find((p) => p.id === participantId);
+    if (!target) throw new NotFoundException('Không tìm thấy thành viên.');
+    if (target.isHost) throw new ForbiddenException('Không thể xóa chủ nhóm.');
+    await this.prisma.groupOrderParticipant.delete({ where: { id: participantId } });
+    const updated = await this.findByToken(token);
+    return { kicked: participantId, groupOrder: updated };
+  }
+
+  async join(token: string, userId: string | null, dto: JoinGroupOrderDto) {
+    const go = await this.prisma.groupOrder.findUnique({
+      where: { token },
+      include: { participants: true },
+    });
+    if (!go) {
+      throw new NotFoundException({ message: 'Không tìm thấy đơn nhóm.', code: 'GROUP_ORDER_NOT_FOUND' });
+    }
     if (go.expiresAt < new Date()) {
-      throw new BadRequestException('Don nhom da het han.');
+      throw new BadRequestException({ message: 'Đơn nhóm đã hết hạn.', code: 'GROUP_ORDER_EXPIRED' });
     }
     if (go.status !== 'collecting') {
-      throw new BadRequestException('Don nhom khong con nhan thanh vien.');
+      throw new BadRequestException({ message: 'Đơn nhóm không còn nhận thành viên mới.', code: 'GROUP_ORDER_NOT_COLLECTING' });
     }
 
-    const existing = go.participants.find((p) => p.userId === userId);
-    if (existing) {
-      return { sessionToken: existing.sessionToken, alreadyJoined: true };
+    // Logged-in user: return existing session if already joined
+    if (userId) {
+      const existing = go.participants.find((p) => p.userId === userId);
+      if (existing) {
+        if (dto.deviceId && !(existing as any).deviceId) {
+          await this.prisma.groupOrderParticipant.update({
+            where: { id: existing.id },
+            data: { deviceId: dto.deviceId },
+          }).catch(() => {});
+        }
+        return { sessionToken: existing.sessionToken, participantId: existing.id, alreadyJoined: true };
+      }
+    }
+
+    // Anti-cheat: block same device from joining twice
+    if (dto.deviceId) {
+      const sameDevice = go.participants.find((p) => (p as any).deviceId === dto.deviceId);
+      if (sameDevice) {
+        throw new ConflictException({
+          message: 'Thiết bị này đã tham gia đơn nhóm.',
+          code: 'GROUP_ORDER_DEVICE_ALREADY_JOINED',
+        });
+      }
     }
 
     const sessionToken = randomUUID();
     const newParticipant = await this.prisma.groupOrderParticipant.create({
       data: {
         groupOrderId: go.id,
-        userId,
+        userId: userId ?? null,
+        guestName: !userId ? (dto.guestName?.trim() || 'Khách') : null,
         sessionToken,
         isHost: false,
+        deviceId: dto.deviceId ?? null,
       },
     });
 
@@ -320,6 +431,28 @@ export class GroupOrderService {
       include: this.fullInclude(),
     });
     return { groupOrder: this.serialize(updated!), order };
+  }
+
+  async initHostBankTransfer(token: string, sessionToken: string) {
+    const { go, participant } = await this.resolveParticipant(token, sessionToken);
+
+    if (!participant.isHost) throw new ForbiddenException('Chi chu nhom moi co the khoi tao thanh toan.');
+    if (go.status !== GroupOrderStatus.locked) throw new BadRequestException('Don nhom phai duoc khoa truoc khi thanh toan.');
+    if (go.paymentMode !== 'host_pays') throw new BadRequestException('Chi ap dung cho don nhom chu tra.');
+    if ((go as any).paymentType !== 'bank_transfer') throw new BadRequestException('Chi ap dung cho thanh toan chuyen khoan.');
+
+    if (!(participant as any).paymentQrToken) {
+      await this.prisma.groupOrderParticipant.update({
+        where: { id: participant.id },
+        data: { paymentQrToken: randomUUID() } as any,
+      });
+    }
+
+    const updated = await this.prisma.groupOrder.findUnique({
+      where: { token },
+      include: this.fullInclude(),
+    });
+    return this.serialize(updated!);
   }
 
   async initSplitPayment(token: string, sessionToken: string, paymentType: string) {
@@ -594,10 +727,18 @@ export class GroupOrderService {
     });
     if (!goCheck) return null;
 
-    const withItems = goCheck.participants.filter((p) => p.items.length > 0);
-    const allPaid = withItems.every((p) => (p.paymentStatus as string) === 'paid');
+    const shouldCreateOrder = (() => {
+      if (goCheck.status !== GroupOrderStatus.locked) return false;
+      if ((goCheck as any).paymentMode === 'host_pays') {
+        // Host pays for all — create order when the host's payment is confirmed
+        return goCheck.participants.some((p) => p.id === participantId && p.isHost);
+      }
+      // Split: create order when every participant with items has paid
+      const withItems = goCheck.participants.filter((p) => p.items.length > 0);
+      return withItems.every((p) => (p.paymentStatus as string) === 'paid');
+    })();
 
-    if (allPaid && goCheck.status === GroupOrderStatus.locked) {
+    if (shouldCreateOrder) {
       const pt = goCheck.participants.find((p) => p.paymentType != null)?.paymentType ?? 'cash';
       const order = await this.createFinalOrder(goCheck, pt as any, true);
       await this.prisma.groupOrder.update({
@@ -712,7 +853,9 @@ export class GroupOrderService {
     const { go, participant } = await this.resolveParticipant(token, sessionToken);
 
     if (!participant.isHost) throw new ForbiddenException('Chi chu nhom moi co the dat don.');
-    if (go.status !== GroupOrderStatus.collecting) throw new BadRequestException('Don nhom khong o trang thai thu thap.');
+    if (go.status !== GroupOrderStatus.collecting && go.status !== GroupOrderStatus.locked) {
+      throw new BadRequestException('Don nhom khong o trang thai hop le.');
+    }
     if ((go as any).paymentMode !== 'split') throw new BadRequestException('Chi ap dung cho don nhom chia tien.');
     if ((go as any).paymentType !== null && (go as any).paymentType !== 'cash') {
       throw new BadRequestException('Chi ap dung cho phuong thuc tien mat.');
@@ -726,12 +869,13 @@ export class GroupOrderService {
     const withItems = goFull!.participants.filter((p: any) => p.items.length > 0);
     if (withItems.length === 0) throw new BadRequestException('Chua co mon nao duoc chon.');
 
-    // Atomically lock group order + mark all participants as cash/paid
+    // Lock (if still collecting) + mark all participants as cash/paid atomically
+    const lockOp = go.status === GroupOrderStatus.collecting
+      ? [this.prisma.groupOrder.update({ where: { token }, data: { status: GroupOrderStatus.locked } })]
+      : [];
+
     await this.prisma.$transaction([
-      this.prisma.groupOrder.update({
-        where: { token },
-        data: { status: GroupOrderStatus.locked },
-      }),
+      ...lockOp,
       ...withItems.map((p: any) =>
         this.prisma.groupOrderParticipant.update({
           where: { id: p.id },
@@ -775,11 +919,13 @@ export class GroupOrderService {
       where: { token },
       include: { participants: true },
     });
-    if (!go) throw new NotFoundException('Khong tim thay don nhom.');
+    if (!go) {
+      throw new NotFoundException({ message: 'Không tìm thấy đơn nhóm.', code: 'GROUP_ORDER_NOT_FOUND' });
+    }
 
     const participant = go.participants.find((p) => p.sessionToken === sessionToken);
     if (!participant) {
-      throw new ForbiddenException('Phien lam viec khong hop le.');
+      throw new ForbiddenException({ message: 'Phiên làm việc không hợp lệ.', code: 'GROUP_ORDER_SESSION_INVALID' });
     }
 
     return { go, participant };

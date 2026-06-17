@@ -40,6 +40,7 @@ export interface CreateOrderPayload {
   voucherCode?: string
   discountAmount?: number
   shippingFee?: number
+  guestDeliveryAddress?: string
   guestDeliveryName?: string
   guestDeliveryPhone?: string
 }

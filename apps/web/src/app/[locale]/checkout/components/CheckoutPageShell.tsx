@@ -2,7 +2,7 @@
 
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, ArrowRight, Loader2 } from "lucide-react";
+import { AlertCircle, ArrowRight, Loader2, LogIn } from "lucide-react";
 import { CheckoutFulfillmentSection } from "./CheckoutFulfillmentSection";
 import { CheckoutHeader } from "./CheckoutHeader";
 import { CheckoutOrderSummary } from "./CheckoutOrderSummary";
@@ -17,13 +17,15 @@ import {
 import { useProfileQuery } from "@/services/profile/hooks";
 import { usePublicStoreLocationQuery } from "@/services/store/hooks";
 import { useShippingEstimateQuery } from "@/services/shipping/hooks";
-import { fetchPublicTable, type PublicTableInfo, type VoucherPreviewResult } from "@/services/order/api";
+import { fetchPublicTable, type PublicTableInfo, type VoucherPreviewResult, type CreatedOrder } from "@/services/order/api";
+import { saveGuestOrder } from "@/hooks/useGuestOrders";
 import { normalizeOptionGroups, computeOptionSurcharge } from "@/lib/product-options";
-
+import { useCartStore } from "@/store/cart-store";
 import { ROUTES } from "@/lib/routes";
 import { useAuthStore } from "@/store/auth-store";
 import { VoucherSection } from "./VoucherSection";
 import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 
 function formatVnd(amount: number) {
   return new Intl.NumberFormat("vi-VN").format(Math.round(amount)) + "đ";
@@ -51,15 +53,29 @@ function CheckoutSkeleton() {
   );
 }
 
+/** Trích mã lỗi từ axios error response. */
+function extractErrorCode(err: unknown): string | null {
+  return (
+    (err as { response?: { data?: { code?: string } } })?.response?.data?.code ?? null
+  );
+}
+
 export function CheckoutPageShell() {
   const t = useTranslations();
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
   const accessToken = useAuthStore((s) => s.accessToken);
+  const isGuest = !accessToken;
 
-  const { data: cart, isLoading } = useCartQuery();
-  const removeCartItemsMutation = useRemoveCartItemsMutation();
+  // Server cart (members)
+  const { data: serverCart, isLoading: serverCartLoading } = useCartQuery();
+  const removeServerCartItems = useRemoveCartItemsMutation();
+
+  // Local cart (guests)
+  const localItems = useCartStore((s) => s.items);
+  const removeLocalItems = useCartStore((s) => s.removeItems);
+
   const { data: savedAddresses = [] } = useAddressesQuery();
   const createOrderMutation = useCreateOrderMutation();
   const { data: storeLocation } = usePublicStoreLocationQuery();
@@ -124,18 +140,24 @@ export function CheckoutPageShell() {
     }
   }, [tableIdParam]);
 
+  // Guests always use new-address form (no saved addresses to pick from)
+  const effectiveSavedAddresses = isGuest ? [] : savedAddresses;
+
   useEffect(() => {
-    if (savedAddresses.length > 0 && selectedAddressId === null) {
-      const def = savedAddresses.find((a) => a.isDefault) ?? savedAddresses[0];
+    if (effectiveSavedAddresses.length > 0 && selectedAddressId === null) {
+      const def = effectiveSavedAddresses.find((a) => a.isDefault) ?? effectiveSavedAddresses[0];
       setSelectedAddressId(def.id);
     }
-  }, [savedAddresses, selectedAddressId]);
+  }, [effectiveSavedAddresses, selectedAddressId]);
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [orderError, setOrderError] = useState<string | null>(null);
   const [appliedVoucher, setAppliedVoucher] = useState<VoucherPreviewResult | null>(null);
 
-  const allItems = cart?.items ?? [];
+  // Source of truth: guest = local Zustand, member = server cart
+  const allServerItems = serverCart?.items ?? [];
+  const allItems = isGuest ? localItems : allServerItems;
+
   const items = useMemo(
     () =>
       selectedItemIds
@@ -147,11 +169,11 @@ export function CheckoutPageShell() {
   const subtotal = useMemo(
     () =>
       items.reduce((sum, item) => {
-        const discountedBase = item.product.finalPrice;
+        const discountedBase = Number(item.product.finalPrice) || Number(item.product.price) || 0;
         const groups = normalizeOptionGroups(item.product.optionGroups);
         const optionSurcharge = computeOptionSurcharge(groups, item.selectedOptions);
         const toppingTotal = (item.toppings ?? []).reduce(
-          (s, t) => s + parseFloat(t.topping.price),
+          (s, t) => s + Number(t.topping?.price ?? 0),
           0,
         );
         return sum + (discountedBase + optionSurcharge + toppingTotal) * item.quantity;
@@ -159,9 +181,9 @@ export function CheckoutPageShell() {
     [items],
   );
 
-  // Resolve lat/lng for shipping estimate from selected address or form
   const isDelivery = tab === CHECKOUT_TAB.DELIVERY;
-  const isNewAddress = selectedAddressId === "__new__" || savedAddresses.length === 0;
+  // Guests always use "new address" form for delivery
+  const isNewAddress = isGuest || selectedAddressId === "__new__" || effectiveSavedAddresses.length === 0;
 
   const hasValidDeliveryAddress = useMemo(() => {
     if (!isDelivery) return true;
@@ -172,16 +194,16 @@ export function CheckoutPageShell() {
   const shippingLat = useMemo(() => {
     if (!isDelivery) return null;
     if (isNewAddress) return deliveryForm.lat;
-    const addr = savedAddresses.find((a) => a.id === selectedAddressId);
+    const addr = effectiveSavedAddresses.find((a) => a.id === selectedAddressId);
     return addr?.lat ?? null;
-  }, [isDelivery, isNewAddress, deliveryForm.lat, savedAddresses, selectedAddressId]);
+  }, [isDelivery, isNewAddress, deliveryForm.lat, effectiveSavedAddresses, selectedAddressId]);
 
   const shippingLng = useMemo(() => {
     if (!isDelivery) return null;
     if (isNewAddress) return deliveryForm.lng;
-    const addr = savedAddresses.find((a) => a.id === selectedAddressId);
+    const addr = effectiveSavedAddresses.find((a) => a.id === selectedAddressId);
     return addr?.lng ?? null;
-  }, [isDelivery, isNewAddress, deliveryForm.lng, savedAddresses, selectedAddressId]);
+  }, [isDelivery, isNewAddress, deliveryForm.lng, effectiveSavedAddresses, selectedAddressId]);
 
   const { data: shippingEstimate } = useShippingEstimateQuery(shippingLat, shippingLng, subtotal);
 
@@ -191,15 +213,9 @@ export function CheckoutPageShell() {
   const shippingIsDisabled = !isDelivery || !shippingEstimate || (shippingEstimate?.isDisabled ?? true);
 
   const voucherDiscount = appliedVoucher?.discountAmount ?? 0;
-
   const total = Math.max(0, subtotal - voucherDiscount + shippingFee);
 
   async function handleSubmitOrder() {
-    if (!accessToken) {
-      router.push(ROUTES.LOGIN);
-      return;
-    }
-
     setOrderError(null);
 
     if (items.length === 0) {
@@ -268,11 +284,11 @@ export function CheckoutPageShell() {
     }
 
     const orderItems = items.map((item) => {
-      const discountedBase = item.product.finalPrice;
+      const discountedBase = Number(item.product.finalPrice) || Number(item.product.price) || 0;
       const groups = normalizeOptionGroups(item.product.optionGroups);
       const optionSurcharge = computeOptionSurcharge(groups, item.selectedOptions);
-      const toppingTotal = item.toppings.reduce(
-        (s, t) => s + parseFloat(t.topping.price),
+      const toppingTotal = (item.toppings ?? []).reduce(
+        (s, t) => s + Number(t.topping?.price ?? 0),
         0,
       );
       const unitPrice = discountedBase + optionSurcharge + toppingTotal;
@@ -302,8 +318,10 @@ export function CheckoutPageShell() {
     try {
       const orderedItemIds = items.map((i) => i.id);
 
+      let order: CreatedOrder;
+
       if (tab === CHECKOUT_TAB.TABLE) {
-        const order = await createOrderMutation.mutateAsync({
+        order = await createOrderMutation.mutateAsync({
           type: "table",
           paymentType: paymentMethod,
           tableId: tableId!,
@@ -311,47 +329,53 @@ export function CheckoutPageShell() {
           voucherCode: appliedVoucher?.code,
           discountAmount: voucherDiscount > 0 ? voucherDiscount : undefined,
         });
-        await removeCartItemsMutation.mutateAsync(orderedItemIds);
-        router.push(ROUTES.ORDER_DETAIL(order.paymentCode));
-        return;
       } else if (tab === CHECKOUT_TAB.DELIVERY) {
-        const order = await createOrderMutation.mutateAsync(
-          isNewAddress
-            ? {
-                type: "delivery",
-                paymentType: paymentMethod,
-                inlineAddress: {
-                  fullAddress: deliveryForm.fullAddress.trim(),
-                  lat: deliveryForm.lat ?? 0,
-                  lng: deliveryForm.lng ?? 0,
-                },
-                guestDeliveryName: deliveryForm.name.trim() || undefined,
-                guestDeliveryPhone: deliveryForm.phone.trim() || undefined,
-                items: orderItems,
-                voucherCode: appliedVoucher?.code,
-                discountAmount: voucherDiscount > 0 ? voucherDiscount : undefined,
-                shippingFee: shippingFee > 0 ? shippingFee : undefined,
-              }
-            : {
-                type: "delivery",
-                paymentType: paymentMethod,
-                addressId: selectedAddressId!,
-                items: orderItems,
-                voucherCode: appliedVoucher?.code,
-                discountAmount: voucherDiscount > 0 ? voucherDiscount : undefined,
-                shippingFee: shippingFee > 0 ? shippingFee : undefined,
-              },
-        );
-        await removeCartItemsMutation.mutateAsync(orderedItemIds);
-        router.push(ROUTES.ORDER_DETAIL(order.paymentCode));
-        return;
+        if (isGuest) {
+          // Guests: send as guestDeliveryAddress (never save to DB)
+          order = await createOrderMutation.mutateAsync({
+            type: "delivery",
+            paymentType: paymentMethod,
+            guestDeliveryAddress: deliveryForm.fullAddress.trim(),
+            guestDeliveryName: deliveryForm.name.trim() || undefined,
+            guestDeliveryPhone: deliveryForm.phone.trim() || undefined,
+            items: orderItems,
+            shippingFee: shippingFee > 0 ? shippingFee : undefined,
+          });
+        } else if (isNewAddress) {
+          // Member + new address: save to DB via inlineAddress
+          order = await createOrderMutation.mutateAsync({
+            type: "delivery",
+            paymentType: paymentMethod,
+            inlineAddress: {
+              fullAddress: deliveryForm.fullAddress.trim(),
+              lat: deliveryForm.lat ?? 0,
+              lng: deliveryForm.lng ?? 0,
+            },
+            guestDeliveryName: deliveryForm.name.trim() || undefined,
+            guestDeliveryPhone: deliveryForm.phone.trim() || undefined,
+            items: orderItems,
+            voucherCode: appliedVoucher?.code,
+            discountAmount: voucherDiscount > 0 ? voucherDiscount : undefined,
+            shippingFee: shippingFee > 0 ? shippingFee : undefined,
+          });
+        } else {
+          order = await createOrderMutation.mutateAsync({
+            type: "delivery",
+            paymentType: paymentMethod,
+            addressId: selectedAddressId!,
+            items: orderItems,
+            voucherCode: appliedVoucher?.code,
+            discountAmount: voucherDiscount > 0 ? voucherDiscount : undefined,
+            shippingFee: shippingFee > 0 ? shippingFee : undefined,
+          });
+        }
       } else {
         const pickupTime =
           pickupForm.mode === "asap"
             ? new Date(Date.now() + 20 * 60_000).toISOString()
             : new Date(pickupForm.scheduledTime).toISOString();
 
-        const order = await createOrderMutation.mutateAsync({
+        order = await createOrderMutation.mutateAsync({
           type: "pickup",
           paymentType: paymentMethod,
           pickupTime,
@@ -361,26 +385,55 @@ export function CheckoutPageShell() {
           voucherCode: appliedVoucher?.code,
           discountAmount: voucherDiscount > 0 ? voucherDiscount : undefined,
         });
-        await removeCartItemsMutation.mutateAsync(orderedItemIds);
-        router.push(ROUTES.ORDER_DETAIL(order.paymentCode));
-        return;
       }
+
+      // Clear cart after successful order
+      if (isGuest) {
+        removeLocalItems(orderedItemIds);
+        saveGuestOrder({
+          paymentCode: order.paymentCode,
+          type: order.type as "delivery" | "pickup" | "table",
+          totalAmount: parseFloat(order.totalAmount),
+          createdAt: new Date().toISOString(),
+        });
+      } else {
+        await removeServerCartItems.mutateAsync(orderedItemIds);
+      }
+
+      router.push(ROUTES.ORDER_DETAIL(order.paymentCode));
     } catch (err: unknown) {
-      const raw =
-        (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
+      const code = extractErrorCode(err);
+      const hasI18nKey = code && code in (t as unknown as Record<string, unknown>);
       setOrderError(
-        Array.isArray(raw) ? t("order_failed") : (raw ?? t("order_failed")),
+        hasI18nKey
+          ? t(code as Parameters<typeof t>[0])
+          : t("order_failed"),
       );
     }
   }
 
-  if (!accessToken || (isLoading && items.length === 0)) return <CheckoutSkeleton />;
+  const isLoading = !isGuest && serverCartLoading && items.length === 0;
+  if (isLoading) return <CheckoutSkeleton />;
 
   const isSubmitting = createOrderMutation.isPending;
 
   return (
     <div className="min-h-screen bg-surface-soft pb-[104px] pt-8 sm:pt-10 lg:pb-20">
       <div className="container mx-auto max-w-6xl px-4 sm:px-6">
+        {/* Guest banner */}
+        {isGuest && (
+          <div className="mb-5 flex items-center justify-between gap-3 rounded-2xl border border-black/6 bg-white px-4 py-3 text-sm">
+            <span className="text-muted">{t("guest_checkout_banner")}</span>
+            <Link
+              href={ROUTES.LOGIN}
+              className="flex shrink-0 items-center gap-1.5 rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-white"
+            >
+              <LogIn className="size-3.5" />
+              {t("guest_checkout_login_cta")}
+            </Link>
+          </div>
+        )}
+
         <CheckoutHeader tab={tab} onTabChange={setTab} />
 
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-12 lg:gap-10 xl:gap-12">
@@ -391,7 +444,7 @@ export function CheckoutPageShell() {
               onDeliveryFormChange={(patch) => setDeliveryForm((p) => ({ ...p, ...patch }))}
               pickupForm={pickupForm}
               onPickupFormChange={(patch) => setPickupForm((p) => ({ ...p, ...patch }))}
-              savedAddresses={savedAddresses}
+              savedAddresses={effectiveSavedAddresses}
               selectedAddressId={selectedAddressId}
               onSelectAddress={setSelectedAddressId}
               tableName={tableInfo?.name}
@@ -401,17 +454,20 @@ export function CheckoutPageShell() {
               profilePhone={profile?.phone}
             />
 
-            <div className="mt-4 space-y-3 rounded-3xl border border-black/6 bg-white p-5 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.08)] sm:p-6">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-                {t("offers")}
-              </p>
-              <VoucherSection
-                subtotal={subtotal}
-                applied={appliedVoucher}
-                onApply={setAppliedVoucher}
-                onRemove={() => setAppliedVoucher(null)}
-              />
-            </div>
+            {/* Vouchers: members only */}
+            {!isGuest && (
+              <div className="mt-4 space-y-3 rounded-3xl border border-black/6 bg-white p-5 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.08)] sm:p-6">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
+                  {t("offers")}
+                </p>
+                <VoucherSection
+                  subtotal={subtotal}
+                  applied={appliedVoucher}
+                  onApply={setAppliedVoucher}
+                  onRemove={() => setAppliedVoucher(null)}
+                />
+              </div>
+            )}
 
             <PaymentMethodSection
               selected={paymentMethod}
@@ -443,7 +499,7 @@ export function CheckoutPageShell() {
         </div>
       </div>
 
-      {/* ── Mobile sticky submit bar (hidden on lg+) ────────────────────────── */}
+      {/* Mobile sticky submit bar */}
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-black/6 bg-white/95 px-4 pb-[calc(12px+env(safe-area-inset-bottom))] pt-3 shadow-[0_-4px_20px_-8px_rgba(0,0,0,0.12)] backdrop-blur-sm lg:hidden">
         {orderError && (
           <div className="mb-2.5 flex items-start gap-1.5 text-xs font-medium text-red-600">

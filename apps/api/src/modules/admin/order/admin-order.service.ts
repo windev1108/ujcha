@@ -547,7 +547,7 @@ export class AdminOrderService {
       ? await this.prisma.pointTransaction.findFirst({
           where: { userId: ownerId, source: PointSource.order, referenceId: orderId, type: PointTransactionType.earn },
           select: { amount: true },
-        }).then((t) => (t ? Math.round(Number(t.amount) * 10) / 10 : 0)).catch(() => 0)
+        }).then((t) => (t?.amount ?? 0)).catch(() => 0)
       : 0;
 
     await Promise.allSettled(

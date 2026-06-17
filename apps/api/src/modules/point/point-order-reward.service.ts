@@ -52,17 +52,15 @@ export class PointOrderRewardService {
     const groupOrder = await this.prisma.groupOrder.findFirst({
       where: { orderId, paymentMode: GroupPaymentMode.split },
       include: {
-        participants: {
-          where: { userId: { not: null } },
-          include: { items: true },
-        },
+        participants: { include: { items: true } },
       },
     });
 
-    if (groupOrder && groupOrder.participants.length > 0) {
+    if (groupOrder && groupOrder.participants.some((p) => p.items.length > 0)) {
       await this.rewardSplitGroupOrder(
         { id: order.id, productAmount, updatedAt: order.updatedAt },
         groupOrder.participants,
+        groupOrder.hostUserId,
         policy,
       );
       return;
@@ -73,8 +71,8 @@ export class PointOrderRewardService {
   }
 
   /**
-   * Với split payment: mỗi participant có userId được tích điểm theo phần sản phẩm của họ.
-   * Proportional share = (subtotal_của_họ / tổng_subtotal) × productAmount (không gồm phí ship).
+   * Với split payment: participant đã đăng nhập tích điểm theo phần của họ.
+   * Participant guest (userId = null) → phần điểm của họ gộp vào chủ nhóm (hostUserId).
    */
   private async rewardSplitGroupOrder(
     order: { id: string; productAmount: Prisma.Decimal; updatedAt: Date },
@@ -82,13 +80,13 @@ export class PointOrderRewardService {
       userId: string | null;
       items: Array<{ unitPrice: Prisma.Decimal; quantity: number; toppingsJson: unknown }>;
     }>,
+    hostUserId: string,
     policy: ResolvedPointPolicy,
   ): Promise<void> {
     let totalSubtotal = new Prisma.Decimal(0);
-    const userSubtotals: Array<{ userId: string; subtotal: Prisma.Decimal }> = [];
+    const userSubtotals = new Map<string, Prisma.Decimal>();
 
     for (const participant of participants) {
-      if (!participant.userId) continue;
       let sub = new Prisma.Decimal(0);
       for (const item of participant.items) {
         const toppingSum = Array.isArray(item.toppingsJson)
@@ -100,16 +98,17 @@ export class PointOrderRewardService {
         const unit = new Prisma.Decimal(item.unitPrice).add(new Prisma.Decimal(toppingSum));
         sub = sub.add(unit.mul(item.quantity));
       }
-      if (sub.greaterThan(0)) {
-        userSubtotals.push({ userId: participant.userId, subtotal: sub });
-        totalSubtotal = totalSubtotal.add(sub);
-      }
+      if (sub.isZero()) continue;
+
+      // Guest participant → điểm gộp vào chủ nhóm
+      const recipientId = participant.userId ?? hostUserId;
+      userSubtotals.set(recipientId, (userSubtotals.get(recipientId) ?? new Prisma.Decimal(0)).add(sub));
+      totalSubtotal = totalSubtotal.add(sub);
     }
 
     if (totalSubtotal.isZero()) return;
 
-    for (const { userId, subtotal } of userSubtotals) {
-      // Phần tích điểm theo tỉ lệ giá trị sản phẩm, không bao gồm phí ship
+    for (const [userId, subtotal] of userSubtotals) {
       const proportionalAmount = subtotal
         .mul(order.productAmount)
         .div(totalSubtotal)
@@ -145,8 +144,8 @@ export class PointOrderRewardService {
       .mul(policy.effectiveEarnPercent)
       .div(100)
       .div(policy.pointRate);
-    const points = Math.round(Number(earnedDecimal.toString()) * 10) / 10;
-    if (points < 0.1) return;
+    const points = Math.floor(Number(earnedDecimal.toString()));
+    if (points < 1) return;
 
     const baseMs = updatedAt.getTime();
     const usableFrom = new Date(baseMs + policy.delayHours * 60 * 60 * 1000);

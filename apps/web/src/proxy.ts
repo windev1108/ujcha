@@ -5,10 +5,15 @@ import { routing } from './i18n/routing';
 const intlMiddleware = createMiddleware(routing);
 
 const PROTECTED_PREFIXES = [
-  '/cart', '/checkout', '/profile', '/orders',
+  '/profile', '/orders',
   '/notifications', '/vouchers', '/rewards', '/addresses',
+  '/group-order/sessions',
 ];
 const AUTH_PAGES = ['/login', '/register', '/forgot-password'];
+
+// Order detail by paymentCode is guest-accessible (paymentCode is unguessable).
+// Pattern: /orders/UJCHA-XXXXXXXX (with optional locale prefix like /en/orders/…)
+const ORDER_DETAIL_RE = /(?:^|\/[a-z]{2})\/orders\/UJCHA-[0-9A-F]{8}(?:\/|$)/i;
 
 export default function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -20,7 +25,7 @@ export default function middleware(request: NextRequest) {
   }
 
   const isProtected = PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
-  if (isProtected && !isAuth) {
+  if (isProtected && !isAuth && !ORDER_DETAIL_RE.test(pathname)) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 

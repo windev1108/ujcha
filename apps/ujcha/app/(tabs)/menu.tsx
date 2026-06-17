@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, TextInput } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useRouter } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Ionicons } from '@expo/vector-icons'
@@ -9,6 +10,7 @@ import { fetchProducts, fetchCategories } from '@/services/product/api'
 import { QK } from '@/constants/query-keys'
 
 export default function MenuScreen() {
+  const router = useRouter()
   const insets = useSafeAreaInsets()
   const { t } = useTranslation()
   const [search, setSearch] = useState('')
@@ -97,7 +99,7 @@ export default function MenuScreen() {
           <View className="flex-row flex-wrap gap-4">
             {filtered.map((p) => (
               <View key={p.id} className="w-[47%]">
-                <ProductCard product={p} />
+                <ProductCard product={p} onAddPress={() => router.push(`/menu/${p.slug}`)} />
               </View>
             ))}
           </View>

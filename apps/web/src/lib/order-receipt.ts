@@ -37,6 +37,8 @@ const RECEIPT_I18N = {
     pay_cash: "Tiền mặt",
     pay_transfer: "Chuyển khoản",
     invoice: "Hóa đơn",
+    loyalty_qr_label: "Quét để tích điểm UjCha",
+    loyalty_qr_sub: "Tạo tài khoản & nhận điểm cho đơn này",
   },
   en: {
     order: "Order",
@@ -59,6 +61,8 @@ const RECEIPT_I18N = {
     pay_cash: "Cash",
     pay_transfer: "Bank transfer",
     invoice: "Invoice",
+    loyalty_qr_label: "Scan to earn UjCha points",
+    loyalty_qr_sub: "Create an account & claim points for this order",
   },
 } as const;
 
@@ -92,6 +96,7 @@ export type ReceiptOrder = {
   deliveryAddress?: string | null;
   tableName?: string | null;
   tableArea?: string | null;
+  earnedPoints?: number | null;
 };
 
 function serviceLabel(type: string, i18n: I18nStrings): string {
@@ -118,8 +123,8 @@ function buildItemsHtml(items: ReceiptOrderItem[], i18n: I18nStrings): string {
       `</div>`,
     );
 
-    for (const [k, v] of Object.entries(it.options)) {
-      lines.push(`<div style="margin-left:26px;font-size:11px;font-weight:bold;margin-bottom:1px;color:#000;">+ ${esc(k)}: ${esc(v)}</div>`);
+    for (const [, v] of Object.entries(it.options)) {
+      lines.push(`<div style="margin-left:26px;font-size:11px;font-weight:bold;margin-bottom:1px;color:#000;">+ ${esc(v)}</div>`);
     }
     for (const ex of it.extras) {
       const exPrice = typeof ex.price === "string" ? parseFloat(ex.price) : ex.price;
@@ -190,6 +195,14 @@ export function buildReceiptHtml(order: ReceiptOrder, locale = "vi"): string {
       : `<div style="font-size:11px;color:#000;margin-top:1px;">${esc(i18n.pending)}</div>`,
 
     `<div style="border-top:1px dashed #000;margin:4px 0;"></div>`,
+    !(order.earnedPoints) ? (
+      `<div style="text-align:center;margin:6px 0 4px;">` +
+      `<img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(`${env.SITE_URL}/${locale}/register?order=${order.paymentCode}`)}" width="80" height="80" style="display:block;margin:0 auto;" alt="QR"/>` +
+      `<div style="font-size:10px;font-weight:bold;color:#000;margin-top:3px;">${esc(i18n.loyalty_qr_label)}</div>` +
+      `<div style="font-size:9px;color:#444;margin-top:1px;">${esc(i18n.loyalty_qr_sub)}</div>` +
+      `</div>` +
+      `<div style="border-top:1px dashed #000;margin:4px 0;"></div>`
+    ) : "",
     `<div style="text-align:center;font-size:10px;color:#000;">${env.SITE_URL}</div>`,
   ].join("");
 

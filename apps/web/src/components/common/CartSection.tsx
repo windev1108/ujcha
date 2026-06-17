@@ -7,12 +7,14 @@ import { useCartQuery } from "@/services/cart/hooks";
 import { Link } from "@/i18n/navigation";
 import { ROUTES } from "@/lib/routes";
 import { useAuth } from "@/hooks";
+import { useCartStore } from "@/store/cart-store";
 
 export const CartSection = () => {
   const t = useTranslations();
   const { isLoggedIn } = useAuth();
   const { data: cart } = useCartQuery();
-  const count = isLoggedIn ? (cart?.items?.length ?? 0) : 0;
+  const localItems = useCartStore((s) => s.items);
+  const count = isLoggedIn ? (cart?.items?.length ?? 0) : localItems.length;
 
   return (
     <Tooltip>

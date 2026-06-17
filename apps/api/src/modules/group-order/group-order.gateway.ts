@@ -27,4 +27,12 @@ export class GroupOrderGateway {
   broadcast(token: string, state: unknown) {
     this.server.to(`room:${token}`).emit('updated', state);
   }
+
+  broadcastKick(token: string, participantId: string) {
+    this.server.to(`room:${token}`).emit('kicked', { participantId });
+  }
+
+  broadcastDissolved(token: string) {
+    this.server.to(`room:${token}`).emit('dissolved');
+  }
 }

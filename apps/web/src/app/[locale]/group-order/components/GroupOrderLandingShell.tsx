@@ -11,6 +11,8 @@ import { Button } from "@heroui/react";
 import { ROUTES } from "@/lib/routes";
 import { useAuthStore } from "@/store/auth-store";
 import { createGroupOrder, fetchGroupOrderConfig, type GroupDiscountTier } from "@/services/group-order/api";
+import { getDeviceId } from "@/hooks/useDeviceId";
+import { fetchMyGroupOrderSessions } from "@/services/group-order/api";
 import { useTranslations } from "next-intl";
 
 type OrderTypeOpt = "pickup" | "delivery";
@@ -18,7 +20,7 @@ type PaymentModeOpt = "split" | "host_pays";
 
 // ─── Create Modal ──────────────────────────────────────────────────────────────
 
-function CreateGroupModal({ onClose }: { onClose: () => void }) {
+function CreateGroupModal({ onClose, hasActiveSession }: { onClose: () => void; hasActiveSession: boolean }) {
   const router = useRouter();
   const t = useTranslations();
   const accessToken = useAuthStore((s) => s.accessToken);
@@ -27,15 +29,80 @@ function CreateGroupModal({ onClose }: { onClose: () => void }) {
   const [paymentMode, setPaymentMode] = useState<PaymentModeOpt>("split");
   const [creating, setCreating] = useState(false);
 
+  if (hasActiveSession) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center"
+        onClick={(e) => e.target === e.currentTarget && onClose()}
+      >
+        <motion.div
+          initial={{ y: "100%", opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+          exit={{ y: "100%", opacity: 0 }}
+          transition={{ type: "spring", damping: 32, stiffness: 380 }}
+          className="w-full max-w-md overflow-hidden rounded-t-[2rem] bg-white sm:rounded-[2rem]"
+        >
+          <div className="flex items-center justify-between px-6 py-4">
+            <div className="flex items-center gap-3">
+              <div className="flex size-9 items-center justify-center rounded-xl bg-amber-50">
+                <Users className="size-4.5 text-amber-600" />
+              </div>
+              <h2 className="text-base font-bold text-foreground">{t("group_orders")}</h2>
+            </div>
+            <button type="button" onClick={onClose}
+              className="flex size-8 items-center justify-center rounded-full bg-black/6 text-foreground/50 hover:bg-black/10"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+          <div className="px-6 pb-8 pt-2 text-center">
+            <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-amber-50 ring-1 ring-amber-200">
+              <Users className="size-6 text-amber-600" />
+            </div>
+            <p className="text-sm font-semibold text-foreground">{t("active_group_order_exists")}</p>
+            <div className="mt-5 flex flex-col gap-2.5">
+              <Button
+                className="h-12 w-full rounded-full bg-[#1a3c34] text-sm font-semibold text-white"
+                onPress={() => { onClose(); router.push(ROUTES.GROUP_ORDER_SESSIONS); }}
+              >
+                {t("active_group_order_exists_cta")}
+              </Button>
+              <Button
+                className="h-10 w-full rounded-full border border-black/10 bg-white text-sm font-semibold text-foreground/60"
+                onPress={onClose}
+              >
+                {t("back")}
+              </Button>
+            </div>
+          </div>
+        </motion.div>
+      </motion.div>
+    );
+  }
+
   const handleCreate = async () => {
     if (!accessToken) { router.push(ROUTES.LOGIN); return; }
     setCreating(true);
     try {
-      const result = await createGroupOrder({ type: orderType, paymentMode });
+      const deviceId = await getDeviceId();
+      const result = await createGroupOrder({ type: orderType, paymentMode, deviceId });
+      for (const key of Object.keys(localStorage)) {
+        if (
+          key.startsWith('group_order_session_') ||
+          key.startsWith('group_order_participant_') ||
+          key.startsWith('group_order_meta_')
+        ) {
+          localStorage.removeItem(key);
+        }
+      }
       localStorage.setItem(`group_order_session_${result.token}`, result.hostSessionToken);
       if (result.hostParticipantId) {
         localStorage.setItem(`group_order_participant_${result.token}`, result.hostParticipantId);
       }
+      localStorage.setItem(
+        `group_order_meta_${result.token}`,
+        JSON.stringify({ token: result.token, expiresAt: result.expiresAt, type: orderType, status: result.status }),
+      );
       router.push(ROUTES.GROUP_ORDER(result.token));
     } catch {
       alert(t("create_group_order_error"));
@@ -269,10 +336,28 @@ function fmtExpiry(minutes: number, locale: string): string {
 
 export function GroupOrderLandingShell() {
   const t = useTranslations();
+  const router = useRouter();
   const locale = typeof window !== "undefined"
     ? (document.documentElement.lang || "vi")
     : "vi";
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const [hasActiveSession, setHasActiveSession] = useState(false);
   const [showModal, setShowModal] = useState(false);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    fetchMyGroupOrderSessions()
+      .then((list) => setHasActiveSession(list.length > 0))
+      .catch(() => {});
+  }, [accessToken]);
+
+  const handleCreatePress = () => {
+    if (!accessToken) {
+      router.push(`${ROUTES.LOGIN}?redirect=/group-order`);
+      return;
+    }
+    setShowModal(true);
+  };
   const [tiers, setTiers] = useState<GroupDiscountTier[]>([]);
   const [expiryMinutes, setExpiryMinutes] = useState(120);
   const [configLoaded, setConfigLoaded] = useState(false);
@@ -307,7 +392,7 @@ export function GroupOrderLandingShell() {
   return (
     <>
       <AnimatePresence>
-        {showModal && <CreateGroupModal onClose={() => setShowModal(false)} />}
+        {showModal && <CreateGroupModal onClose={() => setShowModal(false)} hasActiveSession={hasActiveSession} />}
       </AnimatePresence>
 
       {/* ── Hero ── */}
@@ -361,13 +446,15 @@ export function GroupOrderLandingShell() {
             >
               <Button
                 className="inline-flex h-14 items-center gap-2.5 rounded-full bg-white px-8 text-base font-bold text-[#1a3c34] shadow-[0_8px_32px_-8px_rgba(0,0,0,0.3)] hover:opacity-95"
-                onPress={() => setShowModal(true)}
+                onPress={handleCreatePress}
               >
                 <Users className="size-5" />
-                {t("create_group_order_now")}
+                {accessToken ? t("create_group_order_now") : t("login_to_create_group_order")}
                 <ArrowRight className="size-4.5" />
               </Button>
-              <p className="text-xs text-white/35">{t("group_order_cta_note")}</p>
+              <p className="text-xs text-white/35">
+                {accessToken ? t("group_order_cta_note") : t("login_to_create_group_order_note")}
+              </p>
             </motion.div>
           </div>
         </div>
@@ -520,10 +607,10 @@ export function GroupOrderLandingShell() {
               <p className="mx-auto mt-3 max-w-sm text-sm text-white/55">{t("group_order_final_desc")}</p>
               <Button
                 className="mt-7 inline-flex h-13 items-center gap-2.5 rounded-full bg-white px-8 text-sm font-bold text-[#1a3c34] hover:opacity-95"
-                onPress={() => setShowModal(true)}
+                onPress={handleCreatePress}
               >
                 <Users className="size-4.5" />
-                {t("create_group_order_free")}
+                {accessToken ? t("create_group_order_free") : t("login_to_create_group_order")}
                 <ArrowRight className="size-4" />
               </Button>
             </div>

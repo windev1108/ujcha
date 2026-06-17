@@ -99,12 +99,12 @@ export function CheckoutOrderSummary({
           >
             {items.map((item) => {
               const imageUrl = item.product.imageUrls[0] ?? null;
-              const base = parseFloat(item.product.price);
-              const discountedBase = item.product.finalPrice;
+              const base = Number(item.product.price) || 0;
+              const discountedBase = Number(item.product.finalPrice) || base;
               const groups = normalizeOptionGroups(item.product.optionGroups);
               const optionSurcharge = computeOptionSurcharge(groups, item.selectedOptions);
               const toppingTotal = (item.toppings ?? []).reduce(
-                (s, t) => s + parseFloat(t.topping.price),
+                (s, t) => s + Number(t.topping?.price ?? 0),
                 0,
               );
               const unitPrice = discountedBase + optionSurcharge + toppingTotal;

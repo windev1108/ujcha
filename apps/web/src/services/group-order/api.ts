@@ -65,6 +65,7 @@ export interface GroupOrderConfig {
 export async function createGroupOrder(payload: {
   type: 'delivery' | 'pickup' | 'table'
   paymentMode: 'host_pays' | 'split'
+  deviceId?: string
   addressId?: string
   tableId?: string
   pickupTime?: string
@@ -75,6 +76,20 @@ export async function createGroupOrder(payload: {
   return data
 }
 
+export interface MyGroupOrderSession {
+  token: string
+  type: 'delivery' | 'pickup' | 'table'
+  status: GroupOrderStatus
+  expiresAt: string
+  paymentMode: GroupPaymentMode
+  participantCount: number
+}
+
+export async function fetchMyGroupOrderSessions(): Promise<MyGroupOrderSession[]> {
+  const { data } = await api.get<MyGroupOrderSession[]>('/group-orders/my')
+  return data
+}
+
 export async function fetchGroupOrder(token: string): Promise<GroupOrderState> {
   const { data } = await api.get<GroupOrderState>(`/group-orders/${token}`)
   return data
@@ -82,8 +97,9 @@ export async function fetchGroupOrder(token: string): Promise<GroupOrderState> {
 
 export async function joinGroupOrder(
   token: string,
+  payload?: { deviceId?: string; guestName?: string },
 ): Promise<{ sessionToken: string; participantId: string; alreadyJoined: boolean }> {
-  const { data } = await api.post(`/group-orders/${token}/join`, {})
+  const { data } = await api.post(`/group-orders/${token}/join`, payload ?? {})
   return data
 }
 
@@ -118,6 +134,14 @@ export async function lockGroupOrder(
   sessionToken: string,
 ): Promise<GroupOrderState> {
   const { data } = await api.post<GroupOrderState>(`/group-orders/${token}/lock`, { sessionToken })
+  return data
+}
+
+export async function initHostBankTransfer(
+  token: string,
+  sessionToken: string,
+): Promise<GroupOrderState> {
+  const { data } = await api.post<GroupOrderState>(`/group-orders/${token}/init-host-bank-transfer`, { sessionToken })
   return data
 }
 
@@ -159,6 +183,26 @@ export async function unlockGroupOrder(
   sessionToken: string,
 ): Promise<GroupOrderState> {
   const { data } = await api.post<GroupOrderState>(`/group-orders/${token}/unlock`, { sessionToken })
+  return data
+}
+
+export async function dissolveGroupOrder(
+  token: string,
+  sessionToken: string,
+): Promise<GroupOrderState> {
+  const { data } = await api.post<GroupOrderState>(`/group-orders/${token}/dissolve`, { sessionToken })
+  return data
+}
+
+export async function kickGroupOrderParticipant(
+  token: string,
+  sessionToken: string,
+  participantId: string,
+): Promise<GroupOrderState> {
+  const { data } = await api.post<GroupOrderState>(`/group-orders/${token}/kick`, {
+    sessionToken,
+    participantId,
+  })
   return data
 }
 

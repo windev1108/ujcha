@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { motion } from "motion/react";
 import Image from "next/image";
 import {
@@ -8,6 +8,7 @@ import {
   CreditCard, ExternalLink, MapPin, Package, Phone, Printer, Star, Truck, Utensils, Users,
   Bike,
   Motorbike,
+  UserPlus,
 } from "lucide-react";
 import { ShipperLiveMap } from "./ShipperLiveMap";
 import { useRouter } from "@/i18n/navigation";
@@ -23,6 +24,7 @@ import { fetchGroupOrder, type GroupOrderState } from "@/services/group-order/ap
 import { useTranslations, useLocale } from "next-intl";
 import { getDisplayName } from "@/lib/product-name";
 import { usePublicStoreLocationQuery } from "@/services/store/hooks";
+import { useAuthStore } from "@/store/auth-store";
 
 // ── formatters ────────────────────────────────────────────────────────────────
 
@@ -127,6 +129,7 @@ function toReceiptOrder(order: OrderDetail, locale: string): ReceiptOrder {
     deliveryAddress: order.address?.fullAddress ?? null,
     tableName: order.table?.name ?? null,
     tableArea: order.table?.area ?? null,
+    earnedPoints: order.earnedPoints,
     items: order.items.map((item) => ({
       quantity: item.quantity,
       price: item.price,
@@ -252,6 +255,21 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
     queryClient.invalidateQueries({ queryKey: orderKeys.detail(paymentCode) });
   }, [queryClient, paymentCode]);
 
+  const PENDING_CALL_DELAY_MS = 3 * 60 * 1000;
+  const [pendingTooLong, setPendingTooLong] = useState(() => {
+    if (!order || order.status !== "pending") return false;
+    return Date.now() - new Date(order.createdAt).getTime() > PENDING_CALL_DELAY_MS;
+  });
+
+  useEffect(() => {
+    if (!order || order.status !== "pending" || pendingTooLong) return;
+    const elapsed = Date.now() - new Date(order.createdAt).getTime();
+    const remaining = PENDING_CALL_DELAY_MS - elapsed;
+    if (remaining <= 0) { setPendingTooLong(true); return; }
+    const timer = setTimeout(() => setPendingTooLong(true), remaining);
+    return () => clearTimeout(timer);
+  }, [order?.status, order?.createdAt, pendingTooLong]);
+
   const isGroupOrder = !!order?.isGroupOrder;
   const groupToken = order?.groupOrderToken ?? null;
 
@@ -263,6 +281,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
   });
 
   const { data: storeLocation } = usePublicStoreLocationQuery();
+  const accessToken = useAuthStore((s) => s.accessToken);
 
   if (isLoading) {
     return (
@@ -322,11 +341,11 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
         >
           <button
             type="button"
-            onClick={() => router.push(ROUTES.ORDERS)}
+            onClick={() => router.push(accessToken ? ROUTES.ORDERS : ROUTES.HOME)}
             className="flex items-center gap-1.5 text-sm text-foreground/55 hover:text-foreground transition-colors"
           >
             <ArrowLeft className="size-4" />
-            {t("order_history")}
+            {accessToken ? t("order_history") : t("home")}
           </button>
           {canExportInvoice && (
             <button
@@ -339,6 +358,42 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
             </button>
           )}
         </motion.div>
+
+        {/* Guest account creation prompt */}
+        {!accessToken && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ ...revealTransition, delay: 0.06 }}
+            className="mb-4 overflow-hidden rounded-3xl border border-[#1a3c34]/15 bg-[#f0faf6] px-5 py-4"
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#1a3c34]/10">
+                <UserPlus className="size-4 text-[#1a3c34]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-[#1a3c34]">{t("guest_order_save_title")}</p>
+                <p className="mt-0.5 text-xs text-[#1a3c34]/70">{t("guest_order_save_desc")}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => router.push(ROUTES.REGISTER)}
+                    className="rounded-full bg-[#1a3c34] px-4 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"
+                  >
+                    {t("guest_orders_register_cta")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => router.push(ROUTES.LOGIN)}
+                    className="rounded-full border border-[#1a3c34]/20 bg-white px-4 py-1.5 text-xs font-semibold text-[#1a3c34] transition hover:bg-[#1a3c34]/5"
+                  >
+                    {t("guest_orders_login_btn")}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         <div className="space-y-4">
 
@@ -407,6 +462,25 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                   <span className="shrink-0 text-lg font-bold tabular-nums text-amber-700">
                     +{Number.isInteger(order.earnedPoints) ? order.earnedPoints : (order.earnedPoints as number).toFixed(1)}
                   </span>
+                </div>
+              )}
+
+              {/* Claim points CTA — not shown for group orders (handled automatically per participant) */}
+              {order.earnedPoints === 0 && !isCancelled && !isGroupOrder && (
+                <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-[#f0faf6] px-4 py-3 ring-1 ring-[#1a3c34]/15">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#1a3c34]/10">
+                      <Star className="size-4 text-[#1a3c34]" />
+                    </div>
+                    <p className="text-xs font-semibold text-[#1a3c34]">{t("claim_points_hint")}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => router.push(ROUTES.LOYALTY(order.paymentCode))}
+                    className="shrink-0 rounded-full bg-[#1a3c34] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"
+                  >
+                    {t("claim_points_cta")}
+                  </button>
                 </div>
               )}
             </div>
@@ -511,7 +585,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
           )}
 
           {/* ── Pending call-to-confirm hint ─────────────────────── */}
-          {order.status === "pending" && storeLocation?.phone && (
+          {pendingTooLong && storeLocation?.phone && (
             <motion.div
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}

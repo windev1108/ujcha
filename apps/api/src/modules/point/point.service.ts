@@ -311,9 +311,9 @@ export class PointService {
   }
 
   private assertPositiveAmount(amount: number) {
-    if (!Number.isFinite(amount) || amount <= 0) {
+    if (!Number.isFinite(amount) || amount <= 0 || !Number.isInteger(amount)) {
       throw new BadRequestException({
-        message: 'amount phải là số dương.',
+        message: 'amount phải là số nguyên dương.',
         code: 'POINT_INVALID_AMOUNT',
       });
     }

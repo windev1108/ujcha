@@ -1,13 +1,15 @@
 "use client";
 
 import type React from "react";
-import { Avatar, Button, Dropdown } from "@heroui/react";
-import { UserIcon, FileText, LogOut, MapPin, MessageSquare, Star, StoreIcon, Ticket, User } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Avatar, Dropdown } from "@heroui/react";
+import { UserIcon, FileText, LogOut, MapPin, MessageSquare, Star, StoreIcon, Ticket, User, Users } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { useAuth } from "@/hooks";
 import { useAuthStore } from "@/store/auth-store";
 import { useProfileQuery } from "@/services/profile/hooks";
+import { fetchMyGroupOrderSessions } from "@/services/group-order/api";
 import { ROUTES } from "@/lib/routes";
 
 // React 19 no longer infers `children` / image props automatically from ComponentPropsWithRef;
@@ -22,21 +24,61 @@ export const UserProfile = ({ onNavigate }: { onNavigate?: () => void } = {}) =>
   const clearSession = useAuthStore((s) => s.clearSession);
   const router = useRouter();
   const { data: profile } = useProfileQuery();
+  const [minMinsLeft, setMinMinsLeft] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    fetchMyGroupOrderSessions()
+      .then((sessions) => {
+        if (sessions.length > 0) {
+          const minMs = Math.min(...sessions.map((s) => new Date(s.expiresAt).getTime() - Date.now()));
+          setMinMinsLeft(Math.max(0, Math.ceil(minMs / 60_000)));
+        }
+      })
+      .catch(() => {});
+  }, [isLoggedIn]);
 
   if (!isLoggedIn) {
     return (
-      <Button
-        isIconOnly
-        variant="ghost"
-        aria-label={t("account")}
-        className="text-foreground"
-        onPress={() => { onNavigate?.(); router.push(ROUTES.LOGIN); }}
-      >
-        <UserIcon className="size-5" />
-      </Button>
+      <Dropdown>
+        <Dropdown.Trigger
+          aria-label={t("account")}
+          className="flex size-9 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[#1a3c34]/40"
+        >
+          <div className="flex size-9 items-center justify-center rounded-full text-foreground/60 transition hover:bg-black/6">
+            <UserIcon className="size-5" />
+          </div>
+        </Dropdown.Trigger>
+
+        <Dropdown.Popover className="w-52 rounded-2xl max-sm:w-[calc(100vw-2rem)]">
+          <Dropdown.Menu>
+            <Dropdown.Section>
+              <Dropdown.Item
+                textValue={t("guest_orders_login_btn")}
+                onPress={() => { onNavigate?.(); router.push(ROUTES.LOGIN); }}
+                className="cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5 py-0.5 text-sm font-semibold text-[#1a3c34]">
+                  <UserIcon className="size-4 shrink-0" />
+                  {t("guest_orders_login_btn")}
+                </div>
+              </Dropdown.Item>
+              <Dropdown.Item
+                textValue={t("guest_orders_register_cta")}
+                onPress={() => { onNavigate?.(); router.push(ROUTES.REGISTER); }}
+                className="cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5 py-0.5 text-sm text-foreground/65">
+                  <span className="flex size-4 shrink-0 items-center justify-center font-semibold text-foreground/35">+</span>
+                  {t("guest_orders_register_cta")}
+                </div>
+              </Dropdown.Item>
+            </Dropdown.Section>
+          </Dropdown.Menu>
+        </Dropdown.Popover>
+      </Dropdown>
     );
   }
-
   const name = user?.name?.trim() || "Tài khoản";
   const sub = user?.email?.trim() || user?.phone?.trim() || "";
   const initial = name.charAt(0).toUpperCase();
@@ -55,7 +97,7 @@ export const UserProfile = ({ onNavigate }: { onNavigate?: () => void } = {}) =>
         </Av>
       </Dropdown.Trigger>
 
-      <Dropdown.Popover className="w-64">
+      <Dropdown.Popover className="w-64 rounded-2xl">
         <Dropdown.Menu>
           {/* User header — no onPress so it acts as a display item */}
           <Dropdown.Section>
@@ -108,6 +150,25 @@ export const UserProfile = ({ onNavigate }: { onNavigate?: () => void } = {}) =>
               <div className="flex items-center gap-2.5 py-0.5 text-sm text-foreground">
                 <FileText className="size-4 shrink-0 text-foreground/50" />
                 {t('order_history')}
+              </div>
+            </Dropdown.Item>
+            <Dropdown.Item
+              textValue={t('group_order_session_title')}
+              onPress={() => router.push(ROUTES.GROUP_ORDER_SESSIONS)}
+              className="cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5 py-0.5 text-sm text-foreground">
+                <Users className="size-4 shrink-0 text-foreground/50" />
+                <span className="flex-1">{t('group_order_session_title')}</span>
+                {minMinsLeft !== null && (
+                  <span className="rounded-full bg-purple-100 px-1.5 py-0.5 text-[10px] font-bold leading-none text-purple-700">
+                    {minMinsLeft <= 0
+                      ? t("sessions_expired")
+                      : minMinsLeft < 60
+                        ? t("sessions_badge_mins", { n: minMinsLeft })
+                        : t("sessions_badge_hours", { n: Math.floor(minMinsLeft / 60) })}
+                  </span>
+                )}
               </div>
             </Dropdown.Item>
             <Dropdown.Item

@@ -20,6 +20,11 @@ export class CreateGroupOrderDto {
   paymentMode: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  deviceId?: string;
+
+  @IsOptional()
   @IsUUID()
   addressId?: string;
 
@@ -41,7 +46,17 @@ export class CreateGroupOrderDto {
   note?: string;
 }
 
-export class JoinGroupOrderDto {}
+export class JoinGroupOrderDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  guestName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  deviceId?: string;
+}
 
 export class GroupOrderItemDto {
   @IsUUID()
@@ -131,6 +146,14 @@ export class DiscountTierDto {
   @IsNumber()
   @Min(0)
   discountPercent: number;
+}
+
+export class KickParticipantDto {
+  @IsString()
+  sessionToken: string;
+
+  @IsUUID()
+  participantId: string;
 }
 
 export class UpdateGroupOrderConfigDto {

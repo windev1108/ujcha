@@ -65,8 +65,9 @@ export class SepayWebhookService {
       }
 
       // 4. Match pending order: find where order.paymentCode appears in SePay content.
-      //    Normalize by removing hyphens — some banks/MoMo strip them in transfer memos.
-      const normalize = (s: string) => s.toLowerCase().replace(/-/g, '');
+      //    Strip all non-alphanumeric chars before comparing — MoMo/banks may convert
+      //    hyphens to spaces or drop them entirely in transfer memos.
+      const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
       const content = normalize(payload.content ?? '');
       const pendingOrders = await this.prisma.order.findMany({
         where: { paymentStatus: PaymentStatus.pending },
@@ -95,7 +96,7 @@ export class SepayWebhookService {
         });
 
         const matchedParticipant = pendingParticipants.find((p) =>
-          content.includes(normalize(p.paymentQrToken!.slice(0, 12))),
+          content.includes(normalize(p.paymentQrToken!).slice(0, 12)),
         );
 
         if (matchedParticipant) {

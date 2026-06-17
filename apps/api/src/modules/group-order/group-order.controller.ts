@@ -12,12 +12,14 @@ import {
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt.guard';
+import { OptionalJwtAuthGuard } from '../auth/optional-jwt.guard';
 import { GroupOrderGateway } from './group-order.gateway';
 import { GroupOrderService } from './group-order.service';
 import {
   ConfirmPaidDto,
   CreateGroupOrderDto,
   JoinGroupOrderDto,
+  KickParticipantDto,
   PaymentActionDto,
   SessionActionDto,
   SetFulfillmentDto,
@@ -34,6 +36,12 @@ export class GroupOrderController {
   ) {}
 
   @UseGuards(JwtAuthGuard)
+  @Get('my')
+  getMyActiveSessions(@Req() req: any) {
+    return this.service.findActiveByUser(req.user.userId as string);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Post()
   async create(@Req() req: any, @Body() dto: CreateGroupOrderDto) {
     const result = await this.service.create(req.user.userId as string, dto);
@@ -45,7 +53,7 @@ export class GroupOrderController {
     return this.service.findByToken(token);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(OptionalJwtAuthGuard)
   @Post(':token/join')
   @HttpCode(200)
   async join(
@@ -53,9 +61,12 @@ export class GroupOrderController {
     @Req() req: any,
     @Body() dto: JoinGroupOrderDto,
   ) {
-    const result = await this.service.join(token, req.user.userId as string, dto);
-    const state = await this.service.findByToken(token);
-    this.gateway.broadcast(token, state);
+    const userId: string | null = (req.user as any)?.userId ?? null;
+    const result = await this.service.join(token, userId, dto);
+    if (!result.alreadyJoined) {
+      const state = await this.service.findByToken(token);
+      this.gateway.broadcast(token, state);
+    }
     return result;
   }
 
@@ -128,6 +139,17 @@ export class GroupOrderController {
     return result;
   }
 
+  @Post(':token/init-host-bank-transfer')
+  @HttpCode(200)
+  async initHostBankTransfer(
+    @Param('token') token: string,
+    @Body() dto: SessionActionDto,
+  ) {
+    const state = await this.service.initHostBankTransfer(token, dto.sessionToken);
+    this.gateway.broadcast(token, state);
+    return state;
+  }
+
   @Post(':token/split-payment')
   @HttpCode(200)
   async initSplitPayment(
@@ -141,6 +163,30 @@ export class GroupOrderController {
     );
     this.gateway.broadcast(token, state);
     return state;
+  }
+
+  @Post(':token/dissolve')
+  @HttpCode(200)
+  async dissolveGroupOrder(
+    @Param('token') token: string,
+    @Body() dto: SessionActionDto,
+  ) {
+    const state = await this.service.dissolveGroupOrder(token, dto.sessionToken);
+    this.gateway.broadcastDissolved(token);
+    this.gateway.broadcast(token, state);
+    return state;
+  }
+
+  @Post(':token/kick')
+  @HttpCode(200)
+  async kickParticipant(
+    @Param('token') token: string,
+    @Body() dto: KickParticipantDto,
+  ) {
+    const result = await this.service.kickParticipant(token, dto.sessionToken, dto.participantId);
+    this.gateway.broadcastKick(token, result.kicked);
+    this.gateway.broadcast(token, result.groupOrder);
+    return result.groupOrder;
   }
 
   @Post(':token/confirm-paid')
