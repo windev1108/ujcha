@@ -793,11 +793,27 @@ export class OrderService {
 
     // Guest (userId = null): paymentCode là đủ xác thực vì mã không đoán được.
     if (!userId) {
-      const groupOrderLink = await this.prisma.groupOrder.findFirst({
-        where: { orderId: order.id },
-        select: { token: true },
-      });
-      return { ...order, isGroupOrder: !!groupOrderLink, groupOrderToken: groupOrderLink?.token ?? null, earnedPoints: 0 };
+      const [groupOrderLink, earnedTxn] = await Promise.all([
+        this.prisma.groupOrder.findFirst({
+          where: { orderId: order.id },
+          select: { token: true },
+        }),
+        // Kiểm tra đơn đã được tích điểm bởi bất kỳ user nào (guest claim sau khi đăng nhập)
+        this.prisma.pointTransaction.findFirst({
+          where: {
+            type: PointTransactionType.earn,
+            source: PointSource.order,
+            referenceId: order.id,
+          },
+          select: { amount: true },
+        }),
+      ]);
+      return {
+        ...order,
+        isGroupOrder: !!groupOrderLink,
+        groupOrderToken: groupOrderLink?.token ?? null,
+        earnedPoints: earnedTxn?.amount ?? 0,
+      };
     }
 
     // Allow host (userId match) or any group order participant

@@ -916,6 +916,8 @@
   "earned_points_from_order": "Điểm tích lũy từ đơn này",
   "points_already_added": "Điểm đã được cộng vào tài khoản",
   "points_will_be_added": "Sẽ được cộng khi đơn hoàn thành",
+  "points_claimed_guest_title": "Đơn hàng đã được tích điểm",
+  "points_claimed_guest_sub": "Ai đó đã tích điểm cho đơn này.",
   "claim_points_hint": "Đơn này chưa được tích điểm",
   "claim_points_cta": "Tích điểm ngay",
   "order_progress": "Tiến trình đơn hàng",

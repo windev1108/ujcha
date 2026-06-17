@@ -447,22 +447,34 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
 
               {/* Earned points banner */}
               {order.earnedPoints > 0 && (
-                <div className="mt-4 flex items-center gap-3 rounded-2xl bg-amber-50 px-4 py-3 ring-1 ring-amber-200">
-                  <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-amber-100">
-                    <Star className="size-4 fill-amber-500 text-amber-500" />
+                accessToken ? (
+                  <div className="mt-4 flex items-center gap-3 rounded-2xl bg-amber-50 px-4 py-3 ring-1 ring-amber-200">
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-amber-100">
+                      <Star className="size-4 fill-amber-500 text-amber-500" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-amber-800">{t("earned_points_from_order")}</p>
+                      <p className="text-[11px] text-amber-600/80">
+                        {order.status === "completed"
+                          ? t("points_already_added")
+                          : t("points_will_be_added")}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-lg font-bold tabular-nums text-amber-700">
+                      +{order.earnedPoints}
+                    </span>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold text-amber-800">{t("earned_points_from_order")}</p>
-                    <p className="text-[11px] text-amber-600/80">
-                      {order.status === "completed"
-                        ? t("points_already_added")
-                        : t("points_will_be_added")}
-                    </p>
+                ) : (
+                  <div className="mt-4 flex items-center gap-3 rounded-2xl bg-green-50 px-4 py-3 ring-1 ring-green-200">
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-green-100">
+                      <CheckCircle2 className="size-4 text-green-600" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-green-800">{t("points_claimed_guest_title")}</p>
+                      <p className="text-[11px] text-green-600/80">{t("points_claimed_guest_sub")}</p>
+                    </div>
                   </div>
-                  <span className="shrink-0 text-lg font-bold tabular-nums text-amber-700">
-                    +{Number.isInteger(order.earnedPoints) ? order.earnedPoints : (order.earnedPoints as number).toFixed(1)}
-                  </span>
-                </div>
+                )
               )}
 
               {/* Claim points CTA — guest only, completed+paid, no points yet, not a group order */}

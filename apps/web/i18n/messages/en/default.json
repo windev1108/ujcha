@@ -873,6 +873,8 @@
   "earned_points_from_order": "Points earned from this order",
   "points_already_added": "Points have been added to your account",
   "points_will_be_added": "Will be added when the order is completed",
+  "points_claimed_guest_title": "Points already claimed for this order",
+  "points_claimed_guest_sub": "Points have been credited to an UjCha account",
   "claim_points_hint": "No points earned for this order yet",
   "claim_points_cta": "Earn points",
   "order_progress": "Order progress",
