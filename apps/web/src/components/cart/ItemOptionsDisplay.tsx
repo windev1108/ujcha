@@ -23,11 +23,12 @@ export function ItemOptionsDisplay({ item }: Props) {
       const v = g.values.find((vv) => vv.label === val);
       return {
         key: val,
+        groupName: getDisplayName(g, locale),
         label: v ? getValueLabel(v, locale) : val,
         delta: v?.priceDelta ?? 0,
       };
     })
-    .filter(Boolean) as { key: string; label: string; delta: number }[];
+    .filter(Boolean) as { key: string; groupName: string; label: string; delta: number }[];
 
   const toppingPills = (item.toppings ?? []).map((t) => ({
     name: getDisplayName(t.topping, locale),
@@ -47,7 +48,7 @@ export function ItemOptionsDisplay({ item }: Props) {
               key={p.key}
               className="inline-flex items-center gap-1 rounded-full bg-surface-secondary px-2.5 py-0.5 text-[11px] font-medium text-foreground/70"
             >
-              {p.label}
+              {p.groupName}: {p.label}
               {p.delta > 0 && (
                 <span className="text-[10px] text-muted">+{fmt(p.delta)}</span>
               )}

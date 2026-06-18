@@ -479,11 +479,11 @@ export function buildSingleLabelHtml(
   printedAt: string,
   fontBase64 = '',
 ): string {
-  const optValues =
+  const optEntries =
     item.optionsJson &&
       typeof item.optionsJson === 'object' &&
       !Array.isArray(item.optionsJson)
-      ? Object.values(item.optionsJson as Record<string, string>).filter(Boolean)
+      ? Object.entries(item.optionsJson as Record<string, string>).filter(([, v]) => Boolean(v))
       : []
 
   const extras = parseExtras(item.extrasJson)
@@ -505,8 +505,8 @@ export function buildSingleLabelHtml(
     lines.push(`<div style="font-weight:bold;font-size:11px;line-height:1.2;color:#000;">${esc(item.product.name)}</div>`)
   }
 
-  for (const v of optValues) {
-    lines.push(`<div style="font-size:9px;line-height:1.2;color:#000;font-weight:bold;">+ ${esc(v)}</div>`)
+  for (const [k, v] of optEntries) {
+    lines.push(`<div style="font-size:9px;line-height:1.2;color:#000;font-weight:bold;">+ ${esc(k)}: ${esc(v)}</div>`)
   }
 
   for (const ex of extras) {

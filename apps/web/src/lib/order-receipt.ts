@@ -123,8 +123,8 @@ function buildItemsHtml(items: ReceiptOrderItem[], i18n: I18nStrings): string {
       `</div>`,
     );
 
-    for (const [, v] of Object.entries(it.options)) {
-      lines.push(`<div style="margin-left:26px;font-size:11px;font-weight:bold;margin-bottom:1px;color:#000;">+ ${esc(v)}</div>`);
+    for (const [k, v] of Object.entries(it.options)) {
+      lines.push(`<div style="margin-left:26px;font-size:11px;font-weight:bold;margin-bottom:1px;color:#000;">+ ${esc(k)}: ${esc(v)}</div>`);
     }
     for (const ex of it.extras) {
       const exPrice = typeof ex.price === "string" ? parseFloat(ex.price) : ex.price;

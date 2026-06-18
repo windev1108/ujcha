@@ -248,9 +248,9 @@ export function OrderDetailModal({
         setBillStatus('printing')
         const address = billCfg.address || billCfg.printerId?.replace('manual-', '')
         const printerName = billCfg.printerName || address
-        const fontBase64 = await getFontBase64()
         if (!address) { setBillStatus('error'); return }
         try {
+            const fontBase64 = await getFontBase64()
             const loyaltyQrUrl = order.paymentCode ? buildKunLoyaltyQrUrl(order.paymentCode) : undefined
             const html = buildReceiptDocumentHtml(order, loyaltyQrUrl, null, fontBase64)
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -265,9 +265,9 @@ export function OrderDetailModal({
         setLabelStatus('printing')
         const address = labelCfg.address || labelCfg.printerId?.replace('manual-', '')
         const printerName = labelCfg.printerName || address
-        const fontBase64 = await getFontBase64()
         if (!address) { setLabelStatus('error'); return }
         try {
+            const fontBase64 = await getFontBase64()
             const allLabels = buildOrderLabels(order, {
                 labelWidth: labelCfg.labelWidth,
                 showProductName: labelCfg.showProductName,

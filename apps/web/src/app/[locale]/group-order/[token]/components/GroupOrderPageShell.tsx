@@ -780,7 +780,11 @@ function ParticipantRow({
               .map(([groupName, optionLabel]) => {
                 const grp = groups.find((g) => g.name === groupName);
                 const val = grp?.values.find((v) => v.label === optionLabel);
-                return { label: val?.nameTranslation?.[locale] ?? val?.label ?? optionLabel, priceDelta: val?.priceDelta ?? 0 };
+                return {
+                  groupName: grp ? getDisplayName(grp, locale) : groupName,
+                  label: val?.nameTranslation?.[locale] ?? val?.label ?? optionLabel,
+                  priceDelta: val?.priceDelta ?? 0,
+                };
               })
               .filter((o) => o.label);
             const toppingTotal = item.toppings?.reduce((s, t) => s + t.price, 0) ?? 0;
@@ -829,7 +833,7 @@ function ParticipantRow({
                           key={i}
                           className="inline-flex items-center gap-1 rounded-full bg-surface-card px-2.5 py-0.5 text-[11px] font-medium text-foreground/70"
                         >
-                          {o.label}
+                          {o.groupName}: {o.label}
                           {o.priceDelta > 0 && (
                             <span className="text-[10px] text-muted">+{fmtVnd(o.priceDelta)}</span>
                           )}

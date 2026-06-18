@@ -388,13 +388,18 @@ let _printQueue: Promise<void> = Promise.resolve()
 async function printHtmlViaElectronWindow(
     printerName: string,
     html: string,
+    pageCss = '@page { size: auto !important; margin: 2mm !important; }',
 ): Promise<void> {
-    const job = _printQueue.then(() => _doPrint(printerName, html))
+    const job = _printQueue.then(() => _doPrint(printerName, html, pageCss))
     _printQueue = job.catch(() => { /* keep queue alive on error */ })
     return job
 }
 
-async function _doPrint(printerName: string, html: string): Promise<void> {
+async function _doPrint(
+    printerName: string,
+    html: string,
+    pageCss: string,
+): Promise<void> {
     const win = new BrowserWindow({
         show: false,
         x: -9999,
@@ -415,7 +420,7 @@ async function _doPrint(printerName: string, html: string): Promise<void> {
             ),
         ])
 
-        await win.webContents.insertCSS('@page { size: auto !important; margin: 2mm !important; }')
+        await win.webContents.insertCSS(pageCss)
         win.show()
         // Brief settle: let the OS compositor register the window before sending the print job
         await new Promise(r => setTimeout(r, 400))
@@ -659,7 +664,7 @@ export async function smartPrint(
             await printViaTcp(address, 9100, buildEscPosLabel(html, paperWidthMm, spacing))
 
         } else {
-            // Label via Windows USB → winspool RAW
+            // Label via Windows USB → winspool RAW ESC/POS
             const targetPrinter = address || printerName
             console.log('[smartPrint] → label USB/spooler:', targetPrinter)
             await printRawViaWindowsSpooler(targetPrinter, buildEscPosLabel(html, paperWidthMm, spacing))
@@ -836,10 +841,12 @@ export function registerPrinterHandlers(): void {
     ipcMain.handle('printer:testPrint', async (_e, id: string, type: 'bill' | 'label') => {
         const printer = resolvePrinter(id)
         if (!printer) throw new Error(`Máy in chưa kết nối (${id})`)
+        const pw = DEFAULT_BILL.paperWidth
         const html = type === 'bill'
-            ? buildTestBillHtml(DEFAULT_BILL.headerText, DEFAULT_BILL.footerText, DEFAULT_BILL.paperWidth)
+            ? buildTestBillHtml(DEFAULT_BILL.headerText, DEFAULT_BILL.footerText, pw)
             : buildTestLabelHtml(50)
-        return smartPrint(printer.address ?? printer.name, printer.name, html, DEFAULT_BILL.paperWidth)
+        const labelSize = type === 'label' ? { width: 50, height: 30 } : undefined
+        return smartPrint(printer.address ?? printer.name, printer.name, html, pw, type, labelSize)
     })
 
     ipcMain.handle('printer:printBill', async (_e, printerId: string, html: string, copies: number, cfg?: BillConfig) => {
@@ -873,7 +880,8 @@ export function registerPrinterHandlers(): void {
         const html = type === 'bill'
             ? buildTestBillHtml('Ujcha Matcha & Coffee', 'Cam on quy khach!', pw)
             : buildTestLabelHtml(50)
-        return smartPrint(address, printerName || address, html, pw)
+        const labelSize = type === 'label' ? { width: 50, height: 30 } : undefined
+        return smartPrint(address, printerName || address, html, pw, type, labelSize)
     })
 
     ipcMain.handle('printer:printBillByAddress', async (

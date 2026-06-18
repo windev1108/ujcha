@@ -110,8 +110,8 @@ function renderItems(order: AdminOrder, el: ReceiptElement): string {
       `</div>`,
     );
 
-    for (const [, v] of Object.entries(opts)) {
-      lines.push(`<div style="margin-left:26px;font-size:${subFs}px;margin-bottom:1px;color:#000;">+ ${esc(v)}</div>`);
+    for (const [k, v] of Object.entries(opts)) {
+      lines.push(`<div style="margin-left:26px;font-size:${subFs}px;margin-bottom:1px;color:#000;">+ ${esc(k)}: ${esc(v)}</div>`);
     }
     for (const ex of extras) {
       const exPrice = Number(ex.price ?? 0);
