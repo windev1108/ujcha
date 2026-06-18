@@ -3,7 +3,8 @@ import { fetchProductBySlug } from '@/services/product/api'
 import { ProductDetailPageShell } from './components/ProductDetailPageShell'
 import { getDisplayName, getDisplayDescription } from '@/lib/product-name'
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://kun.vn'
+const _rawSiteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ujcha.vercel.app";
+const SITE_URL = _rawSiteUrl.startsWith("http") ? _rawSiteUrl : `https://${_rawSiteUrl}`;
 
 export const revalidate = 300;
 

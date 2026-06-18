@@ -6,7 +6,8 @@ import { fontSans, fontSerif } from "@/assets/font";
 import { NextIntlClientProvider } from "next-intl";
 import "@/app/globals.css";
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ujcha.vercel.app";
+const _rawSiteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ujcha.vercel.app";
+const SITE_URL = _rawSiteUrl.startsWith("http") ? _rawSiteUrl : `https://${_rawSiteUrl}`;
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

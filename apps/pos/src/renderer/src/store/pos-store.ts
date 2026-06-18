@@ -85,7 +85,7 @@ export const usePosStore = create<PosState>((set, get) => ({
         .map(([k, v]) => `${k}:${v}`)
         .join('|')
       const extras = [...(i.extras ?? [])].map(e => e.id).sort().join(',')
-      return `${i.productId}__${opts}__${extras}`
+      return `${i.productId}__${opts}__${extras}__${(i.note ?? '').trim()}`
     }
     set((s) => {
       const newKey = key(item)

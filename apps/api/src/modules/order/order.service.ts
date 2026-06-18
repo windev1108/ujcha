@@ -24,6 +24,7 @@ import type { CreateOrderItemDto } from './dto/create-order-item.dto';
 import type { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { NotificationService } from '../notification/notification.service';
 import { OrderValidationService } from './order-validation.service';
+import { computeFinalPrice } from '../../helper/utils';
 
 export type OrderDetail = Prisma.OrderGetPayload<{
   include: {
@@ -166,6 +167,9 @@ export class OrderService {
    * Chuẩn hoá đơn giá từ DB (sản phẩm + topping + phụ phí tuỳ chọn nhóm), kiểm tra khớp với giá client (POS).
    */
   private async buildOrderItemRows(items: CreateOrderItemDto[], skipOptionValidation = false) {
+    const shopSettings = await this.prisma.shopSettings.findUnique({ where: { id: 'default' } });
+    const globalDiscount = shopSettings?.globalDiscountPercent ?? 0;
+
     const rows: Array<{
       productId: string;
       quantity: number;
@@ -194,8 +198,9 @@ export class OrderService {
         });
       }
 
-      // ── Base price từ DB ─────────────────────────────────────────────────
-      let unit = new Prisma.Decimal(product.price);
+      // ── Base price từ DB, áp dụng giảm giá hiệu quả ─────────────────────
+      const effectiveDiscount = globalDiscount > 0 ? globalDiscount : (product.discountPercent ?? 0);
+      let unit = new Prisma.Decimal(computeFinalPrice(product.price, effectiveDiscount));
 
       // ── Extras (toppings) — validated against product's inline toppings ───
       const extrasSnap: { toppingId: string; name: string; price: number; nameTranslation: Record<string, string> }[] = [];
