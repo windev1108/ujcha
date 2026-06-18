@@ -334,7 +334,7 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
                     <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted">
                       {getDisplayName(resolvedProduct.category, locale)}
                     </p>
-                    <h2 className="text-xl font-semibold leading-snug text-foreground sm:text-2xl">
+                    <h2 className="text-base font-semibold leading-snug text-foreground sm:text-xl">
                       {displayName}
                     </h2>
                     {isEditMode && (
@@ -348,13 +348,13 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: 6 }}
                           transition={{ duration: 0.16 }}
-                          className="text-xl font-black tabular-nums text-kun-products-forest"
+                          className="text-lg font-black tabular-nums text-kun-products-forest sm:text-xl"
                         >
                           {formatVnd(unitPrice)}
                         </motion.p>
                       </AnimatePresence>
                       {hasDiscount && (
-                        <p className="text-sm text-muted line-through">{formatVnd(basePrice)}</p>
+                        <p className="text-xs text-muted line-through sm:text-sm">{formatVnd(basePrice)}</p>
                       )}
                     </div>
                     {getDisplayDescription(resolvedProduct, locale) && (
@@ -420,7 +420,7 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
                           </button>
                         )}
                       </div>
-                      <div className="grid grid-cols-2 gap-1.5">
+                      <div className="max-h-[172px] overflow-y-auto overscroll-contain rounded-xl grid grid-cols-1 gap-1.5">
                         {toppings.map((top) => {
                           const isActive = selectedToppings.has(top.id);
                           return (
