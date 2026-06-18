@@ -61,6 +61,11 @@ export const useAuthStore = create<AuthState>()(
         refreshToken: s.refreshToken,
       }),
       onRehydrateStorage: () => (state) => {
+        // Re-set the cookie so middleware doesn't kick authenticated users out
+        // when the cookie expired but localStorage still has a valid token.
+        if (state?.accessToken) {
+          setAuthCookie(state.accessToken);
+        }
         state?.setHydrated(true);
       },
     },

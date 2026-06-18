@@ -8,12 +8,6 @@ import { useAuth } from "@/hooks";
 import { useGuestOrders } from "@/hooks/useGuestOrders";
 import { ROUTES } from "@/lib/routes";
 
-const TYPE_LABEL: Record<string, string> = {
-  delivery: "Giao hàng",
-  pickup: "Mang về",
-  table: "Tại bàn",
-};
-
 function fmtTime(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diffMs / 60_000);
@@ -25,6 +19,11 @@ function fmtTime(iso: string): string {
 
 export function GuestOrdersDropdown({ onNavigate }: { onNavigate?: () => void } = {}) {
   const t = useTranslations();
+  const typeLabel: Record<string, string> = {
+    delivery: t("type_delivery"),
+    pickup: t("type_pickup"),
+    table: t("type_table"),
+  };
   const { isLoggedIn } = useAuth();
   const [guestOrders] = useGuestOrders();
   const router = useRouter();
@@ -77,7 +76,7 @@ export function GuestOrdersDropdown({ onNavigate }: { onNavigate?: () => void } 
                       #{o.paymentCode}
                     </p>
                     <p className="truncate text-xs text-muted">
-                      {TYPE_LABEL[o.type] ?? o.type}
+                      {typeLabel[o.type] ?? o.type}
                       <span className="mx-1 opacity-40">·</span>
                       {new Intl.NumberFormat("vi-VN").format(Math.round(o.totalAmount))}đ
                     </p>

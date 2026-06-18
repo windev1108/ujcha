@@ -465,7 +465,7 @@ export function AppHeader() {
                     : mins < 1440
                       ? `${Math.floor(mins / 60)} giờ trước`
                       : new Date(o.createdAt).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
-                  const typeLabel: Record<string, string> = { delivery: "Giao hàng", pickup: "Mang về", table: "Tại bàn" };
+                  const typeLabel: Record<string, string> = { delivery: t("type_delivery"), pickup: t("type_pickup"), table: t("type_table") };
                   return (
                     <motion.div
                       key={o.paymentCode}
