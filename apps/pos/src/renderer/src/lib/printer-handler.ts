@@ -411,7 +411,6 @@ async function _doPrint(
         webPreferences: { contextIsolation: true, nodeIntegration: false },
     })
     try {
-        // data: URL loads from memory — faster and more reliable than loadFile for hidden windows
         const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`
         await Promise.race([
             win.loadURL(dataUrl),
@@ -420,19 +419,38 @@ async function _doPrint(
             ),
         ])
 
-        await win.webContents.insertCSS(pageCss)
+        // Only insert CSS override when explicitly requested.
+        // All bill/label HTML already embed their own @page { size: Xmm auto; margin: 0; }.
+        // Overriding with size:auto !important can cause A4 paper size on some GDI drivers → blank output.
+        if (pageCss) {
+            await win.webContents.insertCSS(pageCss)
+        }
         win.show()
-        // Brief settle: let the OS compositor register the window before sending the print job
         await new Promise(r => setTimeout(r, 400))
 
-        // Fire-and-forget: webContents.print() callback is unreliable on Electron 32/Windows
-        // for programmatically-created windows. Submit and wait for spooling to complete.
-        win.webContents.print({ silent: true, deviceName: printerName, printBackground: true })
-        console.log('[print] ✅ job submitted →', printerName)
+        await new Promise<void>((resolve, reject) => {
+            // Fallback: callback is unreliable on some Electron/Windows combos — resolve after timeout
+            const fallback = setTimeout(() => {
+                console.log('[print] callback not received — assuming spooled')
+                resolve()
+            }, 8000)
+            win.webContents.print(
+                { silent: true, deviceName: printerName, printBackground: true },
+                (success, failureReason) => {
+                    clearTimeout(fallback)
+                    if (success) {
+                        console.log('[print] ✅ callback confirmed →', printerName)
+                        resolve()
+                    } else {
+                        reject(new Error(failureReason ?? 'Máy in từ chối lệnh in'))
+                    }
+                },
+            )
+            console.log('[print] job submitted →', printerName)
+        })
 
-        // Wait for data to reach the Windows spooler before destroying the window.
-        // Destroying mid-spool cancels the job on Windows.
-        await new Promise(r => setTimeout(r, 3000))
+        // Brief wait after callback to let the driver finish flushing the buffer
+        await new Promise(r => setTimeout(r, 800))
     } finally {
         win.destroy()
     }
@@ -651,7 +669,8 @@ export async function smartPrint(
                 if (!online) throw new Error(reason)
             }
 
-            await printHtmlViaElectronWindow(winName, html)
+            // Bill HTML already has @page { size: Xmm auto; margin: 0; } — don't override
+            await printHtmlViaElectronWindow(winName, html, '')
 
         } else if (isComPort(address)) {
             // Label via Bluetooth COM port → ESC/POS raw
@@ -664,10 +683,16 @@ export async function smartPrint(
             await printViaTcp(address, 9100, buildEscPosLabel(html, paperWidthMm, spacing))
 
         } else {
-            // Label via Windows USB → winspool RAW ESC/POS
+            // Label via Windows USB — GDI driver path (same pipeline as bill)
+            // printRawViaWindowsSpooler sends raw ESC/POS bytes that bypass the Windows driver.
+            // GDI-based label printers (XP-420B, etc.) need the driver to rasterize the content;
+            // they cannot interpret raw ESC/POS bytes and silently reject the job.
             const targetPrinter = address || printerName
-            console.log('[smartPrint] → label USB/spooler:', targetPrinter)
-            await printRawViaWindowsSpooler(targetPrinter, buildEscPosLabel(html, paperWidthMm, spacing))
+            console.log('[smartPrint] → label USB/GDI:', targetPrinter)
+            const { online, reason } = await checkWindowsPrinterOnline(targetPrinter)
+            if (!online) throw new Error(reason)
+            // Label HTML already has @page { size: Xmm auto; margin: 0; } — don't override
+            await printHtmlViaElectronWindow(targetPrinter, html, '')
         }
 
         return { ok: true }
