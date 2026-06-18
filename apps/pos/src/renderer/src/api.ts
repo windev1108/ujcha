@@ -100,6 +100,12 @@ export interface CustomerLookupResult {
 export const lookupCustomer = (q: string) =>
   api.get<CustomerLookupResult[]>('/admin/users', { params: { q } }).then((r) => r.data)
 
+export const fetchReturningCustomers = (phones: string[], userIds: string[]) =>
+  api.post<{ returningPhones: string[]; returningUserIds: string[] }>(
+    '/admin/orders/returning-check',
+    { phones, userIds },
+  ).then((r) => r.data)
+
 export const fetchExternalOrders = (page = 1, pageSize = 100, from?: string, to?: string) =>
   api.get('/admin/orders', {
     params: { page, pageSize, isExternal: true, ...(from && { from }), ...(to && { to }) },

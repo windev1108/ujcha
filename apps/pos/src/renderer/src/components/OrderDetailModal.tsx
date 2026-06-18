@@ -2,7 +2,7 @@ import {
     X, Printer, Tag, CheckCircle2, Loader2, AlertCircle,
     MapPin, CreditCard, Clock, ShoppingBag, Percent,
     Star, Receipt, Box, Circle, Ban, ExternalLink, Phone, User,
-    Bike, UtensilsCrossed, Package, Truck, UserPlus, Users, Crown, XCircle,
+    Bike, UtensilsCrossed, Package, Truck, UserPlus, Users, Crown, XCircle, UserCheck, Sparkles,
 } from 'lucide-react'
 import { Fragment, useState, useEffect } from 'react'
 import { DEFAULT_BILL_CONFIG, DEFAULT_LABEL_CONFIG, type AdminOrder, type OrderStatus } from '../types/common'
@@ -188,10 +188,12 @@ const PAYMENT_TYPE_LABEL: Record<string, string> = {
 
 export function OrderDetailModal({
     order,
+    isReturning,
     onClose,
     onStatusChange,
 }: {
     order: AdminOrder
+    isReturning?: boolean
     onClose: () => void
     onStatusChange?: (id: string, status: OrderStatus) => Promise<void>
 }) {
@@ -353,6 +355,16 @@ export function OrderDetailModal({
                                 </span>
                             )}
                             <PaymentBadge status={order.paymentStatus} />
+                            {isReturning === true && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-200">
+                                    <UserCheck className="size-3" /> Khách quen
+                                </span>
+                            )}
+                            {isReturning === false && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-1 text-[10px] font-bold text-violet-600 ring-1 ring-violet-200">
+                                    <Sparkles className="size-3" /> Khách mới
+                                </span>
+                            )}
                         </div>
                         <div className="mt-1.5 flex items-center gap-2 flex-wrap">
                             {order.type === 'delivery' && (

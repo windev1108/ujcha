@@ -27,6 +27,7 @@ import { AdminOrderListQueryDto } from './dto/admin-order-list-query.dto';
 import { AdminOrderMetricsQueryDto } from './dto/admin-order-metrics-query.dto';
 import { AssignShipperDto } from './dto/assign-shipper.dto';
 import { BulkUpdateOrderStatusDto } from './dto/bulk-update-order-status.dto';
+import { ReturningCheckDto } from './dto/returning-check.dto';
 
 @ApiTags('admin-orders')
 @ApiBearerAuth('admin-access-token')
@@ -58,6 +59,13 @@ export class AdminOrderController {
   })
   list(@Query() query: AdminOrderListQueryDto) {
     return this.adminOrderService.findAll(query);
+  }
+
+  @Post('returning-check')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Kiểm tra khách quen — trả về phones/userIds đã có ít nhất 1 đơn completed' })
+  returningCheck(@Body() dto: ReturningCheckDto) {
+    return this.adminOrderService.checkReturning(dto.phones ?? [], dto.userIds ?? []);
   }
 
   @Get(':orderId')

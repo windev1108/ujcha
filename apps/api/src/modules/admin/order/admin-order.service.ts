@@ -644,6 +644,29 @@ export class AdminOrderService {
     return this.withTypeDisplay(updated);
   }
 
+  async checkReturning(phones: string[], userIds: string[]) {
+    const [byPhone, byUser] = await Promise.all([
+      phones.length
+        ? this.prisma.order.findMany({
+            where: { guestDeliveryPhone: { in: phones }, status: OrderStatus.completed },
+            select: { guestDeliveryPhone: true },
+            distinct: ['guestDeliveryPhone'],
+          })
+        : [],
+      userIds.length
+        ? this.prisma.order.findMany({
+            where: { userId: { in: userIds }, status: OrderStatus.completed },
+            select: { userId: true },
+            distinct: ['userId'],
+          })
+        : [],
+    ]);
+    return {
+      returningPhones: byPhone.map((o) => o.guestDeliveryPhone!),
+      returningUserIds: byUser.map((o) => o.userId!),
+    };
+  }
+
   private withTypeDisplay(order: AdminOrderPayload) {
     const typeDisplay =
       order.type === OrderType.delivery

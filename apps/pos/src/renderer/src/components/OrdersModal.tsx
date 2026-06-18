@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import {
   ArrowLeft, Bell, Clock, CheckCircle2, XCircle, RefreshCw,
   ShoppingBag, CreditCard, ChevronRight, Search,
-  Loader2, Calendar, Check, ListChecks, X, Bike, Truck, Utensils, Users,
+  Loader2, Calendar, Check, ListChecks, X, Bike, Truck, Utensils, Users, Sparkles, UserCheck,
 } from 'lucide-react'
 import { io } from 'socket.io-client'
-import { fetchOrders, updateOrderStatus, bulkUpdateOrderStatus, fetchShippers, assignShipper, API_URL } from '../api'
+import { fetchOrders, updateOrderStatus, bulkUpdateOrderStatus, fetchShippers, assignShipper, fetchReturningCustomers, API_URL } from '../api'
 import type { AdminOrder, OrderStatus } from '../types/common'
 import newOrderMp3 from '../assets/mp3/new-order.mp3'
 import { formatDate } from '@/lib/utils'
@@ -217,6 +217,9 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkBusy, setBulkBusy] = useState(false)
 
+  // Set of phone/userId strings that have at least one past completed order
+  const [returningSet, setReturningSet] = useState<Set<string>>(new Set())
+
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
@@ -262,12 +265,21 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
       const items = (data as { items: AdminOrder[] }).items ?? []
       setOrders(items)
       if (addToQueue) {
-        // Add all currently pending orders to queue so audio plays until they're all confirmed
         setNewOrderQueue(prev => {
           const next = new Set(prev)
           items.filter(o => o.status === 'pending').forEach(o => next.add(o.id))
           return next
         })
+      }
+      // Batch-check returning customer status for all orders with an identifier
+      const phones = [...new Set(items.map(o => o.guestDeliveryPhone).filter(Boolean) as string[])]
+      const userIds = [...new Set(items.map(o => o.userId).filter(Boolean) as string[])]
+      if (phones.length || userIds.length) {
+        fetchReturningCustomers(phones, userIds)
+          .then(({ returningPhones, returningUserIds }) => {
+            setReturningSet(new Set([...returningPhones, ...returningUserIds]))
+          })
+          .catch(() => { /* non-critical, silent fail */ })
       }
     } catch { /* ignore */ } finally { setLoading(false) }
   }
@@ -401,6 +413,12 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
     const { from, to } = getApiDateRange(quickDate, dateFrom, dateTo)
     setSelectedIds(new Set())
     void load(from, to)
+  }
+
+  function getReturningStatus(order: AdminOrder): boolean | undefined {
+    const key = order.userId ?? order.guestDeliveryPhone ?? null
+    if (!key) return undefined
+    return returningSet.has(key)
   }
 
   const allFilteredSelected = filtered.length > 0 && filtered.every(o => selectedIds.has(o.id))
@@ -617,6 +635,7 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
                     isBusy={busyIds.has(order.id)}
                     isSelected={selectedIds.has(order.id)}
                     onToggleSelect={() => toggleSelect(order.id)}
+                    isReturning={getReturningStatus(order)}
                   />
                 ))}
               </div>
@@ -628,6 +647,7 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
       {selectedOrder && (
         <OrderDetailModal
           order={selectedOrder}
+          isReturning={getReturningStatus(selectedOrder)}
           onClose={() => setSelectedOrder(null)}
           onStatusChange={async (id, status) => {
             await handleStatusOrAssign(id, status)
@@ -665,6 +685,7 @@ function OrderCard({
   isBusy,
   isSelected,
   onToggleSelect,
+  isReturning,
 }: {
   order: AdminOrder
   onOpen: () => void
@@ -672,6 +693,7 @@ function OrderCard({
   isBusy: boolean
   isSelected: boolean
   onToggleSelect: () => void
+  isReturning?: boolean
 }) {
   const typeInfo = ORDER_TYPE_LABEL[order.type] ?? { label: order.type, Icon: ShoppingBag }
   const totalQty = order.items.reduce((s, i) => s + i.quantity, 0)
@@ -736,6 +758,16 @@ function OrderCard({
               <typeInfo.Icon className="size-3 shrink-0" />
               {typeInfo.label}
             </span>
+            {isReturning === true && (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                <UserCheck className="size-2.5" /> Khách quen
+              </span>
+            )}
+            {isReturning === false && (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-600">
+                <Sparkles className="size-2.5" /> Khách mới
+              </span>
+            )}
             {order.type === 'delivery' && order.shipper && (
               <span className="inline-flex items-center gap-0.5 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">
                 <Bike className="size-2.5" />{order.shipper.name}
