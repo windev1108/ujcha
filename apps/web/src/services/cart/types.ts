@@ -25,6 +25,7 @@ export interface ApiCartItem {
   selectedOptions: Record<string, string>
   toppings: ApiCartTopping[]
   product: ApiCartProduct
+  note?: string | null
 }
 
 export interface ApiCart {

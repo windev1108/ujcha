@@ -312,6 +312,7 @@ export function CheckoutPageShell() {
           nameTranslation: t.topping.nameTranslation,
         })),
         ...(Object.keys(optionTranslations).length > 0 ? { optionTranslations } : {}),
+        ...(item.note?.trim() ? { note: item.note.trim() } : {}),
       };
     });
 

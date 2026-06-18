@@ -192,14 +192,14 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
     const toppingIds = Array.from(selectedToppings);
 
     if (!accessToken) {
-      addLocalItem({ productId: resolvedProduct.id, quantity, selectedOptions, toppingIds, product: productSnapshot, toppingSnapshots });
+      addLocalItem({ productId: resolvedProduct.id, quantity, selectedOptions, toppingIds, product: productSnapshot, toppingSnapshots, note });
       setAddedFeedback(true);
       setTimeout(() => { setAddedFeedback(false); onClose(); }, 300);
       return;
     }
 
     addToCart(
-      { productId: resolvedProduct.id, quantity, selectedOptions, toppingIds, product: productSnapshot, toppingSnapshots },
+      { productId: resolvedProduct.id, quantity, selectedOptions, toppingIds, product: productSnapshot, toppingSnapshots, note: note || undefined },
       {
         onSuccess: () => {
           setAddedFeedback(true);

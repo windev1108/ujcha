@@ -110,7 +110,7 @@ export function CartLineList({
         initial="hidden"
         animate="show"
       >
-        {items.map(({ id, product, quantity, selectedOptions, toppings }, index) => {
+        {items.map(({ id, product, quantity, selectedOptions, toppings, note }, index) => {
           const productDisplayName = getDisplayName(product, locale);
           const imageUrl = product.imageUrls[0] ?? null;
           const bgColor = PLACEHOLDER_BG[index % PLACEHOLDER_BG.length];
@@ -194,7 +194,7 @@ export function CartLineList({
                         </Link>
 
                         <ItemOptionsDisplay
-                          item={{ product, selectedOptions, toppings }}
+                          item={{ product, selectedOptions, toppings, note }}
                         />
 
                         {/* Actions */}
@@ -232,7 +232,7 @@ export function CartLineList({
                             size="sm"
                             isDisabled={isUpdating}
                             className="h-8 gap-1.5 rounded-full px-3 text-xs font-medium text-muted hover:text-foreground"
-                            onPress={() => onEdit({ id, product, quantity, selectedOptions, toppings } as ApiCartItem)}
+                            onPress={() => onEdit({ id, product, quantity, selectedOptions, toppings, note } as ApiCartItem)}
                           >
                             <Pencil className="size-3" />
                             {t("edit")}

@@ -32,6 +32,7 @@ export function useAddToCartMutation() {
       quantity,
       selectedOptions,
       toppingIds,
+      note,
     }: {
       productId: string;
       quantity?: number;
@@ -39,8 +40,9 @@ export function useAddToCartMutation() {
       toppingIds?: string[];
       product?: ApiCartProduct;
       toppingSnapshots?: ApiCartTopping[];
+      note?: string;
     }) => {
-      await addToCart(productId, quantity ?? 1, selectedOptions, toppingIds);
+      await addToCart(productId, quantity ?? 1, selectedOptions, toppingIds, note);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: cartKeys.cart }),
   });
@@ -54,14 +56,16 @@ export function useUpdateCartItemMutation() {
       quantity,
       selectedOptions,
       toppingIds,
+      note,
     }: {
       itemId: string;
       quantity: number;
       selectedOptions?: Record<string, string>;
       toppingIds?: string[];
       toppingSnapshots?: ApiCartTopping[];
+      note?: string;
     }) => {
-      await updateCartItem(itemId, quantity, selectedOptions, toppingIds);
+      await updateCartItem(itemId, quantity, selectedOptions, toppingIds, note);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: cartKeys.cart }),
   });

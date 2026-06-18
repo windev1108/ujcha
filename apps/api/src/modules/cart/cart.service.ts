@@ -110,6 +110,7 @@ export class CartService {
         quantity: dto.quantity,
         selectedOptions: dto.selectedOptions ?? {},
         toppingsJson,
+        ...(dto.note?.trim() ? { note: dto.note.trim().slice(0, 500) } : {}),
       },
       include: CART_ITEM_INCLUDE,
     });
@@ -147,6 +148,7 @@ export class CartService {
         quantity: dto.quantity,
         ...(dto.selectedOptions !== undefined && { selectedOptions: dto.selectedOptions }),
         ...(toppingsJson !== undefined && { toppingsJson }),
+        ...(dto.note !== undefined && { note: dto.note.trim().slice(0, 500) || null }),
       },
       include: CART_ITEM_INCLUDE,
     });

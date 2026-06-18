@@ -166,7 +166,7 @@ export function CheckoutOrderSummary({
                     <p className="mt-0.5 text-xs text-foreground/50">
                       {getDisplayName(item.product.category, locale)}
                     </p>
-                    <ItemOptionsDisplay item={item} />
+                    <ItemOptionsDisplay item={{ product: item.product, selectedOptions: item.selectedOptions, toppings: item.toppings, note: item.note }} />
 
                   </div>
                 </motion.li>

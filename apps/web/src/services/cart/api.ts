@@ -11,8 +11,9 @@ export async function addToCart(
   quantity: number,
   selectedOptions?: Record<string, string>,
   toppingIds?: string[],
+  note?: string,
 ): Promise<void> {
-  await api.post('/cart/items', { productId, quantity, selectedOptions, toppingIds })
+  await api.post('/cart/items', { productId, quantity, selectedOptions, toppingIds, ...(note?.trim() ? { note: note.trim() } : {}) })
 }
 
 export async function updateCartItem(
@@ -20,8 +21,9 @@ export async function updateCartItem(
   quantity: number,
   selectedOptions?: Record<string, string>,
   toppingIds?: string[],
+  note?: string,
 ): Promise<void> {
-  await api.patch(`/cart/items/${itemId}`, { quantity, selectedOptions, toppingIds })
+  await api.patch(`/cart/items/${itemId}`, { quantity, selectedOptions, toppingIds, ...(note !== undefined ? { note: note.trim() || null } : {}) })
 }
 
 export async function removeCartItem(itemId: string): Promise<void> {

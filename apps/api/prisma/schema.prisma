@@ -201,6 +201,8 @@ model CartItem {
   selectedOptions Json     @default("{}")
   /// Topping đã chọn (snapshot từ Product.toppings): [{ id, name, price }]
   toppingsJson    Json     @default("[]")
+  /// Ghi chú riêng cho dòng hàng (ít đá, không đường…)
+  note            String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
