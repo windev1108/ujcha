@@ -11,12 +11,11 @@ function AuthPersistHydration() {
 
   useEffect(() => {
     const p = useAuthStore.persist;
-    if (typeof p.onFinishHydration === "function") {
-      return p.onFinishHydration(() => {
-        setHydrated(true);
-      });
+    if (p.hasHydrated()) {
+      setHydrated(true);
+      return;
     }
-    setHydrated(true);
+    return p.onFinishHydration(() => setHydrated(true));
   }, [setHydrated]);
 
   return null;

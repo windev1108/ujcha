@@ -405,6 +405,7 @@ export function buildEscPosLabel(
     const lines = parseHtml(html)
     const out: Buffer[] = [
         CMD.init(),
+        CMD.utf8(),
         CMD.fontB(true),
         CMD.lineSpacing(lineSpacingVal),
     ]

@@ -24,7 +24,7 @@ interface DiscoveredPrinter {
 interface BillConfig {
     enabled: boolean
     printerId: string | null
-    paperWidth: 58 | 80
+    paperWidth: number
     autoPrint: boolean
     copies: number
     showLogo: boolean
@@ -116,46 +116,204 @@ function resolvePrinter(printerId: string): DiscoveredPrinter | null {
 // ESC/POS raw byte builder
 // ═══════════════════════════════════════════════════════════════════════════════
 
+type EscPosLine =
+    | { align: 'center' | 'left'; text: string; bold?: boolean; large?: boolean }
+    | { align: 'two-col'; left: string; right: string; bold?: boolean }
+    | { align: 'three-col'; qty: string; name: string; price: string }
+    | { align: 'separator' }
+    | { align: 'qr'; data: string }
+
+// Depth-aware div extractor — handles nested divs correctly.
+// Returns only the top-level <div> blocks found directly in `html`.
+function extractDivBlocks(html: string): { attrs: string; inner: string }[] {
+    const result: { attrs: string; inner: string }[] = []
+    const lower = html.toLowerCase()
+    let i = 0
+    const n = html.length
+    while (i < n) {
+        const start = lower.indexOf('<div', i)
+        if (start === -1) break
+        let tagEnd = start + 4
+        while (tagEnd < n && html[tagEnd] !== '>') tagEnd++
+        if (tagEnd >= n) break
+        const attrs = html.slice(start + 4, tagEnd).trim()
+        let depth = 1
+        let pos = tagEnd + 1
+        let innerEnd = -1
+        while (pos < n && depth > 0) {
+            const o = lower.indexOf('<div', pos)
+            const c = lower.indexOf('</div', pos)
+            if (c === -1) { pos = n; break }
+            if (o !== -1 && o < c) {
+                depth++
+                let te = o + 4
+                while (te < n && html[te] !== '>') te++
+                pos = te + 1
+            } else {
+                depth--
+                if (depth === 0) innerEnd = c
+                pos = c + 6
+            }
+        }
+        if (innerEnd !== -1) result.push({ attrs, inner: html.slice(tagEnd + 1, innerEnd) })
+        i = pos
+    }
+    return result
+}
+
+function buildEscPosQr(data: string): Buffer {
+    const bytes = Buffer.from(data, 'utf8')
+    const storeLen = bytes.length + 3
+    const pL = storeLen & 0xFF
+    const pH = (storeLen >> 8) & 0xFF
+    return Buffer.concat([
+        Buffer.from([0x1B, 0x61, 0x01]),                                                  // center
+        Buffer.from([0x1D, 0x28, 0x6B, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00]),            // model 2
+        Buffer.from([0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x43, 0x04]),                  // module size 4
+        Buffer.from([0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x45, 0x31]),                  // EC level M
+        Buffer.concat([Buffer.from([0x1D, 0x28, 0x6B, pL, pH, 0x31, 0x50, 0x30]), bytes]), // store data
+        Buffer.from([0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x51, 0x30]),                  // print
+        Buffer.from([0x1B, 0x61, 0x00]),                                                  // left
+    ])
+}
+
+function parseReceiptHtmlToLines(html: string): EscPosLine[] {
+    const classStyles = new Map<string, string>()
+    for (const [, cls, style] of html.matchAll(/\.([a-zA-Z_-][\w-]*)\s*\{([^}]*)\}/g)) {
+        classStyles.set(cls, style)
+    }
+
+    const resolveStyle = (attrStr: string): string => {
+        const inline = attrStr.match(/style="([^"]*)"/i)?.[1] ?? ''
+        const cls = attrStr.match(/class="([^"]*)"/i)?.[1] ?? ''
+        const fromClass = cls.split(/\s+/).map(c => classStyles.get(c) ?? '').join(';')
+        return inline + ';' + fromClass
+    }
+
+    const decodeEntities = (s: string) => s
+        .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+        .replace(/&nbsp;/g, ' ').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+
+    const stripInner = (s: string) => decodeEntities(
+        s.replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, '')
+    ).trim()
+
+    const lines: EscPosLine[] = []
+    const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
+    const body = bodyMatch ? bodyMatch[1] : html
+
+    for (const { attrs, inner } of extractDivBlocks(body)) {
+        // data-pos="item" marker: qty/name/price encoded directly in attributes — most reliable
+        if (/data-pos="item"/.test(attrs)) {
+            const qty = attrs.match(/data-qty="([^"]+)"/)?.[1] ?? ''
+            const name = decodeEntities(attrs.match(/data-name="([^"]*)"/)?.[1] ?? '')
+            const price = decodeEntities(attrs.match(/data-price="([^"]*)"/)?.[1] ?? '')
+            if (name || price) lines.push({ align: 'three-col', qty, name, price })
+            continue
+        }
+
+        const style = resolveStyle(attrs)
+        const isEmpty = stripInner(inner).length === 0
+
+        if (/border-top|border-bottom/.test(style) || (isEmpty && /line|separator|divider/i.test(attrs))) {
+            lines.push({ align: 'separator' })
+            continue
+        }
+
+        // img-only div: extract QR data from qrserver.com src
+        if (/^\s*<img[^>]*>\s*$/.test(inner)) {
+            const src = inner.match(/<img[^>]+src="([^"]+)"/i)?.[1] ?? ''
+            const dataParam = src.match(/[?&]data=([^&]*)/i)?.[1]
+            if (dataParam) lines.push({ align: 'qr', data: decodeURIComponent(dataParam) })
+            continue
+        }
+
+        const isCenter = /text-align\s*:\s*center/i.test(style)
+        const isFlex = /display\s*:\s*flex/i.test(style) && /justify-content\s*:\s*space-between/i.test(style)
+        const isGrid = /display\s*:\s*grid/i.test(style)
+        const isBold = /font-weight\s*:\s*bold/i.test(style)
+        const isLarge = /font-size\s*:\s*(1[6-9]|[2-9]\d)px/i.test(style)
+
+        if (isGrid) {
+            // Fallback: parse nested cells (for grid divs without data-pos marker)
+            const cells = extractDivBlocks(inner)
+            const qty = cells[0] ? stripInner(cells[0].inner) : ''
+            const name = cells[1] ? stripInner(cells[1].inner) : ''
+            const price = cells[2] ? stripInner(cells[2].inner) : ''
+            if (name || price) lines.push({ align: 'three-col', qty, name, price })
+        } else if (isFlex) {
+            const spans = [...inner.matchAll(/<span[^>]*>([\s\S]*?)<\/span>/gi)]
+            const left = spans[0] ? stripInner(spans[0][1]) : ''
+            const right = spans[1] ? stripInner(spans[1][1]) : ''
+            if (left || right) lines.push({ align: 'two-col', left, right, bold: isBold })
+        } else if (isCenter) {
+            const text = stripInner(inner)
+            if (text) lines.push({ align: 'center', text, bold: isBold, large: isLarge })
+        } else {
+            const text = stripInner(inner)
+            if (text) lines.push({ align: 'left', text, bold: isBold })
+        }
+    }
+
+    return lines
+}
+
 function buildEscPos(html: string, paperWidthMm: number): Buffer {
     const charWidth = paperWidthMm <= 58 ? 32 : 48
-
-    const stripHtml = (s: string) => s
-        .replace(/<br\s*\/?>/gi, '\n')
-        .replace(/<\/(?:div|p|tr|li|h[1-6])>/gi, '\n')
-        .replace(/<[^>]+>/g, '')
-        .replace(/&amp;/g, '&').replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
-        .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-
-    const lines = stripHtml(html)
-        .split('\n')
-        .map(l => l.trim())
-        .filter(Boolean)
-
     const chunks: Buffer[] = []
 
-    // Init + codepage
     chunks.push(Buffer.from([0x1B, 0x40]))         // ESC @ — Initialize
     chunks.push(Buffer.from([0x1B, 0x74, 0x00]))   // ESC t 0 — PC437 codepage
 
-    for (const line of lines) {
-        if (/^[-=─━*]+$/.test(line)) {
-            chunks.push(Buffer.from([0x1B, 0x61, 0x01]))  // center
+    const parsed = parseReceiptHtmlToLines(html)
+
+    for (const line of parsed) {
+        if (line.align === 'separator') {
+            chunks.push(Buffer.from([0x1B, 0x61, 0x01]))
             chunks.push(latinBuf('-'.repeat(charWidth) + '\n'))
             continue
         }
 
-        const isBold = line.length < 24 && /[A-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐƠƯẠ-Ỹ]/.test(line)
+        if (line.align === 'qr') {
+            chunks.push(buildEscPosQr(line.data))
+            continue
+        }
 
-        chunks.push(Buffer.from([0x1B, 0x61, 0x01]))  // center
-        if (isBold) chunks.push(Buffer.from([0x1B, 0x45, 0x01]))  // bold on
+        if (line.align === 'three-col') {
+            const qty = removeDiacritics(line.qty).replace(/\s+/g, '')      // "2x"
+            const price = removeDiacritics(line.price)                       // "45.000d"
+            const maxName = Math.max(1, charWidth - qty.length - 1 - price.length - 1)
+            const name = removeDiacritics(line.name).substring(0, maxName)
+            const pad = Math.max(1, charWidth - qty.length - 1 - name.length - price.length)
+            chunks.push(Buffer.from([0x1B, 0x61, 0x00]))
+            chunks.push(Buffer.from([0x1B, 0x45, 0x01]))
+            chunks.push(latinBuf(`${qty} ${name}${' '.repeat(pad)}${price}\n`))
+            chunks.push(Buffer.from([0x1B, 0x45, 0x00]))
+            continue
+        }
 
-        chunks.push(latinBuf(removeDiacritics(line.substring(0, charWidth)) + '\n'))
+        if (line.align === 'two-col') {
+            const left = removeDiacritics(line.left)
+            const right = removeDiacritics(line.right)
+            const gap = Math.max(1, charWidth - left.length - right.length)
+            const leftTrunc = left.substring(0, charWidth - right.length - 1)
+            chunks.push(Buffer.from([0x1B, 0x61, 0x00]))
+            if (line.bold) chunks.push(Buffer.from([0x1B, 0x45, 0x01]))
+            chunks.push(latinBuf(leftTrunc + ' '.repeat(gap) + right + '\n'))
+            if (line.bold) chunks.push(Buffer.from([0x1B, 0x45, 0x00]))
+            continue
+        }
 
-        if (isBold) chunks.push(Buffer.from([0x1B, 0x45, 0x00]))  // bold off
+        // center or left
+        const align = line.align === 'center' ? 0x01 : 0x00
+        chunks.push(Buffer.from([0x1B, 0x61, align]))
+        if (line.large) chunks.push(Buffer.from([0x1D, 0x21, 0x11]))
+        if (line.bold) chunks.push(Buffer.from([0x1B, 0x45, 0x01]))
+        chunks.push(latinBuf(removeDiacritics(line.text.substring(0, line.large ? 16 : charWidth)) + '\n'))
+        if (line.bold) chunks.push(Buffer.from([0x1B, 0x45, 0x00]))
+        if (line.large) chunks.push(Buffer.from([0x1D, 0x21, 0x00]))
     }
 
-    // Feed 4 lines + partial cut
     chunks.push(Buffer.from([
         0x1B, 0x64, 0x04,
         0x1D, 0x56, 0x42, 0x00,
@@ -166,9 +324,10 @@ function buildEscPos(html: string, paperWidthMm: number): Buffer {
 
 function removeDiacritics(text: string): string {
     return text
+        .replace(/₫/g, 'd')
         .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[đĐ]/g, c => c === 'đ' ? 'd' : 'D')
+        .replace(/[̀-ͯ]/g, '')
+        .replace(/[đĐ]/g, (c) => (c === 'đ' ? 'd' : 'D'))
         .replace(/[^\x20-\x7E]/g, '?')
 }
 
@@ -267,33 +426,18 @@ async function printRawViaWindowsSpooler(printerName: string, data: Buffer): Pro
     fs.writeFileSync(tmpBin, data)
     const binEscaped = tmpBin.replace(/\\/g, '\\\\')
 
-    let psScript: string
+    const printerEscaped = printerName.replace(/'/g, "\\'")
 
-    if (/^USB\d+$/i.test(portName)) {
-        // ── Strategy A: Direct USB device file write ──────────────────────────
-        // Bypasses Windows spooler + GDI driver entirely.
-        // \\.\USB001 is the Win32 device object for the USB printer port.
-        psScript = `
-$bytes = [System.IO.File]::ReadAllBytes('${binEscaped}')
-$stream = New-Object System.IO.FileStream(
-    '\\\\.\\${portName}',
-    [System.IO.FileMode]::Open,
-    [System.IO.FileAccess]::Write,
-    [System.IO.FileShare]::ReadWrite
-)
-try {
-    $stream.Write($bytes, 0, $bytes.Length)
-    $stream.Flush()
-    Write-Output "OK:$($bytes.Length)"
-} finally {
-    $stream.Dispose()
-}
-`
-        console.log('[print-usb] strategy: direct device \\\\.\\ ', portName)
-    } else {
-        // ── Strategy B: winspool.drv RAW (fallback for WSD, LPT, network ports) ──
-        const printerEscaped = printerName.replace(/'/g, "\\'")
-        psScript = `
+    const runPs = async (script: string): Promise<{ stdout: string; stderr: string }> => {
+        fs.writeFileSync(tmpPs1, script, 'utf-8')
+        return execAsync(
+            `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${tmpPs1}"`,
+            { timeout: 15000 }
+        )
+    }
+
+    // Strategy B script (winspool RAW) — always built, used as fallback or primary for non-USB
+    const strategyBScript = `
 $bytes = [System.IO.File]::ReadAllBytes('${binEscaped}')
 Add-Type -TypeDefinition @"
 using System;
@@ -349,20 +493,50 @@ try {
     [RawPrint]::ClosePrinter(\$h) | Out-Null
 }
 `
-        console.log('[print-usb] strategy: winspool RAW (port:', portName || 'unknown', ')')
-    }
-
-    fs.writeFileSync(tmpPs1, psScript, 'utf-8')
 
     try {
-        const { stdout, stderr } = await execAsync(
-            `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${tmpPs1}"`,
-            { timeout: 15000 }
-        )
+        if (/^USB\d+$/i.test(portName)) {
+            // ── Strategy A: Direct USB device file write ──────────────────────────
+            // Bypasses Windows spooler + GDI driver entirely.
+            // \\.\USB001 is the Win32 device object for the USB printer port.
+            // May fail with Access Denied if spooler holds the port exclusively → fall back to B.
+            const strategyAScript = `
+$bytes = [System.IO.File]::ReadAllBytes('${binEscaped}')
+$stream = New-Object System.IO.FileStream(
+    '\\\\.\\${portName}',
+    [System.IO.FileMode]::Open,
+    [System.IO.FileAccess]::Write,
+    [System.IO.FileShare]::ReadWrite
+)
+try {
+    $stream.Write($bytes, 0, $bytes.Length)
+    $stream.Flush()
+    Write-Output "OK:$($bytes.Length)"
+} finally {
+    $stream.Dispose()
+}
+`
+            console.log('[print-usb] strategy A: direct device \\\\.\\ ', portName)
+            try {
+                const { stdout } = await runPs(strategyAScript)
+                if (stdout.includes('OK:')) {
+                    console.log('[print-usb] ✅ Strategy A:', stdout.trim())
+                    return
+                }
+                console.warn('[print-usb] Strategy A no OK — falling back to B:', stdout.trim())
+            } catch (stratAErr) {
+                console.warn('[print-usb] Strategy A threw — falling back to B:', String(stratAErr))
+            }
+        }
+
+        // ── Strategy B: winspool RAW ──────────────────────────────────────────
+        // Primary for non-USB ports (WSD, LPT, network); fallback when Strategy A fails.
+        console.log('[print-usb] strategy B: winspool RAW (port:', portName || 'unknown', ')')
+        const { stdout, stderr } = await runPs(strategyBScript)
         if (!stdout.includes('OK:')) {
             throw new Error(`Print failed: ${stderr?.trim() || stdout?.trim()}`)
         }
-        console.log('[print-usb] ✅', stdout.trim())
+        console.log('[print-usb] ✅ Strategy B:', stdout.trim())
     } finally {
         try { fs.unlinkSync(tmpBin) } catch { /**/ }
         try { fs.unlinkSync(tmpPs1) } catch { /**/ }
@@ -389,8 +563,9 @@ async function printHtmlViaElectronWindow(
     printerName: string,
     html: string,
     pageCss = '@page { size: auto !important; margin: 2mm !important; }',
+    paperWidthMm?: number,
 ): Promise<void> {
-    const job = _printQueue.then(() => _doPrint(printerName, html, pageCss))
+    const job = _printQueue.then(() => _doPrint(printerName, html, pageCss, paperWidthMm))
     _printQueue = job.catch(() => { /* keep queue alive on error */ })
     return job
 }
@@ -399,6 +574,7 @@ async function _doPrint(
     printerName: string,
     html: string,
     pageCss: string,
+    paperWidthMm?: number,
 ): Promise<void> {
     const win = new BrowserWindow({
         show: false,
@@ -428,6 +604,34 @@ async function _doPrint(
         win.show()
         await new Promise(r => setTimeout(r, 400))
 
+        const printOpts: {
+            silent: boolean
+            deviceName: string
+            printBackground: boolean
+            pageSize?: { width: number; height: number }
+            margins?: { marginType: 'none' }
+        } = { silent: true, deviceName: printerName, printBackground: true }
+
+        if (paperWidthMm && paperWidthMm > 0) {
+            // Measure actual content height so the GDI driver receives dimensions that match
+            // the real receipt length. A fixed 297mm (A4) height causes roll-paper thermal
+            // drivers to hold or discard the job because the page height doesn't match their
+            // configured paper — the job appears in the queue but no paper comes out.
+            let heightMicrons = 297000
+            try {
+                const scrollPx: number = await win.webContents.executeJavaScript(
+                    'document.documentElement.scrollHeight'
+                )
+                // CSS px → microns: px × (25.4 mm/in ÷ 96 px/in) × 1000 μm/mm + 10 mm bottom buffer
+                heightMicrons = Math.ceil((scrollPx * 25.4 / 96 + 10) * 1000)
+                console.log('[print] content height:', scrollPx, 'px →', Math.round(heightMicrons / 1000), 'mm')
+            } catch {
+                console.warn('[print] height measurement failed — using 297mm fallback')
+            }
+            printOpts.pageSize = { width: paperWidthMm * 1000, height: heightMicrons }
+            printOpts.margins = { marginType: 'none' }
+        }
+
         await new Promise<void>((resolve, reject) => {
             // Fallback: callback is unreliable on some Electron/Windows combos — resolve after timeout
             const fallback = setTimeout(() => {
@@ -435,7 +639,7 @@ async function _doPrint(
                 resolve()
             }, 8000)
             win.webContents.print(
-                { silent: true, deviceName: printerName, printBackground: true },
+                printOpts,
                 (success, failureReason) => {
                     clearTimeout(fallback)
                     if (success) {
@@ -446,7 +650,8 @@ async function _doPrint(
                     }
                 },
             )
-            console.log('[print] job submitted →', printerName)
+            console.log('[print] job submitted →', printerName,
+                printOpts.pageSize ? `(${printOpts.pageSize.width / 1000}mm × ${printOpts.pageSize.height / 1000}mm)` : '')
         })
 
         // Brief wait after callback to let the driver finish flushing the buffer
@@ -601,6 +806,123 @@ async function checkWindowsPrinterOnline(printerName: string): Promise<{ online:
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// STRATEGY — Offscreen image render for COM port (Vietnamese / Unicode support)
+//
+// Renders the receipt HTML in a hidden Chromium window at screen resolution,
+// captures the page as a raw RGBA bitmap, scales horizontally to printer dots,
+// and sends via ESC/POS GS v 0 raster command. Supports full Unicode including
+// Vietnamese diacritics and ₫ because Chrome handles the font rendering.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function buildEscPosImageBill(html: string, paperWidthMm: number): Promise<Buffer> {
+    // Receipt HTML is designed for 96 DPI CSS layout
+    const cssW = Math.round((paperWidthMm - 4) * 96 / 25.4)    // 204px for 58mm
+
+    // Render at 2× zoom: text anti-aliases at ~22px instead of 11px.
+    // The captured image is then downscaled to printer dots → crisp result regardless of system DPI.
+    const ZOOM = 2
+    const renderW = cssW * ZOOM                                   // 408px window
+
+    // Safe printable dot width: 48mm for ≤60mm paper (leaves ~5mm margin total on 58mm)
+    const printableMm = paperWidthMm <= 60 ? 48 : Math.round(paperWidthMm - 8)
+    const printerW = Math.round(printableMm * 203 / 25.4)        // 384 dots for 48mm
+    const bytesPerLine = Math.ceil(printerW / 8)                  // 48 bytes
+
+    // Inject zoom: body lays out at cssW CSS px but renders at 2× visual size to fill renderW.
+    // width + margin overrides keep body left-aligned and the correct logical width.
+    const modHtml = html.replace('</head>',
+        `<style>body{zoom:${ZOOM}!important;width:${cssW}px!important;margin:0!important;}</style></head>`)
+
+    // offscreen: true renders into a virtual buffer — not limited by physical screen height.
+    // win.show() is NOT called; that would cap the render buffer to the monitor's pixel height.
+    const win = new BrowserWindow({
+        show: false,
+        width: renderW, height: 1600,
+        frame: false, skipTaskbar: true,
+        webPreferences: { contextIsolation: true, nodeIntegration: false, offscreen: true },
+    })
+
+    try {
+        // offscreen mode requires startPainting() to produce frames for capturePage()
+        win.webContents.startPainting()
+
+        const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(modHtml)}`
+        await Promise.race([
+            win.loadURL(dataUrl),
+            new Promise<never>((_, rej) => setTimeout(() => rej(new Error('render timeout')), 8000)),
+        ])
+
+        // Wait for external images (QR code from api.qrserver.com) to fully load.
+        await Promise.race([
+            win.webContents.executeJavaScript(`
+                new Promise(resolve => {
+                    const imgs = [...document.querySelectorAll('img')]
+                    if (!imgs.length) return resolve(null)
+                    let done = 0
+                    const check = () => { if (++done >= imgs.length) resolve(null) }
+                    imgs.forEach(img => {
+                        if (img.complete && img.naturalWidth > 0) check()
+                        else { img.addEventListener('load', check, {once:true}); img.addEventListener('error', check, {once:true}) }
+                    })
+                })
+            `),
+            new Promise(r => setTimeout(r, 5000)),
+        ]).catch(() => {})
+
+        // scrollHeight with zoom:ZOOM on body ≈ ZOOM × original CSS height
+        let cssDocH = 1600
+        try {
+            cssDocH = (await win.webContents.executeJavaScript('document.documentElement.scrollHeight')) as number
+        } catch { /**/ }
+
+        // Resize offscreen buffer to exact content height, then let the renderer catch up
+        const captureH = Math.min(cssDocH + 20, 16000)
+        win.setSize(renderW, captureH)
+        await new Promise(r => setTimeout(r, 300))
+
+        // capturePage with offscreen: full virtual buffer, no screen-height limit
+        const image = await win.webContents.capturePage({ x: 0, y: 0, width: renderW, height: captureH })
+        const { width: imgW, height: imgH } = image.getSize()
+        const bitmap = image.toBitmap()
+
+        // printerH from original CSS height (before zoom) × DPI ratio 203/96
+        // At DPR=1: imgH ≈ cssDocH → scale cssDocH/2 × 2.115 ≈ 1.06 × imgH/2 → downscale ✓
+        // At higher DPR: imgH is proportionally larger → even more downscaling → sharper
+        const printerH = Math.round((cssDocH / ZOOM) * (203 / 96))
+
+        const lines: Buffer[] = []
+        for (let yP = 0; yP < printerH; yP++) {
+            const yS = Math.min(Math.floor(yP * imgH / printerH), imgH - 1)
+            const row = Buffer.alloc(bytesPerLine, 0x00)
+            for (let xP = 0; xP < printerW; xP++) {
+                const xS = Math.min(Math.floor(xP * imgW / printerW), imgW - 1)
+                const i = (yS * imgW + xS) * 4
+                const lum = (bitmap[i] + bitmap[i + 1] + bitmap[i + 2]) / 3
+                if (lum < 128) row[xP >> 3] |= 0x80 >> (xP & 7)
+            }
+            lines.push(row)
+        }
+
+        while (lines.length && lines[lines.length - 1].every(b => b === 0)) lines.pop()
+        if (!lines.length) throw new Error('Empty receipt render')
+
+        const xL = bytesPerLine & 0xFF
+        const xH = (bytesPerLine >> 8) & 0xFF
+        const yL = lines.length & 0xFF
+        const yH = (lines.length >> 8) & 0xFF
+
+        return Buffer.concat([
+            Buffer.from([0x1B, 0x40]),
+            Buffer.from([0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH]),
+            ...lines,
+            Buffer.from([0x1B, 0x64, 0x04, 0x1D, 0x56, 0x42, 0x00]),
+        ])
+    } finally {
+        win.destroy()
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // MAIN SMART PRINT ROUTER
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -639,7 +961,7 @@ export async function smartPrint(
     address: string,
     printerName: string,
     html: string,
-    paperWidthMm: 58 | 80,
+    paperWidthMm: number,
     type: 'bill' | 'label' = 'bill',
     labelSize?: { width: number; height: number },
     spacing?: { lineSpacing?: number; feedAfterCut?: number; paddingTop?: number; paddingBottom?: number },
@@ -648,34 +970,46 @@ export async function smartPrint(
 
     try {
         if (type !== 'label') {
-            // Bills always use Electron GDI print path:
-            // webContents.print() → Chrome → Windows driver → rasterized bitmap.
-            // This is the only path that renders Unicode (Vietnamese) + QR images
-            // correctly on GDI-based thermal printers like MP583, regardless of
-            // how the printer is connected (USB, Bluetooth COM port, WiFi/WSD).
             const winName = printerName || address
-            console.log('[smartPrint] → bill (Electron print):', winName)
 
-            // Pre-flight: verify the printer is actually reachable before submitting.
-            // Windows spooler silently accepts jobs even when the printer is off,
-            // so we must check proactively — the print callback is unreliable.
-            if (isComPort(winName)) {
-                // Pure COM-port printer (no Windows driver) — try opening the port
-                const reachable = await tryComPort(winName)
-                if (!reachable) throw new Error(`Cổng ${winName} không kết nối được — kiểm tra bluetooth/máy in`)
+            if (isComPort(address)) {
+                // Bluetooth COM port: webContents.print({ deviceName: "COM3" }) silently
+                // redirects to the default printer because "COM3" is not a Windows printer name.
+                // Always use raw ESC/POS bytes over the serial connection.
+                // Vietnamese diacritics are stripped to ASCII on this path.
+                console.log('[smartPrint] → bill via COM (image ESC/POS):', address)
+                const reachable = await tryComPort(address)
+                if (!reachable) throw new Error(`Cổng ${address} không kết nối được — kiểm tra bluetooth/máy in`)
+                let escData: Buffer
+                try {
+                    escData = await buildEscPosImageBill(html, paperWidthMm)
+                } catch (imgErr) {
+                    console.warn('[smartPrint] Image render failed, falling back to text ESC/POS:', imgErr)
+                    escData = buildEscPos(html, paperWidthMm)
+                }
+                await printViaComPort(address, escData)
             } else {
-                // Windows printer entry — check WMIC status
+                // Windows named printer: GDI path via webContents.print().
+                // Chrome layout engine handles Unicode (Vietnamese) + QR image rendering.
+                console.log('[smartPrint] → bill via GDI (Electron print):', winName)
                 const { online, reason } = await checkWindowsPrinterOnline(winName)
                 if (!online) throw new Error(reason)
+                await printHtmlViaElectronWindow(winName, html, '', paperWidthMm)
             }
 
-            // Bill HTML already has @page { size: Xmm auto; margin: 0; } — don't override
-            await printHtmlViaElectronWindow(winName, html, '')
-
         } else if (isComPort(address)) {
-            // Label via Bluetooth COM port → ESC/POS raw
-            console.log('[smartPrint] → label COM:', address)
-            await printViaComPort(address, buildEscPosLabel(html, paperWidthMm, spacing))
+            // Label via Bluetooth COM port → image ESC/POS (same as bill, for Vietnamese support)
+            console.log('[smartPrint] → label COM (image):', address)
+            const reachable = await tryComPort(address)
+            if (!reachable) throw new Error(`Cổng ${address} không kết nối được — kiểm tra bluetooth/máy in`)
+            let labelEsc: Buffer
+            try {
+                labelEsc = await buildEscPosImageBill(html, paperWidthMm)
+            } catch (imgErr) {
+                console.warn('[smartPrint] label image render failed, falling back to text:', imgErr)
+                labelEsc = buildEscPosLabel(html, paperWidthMm, spacing)
+            }
+            await printViaComPort(address, labelEsc)
 
         } else if (isIpAddress(address)) {
             // Label via WiFi/LAN → TCP 9100 ESC/POS raw
@@ -683,16 +1017,15 @@ export async function smartPrint(
             await printViaTcp(address, 9100, buildEscPosLabel(html, paperWidthMm, spacing))
 
         } else {
-            // Label via Windows USB — GDI driver path (same pipeline as bill)
-            // printRawViaWindowsSpooler sends raw ESC/POS bytes that bypass the Windows driver.
-            // GDI-based label printers (XP-420B, etc.) need the driver to rasterize the content;
-            // they cannot interpret raw ESC/POS bytes and silently reject the job.
-            const targetPrinter = address || printerName
-            console.log('[smartPrint] → label USB/GDI:', targetPrinter)
-            const { online, reason } = await checkWindowsPrinterOnline(targetPrinter)
-            if (!online) throw new Error(reason)
-            // Label HTML already has @page { size: Xmm auto; margin: 0; } — don't override
-            await printHtmlViaElectronWindow(targetPrinter, html, '')
+            // Label via Windows USB — ESC/POS raw bytes written directly to the USB device.
+            //
+            // address may be a USB port name like "USB001" (returned by getSystemPrinters via WMIC
+            // portMap), which is NOT a valid Windows printer name.  printRawViaWindowsSpooler needs
+            // the printer display name ("XP-420B") so it can WMIC-look up the real port and open
+            // \\.\USB001.  When address looks like a port pattern, fall back to printerName.
+            const usbTarget = /^USB\d+$/i.test(address) ? printerName : (address || printerName)
+            console.log('[smartPrint] → label USB/raw:', usbTarget)
+            await printRawViaWindowsSpooler(usbTarget, buildEscPosLabel(html, paperWidthMm, spacing))
         }
 
         return { ok: true }
@@ -705,26 +1038,33 @@ export async function smartPrint(
 
 // ─── Test HTML builders ───────────────────────────────────────────────────────
 function buildTestBillHtml(headerText: string, footerText: string, paperWidthMm: number): string {
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Test Hoa don</title>
+    const w = paperWidthMm - 4
+    const baseFontSize = paperWidthMm <= 58 ? 11 : 13
+    const shopNameFs = paperWidthMm <= 58 ? 16 : 20
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Kiểm tra máy in</title>
 <style>
   @page { size: ${paperWidthMm}mm auto; margin: 0; }
-  body { font-family: 'Courier New', monospace; font-size: 12px; margin: 0; padding: 2mm; width: ${paperWidthMm - 4}mm; color: #000; }
-  .c { text-align: center; } .line { border-top: 1px dashed #000; margin: 4px 0; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: ${baseFontSize}px; font-weight: bold; margin: 0; padding: 2mm; width: ${w}mm; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .c { text-align: center; } .line { border-top: 1px dashed #000; margin: 5px 0; }
 </style></head><body>
-<div class="c"><b>${headerText}</b></div>
+<div class="c" style="font-size:${shopNameFs}px;letter-spacing:4px;">${headerText}</div>
 <div class="line"></div>
-<div class="c">=== TEST IN HOA DON ===</div>
-<div>Kho giay: ${paperWidthMm}mm</div>
-<div>Thoi gian: ${new Date().toLocaleString('vi-VN')}</div>
+<div class="c">KIỂM TRA MÁY IN ${paperWidthMm}mm</div>
+<div>${new Date().toLocaleString('vi-VN')}</div>
+<div class="line"></div>
+<div>Tiếng Việt: Cà phê sữa đá</div>
+<div>Trà sữa Oolong Nướng 45.000đ</div>
+<div>Đường: 50% · Đá: Ít · Size: L</div>
 <div class="line"></div>
 <div class="c">${footerText}</div>
-<div style="margin-top:8px"></div>
+<div style="margin-top:10px"></div>
 </body></html>`
 }
 
-function buildTestLabelHtml(labelWidthMm: number): string {
+function buildTestLabelHtml(labelWidthMm: number, labelHeightMm = 30): string {
     return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Test Nhan</title>
-<style>@page{size:${labelWidthMm}mm auto;margin:0;}body{font-family:sans-serif;margin:0;padding:3px;width:${labelWidthMm}mm;color:#000;}</style>
+<style>@page{size:${labelWidthMm}mm ${labelHeightMm}mm;margin:0;}body{font-family:sans-serif;margin:0;padding:3px;width:${labelWidthMm}mm;color:#000;}</style>
 </head><body>
 <p style="font-size:13px;font-weight:bold;margin:0">=== TEST NHAN ===</p>
 <p style="font-size:11px;margin:2px 0">Ca phe sua da - Size L</p>
@@ -772,10 +1112,43 @@ async function getSystemPrinters(): Promise<DiscoveredPrinter[]> {
 
 async function discoverAll(): Promise<DiscoveredPrinter[]> {
     const [sys] = await Promise.allSettled([getSystemPrinters()])
-    const all = (sys.status === 'fulfilled' ? sys.value : []).map(p => ({
-        ...p,
-        status: connectedPrinters.has(p.id) ? 'connected' as PrinterStatus : p.status,
-    }))
+    const discovered = sys.status === 'fulfilled' ? sys.value : []
+
+    // For USB printers saved as "connected", verify they are actually online right now.
+    // Windows keeps the driver installed permanently, so the printer always shows in
+    // getPrintersAsync() even when the USB cable is unplugged.  Without this check,
+    // discoverAll() would mark the saved printer as 'connected' forever.
+    // BT/network printers are not checked here — they're validated at print time.
+    const savedUsbIds = discovered
+        .filter(p => connectedPrinters.has(p.id) && p.connection === 'usb')
+        .map(p => p.id)
+
+    const usbOnlineSet = new Set<string>()
+    if (savedUsbIds.length > 0) {
+        await Promise.all(
+            discovered
+                .filter(p => savedUsbIds.includes(p.id))
+                .map(async p => {
+                    const { online } = await checkWindowsPrinterOnline(p.name)
+                    if (online) usbOnlineSet.add(p.id)
+                    else {
+                        // Remove from in-memory connected state so status is reflected immediately
+                        connectedPrinters.delete(p.id)
+                    }
+                })
+        )
+    }
+
+    const all = discovered.map(p => {
+        const isSavedConnected = connectedPrinters.has(p.id)
+        const isUsbAndOnline = savedUsbIds.includes(p.id) && usbOnlineSet.has(p.id)
+        const isNonUsb = isSavedConnected && !savedUsbIds.includes(p.id)
+        return {
+            ...p,
+            status: (isUsbAndOnline || isNonUsb) ? 'connected' as PrinterStatus : p.status,
+        }
+    })
+
     const seen = new Set<string>()
     return all.filter(p => { if (seen.has(p.id)) return false; seen.add(p.id); return true })
 }
@@ -898,15 +1271,20 @@ export function registerPrinterHandlers(): void {
     // ── By-address handlers ────────────────────────────────────────────────────
 
     ipcMain.handle('printer:testPrintByAddress', async (
-        _e, address: string, type: 'bill' | 'label', printerName: string,
+        _e, address: string, type: 'bill' | 'label', printerName: string, cfg?: LabelConfig & { paperWidth?: number },
     ) => {
-        console.log('[testPrintByAddress]', { address, type, printerName })
-        const pw: 58 | 80 = 58
+        console.log('[testPrintByAddress]', { address, type, printerName, cfg })
+        const pw = cfg?.paperWidth ?? 58
+        const labelW = cfg?.labelWidth ?? 50
+        const labelH = cfg?.labelHeight ?? 30
         const html = type === 'bill'
-            ? buildTestBillHtml('Ujcha Matcha & Coffee', 'Cam on quy khach!', pw)
-            : buildTestLabelHtml(50)
-        const labelSize = type === 'label' ? { width: 50, height: 30 } : undefined
-        return smartPrint(address, printerName || address, html, pw, type, labelSize)
+            ? buildTestBillHtml('Ujcha Matcha & Coffee', 'Cảm ơn quý khách!', pw)
+            : buildTestLabelHtml(labelW, labelH)
+        const labelSize = type === 'label' ? { width: labelW, height: labelH } : undefined
+        const spacing = type === 'label' && cfg
+            ? { lineSpacing: cfg.lineSpacing, feedAfterCut: cfg.feedAfterCut, paddingTop: cfg.paddingTop, paddingBottom: cfg.paddingBottom }
+            : undefined
+        return smartPrint(address, printerName || address, html, pw, type, labelSize, spacing)
     })
 
     ipcMain.handle('printer:printBillByAddress', async (
@@ -917,7 +1295,7 @@ export function registerPrinterHandlers(): void {
         console.log('[printBillByAddress]', { address, printerName, pw, copies, spacing })
         try {
             for (let i = 0; i < (copies ?? 1); i++)
-                await smartPrint(address, printerName || address, html, pw as 58 | 80, 'bill', undefined, spacing)
+                await smartPrint(address, printerName || address, html, pw, 'bill', undefined, spacing)
             return { ok: true }
         } catch (e) { return { ok: false, error: String(e) } }
     })

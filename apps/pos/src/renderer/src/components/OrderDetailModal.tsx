@@ -130,20 +130,22 @@ function ItemRow({ item }: { item: AdminOrder['items'][number] }) {
 
     return (
         <div className="flex items-start gap-3 px-4 py-3">
-            {item.product.imageUrls?.[0] ? (
-                <img src={item.product.imageUrls[0]} alt={item.product.name} className="size-11 shrink-0 rounded-xl object-cover ring-1 ring-black/6" />
-            ) : (
-                <div className="size-11 shrink-0 rounded-xl bg-gray-100 flex items-center justify-center ring-1 ring-black/6">
-                    <ShoppingBag className="size-4 text-gray-300" />
-                </div>
-            )}
+            <div className="relative shrink-0 size-11">
+                {item.product.imageUrls?.[0] ? (
+                    <img src={item.product.imageUrls[0]} alt={item.product.name} className="size-11 rounded-xl object-cover ring-1 ring-black/6" />
+                ) : (
+                    <div className="size-11 rounded-xl bg-gray-100 flex items-center justify-center ring-1 ring-black/6">
+                        <ShoppingBag className="size-4 text-gray-300" />
+                    </div>
+                )}
+                <span className="absolute -bottom-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full bg-brand text-[10px] font-black text-white ring-2 ring-white shadow-sm">
+                    {item.quantity}
+                </span>
+            </div>
 
             <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-gray-900 leading-snug">{item.product?.name}</p>
-                        <span className="text-[10px] font-bold text-gray-400">×{item.quantity}</span>
-                    </div>
+                    <p className="font-semibold text-gray-900 leading-snug">{item.product?.name}</p>
                     <div className="shrink-0 text-right">
                         <p className="font-semibold text-gray-800 tabular-nums">{fmt(lineTotal)}</p>
                         {item.quantity > 1 && (
@@ -152,7 +154,7 @@ function ItemRow({ item }: { item: AdminOrder['items'][number] }) {
                     </div>
                 </div>
 
-                {(optsStr || extras.length > 0 || item.note) && (
+                {(optsStr || extras.length > 0) && (
                     <div className="mt-1.5 flex flex-wrap gap-1">
                         {optsStr && optsStr.split(' · ').map((opt, i) => (
                             <span key={i} className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
@@ -165,12 +167,10 @@ function ItemRow({ item }: { item: AdminOrder['items'][number] }) {
                                 {ex.price > 0 && <span className="text-emerald-500">+{fmt(ex.price)}</span>}
                             </span>
                         ))}
-                        {item.note && (
-                            <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[10px] italic text-amber-700">
-                                &ldquo;{item.note}&rdquo;
-                            </span>
-                        )}
                     </div>
+                )}
+                {item.note && (
+                    <p className="mt-1.5 text-[11px] font-medium text-amber-700">Ghi chú: {item.note}</p>
                 )}
             </div>
         </div>
@@ -251,7 +251,8 @@ export function OrderDetailModal({
         if (!address) { setBillStatus('error'); return }
         try {
             const fontBase64 = await getFontBase64()
-            const loyaltyQrUrl = order.paymentCode ? buildKunLoyaltyQrUrl(order.paymentCode) : undefined
+            const loyaltyQrUrl = (order.paymentCode && (order.type === 'pickup' || order.type === 'table' || !order.userId))
+                ? buildKunLoyaltyQrUrl(order.paymentCode) : undefined
             const html = buildReceiptDocumentHtml(order, loyaltyQrUrl, null, fontBase64)
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const result = await (eAPI?.printer as any)?.printBillByAddress(address, printerName, html, billCfg.copies, billCfg) ?? { ok: true }

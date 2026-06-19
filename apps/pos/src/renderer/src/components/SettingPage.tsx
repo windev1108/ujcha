@@ -42,7 +42,7 @@ interface ManualPrinterConfig {
     typeId: PrinterTypeId | ''
     address: string
     port: string
-    paperWidth: 58 | 80
+    paperWidth: number
     copies: number
     headerText: string
     footerText: string
@@ -59,14 +59,14 @@ interface ManualPrinterConfig {
 
 // ─── Printer type catalogue ───────────────────────────────────────────────────
 const PRINTER_TYPES: PrinterTypeOption[] = [
-    {
-        id: 'xprinter-wifi',
-        label: 'Máy in hoá đơn XPrinter (Wifi, LAN)',
-        connection: 'network',
-        addressLabel: 'Địa chỉ IP máy in',
-        addressHint: 'VD: 192.168.1.100',
-        defaultPort: '9100',
-    },
+    // {
+    //     id: 'xprinter-wifi',
+    //     label: 'Máy in hoá đơn XPrinter (Wifi, LAN)',
+    //     connection: 'network',
+    //     addressLabel: 'Địa chỉ IP máy in',
+    //     addressHint: 'VD: 192.168.1.100',
+    //     defaultPort: '9100',
+    // },
     {
         id: 'xprinter-bluetooth',
         label: 'Máy in hoá đơn XPrinter (Bluetooth)',
@@ -77,45 +77,54 @@ const PRINTER_TYPES: PrinterTypeOption[] = [
     },
     {
         id: 'xprinter-usb',
-        label: 'Máy in hoá đơn XPrinter (USB)',
+        label: 'Máy in hoá đơn (USB, có driver Windows)',
         connection: 'usb',
         addressLabel: 'Tên máy in trong Windows',
-        addressHint: 'VD: XP-58',
+        addressHint: 'VD: XP-58, MP-583, TP-806 — tên hiển thị trong Printers & scanners',
         defaultPort: '',
     },
-    {
-        id: 'epson-wifi',
-        label: 'Máy in hoá đơn Epson (Wifi, LAN)',
-        connection: 'network',
-        addressLabel: 'Địa chỉ IP máy in',
-        addressHint: 'VD: 192.168.1.101',
-        defaultPort: '9100',
-    },
-    {
-        id: 'epson-bluetooth',
-        label: 'Máy in hoá đơn Epson (Bluetooth)',
-        connection: 'bluetooth',
-        addressLabel: 'Địa chỉ MAC hoặc COM port',
-        addressHint: 'VD: 00:11:22:33:44:55 hoặc COM3',
-        defaultPort: '',
-    },
-    {
-        id: 'sunmi-bluetooth',
-        label: 'Máy in tích hợp Sunmi (Bluetooth)',
-        connection: 'bluetooth',
-        addressLabel: 'Địa chỉ MAC Bluetooth',
-        addressHint: 'VD: AA:BB:CC:DD:EE:FF',
-        defaultPort: '',
-    },
-    {
-        id: 'other-wifi',
-        label: 'Máy in khác (Wifi, LAN)',
-        connection: 'network',
-        addressLabel: 'Địa chỉ IP máy in',
-        addressHint: 'VD: 192.168.1.200',
-        defaultPort: '9100',
-    },
+    // {
+    //     id: 'epson-wifi',
+    //     label: 'Máy in hoá đơn Epson (Wifi, LAN)',
+    //     connection: 'network',
+    //     addressLabel: 'Địa chỉ IP máy in',
+    //     addressHint: 'VD: 192.168.1.101',
+    //     defaultPort: '9100',
+    // },
+    // {
+    //     id: 'epson-bluetooth',
+    //     label: 'Máy in hoá đơn Epson (Bluetooth)',
+    //     connection: 'bluetooth',
+    //     addressLabel: 'Địa chỉ MAC hoặc COM port',
+    //     addressHint: 'VD: 00:11:22:33:44:55 hoặc COM3',
+    //     defaultPort: '',
+    // },
+    // {
+    //     id: 'sunmi-bluetooth',
+    //     label: 'Máy in tích hợp Sunmi (Bluetooth)',
+    //     connection: 'bluetooth',
+    //     addressLabel: 'Địa chỉ MAC Bluetooth',
+    //     addressHint: 'VD: AA:BB:CC:DD:EE:FF',
+    //     defaultPort: '',
+    // },
+    // {
+    //     id: 'other-wifi',
+    //     label: 'Máy in khác (Wifi, LAN)',
+    //     connection: 'network',
+    //     addressLabel: 'Địa chỉ IP máy in',
+    //     addressHint: 'VD: 192.168.1.200',
+    //     defaultPort: '9100',
+    // },
 ]
+
+const PAPER_WIDTH_OPTIONS = [
+    { value: 48, label: '48mm', hint: 'Mini printer · Gprinter GP-C480' },
+    { value: 58, label: '58mm', hint: 'XPrinter XP-58 · Gprinter GP-58 · Epson TM-T20' },
+    { value: 72, label: '72mm', hint: 'Bixolon SRP-270 · một số dòng máy in khổ trung' },
+    { value: 76, label: '76mm', hint: 'Dòng máy in khổ rộng trung' },
+    { value: 80, label: '80mm', hint: 'XPrinter XP-80 · Epson TM-T82/T88 · Bixolon SRP-350 · SUNMI P2' },
+    { value: 112, label: '112mm', hint: 'Máy in bếp · Star TSP700II · khổ rộng' },
+] as const
 
 const LABEL_SIZES = [
     { label: 'Loại 60x40mm', width: 60, height: 40 },
@@ -216,17 +225,16 @@ function LabelPreview({ cfg }: { cfg: ManualPrinterConfig }) {
                 <div style={{ width: displayW, height: displayH, overflow: 'hidden', background: 'white', border: '1px solid #d1d5db', borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', position: 'relative' }}>
                     <div style={{ position: 'absolute', top: 0, left: 0, transform: `scale(${scale})`, transformOrigin: 'top left', width: naturalW, fontFamily: "'Courier New', monospace", fontSize: 10, padding: '4px 8px', lineHeight: 1.3, color: '#000' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
-                            <span>UJCHA</span><span>1/3</span>
+                            <span>UJCHA-0001</span><span>1/3</span>
                         </div>
                         <div style={{ borderTop: '1px dashed #000', margin: '2px 0' }} />
                         <div style={{ fontWeight: 'bold', fontSize: 11 }}>Trà Sữa Oolong Nướng</div>
-                        <div style={{ fontSize: 9 }}>+ M</div>
-                        <div style={{ fontSize: 9 }}>+ Đường 50%</div>
-                        <div style={{ fontSize: 9 }}>+ Ít đá</div>
+                        <div style={{ fontSize: 9 }}>+ Size: M</div>
+                        <div style={{ fontSize: 9 }}>+ Đường: 50%</div>
+                        <div style={{ fontSize: 9 }}>+ Đá: Ít đá</div>
                         <div style={{ fontSize: 9 }}>+ Trân châu đen</div>
                         <div style={{ fontSize: 9, fontStyle: 'italic' }}>* Ít ngọt</div>
-                        <div style={{ borderTop: '1px dashed #000', margin: '2px 0' }} />
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, marginTop: 3 }}>
                             <span style={{ fontWeight: 'bold' }}>55.000đ</span><span>09:30</span>
                         </div>
                     </div>
@@ -242,36 +250,66 @@ function BillPreview({ cfg }: { cfg: ManualPrinterConfig }) {
     const naturalW = paperW * MM
     const displayW = 220
     const scale = displayW / naturalW
-    const naturalH = 195
+    const naturalH = 300
     const displayH = Math.round(naturalH * scale)
+    const baseFs = paperW <= 58 ? 11 : 13
+    const subFs = paperW <= 58 ? 9 : 11
+    const nameFs = paperW <= 58 ? 11 : 13
+    const shopFs = paperW <= 58 ? 16 : 20
+    const refFs = paperW <= 58 ? 18 : 22
+    const colGap = paperW <= 58 ? 4 : 6
+
+    const QtyBox = ({ n }: { n: string }) => (
+        <span style={{ display: 'inline-block', width: 20, height: 20, lineHeight: '18px', background: '#fff', border: '1.5px solid #000', color: '#000', textAlign: 'center', fontWeight: 'bold', fontSize: subFs, verticalAlign: 'middle' }}>{n}</span>
+    )
 
     return (
         <div className="flex justify-center py-2">
             <div className="flex flex-col items-center gap-1.5">
                 <p className="text-[10px] text-gray-400">{paperW}mm (mẫu)</p>
                 <div style={{ width: displayW, height: displayH, overflow: 'hidden', background: 'white', border: '1px solid #d1d5db', borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', position: 'relative' }}>
-                    <div style={{ position: 'absolute', top: 0, left: 0, transform: `scale(${scale})`, transformOrigin: 'top left', width: naturalW, fontFamily: "'Courier New', monospace", fontSize: 12, padding: '4px 0', lineHeight: 1.35, color: '#000' }}>
-                        <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: 16, letterSpacing: 2 }}>UJCHA</div>
-                        <div style={{ textAlign: 'center', fontSize: 10 }}>{cfg.headerText || 'UJCHA Matcha & Coffee'}</div>
+                    <div style={{ position: 'absolute', top: 0, left: 0, transform: `scale(${scale})`, transformOrigin: 'top left', width: naturalW, fontFamily: "'Segoe UI', Arial, sans-serif", fontSize: baseFs, fontWeight: 'bold', padding: '4px 4px', lineHeight: 1.35, color: '#000' }}>
+                        {/* shop-name */}
+                        <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: shopFs, letterSpacing: 2, marginBottom: 1 }}>Ujcha</div>
+                        {/* order-ref */}
+                        <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: refFs, letterSpacing: 1, marginBottom: 2 }}>UJCHA-0001</div>
+                        <div style={{ textAlign: 'center', fontSize: subFs, marginBottom: 1 }}>3 sản phẩm</div>
+                        {/* date */}
+                        <div style={{ textAlign: 'center', fontSize: baseFs, marginBottom: 2 }}>01/05/2025 09:30</div>
+                        {/* service-type */}
+                        <div style={{ textAlign: 'center', fontSize: baseFs, marginBottom: 1 }}>Loại: <b>Tại bàn</b></div>
+                        <div style={{ textAlign: 'center', fontSize: baseFs, marginBottom: 1 }}>Bàn: <b>A1</b></div>
+                        {/* divider */}
                         <div style={{ borderTop: '2px dashed #000', margin: '5px 0' }} />
-                        <div style={{ fontSize: 10 }}>Đơn: UJCHA-20250501-0001</div>
-                        <div style={{ fontSize: 10 }}>01/05/2025 09:30</div>
-                        <div style={{ fontSize: 10 }}>Loại: Tại bàn</div>
-                        <div style={{ borderTop: '2px dashed #000', margin: '5px 0' }} />
-                        <div style={{ display: 'grid', gridTemplateColumns: '24px 1fr auto', gap: 4, fontWeight: 'bold', fontSize: 12 }}>
-                            <span>2x</span><span>Trà Sữa Oolong Nướng</span><span style={{ whiteSpace: 'nowrap' }}>110.000đ</span>
+                        {/* items */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '22px minmax(0,1fr) auto', columnGap: colGap, alignItems: 'start', margin: '4px 0 2px' }}>
+                            <div style={{ paddingTop: 1 }}><QtyBox n="2x" /></div>
+                            <div style={{ fontWeight: 'bold', fontSize: nameFs, wordBreak: 'break-word', lineHeight: 1.3 }}>Trà Sữa Oolong Nướng</div>
+                            <div style={{ textAlign: 'right', fontSize: nameFs, fontWeight: 'bold', whiteSpace: 'nowrap', paddingLeft: 2 }}>110.000đ</div>
                         </div>
-                        <div style={{ marginLeft: 28, fontSize: 10, color: '#555' }}>Size: M · Đường: 50% · Đá: Ít đá</div>
+                        <div style={{ marginLeft: 26, fontSize: subFs, fontWeight: 'bold', marginBottom: 1 }}>+ Size: M</div>
+                        <div style={{ marginLeft: 26, fontSize: subFs, fontWeight: 'bold', marginBottom: 1 }}>+ Đường: 50%</div>
                         <div style={{ borderBottom: '1px dashed #000', margin: '4px 0 3px' }} />
-                        <div style={{ display: 'grid', gridTemplateColumns: '24px 1fr auto', gap: 4, fontWeight: 'bold', fontSize: 12 }}>
-                            <span>1x</span><span>Cà Phê Muối</span><span style={{ whiteSpace: 'nowrap' }}>45.000đ</span>
+                        <div style={{ display: 'grid', gridTemplateColumns: '22px minmax(0,1fr) auto', columnGap: colGap, alignItems: 'start', margin: '4px 0 2px' }}>
+                            <div style={{ paddingTop: 1 }}><QtyBox n="1x" /></div>
+                            <div style={{ fontWeight: 'bold', fontSize: nameFs, wordBreak: 'break-word', lineHeight: 1.3 }}>Cà Phê Muối</div>
+                            <div style={{ textAlign: 'right', fontSize: nameFs, fontWeight: 'bold', whiteSpace: 'nowrap', paddingLeft: 2 }}>45.000đ</div>
                         </div>
+                        {/* divider */}
                         <div style={{ borderTop: '2px dashed #000', margin: '5px 0' }} />
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: 13 }}>
-                            <span>Tổng cộng</span><span>155.000đ</span>
+                        {/* subtotal */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: baseFs, marginBottom: 2 }}>
+                            <span>Tạm tính</span><span style={{ whiteSpace: 'nowrap' }}>155.000đ</span>
                         </div>
+                        {/* total */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: baseFs + 1, marginTop: 2, marginBottom: 2 }}>
+                            <span>Tổng cộng</span><span style={{ whiteSpace: 'nowrap' }}>155.000đ</span>
+                        </div>
+                        {/* divider */}
                         <div style={{ borderTop: '2px dashed #000', margin: '5px 0' }} />
-                        <div style={{ textAlign: 'center', fontSize: 10 }}>{cfg.footerText || 'Cảm ơn quý khách! Hẹn gặp lại.'}</div>
+                        {/* payment-status */}
+                        <div style={{ fontSize: baseFs, marginBottom: 2 }}>Thanh toán: <b>Chuyển khoản</b></div>
+                        <div style={{ fontSize: baseFs, fontWeight: 'bold' }}>✓ Đã thanh toán</div>
                     </div>
                 </div>
             </div>
@@ -505,45 +543,6 @@ function PrinterSection({
                             </div>
                         )}
 
-                        {isBill && (
-                            <div>
-                                <FieldLabel>Chọn kích thước giấy in</FieldLabel>
-                                <div className="flex gap-2">
-                                    {([58, 80] as const).map(w => (
-                                        <button
-                                            key={w}
-                                            onClick={() => onChange({ ...cfg, paperWidth: w })}
-                                            className={`flex-1 h-11 rounded-xl border text-sm font-semibold transition-colors ${cfg.paperWidth === w
-                                                ? 'border-brand bg-brand-muted text-brand'
-                                                : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-brand-accent'
-                                                }`}
-                                        >
-                                            Loại {w}mm
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {!isBill && (
-                            <div>
-                                <FieldLabel>Chọn kích thước tem nhãn</FieldLabel>
-                                <select
-                                    value={`${cfg.labelWidth}x${cfg.labelHeight}`}
-                                    onChange={e => {
-                                        const [w, h] = e.target.value.split('x').map(Number)
-                                        onChange({ ...cfg, labelWidth: w, labelHeight: h })
-                                    }}
-                                    className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm text-gray-800 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/10"
-                                >
-                                    {LABEL_SIZES.map(s => (
-                                        <option key={s.label} value={`${s.width}x${s.height}`}>
-                                            {s.label}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
                     </div>
                 </Card>
             )}
@@ -553,8 +552,8 @@ function PrinterSection({
                     <Toggle
                         checked={cfg.autoPrint}
                         onChange={v => onChange({ ...cfg, autoPrint: v })}
-                        label="Cho phép in tự động đơn tại quán"
-                        sub="Tự động in khi đơn được tạo thành công"
+                        label={isBill ? 'Tự động in hóa đơn' : 'Tự động in tem nhãn'}
+                        sub={isBill ? 'In hóa đơn ngay khi đơn được tạo / thanh toán thành công' : 'In tem nhãn cho pha chế ngay khi nhận đơn mới'}
                     />
                     {isBill && (
                         <>
@@ -618,8 +617,46 @@ function PrinterSection({
                 )}
             </Card>
 
-            <Card title="Xem trước kết quả in">
-                {isBill ? <BillPreview cfg={cfg} /> : <LabelPreview cfg={cfg} />}
+            <Card title={isBill ? 'Khổ giấy & Xem trước' : 'Kích thước nhãn & Xem trước'}>
+                {isBill ? (
+                    <>
+                        <div className="mb-3">
+                            <select
+                                value={cfg.paperWidth}
+                                onChange={e => onChange({ ...cfg, paperWidth: Number(e.target.value) })}
+                                className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm text-gray-800 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/10"
+                            >
+                                {PAPER_WIDTH_OPTIONS.map(opt => (
+                                    <option key={opt.value} value={opt.value}>
+                                        {opt.label} — {opt.hint}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <BillPreview cfg={cfg} />
+                    </>
+                ) : (
+                    <>
+                        <div className="mb-3">
+                            <select
+                                value={`${cfg.labelWidth}x${cfg.labelHeight}`}
+                                onChange={e => {
+                                    const [w, h] = e.target.value.split('x').map(Number)
+                                    onChange({ ...cfg, labelWidth: w, labelHeight: h })
+                                }}
+                                className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm text-gray-800 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/10"
+                            >
+                                {LABEL_SIZES.map(s => (
+                                    <option key={s.label} value={`${s.width}x${s.height}`}>
+                                        {s.label}
+                                    </option>
+                                ))}
+                            </select>
+                            <p className="text-[10px] text-gray-400 mt-1.5">Phổ biến: 50×30mm (Zebra ZD220), 60×40mm (XPrinter XP-365B)</p>
+                        </div>
+                        <LabelPreview cfg={cfg} />
+                    </>
+                )}
             </Card>
 
             <div className="space-y-2">
@@ -661,7 +698,7 @@ function PrinterSection({
                 <DeviceScanModal
                     connectionType={selectedType?.connection === 'usb' ? 'usb' : 'bluetooth'}
                     onSelect={(address, printerName) => {
-                        onChange({ ...cfg, address: printerName ?? address, printerName: printerName ?? address })
+                        onChange({ ...cfg, address, printerName })
                         setShowBtScan(false)
                     }}
                     onClose={() => setShowBtScan(false)}
@@ -1330,7 +1367,7 @@ export function SettingsPage({
             address: saved.address || '',
             printerName: saved.printerName || saved.address || '',
             port: '9100',
-            paperWidth: (saved.paperWidth === 58 || saved.paperWidth === 80) ? saved.paperWidth : 58,
+            paperWidth: (saved.paperWidth && saved.paperWidth > 0) ? saved.paperWidth : 80,
             copies: saved.copies ?? 1,
             headerText: saved.headerText || 'UJCHA Matcha & Coffee',
             footerText: saved.footerText || 'Cảm ơn quý khách! Hẹn gặp lại.',
@@ -1374,7 +1411,7 @@ export function SettingsPage({
         return {
             enabled: m.enabled,
             printerId: m.address ? `manual-${m.address}` : null,
-            paperWidth: m.paperWidth,
+            paperWidth: m.paperWidth as 58 | 80,
             autoPrint: m.autoPrint,
             copies: m.copies,
             showLogo: true,
@@ -1420,10 +1457,19 @@ export function SettingsPage({
         setStatus('testing')
         try {
             if (eAPI?.printer) {
+                const testCfgArg = type === 'label' ? {
+                    labelWidth: cfg.labelWidth ?? 50,
+                    labelHeight: cfg.labelHeight ?? 30,
+                    lineSpacing: cfg.lineSpacing,
+                    feedAfterCut: cfg.feedAfterCut,
+                    paddingTop: cfg.paddingTop,
+                    paddingBottom: cfg.paddingBottom,
+                } : { paperWidth: cfg.paperWidth }
                 const res = await (eAPI.printer as any).testPrintByAddress(
                     cfg.address,
                     type,
                     cfg.printerName || cfg.address,
+                    testCfgArg,
                 )
                 setStatus(res?.ok ? 'ok' : 'error')
             } else {

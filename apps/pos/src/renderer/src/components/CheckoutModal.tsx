@@ -181,11 +181,12 @@ function CustomerPanel({
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
-export function CheckoutModal({ onClose, initialTab, autoConfirm, onOrderComplete }: {
+export function CheckoutModal({ onClose, initialTab, autoConfirm, onOrderComplete, onOrderCreated }: {
   onClose: () => void
   initialTab?: Tab
   autoConfirm?: boolean
   onOrderComplete?: () => void
+  onOrderCreated?: (orderId: string) => void
 }) {
   const cart = usePosStore((s) => s.cart)
   const cartTotal = usePosStore((s) => s.cartTotal)
@@ -372,7 +373,8 @@ export function CheckoutModal({ onClose, initialTab, autoConfirm, onOrderComplet
     const fontBase64 = await getFontBase64()
 
     setBillPrintState('printing')
-    const loyaltyQrUrl = o.paymentCode ? buildKunLoyaltyQrUrl(o.paymentCode) : undefined
+    const loyaltyQrUrl = (o.paymentCode && (o.type === 'pickup' || o.type === 'table' || !o.userId))
+      ? buildKunLoyaltyQrUrl(o.paymentCode) : undefined
     const html = buildReceiptDocumentHtml(o, loyaltyQrUrl, null, fontBase64)
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -406,7 +408,8 @@ export function CheckoutModal({ onClose, initialTab, autoConfirm, onOrderComplet
       if (!address) return
       const fontBase64 = await getFontBase64()
       setBillPrintState('printing')
-      const loyaltyQrUrl = order.paymentCode ? buildKunLoyaltyQrUrl(order.paymentCode) : undefined
+      const loyaltyQrUrl = (order.paymentCode && (order.type === 'pickup' || order.type === 'table' || !order.userId))
+        ? buildKunLoyaltyQrUrl(order.paymentCode) : undefined
       const html = buildReceiptDocumentHtml(order, loyaltyQrUrl, null, fontBase64)
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -444,6 +447,7 @@ export function CheckoutModal({ onClose, initialTab, autoConfirm, onOrderComplet
     try {
       const o = await createOrder(buildOrderBody('paid'))
       setOrder(o)
+      onOrderCreated?.(o.id)
       void printLabelsOnOrderCreated(o)
       onPaymentSuccess(o, total, false)
     } catch {
@@ -459,6 +463,7 @@ export function CheckoutModal({ onClose, initialTab, autoConfirm, onOrderComplet
     try {
       const o = await createOrder(buildOrderBody('pending'))
       setOrder(o)
+      onOrderCreated?.(o.id)
       void printLabelsOnOrderCreated(o)
       setPhase('pending')
 

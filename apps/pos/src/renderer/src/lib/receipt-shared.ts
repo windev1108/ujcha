@@ -155,63 +155,21 @@ function receiptPayLabel(type: string): string {
   return type === 'cash' ? RECEIPT_I18N.pay_cash : RECEIPT_I18N.pay_transfer
 }
 
-function buildBillItems(order: AdminOrder, paperWidth: number): string {
-  const nameFs = paperWidth <= 58 ? 11 : 13
-  const subFs = paperWidth <= 58 ? 10 : 11
-  const grouped = groupOrderItems(order.items)
-  const lines: string[] = []
-  for (let i = 0; i < grouped.length; i++) {
-    const it = grouped[i]
-    const extras = parseExtras(it.extrasJson)
-    const opts = parseOptions(it.optionsJson)
-    const lineTotal = Number.parseFloat(it.price) * it.quantity
-    const colGap = paperWidth <= 58 ? 4 : 6
-    lines.push(
-      `<div style="display:grid;grid-template-columns:22px minmax(0,1fr) auto;column-gap:${colGap}px;align-items:start;margin:4px 0 2px;">` +
-      `<div><span style="display:inline-block;width:20px;height:20px;line-height:18px;background:#fff;border:1.5px solid #000;color:#000;text-align:center;font-weight:bold;font-size:${subFs}px;vertical-align:middle;">${it.quantity}x</span></div>` +
-      `<div style="font-weight:bold;font-size:${nameFs}px;word-break:break-word;line-height:1.3;color:#000;">${esc(it.product.name)}</div>` +
-      `<div style="text-align:right;font-size:${nameFs}px;font-weight:bold;white-space:nowrap;padding-left:4px;min-width:0;color:#000;">${esc(formatVnd(lineTotal))}</div>` +
-      `</div>`,
-    )
-    for (const [k, v] of Object.entries(opts)) {
-      lines.push(`<div style="margin-left:26px;font-size:${subFs}px;font-weight:bold;margin-bottom:1px;color:#000;">+ ${esc(k)}: ${esc(v)}</div>`)
-    }
-    for (const ex of extras) {
-      const exPrice = Number(ex.price ?? 0)
-      lines.push(
-        `<div style="display:flex;justify-content:space-between;margin-left:26px;font-size:${subFs}px;margin-bottom:1px;color:#000;">` +
-        `<span>+ ${esc(ex.name)}</span>` +
-        (exPrice > 0 ? `<span style="white-space:nowrap;padding-left:4px;">${esc(formatVnd(exPrice))}</span>` : '') +
-        `</div>`,
-      )
-    }
-    if (it.note) {
-      lines.push(`<div style="margin-left:26px;font-style:italic;font-size:${subFs}px;color:#000;">${esc(RECEIPT_I18N.note)}: ${esc(it.note)}</div>`)
-    }
-    if (i < grouped.length - 1) {
-      lines.push(`<div style="border-bottom:1px dashed #000;margin:5px 0 4px;"></div>`)
-    }
-  }
-  return lines.join('')
-}
-
 function renderItems(order: AdminOrder, el: ReceiptElement, paperWidth: number): string {
   const lines: string[] = []
-  // FIX: font size nhỏ hơn cho 58mm để không tràn giấy
   const nameFs = paperWidth <= 58 ? Math.max(el.fontSize - 2, 11) : Math.max(el.fontSize, 13)
   const subFs = paperWidth <= 58 ? Math.max(el.fontSize - 4, 9) : Math.max(el.fontSize - 2, 11)
+  const colGap = paperWidth <= 58 ? 4 : 6
   const grouped = groupOrderItems(order.items)
 
   for (let i = 0; i < grouped.length; i++) {
     const it = grouped[i]
     const extras = parseExtras(it.extrasJson)
     const opts = parseOptions(it.optionsJson)
-
     const lineTotal = Number.parseFloat(it.price) * it.quantity
 
-    // Item row: qty box | name | price
     lines.push(
-      `<div style="display:grid;grid-template-columns:22px minmax(0,1fr) auto;column-gap:4px;align-items:start;margin:4px 0 2px;">` +
+      `<div data-pos="item" data-qty="${it.quantity}x" data-name="${esc(it.product.name)}" data-price="${esc(formatVnd(lineTotal))}" style="display:grid;grid-template-columns:22px minmax(0,1fr) auto;column-gap:${colGap}px;align-items:start;margin:4px 0 2px;">` +
       `<div style="padding-top:1px;"><span style="display:inline-block;width:20px;height:20px;line-height:18px;background:#fff;border:1.5px solid #000;color:#000;text-align:center;font-weight:bold;font-size:${subFs}px;vertical-align:middle;">${it.quantity}x</span></div>` +
       `<div style="font-weight:bold;font-size:${nameFs}px;word-break:break-word;line-height:1.3;color:#000;">${esc(it.product.name)}</div>` +
       `<div style="text-align:right;font-size:${nameFs}px;font-weight:bold;white-space:nowrap;padding-left:2px;min-width:0;color:#000;">${esc(formatVnd(lineTotal))}</div>` +
@@ -222,7 +180,6 @@ function renderItems(order: AdminOrder, el: ReceiptElement, paperWidth: number):
       lines.push(`<div style="margin-left:26px;font-size:${subFs}px;font-weight:bold;margin-bottom:1px;color:#000;">+ ${esc(k)}: ${esc(v)}</div>`)
     }
 
-    // Extras / Toppings
     for (const ex of extras) {
       const exPrice = Number(ex.price ?? 0)
       lines.push(
@@ -233,10 +190,9 @@ function renderItems(order: AdminOrder, el: ReceiptElement, paperWidth: number):
       )
     }
 
-    // Ghi chú
     if (it.note) {
       lines.push(
-        `<div style="margin-left:26px;font-style:italic;font-size:${subFs}px;color:#000;">Ghi chú: ${esc(it.note)}</div>`,
+        `<div style="margin-left:26px;font-size:${subFs}px;color:#000;">${esc(RECEIPT_I18N.note)}: ${esc(it.note)}</div>`,
       )
     }
 
@@ -258,32 +214,25 @@ function renderElement(
   const aln = `text-align:${el.align};`
   const scaledFontSize = paperWidth <= 58 ? Math.max(el.fontSize - 2, 9) : el.fontSize
   const fs = `font-size:${scaledFontSize}px;`
+  const smlFs = `font-size:${Math.max(scaledFontSize - 1, 8)}px;`
   const bold = el.bold ? 'font-weight:bold;' : ''
   const base = `${aln}${fs}${bold}color:#000;`
 
   switch (el.type) {
     case 'shop-name':
-      return (
-        `<div style="${aln}font-size:${paperWidth <= 58 ? 16 : 20}px;font-weight:bold;letter-spacing:2px;color:#000;margin-bottom:1px;">Ujcha</div>`
-      )
+      return `<div style="${aln}font-family:Georgia,'Times New Roman',serif;font-size:${paperWidth <= 58 ? 22 : 26}px;font-weight:bold;letter-spacing:3px;color:#000;margin-bottom:4px;">Ujcha</div>`
 
     case 'order-ref':
-      return (
-        `<div style="${aln}font-size:${paperWidth <= 58 ? 18 : 22}px;font-weight:bold;letter-spacing:1px;color:#000;margin-bottom:2px;">${esc(order.paymentCode ?? formatOrderRef(order))}</div>` +
-        (order.items.length > 0
-          ? `<div style="${aln}font-size:${paperWidth <= 58 ? 9 : 11}px;color:#000;margin-bottom:1px;">${order.items.reduce((s, i) => s + i.quantity, 0)} san pham${order.guestDeliveryName ? ` cho ${esc(order.guestDeliveryName)}` : ''}</div>`
-          : '')
-      )
+      return `<div style="${aln}font-size:${paperWidth <= 58 ? 18 : 22}px;font-weight:bold;letter-spacing:1px;color:#000;margin-bottom:4px;">${esc(order.paymentCode ?? formatOrderRef(order))}</div>`
 
     case 'date':
       return `<div style="${base}margin-bottom:2px;">${esc(new Date(order.createdAt).toLocaleString('vi-VN'))}</div>`
 
     case 'service-type': {
-      let html = `<div style="${base}margin-bottom:2px;">Loai: ${esc(serviceLabel(order.type))}</div>`
+      let html = `<div style="${base}margin-bottom:2px;">${esc(RECEIPT_I18N.type)}: <b>${esc(receiptServiceLabel(order.type))}</b></div>`
       if (order.type === 'delivery') {
         const name = order.guestDeliveryName
         const phone = order.guestDeliveryPhone
-        const addr = order.guestDeliveryAddress
         if (name || phone) {
           html += `<div style="${base}margin-bottom:1px;">`
           if (name) html += esc(name)
@@ -291,28 +240,28 @@ function renderElement(
           if (phone) html += esc(phone)
           html += `</div>`
         }
-        if (addr) {
-          html += `<div style="${aln}font-size:${Math.max(scaledFontSize - 2, 8)}px;color:#000;word-break:break-word;margin-bottom:2px;">${esc(addr)}</div>`
-        }
+      }
+      if (order.table?.name) {
+        html += `<div style="${base}margin-bottom:1px;">${esc(RECEIPT_I18N.table)}: ${esc(order.table.name)}</div>`
       }
       return html
     }
 
     case 'divider':
-      return `<div style="border-top:1px dashed #000;margin:4px 0;"></div>`
+      return `<div style="border-top:2px dashed #000;margin:6px 0;"></div>`
 
     case 'items':
       return renderItems(order, el, paperWidth)
 
     case 'subtotal':
-      return `<div style="display:flex;justify-content:space-between;${fs}${bold}margin-bottom:2px;color:#000;"><span>Tam tinh</span><span style="white-space:nowrap;">${esc(formatVnd(order.totalAmount))}</span></div>`
+      return `<div style="display:flex;justify-content:space-between;${smlFs}${bold}margin-bottom:2px;color:#000;"><span>${esc(RECEIPT_I18N.subtotal)}</span><span style="white-space:nowrap;">${esc(formatVnd(order.totalAmount))}</span></div>`
 
     case 'discount': {
       const disc = Number(order.discountAmount) || 0
       const ptDisc = Number(order.pointDiscountAmount) || 0
       let html = ''
-      if (disc > 0) html += `<div style="display:flex;justify-content:space-between;${fs}${bold}margin-bottom:2px;color:#000;"><span>Giảm giá</span><span style="white-space:nowrap;">-${esc(formatVnd(disc))}</span></div>`
-      if (ptDisc > 0) html += `<div style="display:flex;justify-content:space-between;${fs}${bold}margin-bottom:2px;color:#000;"><span>Điểm UjCha</span><span style="white-space:nowrap;">-${esc(formatVnd(ptDisc))}</span></div>`
+      if (disc > 0) html += `<div style="display:flex;justify-content:space-between;${smlFs}${bold}margin-bottom:2px;color:#000;"><span>${esc(RECEIPT_I18N.discount)}</span><span style="white-space:nowrap;">-${esc(formatVnd(disc))}</span></div>`
+      if (ptDisc > 0) html += `<div style="display:flex;justify-content:space-between;${smlFs}${bold}margin-bottom:2px;color:#000;"><span>${esc(RECEIPT_I18N.points)}</span><span style="white-space:nowrap;">-${esc(formatVnd(ptDisc))}</span></div>`
       return html
     }
 
@@ -324,22 +273,28 @@ function renderElement(
       const total = subtotal - disc - ptDisc + ship
       let html = ''
       if (order.type === 'delivery') {
-        html += `<div style="display:flex;justify-content:space-between;${fs}${bold}margin-bottom:2px;color:#000;"><span>Phi van chuyen</span><span style="white-space:nowrap;">${ship > 0 ? esc(formatVnd(ship)) : 'Mien phi'}</span></div>`
+        html += `<div style="display:flex;justify-content:space-between;${smlFs}${bold}margin-bottom:2px;color:#000;"><span>${esc(RECEIPT_I18N.shipping)}</span><span style="white-space:nowrap;">${ship > 0 ? esc(formatVnd(ship)) : esc(RECEIPT_I18N.free)}</span></div>`
       }
-      html += `<div style="display:flex;justify-content:space-between;${fs}${bold}margin-top:3px;color:#000;"><span>Tong cong</span><span style="white-space:nowrap;">${esc(formatVnd(total))}</span></div>`
+      html += `<div style="display:flex;justify-content:space-between;${smlFs}${bold}margin-top:3px;color:#000;"><span>${esc(RECEIPT_I18N.total)}</span><span style="white-space:nowrap;">${esc(formatVnd(total))}</span></div>`
       return html
     }
 
     case 'payment-status':
-      return `<div style="${fs}${bold}margin-bottom:3px;color:#000;"><b>Trang thai:</b> ${order.paymentStatus === 'paid' ? 'Đã thanh toán' : 'Chưa thanh toán'}</div>`
+      return (
+        `<div style="${smlFs}${bold}margin-bottom:2px;color:#000;">${esc(RECEIPT_I18N.payment)}: <b>${esc(receiptPayLabel(order.paymentType))}</b></div>` +
+        (order.paymentStatus === 'paid'
+          ? `<div style="${smlFs}font-weight:bold;color:#000;margin-top:1px;">${esc(RECEIPT_I18N.paid)}</div>`
+          : `<div style="${smlFs}color:#000;margin-top:1px;">${esc(RECEIPT_I18N.pending)}</div>`)
+      )
 
     case 'qr-code':
       if (loyaltyQrUrl) {
+        const qrSize = paperWidth <= 58 ? 120 : 160
         return (
           `<div style="border-top:2px dashed #000;margin:8px 0 6px;"></div>` +
-          `<div style="text-align:center;font-size:12px;font-weight:bold;letter-spacing:0.5px;margin-bottom:6px;color:#000;">QUÉT ĐỂ TÍCH ĐIỂM UJCHA</div>` +
-          `<img src="${loyaltyQrUrl}" style="display:block;margin:0 auto 4px;width:160px;height:160px;" />` +
-          `<div style="text-align:center;font-size:10px;color:#000;margin-bottom:6px;">Đăng nhập &amp; tích điểm ngay từ đơn hàng này</div>`
+          `<div style="text-align:center;font-size:12px;font-weight:bold;letter-spacing:0.5px;margin-bottom:6px;color:#000;">${esc(RECEIPT_I18N.scan_loyalty)}</div>` +
+          `<div style="text-align:center;"><img src="${loyaltyQrUrl}" style="display:block;margin:0 auto 4px;width:${qrSize}px;height:${qrSize}px;" /></div>` +
+          `<div style="text-align:center;font-size:10px;color:#000;margin-bottom:6px;">${esc(RECEIPT_I18N.scan_sub)}</div>`
         )
       }
       return ''
@@ -374,59 +329,11 @@ export function buildReceiptDocumentHtml(
   const paperWidth = cfg.paperWidth ?? 58
   const printableWidth = paperWidth - 4
   const baseFontSize = paperWidth <= 58 ? 11 : 13
-  const shopNameFs = paperWidth <= 58 ? 18 : 22
-  const qrSize = paperWidth <= 58 ? 120 : 160
 
-  const ref = `#${order.paymentCode ?? order.orderRef}`
-  const date = new Date(order.createdAt).toLocaleString('vi-VN')
-  const subtotal = Number(order.totalAmount) || 0
-  const discount = Number(order.discountAmount) || 0
-  const pointDiscount = Number(order.pointDiscountAmount) || 0
-  const ship = order.type === 'delivery' ? (Number(order.shippingFee) || 0) : 0
-  const total = subtotal - discount - pointDiscount + ship
-
-  const deliveryAddr = order.guestDeliveryAddress ?? order.address?.fullAddress
-  const hasContact = order.guestDeliveryName || order.guestDeliveryPhone
-
-  const body = [
-    `<div style="text-align:center;font-size:${shopNameFs}px;font-weight:bold;letter-spacing:4px;color:#000;">Ujcha</div>`,
-    `<div style="border-top:2px dashed #000;margin:6px 0;"></div>`,
-
-    `<div style="font-size:12px;margin-bottom:1px;color:#000;">${esc(RECEIPT_I18N.order)}: <b>${esc(ref)}</b></div>`,
-    `<div style="font-size:11px;color:#000;font-weight:bold;margin-bottom:1px;">${esc(date)}</div>`,
-    `<div style="font-size:12px;margin-bottom:1px;color:#000;">${esc(RECEIPT_I18N.type)}: <b>${esc(receiptServiceLabel(order.type))}</b></div>`,
-
-    deliveryAddr ? `<div style="font-size:11px;color:#000;font-weight:bold;margin-bottom:1px;">${esc(RECEIPT_I18N.address)}: ${esc(deliveryAddr)}</div>` : '',
-    hasContact ? `<div style="font-size:11px;color:#000;font-weight:bold;margin-bottom:1px;">${[order.guestDeliveryName, order.guestDeliveryPhone].filter(Boolean).map((s) => esc(s!)).join(' · ')}</div>` : '',
-    order.table?.name ? `<div style="font-size:11px;color:#000;font-weight:bold;margin-bottom:1px;">${esc(RECEIPT_I18N.table)}: ${esc(order.table.name)}</div>` : '',
-
-    `<div style="border-top:2px dashed #000;margin:6px 0;"></div>`,
-
-    buildBillItems(order, paperWidth),
-    `<div style="border-top:2px dashed #000;margin:6px 0;"></div>`,
-
-    `<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;color:#000;"><span>${esc(RECEIPT_I18N.subtotal)}</span><span style="white-space:nowrap;">${esc(formatVnd(subtotal))}</span></div>`,
-    discount > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;color:#000;"><span>${esc(RECEIPT_I18N.discount)}</span><span style="white-space:nowrap;">-${esc(formatVnd(discount))}</span></div>` : '',
-    pointDiscount > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;color:#000;"><span>${esc(RECEIPT_I18N.points)}</span><span style="white-space:nowrap;">-${esc(formatVnd(pointDiscount))}</span></div>` : '',
-    order.type === 'delivery' ? `<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;color:#000;"><span>${esc(RECEIPT_I18N.shipping)}</span><span style="white-space:nowrap;">${ship > 0 ? esc(formatVnd(ship)) : esc(RECEIPT_I18N.free)}</span></div>` : '',
-    `<div style="display:flex;justify-content:space-between;font-weight:bold;font-size:15px;margin-top:3px;color:#000;"><span>${esc(RECEIPT_I18N.total)}</span><span style="white-space:nowrap;">${esc(formatVnd(total))}</span></div>`,
-    `<div style="font-size:12px;margin-top:2px;color:#000;">${esc(RECEIPT_I18N.payment)}: <b>${esc(receiptPayLabel(order.paymentType))}</b></div>`,
-    order.paymentStatus === 'paid'
-      ? `<div style="font-size:12px;font-weight:bold;color:#000;margin-top:1px;">${esc(RECEIPT_I18N.paid)}</div>`
-      : `<div style="font-size:12px;color:#000;margin-top:1px;">${esc(RECEIPT_I18N.pending)}</div>`,
-
-    loyaltyQrUrl
-      ? (
-        `<div style="border-top:2px dashed #000;margin:8px 0 6px;"></div>` +
-        `<div style="text-align:center;font-size:12px;font-weight:bold;letter-spacing:0.5px;margin-bottom:6px;color:#000;">${esc(RECEIPT_I18N.scan_loyalty)}</div>` +
-        `<img src="${loyaltyQrUrl}" style="display:block;margin:0 auto 4px;width:${qrSize}px;height:${qrSize}px;" />` +
-        `<div style="text-align:center;font-size:10px;color:#000;margin-bottom:6px;">${esc(RECEIPT_I18N.scan_sub)}</div>`
-      )
-      : '',
-
-    `<div style="border-top:1px dashed #000;margin:4px 0;"></div>`,
-    WEB_URL ? `<div style="text-align:center;font-size:10px;color:#000;">${esc(WEB_URL)}</div>` : '',
-  ].join('')
+  const body = buildReceiptBodyHtml(order, loyaltyQrUrl, cfg) +
+    (WEB_URL
+      ? `<div style="border-top:1px dashed #000;margin:4px 0;"></div><div style="text-align:center;font-size:10px;color:#000;">${esc(WEB_URL)}</div>`
+      : '')
 
   const orderTitle = order.paymentCode ?? formatOrderRef(order)
   return (
@@ -514,14 +421,12 @@ export function buildSingleLabelHtml(
   }
 
   if (cfg.showNote && item.note) {
-    lines.push(`<div style="font-size:9px;line-height:1.2;font-style:italic;color:#000;">* ${esc(item.note)}</div>`)
+    lines.push(`<div style="font-size:9px;line-height:1.2;color:#000;">* ${esc(item.note)}</div>`)
   }
 
   if (cfg.customText) {
     lines.push(`<div style="font-size:9px;color:#000;">${esc(cfg.customText)}</div>`)
   }
-
-  // lines.push(`<div style="border-top:1px dashed #000;margin:2px 0;"></div>`)
 
   const footerLeft = cfg.showPrice ? priceStr : ''
   lines.push(

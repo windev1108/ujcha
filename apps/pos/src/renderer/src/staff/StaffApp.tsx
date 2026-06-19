@@ -7,6 +7,8 @@ import type { Product, PosConfig, CustomerUpdate, AdminOrder } from '../types/co
 import { DEFAULT_CONFIG, DEFAULT_BILL_CONFIG, DEFAULT_LABEL_CONFIG } from '../types/common'
 import type { BillConfig, LabelConfig } from '../../../preload'
 import { KEYS, loadLocal } from '../lib/local-storage'
+import { buildOrderLabels, buildReceiptDocumentHtml, buildKunLoyaltyQrUrl } from '../lib/receipt-shared'
+import { getFontBase64 } from '../lib/font-cache'
 import { grabFullToAdminOrder, printGrabBill, printGrabLabels } from '../lib/grab-print'
 import type { GrabFull } from '../lib/grab-print'
 import logoUrl from '../assets/logo.png'
@@ -76,6 +78,57 @@ export function StaffApp() {
 
   // ── Auto-print dedup: track order IDs already printed this session ─────────
   const autoPrintedIdsRef = useRef<Set<string>>(new Set())
+
+  // Auto-print for web orders — ref pattern avoids stale closure in socket handler
+  const autoPrintWebOrderRef = useRef<() => Promise<void>>(async () => { })
+  autoPrintWebOrderRef.current = async () => {
+    const labelCfg = loadLocal<LabelConfig>(KEYS.label, DEFAULT_LABEL_CONFIG)
+    const billCfg = loadLocal<BillConfig>(KEYS.bill, DEFAULT_BILL_CONFIG)
+    const shouldLabel = labelCfg.enabled && labelCfg.autoPrint && !!(labelCfg.address || labelCfg.printerId)
+    const shouldBill = billCfg.enabled && billCfg.autoPrint && !!(billCfg.address || billCfg.printerId)
+    if (!shouldLabel && !shouldBill) return
+    try {
+      const today = new Date().toISOString().slice(0, 10)
+      const data = await fetchOrders(1, 20, today, today)
+      const newOrders = ((data as { items: AdminOrder[] }).items ?? [])
+        .filter(o => !autoPrintedIdsRef.current.has(o.id) && !['cancelled', 'completed'].includes(o.status))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const printerAPI = eAPI?.printer as any
+      for (const o of newOrders) {
+        autoPrintedIdsRef.current.add(o.id)
+        if (!printerAPI) continue
+        if (shouldLabel) {
+          const addr = labelCfg.address || labelCfg.printerId?.replace('manual-', '')
+          const name = labelCfg.printerName || addr
+          if (addr) {
+            const fontBase64 = await getFontBase64()
+            const labels = buildOrderLabels(o, {
+              labelWidth: labelCfg.labelWidth, showProductName: labelCfg.showProductName,
+              showPrice: labelCfg.showPrice, showNote: labelCfg.showNote,
+              customText: labelCfg.customText, lineSpacing: labelCfg.lineSpacing,
+              feedAfterCut: labelCfg.feedAfterCut, paddingTop: labelCfg.paddingTop,
+              paddingBottom: labelCfg.paddingBottom,
+            }, fontBase64)
+            void printerAPI.printLabelsByAddress(addr, name, labels, labelCfg)
+              .then((r: { ok: boolean }) => { console.log('[auto-print web label]', o.id, r?.ok ? '✅' : '❌') })
+          }
+        }
+        if (shouldBill && o.paymentStatus === 'paid') {
+          const addr = billCfg.address || billCfg.printerId?.replace('manual-', '')
+          const name = billCfg.printerName || addr
+          if (addr) {
+            const fontBase64 = await getFontBase64()
+            const loyaltyQrUrl = o.paymentCode ? buildKunLoyaltyQrUrl(o.paymentCode) : undefined
+            const html = buildReceiptDocumentHtml(o, loyaltyQrUrl, null, fontBase64)
+            void printerAPI.printBillByAddress(addr, name, html, billCfg.copies ?? 1, billCfg)
+              .then((r: { ok: boolean }) => { console.log('[auto-print web bill]', o.id, r?.ok ? '✅' : '❌') })
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[auto-print web order]', e)
+    }
+  }
 
   // ── Alert audio: local MP3 files ──────────────────────────────────────────
   const alertIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -215,6 +268,8 @@ export function StaffApp() {
       }
       if (initOrders.status === 'fulfilled') {
         const items = (initOrders.value as { items: AdminOrder[] }).items ?? []
+        // Seed dedup set so existing today's orders are never double-printed on reconnect
+        items.forEach(o => autoPrintedIdsRef.current.add(o.id))
         const pending = items.filter(o => o.status === 'pending').length
         if (pending > 0) setNewOrderBadge(pending)
       }
@@ -271,6 +326,7 @@ export function StaffApp() {
     socket.on('order:new', () => {
       console.log('[socket] order:new received')
       newOrderHandlerRef.current()
+      void autoPrintWebOrderRef.current()
     })
     socket.on('order:external', (data?: { platform?: string }) => {
       const p = (data?.platform ?? '').toUpperCase()
@@ -463,6 +519,7 @@ export function StaffApp() {
           initialTab={aiPaymentMethod === 'transfer' ? 'qr' : 'cash'}
           autoConfirm={!!aiPaymentMethod}
           onOrderComplete={() => clearAiSessionRef.current?.()}
+          onOrderCreated={(id) => { autoPrintedIdsRef.current.add(id) }}
         />
       )}
       {ordersOpen && <OrdersModal onClose={() => setOrdersOpen(false)} />}
