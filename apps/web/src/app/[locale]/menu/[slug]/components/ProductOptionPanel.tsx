@@ -118,10 +118,32 @@ export function ProductOptionPanel({ product }: Props) {
     >
       {/* Header */}
       <div className="space-y-3">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="rounded-full bg-surface-secondary px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-muted">
             {getDisplayName(product.category, locale)}
           </span>
+          {product.isBestSeller && !product.isSoldOut && (
+            <motion.span
+              className="relative overflow-hidden rounded-full bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-amber-900 shadow-[0_0_12px_2px_rgba(251,191,36,0.45)]"
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: "spring", stiffness: 320, damping: 18, delay: 0.15 }}
+            >
+              <motion.span
+                aria-hidden
+                className="pointer-events-none absolute inset-0 -skew-x-[20deg] bg-gradient-to-r from-transparent via-white/50 to-transparent"
+                animate={{ x: ["-120%", "220%"] }}
+                transition={{ repeat: Infinity, duration: 2.2, ease: "easeInOut", repeatDelay: 2.5 }}
+              />
+              <motion.span
+                aria-hidden
+                className="pointer-events-none absolute inset-0 rounded-full ring-2 ring-amber-300/60"
+                animate={{ opacity: [0.5, 1, 0.5], scale: [1, 1.05, 1] }}
+                transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+              />
+              <span className="relative">🏆 Best Seller</span>
+            </motion.span>
+          )}
           {product.isSoldOut && (
             <span className="rounded-full bg-black/8 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-muted">
               {t("sold_out")}

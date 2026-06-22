@@ -26,7 +26,8 @@ export function ProductGrid({ categorySlug, search }: Props) {
       )
     : products;
 
-  const available = filtered?.filter((p) => p.isAvailable) ?? [];
+  const available = (filtered?.filter((p) => p.isAvailable) ?? [])
+    .sort((a, b) => Number(b.isBestSeller) - Number(a.isBestSeller));
 
   if (!isLoading && available.length === 0) {
     return (
