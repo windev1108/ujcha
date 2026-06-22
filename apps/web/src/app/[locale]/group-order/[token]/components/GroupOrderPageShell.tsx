@@ -369,9 +369,10 @@ function ProductPickerDrawer({
   const { data: allProducts = [], isLoading: productsLoading } = useProductsQuery({
     categoryId: activeCategoryId,
   });
-  const products = search.trim()
+  const products = (search.trim()
     ? allProducts.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()))
-    : allProducts;
+    : allProducts
+  ).slice().sort((a, b) => Number(b.isBestSeller) - Number(a.isBestSeller));
 
   const totalCount = Array.from(draft.values()).reduce((s, v) => s + v.quantity, 0);
 
@@ -553,6 +554,22 @@ function ProductPickerDrawer({
                             <span className="absolute left-2 top-2 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
                               -{product.discountPercent}%
                             </span>
+                          )}
+                          {product.isBestSeller && !product.isSoldOut && (
+                            <motion.span
+                              className="absolute bottom-2 left-2 overflow-hidden rounded-full bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 px-1.5 py-0.5 text-[9px] font-bold text-amber-900 shadow-[0_0_8px_1px_rgba(251,191,36,0.5)]"
+                              initial={{ scale: 0.7, opacity: 0 }}
+                              animate={{ scale: 1, opacity: 1 }}
+                              transition={{ type: "spring", stiffness: 320, damping: 18, delay: 0.1 }}
+                            >
+                              <motion.span
+                                aria-hidden
+                                className="pointer-events-none absolute inset-0 -skew-x-[20deg] bg-gradient-to-r from-transparent via-white/50 to-transparent"
+                                animate={{ x: ["-120%", "220%"] }}
+                                transition={{ repeat: Infinity, duration: 2.2, ease: "easeInOut", repeatDelay: 2.5 }}
+                              />
+                              <span className="relative">🏆 Best Seller</span>
+                            </motion.span>
                           )}
                           {qty > 0 && (
                             <span className="absolute right-2 top-2 flex size-5 items-center justify-center rounded-full bg-[#1a3c34] text-[10px] font-bold text-white">
