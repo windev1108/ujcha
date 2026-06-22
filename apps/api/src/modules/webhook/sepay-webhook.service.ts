@@ -125,7 +125,23 @@ export class SepayWebhookService {
         return { success: false, message: 'No matching order found' };
       }
 
-      // 5. Mark paid inside a transaction (idempotency guard included)
+      // 5. Amount check: allow up to 1,000đ underpayment (natural rounding tolerance)
+      const UNDERPAID_TOLERANCE = 1000;
+      const expectedAmount = Number(matched.finalAmount);
+      if (payload.transferAmount < expectedAmount - UNDERPAID_TOLERANCE) {
+        await this.setLogStatus(
+          log.id,
+          'underpaid',
+          `Expected ${expectedAmount}, received ${payload.transferAmount} (gap: ${expectedAmount - payload.transferAmount}đ)`,
+          matched.id,
+        );
+        this.logger.warn(
+          `Order ${matched.id} underpaid — expected ${expectedAmount}, got ${payload.transferAmount}`,
+        );
+        return { success: false, message: 'Transfer amount insufficient' };
+      }
+
+      // 6. Mark paid inside a transaction (idempotency guard included)
       const result = await this.prisma.$transaction(async (tx) => {
         const fresh = await tx.order.findUnique({
           where: { id: matched.id },

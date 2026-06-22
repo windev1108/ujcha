@@ -35,10 +35,6 @@ function fmtVnd(s: string | number) {
   return new Intl.NumberFormat("vi-VN").format(Math.round(n)) + "đ";
 }
 
-// Round down to nearest 1,000đ for bank transfer amounts
-function floorToK(n: number) {
-  return Math.floor(n / 1000) * 1000;
-}
 
 function fmtDate(iso: string, locale: string) {
   const tag = locale === "vi" ? "vi-VN" : "en-US";
@@ -60,6 +56,63 @@ function fmtStepTime(iso: string, locale: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function InfoPopup({ children, size = "md" }: { children: React.ReactNode; size?: "sm" | "md" }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <span ref={ref} className="relative inline-flex">
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        className="flex items-center justify-center rounded-full p-0.5 transition-colors hover:bg-black/6"
+        aria-label="Chi tiết"
+      >
+        <Info className={size === "sm" ? "size-3 text-foreground/30" : "size-3.5 text-foreground/35"} />
+      </button>
+      {open && (
+        <span className="absolute bottom-full right-0 z-20 mb-2 w-52 rounded-xl border border-black/8 bg-white p-3 text-[11px] font-normal text-foreground shadow-xl">
+          {children}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function useCountdown(expiresAt: string | undefined) {
+  const [remaining, setRemaining] = useState(() => {
+    if (!expiresAt) return 0;
+    return Math.max(0, Math.round((new Date(expiresAt).getTime() - Date.now()) / 1000));
+  });
+  useEffect(() => {
+    if (!expiresAt) return;
+    const tick = () => {
+      const left = Math.max(0, Math.round((new Date(expiresAt).getTime() - Date.now()) / 1000));
+      setRemaining(left);
+    };
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [expiresAt]);
+  return remaining;
+}
+
+function fmtCountdown(seconds: number) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 const STEP_TIMESTAMP_KEY: Partial<Record<OrderStatus, keyof OrderDetail>> = {
@@ -317,6 +370,18 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
     };
   }, [groupToken, order?.paymentType, order?.paymentStatus, queryClient, paymentCode]);
 
+  // Detect if the current viewer is the group host — must be before early returns (Rules of Hooks)
+  const isCurrentUserHost = useMemo(() => {
+    if (!groupOrder || groupOrder.paymentMode !== "host_pays") return false;
+    const host = groupOrder.participants.find((p) => p.isHost);
+    if (!host) return false;
+    if (authUser?.id && host.userId === authUser.id) return true;
+    const storedId = typeof window !== "undefined"
+      ? localStorage.getItem(`group_order_participant_${groupToken}`)
+      : null;
+    return storedId === host.id;
+  }, [groupOrder, groupToken, authUser?.id]);
+
   // Identify the current viewer's participant — must be before early returns (Rules of Hooks)
   const myGroupParticipant: GroupOrderParticipant | null = useMemo(() => {
     if (
@@ -340,6 +405,14 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
     }
     return null;
   }, [groupOrder, order, isGroupOrder, groupToken, authUser?.id]);
+
+  // Countdown: group bank_transfer expires same as regular orders (order.createdAt + expiry window).
+  // order is not yet available here, so we pass the ISO string after computing it lazily.
+  // The hook handles undefined by returning 0 immediately — value is replaced once order loads.
+  const groupQrExpiresAt = order
+    ? new Date(new Date(order.createdAt).getTime() + 15 * 60_000).toISOString()
+    : undefined;
+  const groupQrRemaining = useCountdown(groupQrExpiresAt);
 
   if (isLoading) {
     return (
@@ -391,7 +464,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
   function calcSplitAmount(subtotal: number) {
     const discountShare = Math.round(subtotal * discountFraction);
     return {
-      total: floorToK(subtotal - discountShare + perParticipantShipping),
+      total: Math.round(subtotal - discountShare + perParticipantShipping),
       discountShare,
       shippingShare: perParticipantShipping,
     };
@@ -842,7 +915,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                 <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#1a3c34]/8">
                   <QrCode className="size-4 text-[#1a3c34]" />
                 </div>
-                <div>
+                <div className="min-w-0 flex-1">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
                     {t("group_transfer_payment")}
                   </p>
@@ -852,11 +925,50 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                       : t("group_split_transfer_title")}
                   </p>
                 </div>
+                {groupQrRemaining > 0 ? (
+                  <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-600 ring-1 ring-amber-200">
+                    <Clock className="size-3.5" />
+                    {fmtCountdown(groupQrRemaining)}
+                  </span>
+                ) : (
+                  <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 ring-1 ring-red-200">
+                    <Clock className="size-3.5" />
+                    {t("group_qr_expired")}
+                  </span>
+                )}
               </div>
 
               <div className="p-5 sm:p-6">
-                {/* My QR code */}
-                {myGroupParticipant?.paymentQrToken && (
+                {/* Member view when host is paying — no QR for them */}
+                {groupOrder.paymentMode === "host_pays" && !isCurrentUserHost && (() => {
+                  const host = groupOrder.participants.find((p) => p.isHost);
+                  return (
+                    <div className="flex flex-col items-center gap-4 py-4 text-center">
+                      {host?.avatar ? (
+                        <div className="relative size-14 overflow-hidden rounded-full ring-2 ring-[#1a3c34]/15">
+                          <Image src={host.avatar} alt={host.name} fill className="object-cover" sizes="56px" />
+                        </div>
+                      ) : (
+                        <div className="flex size-14 items-center justify-center rounded-full bg-[#1a3c34]/10 text-lg font-bold text-[#1a3c34]">
+                          {host?.name?.[0] ?? "?"}
+                        </div>
+                      )}
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-foreground">
+                          {t("group_host_paying_title", { name: host?.name ?? "" })}
+                        </p>
+                        <p className="text-xs text-foreground/50">{t("group_host_paying_desc")}</p>
+                      </div>
+                      <span className="flex items-center gap-2 rounded-full bg-[#1a3c34]/6 px-4 py-2 text-xs font-semibold text-[#1a3c34]">
+                        <Loader2 className="size-3.5 animate-spin" />
+                        {t("group_waiting_host_payment")}
+                      </span>
+                    </div>
+                  );
+                })()}
+
+                {/* My QR code — shown only to the payer (host in host_pays, self in split) */}
+                {myGroupParticipant?.paymentQrToken && (groupOrder.paymentMode === "split" || isCurrentUserHost) && (
                   <div className="mb-5 flex flex-col items-center gap-3">
                     {payConfig?.bankCode && payConfig?.accountNumber ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -867,7 +979,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                           template: "",
                           amount: String(
                             groupOrder.paymentMode === "host_pays"
-                              ? floorToK(parseFloat(order.finalAmount))
+                              ? Math.round(parseFloat(order.finalAmount))
                               : calcSplitAmount(myGroupParticipant.subtotal).total,
                           ),
                           des: myGroupParticipant.paymentQrToken.replace(/-/g, "").slice(0, 12).toUpperCase(),
@@ -898,34 +1010,31 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                           <span className="text-foreground/50">{t("group_amount")}</span>
                           <span className="flex items-center gap-1 font-bold text-[#1a3c34]">
                             {groupOrder.paymentMode === "host_pays"
-                              ? fmtVnd(floorToK(parseFloat(order.finalAmount)))
+                              ? fmtVnd(parseFloat(order.finalAmount))
                               : (() => {
                                   const { total, discountShare, shippingShare } = calcSplitAmount(myGroupParticipant.subtotal);
                                   return (
                                     <>
                                       {fmtVnd(total)}
                                       {(discountShare > 0 || shippingShare > 0) && (
-                                        <span className="group/tip relative cursor-default">
-                                          <Info className="size-3.5 text-foreground/35" />
-                                          <span className="pointer-events-none absolute bottom-full right-0 z-10 mb-1.5 w-52 rounded-xl border border-black/8 bg-white p-3 text-[11px] font-normal text-foreground shadow-lg opacity-0 transition-opacity group-hover/tip:opacity-100">
-                                            <span className="flex justify-between">
-                                              <span className="text-foreground/60">{t("group_split_items")}</span>
-                                              <span>{fmtVnd(myGroupParticipant.subtotal)}</span>
-                                            </span>
-                                            {discountShare > 0 && (
-                                              <span className="flex justify-between">
-                                                <span className="text-foreground/60">{t("group_split_discount")}</span>
-                                                <span className="text-emerald-600">-{fmtVnd(discountShare)}</span>
-                                              </span>
-                                            )}
-                                            {shippingShare > 0 && (
-                                              <span className="flex justify-between">
-                                                <span className="text-foreground/60">{t("group_split_shipping")}</span>
-                                                <span>+{fmtVnd(shippingShare)}</span>
-                                              </span>
-                                            )}
+                                        <InfoPopup>
+                                          <span className="flex justify-between">
+                                            <span className="text-foreground/60">{t("group_split_items")}</span>
+                                            <span>{fmtVnd(myGroupParticipant.subtotal)}</span>
                                           </span>
-                                        </span>
+                                          {discountShare > 0 && (
+                                            <span className="flex justify-between">
+                                              <span className="text-foreground/60">{t("group_split_discount")}</span>
+                                              <span className="text-emerald-600">-{fmtVnd(discountShare)}</span>
+                                            </span>
+                                          )}
+                                          {shippingShare > 0 && (
+                                            <span className="flex justify-between">
+                                              <span className="text-foreground/60">{t("group_split_shipping")}</span>
+                                              <span>+{fmtVnd(shippingShare)}</span>
+                                            </span>
+                                          )}
+                                        </InfoPopup>
                                       )}
                                     </>
                                   );
@@ -941,6 +1050,13 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                       </div>
                     )}
                   </div>
+                )}
+
+                {/* Auto-cancel warning */}
+                {groupQrRemaining > 0 && (
+                  <p className="mt-3 text-center text-xs text-amber-600/80">
+                    {t("bt_qr_auto_cancel_note")}
+                  </p>
                 )}
 
                 {/* Split mode: all participants payment status */}
@@ -971,27 +1087,24 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                                   <>
                                     {fmtVnd(total)}
                                     {(discountShare > 0 || shippingShare > 0) && (
-                                      <span className="group/ptip relative cursor-default">
-                                        <Info className="size-3 text-foreground/30" />
-                                        <span className="pointer-events-none absolute bottom-full right-0 z-10 mb-1.5 w-48 rounded-xl border border-black/8 bg-white p-2.5 text-[11px] font-normal text-foreground shadow-lg opacity-0 transition-opacity group-hover/ptip:opacity-100">
-                                          <span className="flex justify-between">
-                                            <span className="text-foreground/60">{t("group_split_items")}</span>
-                                            <span>{fmtVnd(p.subtotal)}</span>
-                                          </span>
-                                          {discountShare > 0 && (
-                                            <span className="flex justify-between">
-                                              <span className="text-foreground/60">{t("group_split_discount")}</span>
-                                              <span className="text-emerald-600">-{fmtVnd(discountShare)}</span>
-                                            </span>
-                                          )}
-                                          {shippingShare > 0 && (
-                                            <span className="flex justify-between">
-                                              <span className="text-foreground/60">{t("group_split_shipping")}</span>
-                                              <span>+{fmtVnd(shippingShare)}</span>
-                                            </span>
-                                          )}
+                                      <InfoPopup size="sm">
+                                        <span className="flex justify-between">
+                                          <span className="text-foreground/60">{t("group_split_items")}</span>
+                                          <span>{fmtVnd(p.subtotal)}</span>
                                         </span>
-                                      </span>
+                                        {discountShare > 0 && (
+                                          <span className="flex justify-between">
+                                            <span className="text-foreground/60">{t("group_split_discount")}</span>
+                                            <span className="text-emerald-600">-{fmtVnd(discountShare)}</span>
+                                          </span>
+                                        )}
+                                        {shippingShare > 0 && (
+                                          <span className="flex justify-between">
+                                            <span className="text-foreground/60">{t("group_split_shipping")}</span>
+                                            <span>+{fmtVnd(shippingShare)}</span>
+                                          </span>
+                                        )}
+                                      </InfoPopup>
                                     )}
                                   </>
                                 );

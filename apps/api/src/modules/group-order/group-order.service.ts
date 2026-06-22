@@ -187,6 +187,7 @@ export class GroupOrderService {
         hostUserId: userId,
         status: { notIn: ['completed', 'cancelled'] },
         expiresAt: { gt: new Date() },
+        orderId: null, // Hide once an order has been placed (bank_transfer locks order immediately)
       },
       select: {
         token: true,

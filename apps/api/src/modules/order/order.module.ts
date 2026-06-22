@@ -10,9 +10,10 @@ import { OrderPointApplyService } from './order-point-apply.service';
 import { OrderService } from './order.service';
 import { NotificationModule } from '../notification/notification.module';
 import { OrderValidationService } from './order-validation.service';
+import { GroupOrderModule } from '../group-order/group-order.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, EventsModule, PointModule, ReferralModule, NotificationModule],
+  imports: [PrismaModule, AuthModule, EventsModule, PointModule, ReferralModule, NotificationModule, GroupOrderModule],
   controllers: [OrderController],
   providers: [OrderService, OrderValidationService, OrderPointApplyService, OrderExpiryCronService],
   exports: [OrderService, OrderPointApplyService],

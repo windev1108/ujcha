@@ -571,11 +571,11 @@ function ProductPickerDrawer({
                               <span className="relative">{t("bestseller")}</span>
                             </motion.span>
                           )}
-                          {qty > 0 && (
+                          {/* {qty > 0 && (
                             <span className="absolute right-2 top-2 flex size-5 items-center justify-center rounded-full bg-[#1a3c34] text-[10px] font-bold text-white">
                               {qty}
                             </span>
-                          )}
+                          )} */}
                         </button>
 
                         <div className="flex flex-1 flex-col justify-between gap-2 p-2.5">

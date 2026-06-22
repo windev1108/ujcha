@@ -151,6 +151,9 @@ export function BankTransferQR({ orderId, paymentCode, total, createdAt, onPaid,
           <p className="mt-4 text-center text-xs text-foreground/50">
             {t("bt_qr_instruction")}
           </p>
+          <p className="mt-2 text-center text-xs text-amber-600/80">
+            {t("bt_qr_auto_cancel_note")}
+          </p>
         </>
       )}
     </motion.div>
