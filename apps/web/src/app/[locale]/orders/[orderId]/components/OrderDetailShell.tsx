@@ -1,15 +1,15 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import Image from "next/image";
 import {
   ArrowLeft, BadgeCheck, Ban, Box, CheckCircle2, Circle, Clock,
-  CreditCard, ExternalLink, MapPin, Package, Phone, Printer, Star, Truck, Utensils, Users,
+  CreditCard, ExternalLink, Info, Loader2, MapPin, Package, Phone, Printer, QrCode, Star, Truck, Users, Utensils,
   Bike,
-  Motorbike,
   UserPlus,
 } from "lucide-react";
+import { io } from "socket.io-client";
 import { ShipperLiveMap } from "./ShipperLiveMap";
 import { useRouter } from "@/i18n/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -20,17 +20,24 @@ import { revealTransition, easeOutSmooth } from "@/app/[locale]/(landing)/compon
 import type { OrderDetail, OrderStatus } from "@/services/order/api";
 import { BankTransferQR } from "@/app/[locale]/checkout/components/BankTransferQR";
 import { printReceipt, type ReceiptOrder } from "@/lib/order-receipt";
-import { fetchGroupOrder, type GroupOrderState } from "@/services/group-order/api";
+import { fetchGroupOrder, type GroupOrderParticipant, type GroupOrderState } from "@/services/group-order/api";
 import { useTranslations, useLocale } from "next-intl";
 import { getDisplayName } from "@/lib/product-name";
 import { usePublicStoreLocationQuery } from "@/services/store/hooks";
+import { usePublicPaymentConfigQuery } from "@/services/payment-config/hooks";
 import { useAuthStore } from "@/store/auth-store";
+import { env } from "@/config/env";
 
 // ── formatters ────────────────────────────────────────────────────────────────
 
 function fmtVnd(s: string | number) {
   const n = typeof s === "string" ? parseFloat(s) : s;
   return new Intl.NumberFormat("vi-VN").format(Math.round(n)) + "đ";
+}
+
+// Round down to nearest 1,000đ for bank transfer amounts
+function floorToK(n: number) {
+  return Math.floor(n / 1000) * 1000;
 }
 
 function fmtDate(iso: string, locale: string) {
@@ -280,8 +287,59 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
     staleTime: 60_000,
   });
 
+  const { data: payConfig } = usePublicPaymentConfigQuery();
   const { data: storeLocation } = usePublicStoreLocationQuery();
   const accessToken = useAuthStore((s) => s.accessToken);
+  const authUser = useAuthStore((s) => s.user);
+
+  // Subscribe to group socket for realtime participant payment updates when
+  // this is a group bank-transfer order awaiting payment
+  const groupSocketRef = useRef<ReturnType<typeof io> | null>(null);
+  useEffect(() => {
+    if (!groupToken || !order || order.paymentType !== "bank_transfer" || order.paymentStatus !== "pending") return;
+
+    const socket = io(`${env.API_URL}/group`, {
+      transports: ["websocket", "polling"],
+      reconnectionAttempts: 10,
+      reconnectionDelay: 2000,
+    });
+    groupSocketRef.current = socket;
+    socket.emit("join-room", { token: groupToken });
+    socket.on("updated", (newState: GroupOrderState) => {
+      queryClient.setQueryData(["group-order", groupToken], newState);
+      if (newState.status === "completed") {
+        queryClient.invalidateQueries({ queryKey: orderKeys.detail(paymentCode) });
+      }
+    });
+    return () => {
+      socket.disconnect();
+      groupSocketRef.current = null;
+    };
+  }, [groupToken, order?.paymentType, order?.paymentStatus, queryClient, paymentCode]);
+
+  // Identify the current viewer's participant — must be before early returns (Rules of Hooks)
+  const myGroupParticipant: GroupOrderParticipant | null = useMemo(() => {
+    if (
+      !groupOrder || !order || !isGroupOrder ||
+      order.paymentType !== "bank_transfer" ||
+      order.paymentStatus !== "pending" ||
+      order.status === "cancelled"
+    ) return null;
+    if (groupOrder.paymentMode === "host_pays") {
+      return groupOrder.participants.find((p) => p.isHost) ?? null;
+    }
+    const storedId = typeof window !== "undefined"
+      ? localStorage.getItem(`group_order_participant_${groupToken}`)
+      : null;
+    if (storedId) {
+      const byId = groupOrder.participants.find((p) => p.id === storedId);
+      if (byId) return byId;
+    }
+    if (authUser?.id) {
+      return groupOrder.participants.find((p) => p.userId === authUser.id) ?? null;
+    }
+    return null;
+  }, [groupOrder, order, isGroupOrder, groupToken, authUser?.id]);
 
   if (isLoading) {
     return (
@@ -319,6 +377,25 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
     order.paymentType === "bank_transfer" &&
     order.paymentStatus === "pending" &&
     !isCancelled;
+
+  const isGroupBankTransfer = isGroupOrder && isPendingBankTransfer;
+
+  // Per-participant split amounts: subtract proportional discount, add equal shipping share
+  const orderTotalItems = parseFloat(order.totalAmount);
+  const orderDiscountAmt = parseFloat(order.discountAmount ?? '0');
+  const orderShipping = parseFloat(order.shippingFee ?? '0');
+  const splitParticipants = groupOrder?.participants.filter((p) => p.items.length > 0) ?? [];
+  const splitN = splitParticipants.length;
+  const discountFraction = orderTotalItems > 0 ? orderDiscountAmt / orderTotalItems : 0;
+  const perParticipantShipping = splitN > 0 ? Math.round(orderShipping / splitN) : 0;
+  function calcSplitAmount(subtotal: number) {
+    const discountShare = Math.round(subtotal * discountFraction);
+    return {
+      total: floorToK(subtotal - discountShare + perParticipantShipping),
+      discountShare,
+      shippingShare: perParticipantShipping,
+    };
+  }
 
   const canExportInvoice =
     order.status === "completed" ||
@@ -431,7 +508,19 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                 <span className="rounded-full bg-surface-secondary px-3 py-1 text-xs font-medium text-foreground/70">
                   {t(order.paymentType as "cash" | "bank_transfer")}
                 </span>
-                {isGroupOrder && (
+                {isGroupOrder && groupOrder?.paymentMode === "host_pays" && (
+                  <span className="flex items-center gap-1 rounded-full bg-[#1a3c34]/8 px-3 py-1 text-xs font-semibold text-[#1a3c34]">
+                    <CreditCard className="size-3" />
+                    {t("group_badge_host_pays")}
+                  </span>
+                )}
+                {isGroupOrder && groupOrder?.paymentMode === "split" && (
+                  <span className="flex items-center gap-1 rounded-full bg-[#1a3c34]/8 px-3 py-1 text-xs font-semibold text-[#1a3c34]">
+                    <Users className="size-3" />
+                    {t("group_badge_split")}
+                  </span>
+                )}
+                {isGroupOrder && !groupOrder && (
                   <span className="flex items-center gap-1 rounded-full bg-[#1a3c34]/8 px-3 py-1 text-xs font-semibold text-[#1a3c34]">
                     <Users className="size-3" />
                     {t("group_order_badge")}
@@ -719,7 +808,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
           )}
 
           {/* ── Bank transfer QR (pending payment) ───────────────── */}
-          {isPendingBankTransfer && (
+          {isPendingBankTransfer && !isGroupBankTransfer && (
             <motion.div
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
@@ -738,6 +827,190 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                 onPaid={handlePaid}
                 onExpired={handleExpired}
               />
+            </motion.div>
+          )}
+
+          {/* ── Group bank transfer — per-participant QR ─────────── */}
+          {isGroupBankTransfer && groupOrder && (
+            <motion.div
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ ...revealTransition, delay: 0.16 }}
+              className="overflow-hidden rounded-3xl border border-black/6 bg-white shadow-[0_4px_20px_-8px_rgba(0,0,0,0.1)]"
+            >
+              <div className="flex items-center gap-3 border-b border-black/6 px-5 py-4 sm:px-6">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#1a3c34]/8">
+                  <QrCode className="size-4 text-[#1a3c34]" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
+                    {t("group_transfer_payment")}
+                  </p>
+                  <p className="text-sm font-semibold text-foreground">
+                    {groupOrder.paymentMode === "host_pays"
+                      ? t("group_host_pays_qr_title")
+                      : t("group_split_transfer_title")}
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-5 sm:p-6">
+                {/* My QR code */}
+                {myGroupParticipant?.paymentQrToken && (
+                  <div className="mb-5 flex flex-col items-center gap-3">
+                    {payConfig?.bankCode && payConfig?.accountNumber ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={`https://qr.sepay.vn/img?${new URLSearchParams({
+                          bank: payConfig.bankCode,
+                          acc: payConfig.accountNumber,
+                          template: "",
+                          amount: String(
+                            groupOrder.paymentMode === "host_pays"
+                              ? floorToK(parseFloat(order.finalAmount))
+                              : calcSplitAmount(myGroupParticipant.subtotal).total,
+                          ),
+                          des: myGroupParticipant.paymentQrToken.replace(/-/g, "").slice(0, 12).toUpperCase(),
+                        }).toString()}`}
+                        alt="QR chuyển khoản"
+                        className="h-48 w-48 rounded-2xl ring-1 ring-black/8"
+                      />
+                    ) : (
+                      <div className="flex h-48 w-48 items-center justify-center rounded-2xl bg-surface-card ring-1 ring-black/8">
+                        <QrCode className="size-12 text-foreground/25" />
+                      </div>
+                    )}
+                    {payConfig && (
+                      <div className="w-full space-y-1.5 rounded-2xl bg-[#f0faf6] px-4 py-3 text-xs">
+                        {payConfig.bankCode && (
+                          <div className="flex justify-between">
+                            <span className="text-foreground/50">{t("group_bank")}</span>
+                            <span className="font-semibold">{payConfig.bankCode}</span>
+                          </div>
+                        )}
+                        {payConfig.accountNumber && (
+                          <div className="flex justify-between">
+                            <span className="text-foreground/50">{t("group_account_no")}</span>
+                            <span className="font-mono font-semibold">{payConfig.accountNumber}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between">
+                          <span className="text-foreground/50">{t("group_amount")}</span>
+                          <span className="flex items-center gap-1 font-bold text-[#1a3c34]">
+                            {groupOrder.paymentMode === "host_pays"
+                              ? fmtVnd(floorToK(parseFloat(order.finalAmount)))
+                              : (() => {
+                                  const { total, discountShare, shippingShare } = calcSplitAmount(myGroupParticipant.subtotal);
+                                  return (
+                                    <>
+                                      {fmtVnd(total)}
+                                      {(discountShare > 0 || shippingShare > 0) && (
+                                        <span className="group/tip relative cursor-default">
+                                          <Info className="size-3.5 text-foreground/35" />
+                                          <span className="pointer-events-none absolute bottom-full right-0 z-10 mb-1.5 w-52 rounded-xl border border-black/8 bg-white p-3 text-[11px] font-normal text-foreground shadow-lg opacity-0 transition-opacity group-hover/tip:opacity-100">
+                                            <span className="flex justify-between">
+                                              <span className="text-foreground/60">{t("group_split_items")}</span>
+                                              <span>{fmtVnd(myGroupParticipant.subtotal)}</span>
+                                            </span>
+                                            {discountShare > 0 && (
+                                              <span className="flex justify-between">
+                                                <span className="text-foreground/60">{t("group_split_discount")}</span>
+                                                <span className="text-emerald-600">-{fmtVnd(discountShare)}</span>
+                                              </span>
+                                            )}
+                                            {shippingShare > 0 && (
+                                              <span className="flex justify-between">
+                                                <span className="text-foreground/60">{t("group_split_shipping")}</span>
+                                                <span>+{fmtVnd(shippingShare)}</span>
+                                              </span>
+                                            )}
+                                          </span>
+                                        </span>
+                                      )}
+                                    </>
+                                  );
+                                })()}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-foreground/50">{t("group_transfer_note")}</span>
+                          <span className="font-mono font-semibold">
+                            {myGroupParticipant.paymentQrToken.replace(/-/g, "").slice(0, 12).toUpperCase()}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Split mode: all participants payment status */}
+                {groupOrder.paymentMode === "split" && (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
+                      {t("group_payment_status_members")}
+                    </p>
+                    <ul className="space-y-2">
+                      {groupOrder.participants
+                        .filter((p) => p.items.length > 0)
+                        .map((p) => (
+                          <li key={p.id} className="flex items-center gap-2.5">
+                            {p.avatar ? (
+                              <div className="relative size-7 shrink-0 overflow-hidden rounded-full ring-1 ring-black/8">
+                                <Image src={p.avatar} alt={p.name} fill className="object-cover" sizes="28px" />
+                              </div>
+                            ) : (
+                              <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#1a3c34]/10 text-[11px] font-bold text-[#1a3c34]">
+                                {p.name[0]}
+                              </div>
+                            )}
+                            <span className="flex-1 text-sm text-foreground">{p.name}</span>
+                            <span className="flex items-center gap-1 text-sm font-medium tabular-nums text-foreground/60">
+                              {(() => {
+                                const { total, discountShare, shippingShare } = calcSplitAmount(p.subtotal);
+                                return (
+                                  <>
+                                    {fmtVnd(total)}
+                                    {(discountShare > 0 || shippingShare > 0) && (
+                                      <span className="group/ptip relative cursor-default">
+                                        <Info className="size-3 text-foreground/30" />
+                                        <span className="pointer-events-none absolute bottom-full right-0 z-10 mb-1.5 w-48 rounded-xl border border-black/8 bg-white p-2.5 text-[11px] font-normal text-foreground shadow-lg opacity-0 transition-opacity group-hover/ptip:opacity-100">
+                                          <span className="flex justify-between">
+                                            <span className="text-foreground/60">{t("group_split_items")}</span>
+                                            <span>{fmtVnd(p.subtotal)}</span>
+                                          </span>
+                                          {discountShare > 0 && (
+                                            <span className="flex justify-between">
+                                              <span className="text-foreground/60">{t("group_split_discount")}</span>
+                                              <span className="text-emerald-600">-{fmtVnd(discountShare)}</span>
+                                            </span>
+                                          )}
+                                          {shippingShare > 0 && (
+                                            <span className="flex justify-between">
+                                              <span className="text-foreground/60">{t("group_split_shipping")}</span>
+                                              <span>+{fmtVnd(shippingShare)}</span>
+                                            </span>
+                                          )}
+                                        </span>
+                                      </span>
+                                    )}
+                                  </>
+                                );
+                              })()}
+                            </span>
+                            {p.paymentStatus === "paid" ? (
+                              <CheckCircle2 className="size-4 shrink-0 text-emerald-500" />
+                            ) : (
+                              <span className="flex items-center gap-1 shrink-0">
+                                <span className="text-[10px] font-medium text-foreground/40">{t("group_unpaid_label")}</span>
+                                <Loader2 className="size-3.5 animate-spin text-[#1a3c34]/40" />
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             </motion.div>
           )}
 

@@ -103,6 +103,14 @@ export class SepayWebhookService {
           const result = await this.groupOrderService.autoConfirmParticipantPaid(matchedParticipant.id);
           if (result) {
             this.groupOrderGateway.broadcast(result.token, result.state);
+            if (result.orderId && (result.state as any).status === 'completed') {
+              this.ordersGateway.emitOrderPaid({
+                orderId: result.orderId,
+                paymentCode: (result.state as any).order?.paymentCode ?? '',
+                transferAmount: payload.transferAmount,
+                transactionId: String(payload.id),
+              });
+            }
             await this.setLogStatus(log.id, 'group_participant_paid');
             this.logger.log(`Group participant ${matchedParticipant.id} marked paid — SePay tx #${payload.id}`);
             return { success: true, message: 'Group participant marked as paid' };

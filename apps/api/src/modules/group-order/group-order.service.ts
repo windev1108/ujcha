@@ -385,10 +385,41 @@ export class GroupOrderService {
       throw new BadRequestException('Don nhom khong o trang thai thu thap.');
     }
 
-    await this.prisma.groupOrder.update({
-      where: { token },
-      data: { status: GroupOrderStatus.locked },
-    });
+    if ((go as any).paymentType === 'bank_transfer') {
+      const goFull = await this.prisma.groupOrder.findUnique({
+        where: { token },
+        include: { participants: { include: { items: true } } },
+      });
+
+      const order = await this.createFinalOrder(goFull!, 'bank_transfer', false);
+
+      if (go.paymentMode === 'host_pays') {
+        const host = goFull!.participants.find((p) => p.isHost);
+        if (host) {
+          await this.prisma.groupOrderParticipant.update({
+            where: { id: host.id },
+            data: { paymentQrToken: randomUUID(), paymentType: 'bank_transfer' } as any,
+          });
+        }
+      } else {
+        for (const p of goFull!.participants.filter((p) => p.items.length > 0)) {
+          await this.prisma.groupOrderParticipant.update({
+            where: { id: p.id },
+            data: { paymentQrToken: randomUUID(), paymentType: 'bank_transfer' } as any,
+          });
+        }
+      }
+
+      await this.prisma.groupOrder.update({
+        where: { token },
+        data: { status: GroupOrderStatus.locked, orderId: order.id },
+      });
+    } else {
+      await this.prisma.groupOrder.update({
+        where: { token },
+        data: { status: GroupOrderStatus.locked },
+      });
+    }
 
     const updated = await this.prisma.groupOrder.findUnique({
       where: { token },
@@ -702,7 +733,7 @@ export class GroupOrderService {
     return match?.discountPercent ?? 0;
   }
 
-  async autoConfirmParticipantPaid(participantId: string): Promise<{ token: string; state: ReturnType<typeof this.serialize> } | null> {
+  async autoConfirmParticipantPaid(participantId: string): Promise<{ token: string; state: ReturnType<typeof this.serialize>; orderId: string | null } | null> {
     const participant = await this.prisma.groupOrderParticipant.findUnique({
       where: { id: participantId },
       select: { id: true, paymentStatus: true, groupOrderId: true },
@@ -727,31 +758,46 @@ export class GroupOrderService {
     });
     if (!goCheck) return null;
 
-    const shouldCreateOrder = (() => {
+    const allPaid = (() => {
       if (goCheck.status !== GroupOrderStatus.locked) return false;
       if ((goCheck as any).paymentMode === 'host_pays') {
-        // Host pays for all — create order when the host's payment is confirmed
-        return goCheck.participants.some((p) => p.id === participantId && p.isHost);
+        return goCheck.participants.some((p) => p.isHost && (p.paymentStatus as string) === 'paid');
       }
-      // Split: create order when every participant with items has paid
       const withItems = goCheck.participants.filter((p) => p.items.length > 0);
       return withItems.every((p) => (p.paymentStatus as string) === 'paid');
     })();
 
-    if (shouldCreateOrder) {
-      const pt = goCheck.participants.find((p) => p.paymentType != null)?.paymentType ?? 'cash';
-      const order = await this.createFinalOrder(goCheck, pt as any, true);
-      await this.prisma.groupOrder.update({
-        where: { token },
-        data: { status: GroupOrderStatus.completed, orderId: order.id },
-      });
+    const existingOrderId = (goCheck as any).orderId as string | null;
+    let finalOrderId = existingOrderId;
+
+    if (allPaid) {
+      if (existingOrderId) {
+        // Bank-transfer flow: order was pre-created at lock time — mark it paid
+        await this.prisma.order.update({
+          where: { id: existingOrderId },
+          data: { paymentStatus: PaymentStatus.paid, paidAt: new Date() },
+        });
+        await this.prisma.groupOrder.update({
+          where: { token },
+          data: { status: GroupOrderStatus.completed },
+        });
+      } else {
+        // Legacy/cash flow: create order now
+        const pt = goCheck.participants.find((p: any) => p.paymentType != null)?.paymentType ?? 'cash';
+        const order = await this.createFinalOrder(goCheck, pt as any, true);
+        finalOrderId = order.id;
+        await this.prisma.groupOrder.update({
+          where: { token },
+          data: { status: GroupOrderStatus.completed, orderId: order.id },
+        });
+      }
     }
 
     const updated = await this.prisma.groupOrder.findUnique({
       where: { token },
       include: this.fullInclude(),
     });
-    return { token, state: this.serialize(updated!) };
+    return { token, state: this.serialize(updated!), orderId: finalOrderId };
   }
 
   private async createFinalOrder(

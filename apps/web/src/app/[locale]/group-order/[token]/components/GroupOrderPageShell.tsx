@@ -66,8 +66,6 @@ import {
   unlockGroupOrder,
   setGroupOrderFulfillment,
   checkoutHostPays,
-  initHostBankTransfer,
-  initSplitPayment,
   confirmParticipantPaid,
   checkoutSplitCash,
   kickGroupOrderParticipant,
@@ -1072,9 +1070,7 @@ export function GroupOrderPageShell() {
     mode: "asap", scheduledTime: "", name: "", phone: "",
   });
   const [localPaymentType, setLocalPaymentType] = useState<PaymentMethod>("cash");
-  const splitInitRef = useRef(false);
   const splitCashConfirmRef = useRef(false);
-  const hostBankTransferInitRef = useRef(false);
   const autoSavePendingRef = useRef(false);
 
   const socketRef = useRef<Socket | null>(null);
@@ -1268,29 +1264,12 @@ export function GroupOrderPageShell() {
   }, [token]);
 
 
+  // Redirect to order detail as soon as an order is created (bank_transfer → on lock; cash → after checkout)
   useEffect(() => {
-    if (state?.status === "completed" && state.order?.paymentCode) {
+    if (state?.order?.paymentCode) {
       router.push(ROUTES.ORDER_DETAIL(state.order.paymentCode));
     }
-  }, [state?.status, state?.order?.paymentCode, router]);
-
-  // Auto-initiate split payment with host's chosen method when order is locked
-  useEffect(() => {
-    if (
-      state?.status === "locked" &&
-      state.paymentMode === "split" &&
-      me?.paymentStatus === "pending" &&
-      me.paymentType === null &&
-      me.items.length > 0 &&
-      sessionToken &&
-      !splitInitRef.current
-    ) {
-      splitInitRef.current = true;
-      void initSplitPayment(token, sessionToken, state.paymentType ?? "cash")
-        .then((newState) => setState(newState))
-        .catch(() => { splitInitRef.current = false; });
-    }
-  }, [state?.status, state?.paymentMode, state?.paymentType, me?.paymentStatus, me?.paymentType, me?.items.length, sessionToken, token]);
+  }, [state?.order?.paymentCode, router]);
 
   // Auto-confirm cash split participants — cash is collected by shipper on delivery, no manual confirmation needed
   useEffect(() => {
@@ -1309,24 +1288,6 @@ export function GroupOrderPageShell() {
         .catch(() => { splitCashConfirmRef.current = false; });
     }
   }, [state?.status, state?.paymentMode, me?.paymentStatus, me?.paymentType, me?.items.length, me?.id, sessionToken, token]);
-
-  // Auto-generate QR token for host_pays + bank_transfer when order is locked
-  useEffect(() => {
-    if (
-      state?.status === "locked" &&
-      state.paymentMode === "host_pays" &&
-      state.paymentType === "bank_transfer" &&
-      me?.isHost &&
-      !me.paymentQrToken &&
-      sessionToken &&
-      !hostBankTransferInitRef.current
-    ) {
-      hostBankTransferInitRef.current = true;
-      void initHostBankTransfer(token, sessionToken)
-        .then((newState) => setState(newState))
-        .catch(() => { hostBankTransferInitRef.current = false; });
-    }
-  }, [state?.status, state?.paymentMode, state?.paymentType, me?.isHost, me?.paymentQrToken, sessionToken, token]);
 
   const withAction = async (fn: () => Promise<GroupOrderState | { groupOrder: GroupOrderState }>) => {
     if (!sessionToken) return;
@@ -2031,109 +1992,7 @@ export function GroupOrderPageShell() {
               </div>
             )}
 
-            {/* Split payment section — cash participants skip this; they're confirmed atomically on lock */}
-            {me &&
-              state.status === "locked" &&
-              state.paymentMode === "split" &&
-              me.paymentStatus === "pending" &&
-              me.paymentType !== "cash" &&
-              me.items.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.12 }}
-                  className="overflow-hidden rounded-3xl border border-black/6 bg-white"
-                >
-                  <div className="flex items-center gap-3 border-b border-black/6 px-5 py-4">
-                    <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-[#1a3c34]/8">
-                      {me.paymentType === "cash" ? (
-                        <Banknote className="size-4 text-[#1a3c34]" />
-                      ) : (
-                        <QrCode className="size-4 text-[#1a3c34]" />
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{t("group_split_payment_card_eyebrow")}</p>
-                      <p className="text-sm font-semibold text-foreground">{t("group_split_payment_card_title")}</p>
-                    </div>
-                  </div>
-                  <div className="p-5">
-                    {me.paymentType === null ? (
-                      <div className="flex items-center justify-center gap-2 py-4">
-                        <Loader2 className="size-4 animate-spin text-[#1a3c34]" />
-                        <span className="text-sm text-foreground/55">{t("group_init_payment")}</span>
-                      </div>
-                    ) : me.paymentType === "cash" ? (
-                      <>
-                        <div className="mb-3 flex items-center gap-2">
-                          <Banknote className="size-4 text-[#1a3c34]" />
-                          <p className="text-sm font-semibold text-foreground">{t("group_split_cash_title")}</p>
-                        </div>
-                        <div className="mb-3 flex items-center justify-between rounded-xl bg-[#f0faf6] px-4 py-3">
-                          <span className="text-sm text-foreground/65">{t("group_split_my_share")}</span>
-                          <span className="text-lg font-bold tabular-nums text-[#1a3c34]">{fmtVnd(myAmount)}</span>
-                        </div>
-                        {discountPercent > 0 && (
-                          <p className="mb-3 text-xs text-foreground/45">
-                            {state.shippingFee > 0
-                              ? t("group_incl_discount_ship", { pct: discountPercent })
-                              : t("group_incl_discount", { pct: discountPercent })}
-                          </p>
-                        )}
-                        <div className="flex items-center gap-2.5 rounded-xl border border-dashed border-[#1a3c34]/20 bg-[#f0faf6] px-3 py-3">
-                          <Bike className="size-4 shrink-0 text-[#1a3c34]" />
-                          <p className="text-xs text-[#1a3c34]">{t("group_cash_delivery_note")}</p>
-                        </div>
-                      </>
-                    ) : me.paymentQrToken ? (
-                      <>
-                        <div className="mb-3 flex items-center gap-2">
-                          <QrCode className="size-4 text-[#1a3c34]" />
-                          <p className="text-sm font-semibold text-foreground">{t("group_split_transfer_title")}</p>
-                        </div>
-                        <div className="mb-3 flex flex-col items-center gap-3">
-                          {payConfig?.bankCode && payConfig?.accountNumber ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={`https://qr.sepay.vn/img?${new URLSearchParams({ bank: payConfig.bankCode, acc: payConfig.accountNumber, template: "", amount: String(myAmount), des: me.paymentQrToken.replace(/-/g, "").slice(0, 12).toUpperCase() }).toString()}`}
-                              alt="QR chuyển khoản"
-                              className="h-44 w-44 rounded-2xl ring-1 ring-black/8"
-                            />
-                          ) : (
-                            <div className="flex h-44 w-44 items-center justify-center rounded-2xl bg-surface-card ring-1 ring-black/8">
-                              <QrCode className="size-10 text-foreground/25" />
-                            </div>
-                          )}
-                          {payConfig && (
-                            <div className="w-full space-y-1.5 rounded-xl bg-[#f0faf6] px-4 py-3 text-xs">
-                              {payConfig.bankCode && <div className="flex justify-between"><span className="text-foreground/50">{t("group_bank")}</span><span className="font-semibold">{payConfig.bankCode}</span></div>}
-                              {payConfig.accountNumber && <div className="flex justify-between"><span className="text-foreground/50">{t("group_account_no")}</span><span className="font-mono font-semibold">{payConfig.accountNumber}</span></div>}
-                              <div className="flex justify-between"><span className="text-foreground/50">{t("group_amount")}</span><span className="font-bold text-[#1a3c34]">{fmtVnd(myAmount)}</span></div>
-                              <div className="flex justify-between"><span className="text-foreground/50">{t("group_transfer_note")}</span><span className="font-mono font-semibold">{me.paymentQrToken.replace(/-/g, "").slice(0, 12).toUpperCase()}</span></div>
-                            </div>
-                          )}
-                          {discountPercent > 0 && (
-                            <p className="w-full text-xs text-foreground/45">
-                              {state.shippingFee > 0
-                                ? t("group_incl_discount_ship", { pct: discountPercent })
-                                : t("group_incl_discount", { pct: discountPercent })}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-[#1a3c34]/20 bg-[#f0faf6] py-3">
-                          <Loader2 className="size-4 animate-spin text-[#1a3c34]" />
-                          <span className="text-sm font-medium text-[#1a3c34]">{t("group_split_waiting")}</span>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex items-center justify-center gap-2 py-4">
-                        <Loader2 className="size-4 animate-spin text-[#1a3c34]" />
-                        <span className="text-sm text-foreground/55">{t("group_gen_qr")}</span>
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              )}
+            {/* Split bank-transfer payment is now handled on the order detail page after lock */}
           </div>
 
           {/* Right — order summary */}
@@ -2246,52 +2105,18 @@ export function GroupOrderPageShell() {
                   );
                 })()}
 
-                {/* Host pays checkout */}
-                {state.status === "locked" && state.paymentMode === "host_pays" && isHost && (
+                {/* Host pays cash checkout — bank_transfer redirects to order detail on lock */}
+                {state.status === "locked" && state.paymentMode === "host_pays" && isHost && state.paymentType !== "bank_transfer" && (
                   <div className="space-y-2 pt-2">
-                    {state.paymentType === "bank_transfer" ? (
-                      me?.paymentQrToken ? (
-                        <>
-                          <div className="flex items-center gap-2">
-                            <QrCode className="size-4 text-[#1a3c34]" />
-                            <p className="text-sm font-semibold text-foreground">{t("group_scan_qr")}</p>
-                          </div>
-                          {payConfig?.bankCode && payConfig?.accountNumber ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={`https://qr.sepay.vn/img?${new URLSearchParams({ bank: payConfig.bankCode, acc: payConfig.accountNumber, template: "", amount: String(finalAmount), des: me!.paymentQrToken!.replace(/-/g, "").slice(0, 12).toUpperCase() }).toString()}`}
-                              alt="QR chuyển khoản"
-                              className="mx-auto h-44 w-44 rounded-2xl ring-1 ring-black/8"
-                            />
-                          ) : null}
-                          {payConfig && (
-                            <div className="space-y-1.5 rounded-xl bg-[#f0faf6] p-3 text-xs">
-                              {payConfig.bankCode && <div className="flex justify-between"><span className="text-foreground/50">{t("group_bank")}</span><span className="font-semibold">{payConfig.bankCode}</span></div>}
-                              {payConfig.accountNumber && <div className="flex justify-between"><span className="text-foreground/50">{t("group_account_no")}</span><span className="font-mono font-semibold">{payConfig.accountNumber}</span></div>}
-                              <div className="flex justify-between"><span className="text-foreground/50">{t("group_amount")}</span><span className="font-bold text-[#1a3c34]">{fmtVnd(finalAmount)}</span></div>
-                              <div className="flex justify-between"><span className="text-foreground/50">{t("group_transfer_note")}</span><span className="font-mono font-semibold">{me!.paymentQrToken!.replace(/-/g, "").slice(0, 12).toUpperCase()}</span></div>
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <div className="flex items-center justify-center gap-2 py-4">
-                          <Loader2 className="size-4 animate-spin text-[#1a3c34]" />
-                          <span className="text-sm text-foreground/55">{t("group_generating_qr")}</span>
-                        </div>
-                      )
-                    ) : (
-                      <>
-                        <p className="text-xs text-foreground/55">{t("group_host_pays_desc")}</p>
-                        <Button
-                          className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#1a3c34] text-sm font-semibold text-white"
-                          isDisabled={actionLoading}
-                          onPress={() => void handleHostCheckout()}
-                        >
-                          <Banknote className="size-4" />
-                          {t("group_pay_cash_btn")}
-                        </Button>
-                      </>
-                    )}
+                    <p className="text-xs text-foreground/55">{t("group_host_pays_desc")}</p>
+                    <Button
+                      className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#1a3c34] text-sm font-semibold text-white"
+                      isDisabled={actionLoading}
+                      onPress={() => void handleHostCheckout()}
+                    >
+                      <Banknote className="size-4" />
+                      {t("group_pay_cash_btn")}
+                    </Button>
                   </div>
                 )}
 

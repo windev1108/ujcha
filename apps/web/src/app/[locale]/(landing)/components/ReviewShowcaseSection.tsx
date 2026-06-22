@@ -102,18 +102,22 @@ function MarqueeRow({
   reviews,
   direction,
   duration,
+  phaseOffsetS = 0,
 }: {
   reviews: PinnedFeedback[];
   direction: "left" | "right";
   duration: number;
+  phaseOffsetS?: number;
 }) {
-  // 3 copies so the loop is seamless: animate exactly -33.333% (left) or +33.333% (right)
   const items = [...reviews, ...reviews, ...reviews];
   return (
     <div className="overflow-hidden">
       <div
         className={direction === "left" ? "rss-track-left" : "rss-track-right"}
-        style={{ animationDuration: `${duration}s` }}
+        style={{
+          animationDuration: `${duration}s`,
+          animationDelay: phaseOffsetS ? `${phaseOffsetS}s` : undefined,
+        }}
       >
         {items.map((r, i) => (
           <ReviewCard key={`${r.id}-${i}`} review={r} />
@@ -134,14 +138,11 @@ export function ReviewShowcaseSection() {
 
   if (!reviews || reviews.length === 0) return null;
 
-  // Split reviews into two disjoint halves so the same card never appears in both rows simultaneously.
-  // Row 1 scrolls LEFT, Row 2 scrolls RIGHT → boustrophedon / snake effect.
-  const showTwoRows = reviews.length >= 4;
-  const half = Math.ceil(reviews.length / 2);
-  const row1 = showTwoRows ? reviews.slice(0, half) : reviews;
-  const row2 = showTwoRows ? reviews.slice(half) : [];
-
-  const rowDuration = (n: number) => Math.round((n * CARD_SLOT_PX) / SPEED_PX_PER_S);
+  // Both rows use ALL reviews so each row has enough cards to fill any viewport.
+  // N × 316px must exceed the widest viewport — ≥6 reviews → 1896px (covers ≤1600px),
+  // ≥7 → 2212px (covers ≤1920px). Row 2 starts half a cycle ahead to stagger visible cards.
+  const showTwoRows = reviews.length >= 6;
+  const duration = Math.round((reviews.length * CARD_SLOT_PX) / SPEED_PX_PER_S);
 
   return (
     <>
@@ -201,9 +202,14 @@ export function ReviewShowcaseSection() {
           <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-24 bg-gradient-to-r from-[#f4f9f7] to-transparent" />
           <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-24 bg-gradient-to-l from-[#f4f9f7] to-transparent" />
 
-          <MarqueeRow reviews={row1} direction="left" duration={rowDuration(row1.length)} />
+          <MarqueeRow reviews={reviews} direction="left" duration={duration} />
           {showTwoRows && (
-            <MarqueeRow reviews={row2} direction="right" duration={rowDuration(row2.length)} />
+            <MarqueeRow
+              reviews={reviews}
+              direction="right"
+              duration={duration}
+              phaseOffsetS={-(duration / 2)}
+            />
           )}
         </div>
       </RevealSection>
