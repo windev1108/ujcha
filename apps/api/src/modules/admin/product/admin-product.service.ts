@@ -103,6 +103,7 @@ export class AdminProductService {
         descriptionTranslation: descriptionTranslation as unknown as Prisma.InputJsonValue,
         isAvailable: dto.isAvailable ?? true,
         isSoldOut: dto.isSoldOut ?? false,
+        isBestSeller: dto.isBestSeller ?? false,
         discountPercent: clampDiscountPercent(dto.discountPercent, 0),
       },
       include: { category: { select: { id: true, name: true, slug: true } } },
@@ -181,6 +182,7 @@ export class AdminProductService {
         }),
         ...(dto.isAvailable !== undefined && { isAvailable: dto.isAvailable }),
         ...(dto.isSoldOut !== undefined && { isSoldOut: dto.isSoldOut }),
+        ...(dto.isBestSeller !== undefined && { isBestSeller: dto.isBestSeller }),
         ...(dto.discountPercent !== undefined && {
           discountPercent: clampDiscountPercent(dto.discountPercent),
         }),

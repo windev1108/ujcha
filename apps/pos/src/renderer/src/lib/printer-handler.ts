@@ -564,8 +564,9 @@ async function printHtmlViaElectronWindow(
     html: string,
     pageCss = '@page { size: auto !important; margin: 2mm !important; }',
     paperWidthMm?: number,
+    paperHeightMm?: number,
 ): Promise<void> {
-    const job = _printQueue.then(() => _doPrint(printerName, html, pageCss, paperWidthMm))
+    const job = _printQueue.then(() => _doPrint(printerName, html, pageCss, paperWidthMm, paperHeightMm))
     _printQueue = job.catch(() => { /* keep queue alive on error */ })
     return job
 }
@@ -575,6 +576,7 @@ async function _doPrint(
     html: string,
     pageCss: string,
     paperWidthMm?: number,
+    paperHeightMm?: number,
 ): Promise<void> {
     const win = new BrowserWindow({
         show: false,
@@ -613,20 +615,27 @@ async function _doPrint(
         } = { silent: true, deviceName: printerName, printBackground: true }
 
         if (paperWidthMm && paperWidthMm > 0) {
-            // Measure actual content height so the GDI driver receives dimensions that match
-            // the real receipt length. A fixed 297mm (A4) height causes roll-paper thermal
-            // drivers to hold or discard the job because the page height doesn't match their
-            // configured paper — the job appears in the queue but no paper comes out.
-            let heightMicrons = 297000
-            try {
-                const scrollPx: number = await win.webContents.executeJavaScript(
-                    'document.documentElement.scrollHeight'
-                )
-                // CSS px → microns: px × (25.4 mm/in ÷ 96 px/in) × 1000 μm/mm + 10 mm bottom buffer
-                heightMicrons = Math.ceil((scrollPx * 25.4 / 96 + 10) * 1000)
-                console.log('[print] content height:', scrollPx, 'px →', Math.round(heightMicrons / 1000), 'mm')
-            } catch {
-                console.warn('[print] height measurement failed — using 297mm fallback')
+            let heightMicrons: number
+            if (paperHeightMm && paperHeightMm > 0) {
+                // Fixed label height provided — use it directly (no scrollHeight measurement)
+                heightMicrons = paperHeightMm * 1000
+                console.log('[print] fixed label size:', paperWidthMm, '×', paperHeightMm, 'mm')
+            } else {
+                // Measure actual content height so the GDI driver receives dimensions that match
+                // the real receipt length. A fixed 297mm (A4) height causes roll-paper thermal
+                // drivers to hold or discard the job because the page height doesn't match their
+                // configured paper — the job appears in the queue but no paper comes out.
+                heightMicrons = 297000
+                try {
+                    const scrollPx: number = await win.webContents.executeJavaScript(
+                        'document.documentElement.scrollHeight'
+                    )
+                    // CSS px → microns: px × (25.4 mm/in ÷ 96 px/in) × 1000 μm/mm + 10 mm bottom buffer
+                    heightMicrons = Math.ceil((scrollPx * 25.4 / 96 + 10) * 1000)
+                    console.log('[print] content height:', scrollPx, 'px →', Math.round(heightMicrons / 1000), 'mm')
+                } catch {
+                    console.warn('[print] height measurement failed — using 297mm fallback')
+                }
             }
             printOpts.pageSize = { width: paperWidthMm * 1000, height: heightMicrons }
             printOpts.margins = { marginType: 'none' }
@@ -1017,15 +1026,20 @@ export async function smartPrint(
             await printViaTcp(address, 9100, buildEscPosLabel(html, paperWidthMm, spacing))
 
         } else {
-            // Label via Windows USB — ESC/POS raw bytes written directly to the USB device.
+            // Label via Windows USB — GDI path via webContents.print() (same as bill).
+            // Raw ESC/POS bytes via printRawViaWindowsSpooler produce blank output on most
+            // GDI-based label printers because the driver intercepts the bytes before they
+            // reach the print head. Chrome/GDI rendering works identically to bill printing.
             //
-            // address may be a USB port name like "USB001" (returned by getSystemPrinters via WMIC
-            // portMap), which is NOT a valid Windows printer name.  printRawViaWindowsSpooler needs
-            // the printer display name ("XP-420B") so it can WMIC-look up the real port and open
-            // \\.\USB001.  When address looks like a port pattern, fall back to printerName.
+            // address may be a USB port name like "USB001" — fall back to printerName for
+            // the Windows printer display name required by webContents.print().
             const usbTarget = /^USB\d+$/i.test(address) ? printerName : (address || printerName)
-            console.log('[smartPrint] → label USB/raw:', usbTarget)
-            await printRawViaWindowsSpooler(usbTarget, buildEscPosLabel(html, paperWidthMm, spacing))
+            console.log('[smartPrint] → label USB/GDI:', usbTarget)
+            const { online, reason } = await checkWindowsPrinterOnline(usbTarget)
+            if (!online) throw new Error(reason)
+            const lw = labelSize?.width ?? paperWidthMm
+            const lh = labelSize?.height
+            await printHtmlViaElectronWindow(usbTarget, html, '', lw, lh)
         }
 
         return { ok: true }
@@ -1066,9 +1080,9 @@ function buildTestLabelHtml(labelWidthMm: number, labelHeightMm = 30): string {
     return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Test Nhan</title>
 <style>@page{size:${labelWidthMm}mm ${labelHeightMm}mm;margin:0;}body{font-family:sans-serif;margin:0;padding:3px;width:${labelWidthMm}mm;color:#000;}</style>
 </head><body>
-<p style="font-size:13px;font-weight:bold;margin:0">=== TEST NHAN ===</p>
-<p style="font-size:11px;margin:2px 0">Ca phe sua da - Size L</p>
-<p style="font-size:11px;font-weight:bold;margin:0">45.000d</p>
+<div style="font-size:13px;font-weight:bold;margin:0">=== TEST NHAN ===</div>
+<div style="font-size:11px;margin:2px 0">Ca phe sua da - Size L</div>
+<div style="font-size:11px;font-weight:bold;margin:0">45.000d</div>
 <div style="margin-top:6px"></div>
 </body></html>`
 }

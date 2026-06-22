@@ -6,6 +6,11 @@ import { applyProductDiscount } from '../lib/utils'
 
 function fmt(n: number) { return n.toLocaleString('vi-VN') + 'đ' }
 
+const MEDIUM_KEYWORDS = ['vừa', 'bình thường', 'trung bình', '50%', 'normal', 'medium']
+function isMedium(label: string) {
+    return MEDIUM_KEYWORDS.some((kw) => label.toLowerCase().includes(kw))
+}
+
 type Props = {
     product: Product | null
     onClose: () => void
@@ -23,11 +28,13 @@ export function ProductConfigModal({ product, onClose, onConfirm }: Props) {
         setNote('')
         setQuantity(1)
         setSelectedToppingIds([])
-        // Auto-select first (free) option per group
+        // Auto-select the "medium/normal" option per group, falling back to first free option
         const next: Record<string, string> = {}
         for (const g of product.optionGroups) {
-            const free = g.values.find((v) => v.priceDelta === 0) ?? g.values[0]
-            if (free) next[g.name] = free.label
+            const freeValues = g.values.filter((v) => v.priceDelta === 0)
+            const candidates = freeValues.length > 0 ? freeValues : g.values
+            const chosen = candidates.find((v) => isMedium(v.label)) ?? candidates[0] ?? g.values[0]
+            if (chosen) next[g.name] = chosen.label
         }
         setOptions(next)
     }, [product])
@@ -122,7 +129,7 @@ export function ProductConfigModal({ product, onClose, onConfirm }: Props) {
                         <div key={g.id} className="space-y-2">
                             <p className="text-xs font-bold uppercase tracking-wider text-gray-400">{g.name}</p>
                             <div className="flex flex-wrap gap-2">
-                                {g.values.map((v) => {
+                                {[...g.values].sort((a, b) => (isMedium(b.label) ? 1 : 0) - (isMedium(a.label) ? 1 : 0)).map((v) => {
                                     const selected = options[g.name] === v.label
                                     return (
                                         <button

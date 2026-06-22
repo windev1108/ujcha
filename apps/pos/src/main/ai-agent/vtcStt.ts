@@ -1,4 +1,4 @@
-async function transcribeWithGroq(audioBuffer: Buffer, apiKey: string): Promise<string | null> {
+async function transcribeWithGroq(audioBuffer: Buffer, apiKey: string, prompt?: string): Promise<string | null> {
   const boundary = `----GroqSTT${Date.now().toString(36)}`
   const CRLF = '\r\n'
 
@@ -6,6 +6,12 @@ async function transcribeWithGroq(audioBuffer: Buffer, apiKey: string): Promise<
     `--${boundary}${CRLF}` +
     `Content-Disposition: form-data; name="file"; filename="audio.wav"${CRLF}` +
     `Content-Type: audio/wav${CRLF}${CRLF}`
+
+  const promptPart = prompt
+    ? `${CRLF}--${boundary}${CRLF}` +
+      `Content-Disposition: form-data; name="prompt"${CRLF}${CRLF}` +
+      prompt
+    : ''
 
   const tail =
     `${CRLF}--${boundary}${CRLF}` +
@@ -17,10 +23,14 @@ async function transcribeWithGroq(audioBuffer: Buffer, apiKey: string): Promise<
     `${CRLF}--${boundary}${CRLF}` +
     `Content-Disposition: form-data; name="response_format"${CRLF}${CRLF}` +
     `json` +
+    `${CRLF}--${boundary}${CRLF}` +
+    `Content-Disposition: form-data; name="temperature"${CRLF}${CRLF}` +
+    `0` +
+    promptPart +
     `${CRLF}--${boundary}--${CRLF}`
 
   const body = Buffer.concat([Buffer.from(filePart), audioBuffer, Buffer.from(tail)])
-  console.log(`[Groq STT] Sending ${audioBuffer.byteLength} bytes`)
+  console.log(`[Groq STT] Sending ${audioBuffer.byteLength} bytes, prompt: ${prompt?.slice(0, 60) ?? 'none'}`)
 
   const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
     method: 'POST',
@@ -42,8 +52,8 @@ async function transcribeWithGroq(audioBuffer: Buffer, apiKey: string): Promise<
   return transcript
 }
 
-export async function transcribeAudio(audioBuffer: Buffer): Promise<string | null> {
+export async function transcribeAudio(audioBuffer: Buffer, prompt?: string): Promise<string | null> {
   const apiKey = process.env['GROQ_API_KEY'] ?? ''
   if (!apiKey) throw new Error('GROQ_API_KEY chưa được cấu hình trong .env')
-  return transcribeWithGroq(audioBuffer, apiKey)
+  return transcribeWithGroq(audioBuffer, apiKey, prompt)
 }

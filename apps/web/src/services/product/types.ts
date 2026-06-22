@@ -43,6 +43,7 @@ export interface ApiProduct {
   toppings: ProductTopping[]
   isAvailable: boolean
   isSoldOut: boolean
+  isBestSeller: boolean
   discountPercent: number
   finalPrice: number
   category: { id: string; name: string; nameTranslation?: Record<string, string>; slug: string; thumbnail: string | null }

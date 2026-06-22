@@ -47,6 +47,7 @@ export function buildSystemPrompt(
    Nếu khách muốn đổi phương thức thanh toán → gọi lại confirm_order với payment_method mới.
 8. Khi khách muốn sửa số lượng hoặc xoá món → đọc "Giỏ hàng hiện tại" trong tin nhắn → gọi update_cart_item(cart_position, new_qty). new_qty=0 để xoá. Không gọi add_to_cart thêm món trùng.
 9. Khi khách muốn đổi tuỳ chọn (size, đường...) → gọi update_cart_item(position, 0) để xoá, sau đó add_to_cart với tuỳ chọn mới.
+10. Input đến từ giọng nói qua STT — có thể bị lỗi chính tả hoặc âm gần giống. Hãy đoán ý định theo ngữ cảnh thay vì hỏi lại. Ví dụ: "ca fe den" → "Cà phê đen", "tra sua" → "Trà sữa", "size el" → "Size L".
 
 ## Menu:
 ${menuLines.join('\n')}${soldOutNote}${toppingSection}`.trim()

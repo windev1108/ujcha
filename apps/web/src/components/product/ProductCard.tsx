@@ -85,7 +85,7 @@ export function ProductCard({ product, index = 0, eager = false }: Props) {
               </div>
             )}
 
-            <ProductCardBadges hasDiscount={hasDiscount} discountPercent={product.discountPercent} isSoldOut={product.isSoldOut} />
+            <ProductCardBadges hasDiscount={hasDiscount} discountPercent={product.discountPercent} isSoldOut={product.isSoldOut} isBestSeller={product.isBestSeller} />
           </button>
 
           {/* Info */}
@@ -158,10 +158,34 @@ function ProductCardImage({ imageUrl, name, bgColor }: { imageUrl: string | null
   );
 }
 
-function ProductCardBadges({ hasDiscount, discountPercent, isSoldOut }: { hasDiscount: boolean; discountPercent: number; isSoldOut: boolean }) {
+function ProductCardBadges({ hasDiscount, discountPercent, isSoldOut, isBestSeller }: { hasDiscount: boolean; discountPercent: number; isSoldOut: boolean; isBestSeller: boolean }) {
   const t = useTranslations();
   return (
     <>
+      {isBestSeller && !isSoldOut && (
+        <motion.span
+          className="absolute right-2.5 top-2.5 overflow-hidden rounded-full bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 px-2.5 py-0.5 text-[10px] font-bold text-amber-900 shadow-[0_0_10px_2px_rgba(251,191,36,0.55)]"
+          initial={{ scale: 0.7, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 320, damping: 18, delay: 0.1 }}
+        >
+          {/* shimmer sweep */}
+          <motion.span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 -skew-x-[20deg] bg-gradient-to-r from-transparent via-white/50 to-transparent"
+            animate={{ x: ["-120%", "220%"] }}
+            transition={{ repeat: Infinity, duration: 2.2, ease: "easeInOut", repeatDelay: 2 }}
+          />
+          {/* glow pulse ring */}
+          <motion.span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 rounded-full ring-2 ring-amber-300/70"
+            animate={{ opacity: [0.6, 1, 0.6], scale: [1, 1.06, 1] }}
+            transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+          />
+          <span className="relative">🏆 Best Seller</span>
+        </motion.span>
+      )}
       {hasDiscount && !isSoldOut && (
         <span className="absolute left-2.5 top-2.5 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
           -{discountPercent}%

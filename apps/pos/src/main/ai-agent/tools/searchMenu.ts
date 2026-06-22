@@ -14,12 +14,36 @@ function tokenize(s: string): string[] {
   return normalize(s).split(/\s+/).filter((t) => t.length >= 2)
 }
 
+function editDistance(a: string, b: string): number {
+  if (a === b) return 0
+  if (a.length === 0) return b.length
+  if (b.length === 0) return a.length
+  const dp: number[] = Array.from({ length: b.length + 1 }, (_, i) => i)
+  for (let i = 1; i <= a.length; i++) {
+    let prev = i
+    for (let j = 1; j <= b.length; j++) {
+      const cur = a[i - 1] === b[j - 1] ? dp[j - 1] : 1 + Math.min(dp[j - 1], dp[j], prev)
+      dp[j - 1] = prev
+      prev = cur
+    }
+    dp[b.length] = prev
+  }
+  return dp[b.length]
+}
+
 function scoreItem(item: AiMenuItem, tokens: string[]): number {
-  const text = normalize(`${item.name} ${item.category}`)
+  const name = normalize(item.name)
+  const nameWords = name.split(/\s+/)
+  const full = normalize(`${item.name} ${item.category}`)
   let s = 0
   for (const tok of tokens) {
-    if (text.includes(tok)) s += tok.length * 2
-    else if (text.split(/\s+/).some((w) => w.startsWith(tok))) s += tok.length
+    if (name === tok) { s += tok.length * 6; continue }         // exact name match
+    if (nameWords.includes(tok)) { s += tok.length * 4; continue }  // exact word in name
+    if (name.includes(tok)) { s += tok.length * 2; continue }   // substring in name
+    if (full.includes(tok)) { s += tok.length; continue }        // substring in category
+    if (nameWords.some((w) => w.startsWith(tok))) { s += tok.length; continue }
+    // fuzzy: allow 1 edit for tokens longer than 4 chars
+    if (tok.length > 4 && nameWords.some((w) => editDistance(w, tok) <= 1)) s += tok.length - 1
   }
   return s
 }

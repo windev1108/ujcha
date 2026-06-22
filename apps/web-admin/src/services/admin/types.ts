@@ -95,6 +95,8 @@ export type AdminProduct = {
   descriptionTranslation: Record<string, string>;
   isAvailable: boolean;
   isSoldOut: boolean;
+  /** Gắn nhãn bán chạy — hiển thị badge Best Seller và ưu tiên trong danh sách nổi bật. */
+  isBestSeller: boolean;
   /** Giảm giá theo sản phẩm 0–100 (cộng với giảm giá toàn shop). */
   discountPercent: number;
   createdAt?: string;
@@ -141,6 +143,7 @@ export type CreateProductBody = {
   toppings?: Array<{ id?: string; name: string; price: number; isActive?: boolean; nameTranslation?: Record<string, string>; descriptionTranslation?: Record<string, string> }>;
   isAvailable?: boolean;
   isSoldOut?: boolean;
+  isBestSeller?: boolean;
   discountPercent?: number;
 };
 

@@ -11,7 +11,10 @@ import { useTranslations } from "next-intl";
 
 export function ProductGallery() {
   const { data: products, isLoading } = useProductsQuery();
-  const displayed = products?.filter((p) => p.isAvailable).slice(0, 12) ?? [];
+  const displayed = products
+    ?.filter((p) => p.isAvailable)
+    .sort((a, b) => Number(b.isBestSeller) - Number(a.isBestSeller))
+    .slice(0, 12) ?? [];
   const t = useTranslations()
   if (!isLoading && displayed.length === 0) return null;
 

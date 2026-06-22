@@ -128,4 +128,9 @@ export class CreateProductDto {
   @Min(0)
   @Max(100)
   discountPercent?: number;
+
+  @ApiPropertyOptional({ default: false, description: 'Gắn nhãn bán chạy — badge Best Seller + ưu tiên nổi bật' })
+  @IsOptional()
+  @IsBoolean()
+  isBestSeller?: boolean;
 }

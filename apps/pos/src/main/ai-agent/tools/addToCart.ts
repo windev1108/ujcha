@@ -29,17 +29,37 @@ export function resolveCartItems(
     for (const group of product.options) {
       const chosen = rawOptions[group.name]
       if (!chosen) continue
-      // Exact match first; then strip trailing price annotations like "(+5.000đ)" or "[+5.000đ]" added by AI
+
+      // 1. Exact match
       let valueObj = group.values.find((v) => v.label === chosen)
+
       if (!valueObj) {
+        // 2. Strip trailing price annotations like "(+5.000đ)" or "[+5.000đ]"
         const stripped = chosen
           .replace(/\s*\([^)]*\)\s*$/, '')
           .replace(/\s*\[[^\]]*\]\s*$/, '')
           .trim()
-        valueObj = group.values.find(
-          (v) => v.label.toLowerCase() === stripped.toLowerCase(),
-        )
+        valueObj = group.values.find((v) => v.label.toLowerCase() === stripped.toLowerCase())
       }
+
+      if (!valueObj) {
+        // 3. Normalized comparison (remove diacritics + lowercase)
+        const norm = (s: string) =>
+          s.toLowerCase().replace(/[đĐ]/g, 'd').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '')
+        const normChosen = norm(chosen)
+        valueObj = group.values.find((v) => norm(v.label) === normChosen)
+      }
+
+      if (!valueObj) {
+        // 4. Prefix/contains match on normalized label
+        const norm = (s: string) =>
+          s.toLowerCase().replace(/[đĐ]/g, 'd').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '')
+        const normChosen = norm(chosen)
+        valueObj =
+          group.values.find((v) => norm(v.label).startsWith(normChosen)) ??
+          group.values.find((v) => normChosen.startsWith(norm(v.label)))
+      }
+
       if (valueObj) {
         cleanOptions[group.name] = valueObj.label
         optionDetails.push({ group: group.name, label: valueObj.label, priceDelta: valueObj.priceDelta })

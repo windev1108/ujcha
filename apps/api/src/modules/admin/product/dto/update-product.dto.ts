@@ -109,4 +109,9 @@ export class UpdateProductDto {
   @Min(0)
   @Max(100)
   discountPercent?: number;
+
+  @ApiPropertyOptional({ description: 'Gắn nhãn bán chạy — badge Best Seller + ưu tiên nổi bật' })
+  @IsOptional()
+  @IsBoolean()
+  isBestSeller?: boolean;
 }

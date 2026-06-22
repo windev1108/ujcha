@@ -68,6 +68,11 @@ export function invalidateMenuCache() {
   menuCacheAt = 0
 }
 
+export function getCachedMenuNames(): string[] {
+  if (!menuCache) return []
+  return menuCache.filter((m) => m.isAvailable && !m.isSoldOut).map((m) => m.name)
+}
+
 interface ApiOptionValue {
   label?: string
   priceDelta?: number

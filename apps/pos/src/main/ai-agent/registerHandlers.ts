@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import type { BrowserWindow } from 'electron'
-import { fetchMenuAndToppings, invalidateMenuCache } from './agent'
+import { fetchMenuAndToppings, invalidateMenuCache, getCachedMenuNames } from './agent'
 import { runAgentTurnGemini, clearGeminiSession } from './agentGemini'
 import { transcribeAudio } from './vtcStt'
 import { readSubConfig, writeSubConfig } from '../../renderer/src/store/config-store'
@@ -30,6 +30,13 @@ function applyCorrections(text: string, corrections: Record<string, string>): st
 
 function getGeminiKey(): string {
   return process.env['GOOGLE_API_KEY'] ?? ''
+}
+
+const STT_BASE_VOCAB = 'Cà phê, trà sữa, sinh tố, matcha, bạc xỉu, đen đá, sữa đá, americano, latte, cappuccino, espresso, trân châu, phô mai. Size S, M, L. Ít đường, vừa ngọt, nhiều đường, không đường. Ít đá, vừa đá, nhiều đá, không đá. Thêm, bớt, đổi, xoá, thanh toán, tiền mặt, chuyển khoản.'
+
+function buildSttPrompt(menuNames: string[]): string {
+  if (menuNames.length === 0) return STT_BASE_VOCAB
+  return `${menuNames.join(', ')}. ${STT_BASE_VOCAB}`
 }
 
 function getAppConfig(): AiAppConfig {
@@ -79,7 +86,8 @@ export function registerAiHandlers(staffWin: () => BrowserWindow | null) {
   })
 
   ipcMain.handle('ai:transcribe', async (_, audioBuffer: ArrayBuffer) => {
-    const transcript = await transcribeAudio(Buffer.from(audioBuffer))  // throws on API error
+    const sttPrompt = buildSttPrompt(getCachedMenuNames())
+    const transcript = await transcribeAudio(Buffer.from(audioBuffer), sttPrompt)  // throws on API error
     if (!transcript) return null
     const cfg = getAppConfig()
     return applyCorrections(transcript, cfg.sttCorrections ?? {})

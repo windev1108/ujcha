@@ -64,6 +64,7 @@ function serializeProductFormSnapshot(input: {
   toppings: ProductTopping[];
   isAvailable: boolean;
   isSoldOut: boolean;
+  isBestSeller: boolean;
 }): string {
   const urls = input.imageUrls.map((u) => u.trim()).filter(Boolean);
   const p = Number.parseFloat(input.price);
@@ -84,6 +85,7 @@ function serializeProductFormSnapshot(input: {
     toppings: input.toppings,
     isAvailable: input.isAvailable,
     isSoldOut: input.isSoldOut,
+    isBestSeller: input.isBestSeller,
   });
 }
 
@@ -101,6 +103,7 @@ function snapshotFromAdminProduct(existing: AdminProduct): string {
     toppings: existing.toppings ?? [],
     isAvailable: existing.isAvailable,
     isSoldOut: existing.isSoldOut ?? false,
+    isBestSeller: existing.isBestSeller ?? false,
   });
 }
 
@@ -134,6 +137,7 @@ export function ProductEditorClient({ mode, productId }: Props) {
   const [toppings, setToppings] = useState<ProductTopping[]>([]);
   const [isAvailable, setIsAvailable] = useState(true);
   const [isSoldOut, setIsSoldOut] = useState(false);
+  const [isBestSeller, setIsBestSeller] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [baselineSnapshot, setBaselineSnapshot] = useState<string | null>(null);
   const createBaselineReadyRef = useRef(false);
@@ -153,6 +157,7 @@ export function ProductEditorClient({ mode, productId }: Props) {
       setToppings(existing.toppings ?? []);
       setIsAvailable(existing.isAvailable);
       setIsSoldOut(existing.isSoldOut ?? false);
+      setIsBestSeller(existing.isBestSeller ?? false);
       setBaselineSnapshot(snapshotFromAdminProduct(existing));
     } else if (mode === "create" && categories.length) {
       setCategoryId((id) => id || categories[0]!.id);
@@ -171,6 +176,7 @@ export function ProductEditorClient({ mode, productId }: Props) {
             toppings: [],
             isAvailable: true,
             isSoldOut: false,
+            isBestSeller: false,
           }),
         );
       }
@@ -201,6 +207,7 @@ export function ProductEditorClient({ mode, productId }: Props) {
         toppings: toppings.length > 0 ? toppings : undefined,
         isAvailable,
         isSoldOut,
+        isBestSeller,
       };
       const skuTrim = sku.trim();
       if (mode === "create") {
@@ -242,6 +249,7 @@ export function ProductEditorClient({ mode, productId }: Props) {
         toppings,
         isAvailable,
         isSoldOut,
+        isBestSeller,
       }),
     [
       sku,
@@ -255,6 +263,7 @@ export function ProductEditorClient({ mode, productId }: Props) {
       toppings,
       isAvailable,
       isSoldOut,
+      isBestSeller,
     ],
   );
 
@@ -888,6 +897,32 @@ export function ProductEditorClient({ mode, productId }: Props) {
                   </Switch>
                   <span className="text-sm font-medium">
                     {isSoldOut ? "Hết hàng" : "Còn hàng"}
+                  </span>
+                </div>
+              </div>
+              <div className="border-t border-black/6 pt-4">
+                <p className="text-xs text-foreground/55">
+                  Gắn nhãn <span className="font-semibold text-amber-600">Best Seller</span> — sản phẩm sẽ hiển thị badge nổi bật và được ưu tiên trong danh sách đề xuất trên trang chủ.
+                </p>
+                <div className="mt-2 flex items-center gap-3">
+                  <Switch
+                    isSelected={isBestSeller}
+                    onChange={setIsBestSeller}
+                    isDisabled={pending}
+                    aria-label="Gắn nhãn Best Seller"
+                  >
+                    <Switch.Control>
+                      <Switch.Thumb />
+                    </Switch.Control>
+                  </Switch>
+                  <span className="text-sm font-medium">
+                    {isBestSeller ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-bold text-amber-700 ring-1 ring-amber-200">
+                        Best Seller
+                      </span>
+                    ) : (
+                      "Chưa gắn nhãn"
+                    )}
                   </span>
                 </div>
               </div>

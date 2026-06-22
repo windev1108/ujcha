@@ -173,8 +173,12 @@ function extractDivBlocks(html: string): Block[] {
 // ─── Main HTML parser ─────────────────────────────────────────────────────────
 function parseHtml(html: string): PrintLine[] {
     const rawBody = extractBody(html)
+    // Normalize <p> tags to <div> so the div-based extractor can handle them
+    const normalized = rawBody
+        .replace(/<p(\s[^>]*)?\/?>/gi, '<div$1>')
+        .replace(/<\/p>/gi, '</div>')
     // Replace QR <img> tags with sentinel divs so they appear in document order
-    const body = rawBody.replace(
+    const body = normalized.replace(
         /<img[^>]+src="[^"]*[?&]data=([^&"]+)[^"]*"[^>]*\/?>/gi,
         (_m, encodedData: string) => {
             try {
@@ -405,7 +409,6 @@ export function buildEscPosLabel(
     const lines = parseHtml(html)
     const out: Buffer[] = [
         CMD.init(),
-        CMD.utf8(),
         CMD.fontB(true),
         CMD.lineSpacing(lineSpacingVal),
     ]
