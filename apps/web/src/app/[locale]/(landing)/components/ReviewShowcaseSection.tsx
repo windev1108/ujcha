@@ -31,18 +31,16 @@ function ReviewCard({ review }: { review: PinnedFeedback }) {
           {Array.from({ length: 5 }).map((_, i) => (
             <Star
               key={i}
-              className={`size-3.5 ${
-                i < (review.rating ?? 0)
+              className={`size-3.5 ${i < (review.rating ?? 0)
                   ? "fill-amber-400 text-amber-400"
                   : "fill-current text-foreground/[0.08]"
-              }`}
+                }`}
             />
           ))}
         </div>
         <span
-          className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold ${
-            isGrab ? "bg-[#00b14f]/10 text-[#00b14f]" : "bg-[#1a3c34]/8 text-[#1a3c34]"
-          }`}
+          className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold ${isGrab ? "bg-[#00b14f]/10 text-[#00b14f]" : "bg-[#1a3c34]/8 text-[#1a3c34]"
+            }`}
         >
           {isGrab ? "GrabFood" : "UjCha"}
         </span>
@@ -203,14 +201,14 @@ export function ReviewShowcaseSection() {
           <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-24 bg-gradient-to-l from-[#f4f9f7] to-transparent" />
 
           <MarqueeRow reviews={reviews} direction="left" duration={duration} />
-          {showTwoRows && (
+          {/* {showTwoRows && (
             <MarqueeRow
               reviews={reviews}
               direction="right"
               duration={duration}
               phaseOffsetS={-(duration / 2)}
             />
-          )}
+          )} */}
         </div>
       </RevealSection>
     </>
