@@ -9,6 +9,10 @@ import { Link } from "@/i18n/navigation";
 import { fetchPinnedFeedbacks, type PinnedFeedback } from "@/services/feedback/api";
 import { RevealSection, easeOutSmooth } from "./RevealSection";
 
+// 300px card + 16px gap = 316px per slot; ~63px/s feels calm
+const CARD_SLOT_PX = 316;
+const SPEED_PX_PER_S = 63;
+
 function ReviewCard({ review }: { review: PinnedFeedback }) {
   const t = useTranslations();
   const locale = useLocale();
@@ -19,12 +23,9 @@ function ReviewCard({ review }: { review: PinnedFeedback }) {
   });
 
   const card = (
-    // Fixed height so every card in the row is identical regardless of content length
     <div className="group relative flex h-[260px] w-[300px] shrink-0 select-none flex-col overflow-hidden rounded-3xl border border-black/[0.06] bg-white p-5 shadow-[0_4px_20px_-6px_rgba(26,60,52,0.09)] transition-shadow duration-300 hover:shadow-[0_10px_36px_-6px_rgba(26,60,52,0.18)]">
-      {/* decorative quote */}
       <Quote className="absolute right-4 top-4 size-10 rotate-180 text-[#1a3c34]/[0.05]" />
 
-      {/* stars + source badge */}
       <div className="flex shrink-0 items-center justify-between gap-2">
         <div className="flex gap-0.5">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -40,24 +41,19 @@ function ReviewCard({ review }: { review: PinnedFeedback }) {
         </div>
         <span
           className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold ${
-            isGrab
-              ? "bg-[#00b14f]/10 text-[#00b14f]"
-              : "bg-[#1a3c34]/8 text-[#1a3c34]"
+            isGrab ? "bg-[#00b14f]/10 text-[#00b14f]" : "bg-[#1a3c34]/8 text-[#1a3c34]"
           }`}
         >
           {isGrab ? "GrabFood" : "UjCha"}
         </span>
       </div>
 
-      {/* review text — clamped to 3 lines */}
-      <p className="mt-3 shrink-0 text-sm leading-relaxed text-foreground/65 line-clamp-3">
+      <p className="mt-3 line-clamp-3 shrink-0 text-sm leading-relaxed text-foreground/65">
         {review.content}
       </p>
 
-      {/* flexible spacer pushes chip + author to the bottom */}
       <div className="flex-1" />
 
-      {/* product chip — anchored just above author */}
       {review.linkedProduct && (
         <div className="mb-3 flex shrink-0 items-center gap-2.5 rounded-2xl bg-[#f0f7f4] p-2.5 transition-colors duration-200 group-hover:bg-[#e5f0ea]">
           {review.linkedProduct.imageUrls[0] && (
@@ -83,7 +79,6 @@ function ReviewCard({ review }: { review: PinnedFeedback }) {
         </div>
       )}
 
-      {/* author + date */}
       <div className="flex shrink-0 items-center justify-between border-t border-black/[0.04] pt-3">
         <p className="text-sm font-semibold text-foreground">
           {review.name ?? t("review_card_anonymous")}
@@ -103,13 +98,21 @@ function ReviewCard({ review }: { review: PinnedFeedback }) {
   return card;
 }
 
-function MarqueeTrack({ reviews, duration }: { reviews: PinnedFeedback[]; duration: number }) {
-  // 3 copies → animate -33.333% for a seamless loop at any screen width
+function MarqueeRow({
+  reviews,
+  direction,
+  duration,
+}: {
+  reviews: PinnedFeedback[];
+  direction: "left" | "right";
+  duration: number;
+}) {
+  // 3 copies so the loop is seamless: animate exactly -33.333% (left) or +33.333% (right)
   const items = [...reviews, ...reviews, ...reviews];
   return (
     <div className="overflow-hidden">
       <div
-        className="rss-scroll flex w-max gap-4 pr-4"
+        className={direction === "left" ? "rss-track-left" : "rss-track-right"}
         style={{ animationDuration: `${duration}s` }}
       >
         {items.map((r, i) => (
@@ -131,18 +134,47 @@ export function ReviewShowcaseSection() {
 
   if (!reviews || reviews.length === 0) return null;
 
+  // Split reviews into two disjoint halves so the same card never appears in both rows simultaneously.
+  // Row 1 scrolls LEFT, Row 2 scrolls RIGHT → boustrophedon / snake effect.
+  const showTwoRows = reviews.length >= 4;
+  const half = Math.ceil(reviews.length / 2);
+  const row1 = showTwoRows ? reviews.slice(0, half) : reviews;
+  const row2 = showTwoRows ? reviews.slice(half) : [];
+
+  const rowDuration = (n: number) => Math.round((n * CARD_SLOT_PX) / SPEED_PX_PER_S);
+
   return (
     <>
       <style>{`
-        @keyframes rss-scroll {
+        @keyframes rss-left {
           to { transform: translateX(-33.3333%); }
         }
-        .rss-scroll { animation: rss-scroll linear infinite; }
-        .rss-zone:hover .rss-scroll { animation-play-state: paused; }
+        @keyframes rss-right {
+          from { transform: translateX(-33.3333%); }
+          to   { transform: translateX(0); }
+        }
+        .rss-track-left {
+          display: flex;
+          width: max-content;
+          gap: 16px;
+          padding-right: 16px;
+          animation: rss-left linear infinite;
+        }
+        .rss-track-right {
+          display: flex;
+          width: max-content;
+          gap: 16px;
+          padding-right: 16px;
+          animation: rss-right linear infinite;
+        }
+        .rss-zone:hover .rss-track-left,
+        .rss-zone:hover .rss-track-right {
+          animation-play-state: paused;
+        }
       `}</style>
 
       <RevealSection className="overflow-hidden bg-[#f4f9f7] py-14 sm:py-20">
-        {/* header — full left-align inside the same container max-width */}
+        {/* header */}
         <div className="mx-auto mb-10 max-w-[72rem] px-5 sm:px-8">
           <motion.div
             initial={{ opacity: 0, y: 12 }}
@@ -164,13 +196,15 @@ export function ReviewShowcaseSection() {
           </motion.div>
         </div>
 
-        {/* single-row infinite marquee — hover anywhere to pause */}
-        <div className="rss-zone relative">
-          {/* edge gradient fades */}
-          <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-20 bg-gradient-to-r from-[#f4f9f7] to-transparent" />
-          <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-20 bg-gradient-to-l from-[#f4f9f7] to-transparent" />
+        {/* snake marquee — left edge and right edge gradients sell the "turn" illusion */}
+        <div className="rss-zone relative flex flex-col gap-4">
+          <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-24 bg-gradient-to-r from-[#f4f9f7] to-transparent" />
+          <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-24 bg-gradient-to-l from-[#f4f9f7] to-transparent" />
 
-          <MarqueeTrack reviews={reviews} duration={60} />
+          <MarqueeRow reviews={row1} direction="left" duration={rowDuration(row1.length)} />
+          {showTwoRows && (
+            <MarqueeRow reviews={row2} direction="right" duration={rowDuration(row2.length)} />
+          )}
         </div>
       </RevealSection>
     </>
