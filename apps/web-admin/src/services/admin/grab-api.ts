@@ -38,3 +38,21 @@ export async function fetchGrabMenu(
   }
   return res.json();
 }
+
+export async function fetchGrabReviews(
+  authCookie: string,
+  merchantId?: string,
+  pageToken?: string,
+  pageSize = 50,
+): Promise<{ reviews: unknown[]; nextToken?: string }> {
+  const res = await fetch("/api/grab/reviews", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ authCookie, merchantId, pageToken, pageSize }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` })) as { error?: string };
+    throw new Error(err.error ?? `HTTP ${res.status}`);
+  }
+  return res.json() as Promise<{ reviews: unknown[]; nextToken?: string }>;
+}

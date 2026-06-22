@@ -136,7 +136,7 @@
   "change_avatar": "Đổi ảnh đại diện",
   "connecting": "Đang kết nối…",
   "contact_info": "Thông tin liên hệ",
-  "online": "Đang trực tuyến",
+  "online": "Đang theo dõi trực tiếp",
   "edit_profile": "Chỉnh sửa thông tin",
   "guest": "Khách",
   "group_order_badge": "Đơn nhóm",
@@ -302,7 +302,7 @@
   "about_story_p3": "Chúng tôi hướng đến việc xây dựng một không gian — cả thực và số — nơi bạn có thể chậm lại, thưởng thức, và tìm thấy khoảnh khắc yên tĩnh của riêng mình. Mỗi tách trà là một lời nhắc: hãy hiện diện.",
   "about_values_eyebrow": "Giá trị cốt lõi",
   "about_values_h2": "Những điều chúng tôi tin",
-  "update_automatically": "Cập nhật tự động",
+  "update_automatically": "Tự động cập nhật",
   "stat_customers": "Khách hàng tin yêu",
   "stat_products": "Sản phẩm thủ công",
   "stat_years_exp": "Năm kinh nghiệm",
@@ -361,7 +361,6 @@
   "apply": "Áp dụng",
   "average_rating": "Bình thường",
   "back": "Quay lại",
-  "blog": "Blog",
   "back_home": "Quay lại trang chủ",
   "back_to_menu": "Quay lại thực đơn",
   "bad_rating": "Tệ",
@@ -452,7 +451,6 @@
   "hide_password": "Ẩn mật khẩu",
   "logging_in": "Đang đăng nhập…",
   "login_welcome": "Chào mừng trở lại! Nhập thông tin để tiếp tục.",
-  "no_account": "Chưa có tài khoản?",
   "password_placeholder": "Mật khẩu của bạn",
   "phone_placeholder": "Số điện thoại của bạn",
   "privacy": "Bảo mật",
@@ -675,7 +673,6 @@
   "quick_order_desc": "Đặt món nhanh ngay tại bàn",
   "quick_order_subtitle": "Trải nghiệm số liền mạch — gọi món không cần chờ nhân viên.",
   "rate_experience": "Đánh giá trải nghiệm của bạn",
-  "referral_and_earn": "Giới thiệu",
   "related_products": "Sản phẩm cùng loại",
   "remove": "Xóa",
   "remove_voucher": "Xóa voucher",
@@ -835,16 +832,13 @@
   "welcome_voucher": "Voucher chào mừng",
   "welcome_voucher_desc": "Nhận ngay khi đăng ký thành công — áp dụng cho đơn hàng đầu tiên tại UjCha",
   "who_gets_what": "Ai nhận được gì?",
-  "who_pays_for_group": "Ai sẽ thanh toán cho nhóm?",
-  "waiting_shipper_turn_on_location": "Đang chờ shipper bật vị trí…",
+  "waiting_shipper_turn_on_location": "Chờ shipper bật định vị",
   "you_label": "Bạn",
   "your_code": "Mã của bạn",
   "your_referral_code": "Mã giới thiệu của bạn",
   "your_referral_vouchers": "Voucher giới thiệu của bạn",
-
   "tab_delivery": "Giao hàng",
   "tab_pickup": "Nhận tại quán",
-
   "delivery_address_title": "Địa chỉ giao hàng",
   "add_new_address_option": "Nhập địa chỉ mới",
   "select_on_map": "Chọn trên bản đồ",
@@ -871,7 +865,6 @@
   "pickup_asap": "Ngay (15–20 phút)",
   "pickup_schedule": "Đặt giờ",
   "contact_name_label": "Tên liên hệ",
-
   "order_summary": "Tóm tắt đơn hàng",
   "shipping_undetermined": "Chưa xác định",
   "out_of_delivery_range": "Ngoài vùng giao hàng",
@@ -886,17 +879,14 @@
   "confirm_store_order": "Xác nhận đơn nhận tại quán",
   "confirm_order_short": "Xác nhận đơn",
   "order_terms_prefix": "Bằng việc đặt hàng, bạn đồng ý với",
-
   "points_count": "{count} điểm",
   "points_saving": "Tiết kiệm -{amount}",
   "points_est_value": "≈ {amount}",
-
   "voucher_percent_off": "Giảm {percent}%",
   "voucher_percent_off_capped": "Giảm {percent}% (tối đa {max})",
   "voucher_fixed_off": "Giảm {amount}",
   "voucher_apply_failed": "Không thể áp dụng voucher.",
   "voucher_shortfall": "Cần thêm {amount}",
-
   "error_cart_empty": "Giỏ hàng trống.",
   "error_table_not_found_qr": "Không tìm thấy thông tin bàn. Vui lòng quét lại mã QR.",
   "error_delivery_out_of_range": "Địa chỉ giao hàng nằm ngoài vùng phục vụ của quán.",
@@ -910,7 +900,6 @@
   "order_failed": "Đặt hàng thất bại. Vui lòng thử lại.",
   "voucher_and_points_info": "Mã voucher và điểm UjCha được áp dụng ở bước thanh toán",
   "group_order_cart_desc": "Mời bạn bè cùng chọn món — càng đông càng giảm",
-
   "order_not_found": "Không tìm thấy đơn hàng",
   "back_to_order_history": "Quay lại lịch sử đơn",
   "earned_points_from_order": "Điểm tích lũy từ đơn này",
@@ -932,7 +921,6 @@
   "open_in_google_maps": "Mở trong Google Maps",
   "table_area_label": "Khu vực {area}",
   "paid": "Đã thanh toán",
-
   "status_pending_desc": "Đơn vừa được đặt",
   "status_confirmed_desc": "Quán đã nhận đơn",
   "status_preparing_desc": "Đang chuẩn bị đơn",
@@ -942,34 +930,23 @@
   "status_arrived_desc": "Shipper đã đến địa chỉ của bạn",
   "status_completed_desc": "Đơn đã được giao thành công",
   "status_cancelled_desc": "Đơn đã bị huỷ",
-
-  "connecting": "Đang kết nối…",
-  "online": "Đang theo dõi trực tiếp",
-  "waiting_shipper_turn_on_location": "Chờ shipper bật định vị",
-  "update_automatically": "Tự động cập nhật",
   "tap_to_fullscreen": "Nhấn để xem toàn màn hình",
-
   "table_distance_hint": "Khoảng cách: {distance}m · Bán kính cho phép: {radius}m",
   "table_basket_info_prefix": "Đặt tại",
   "table_basket_info_suffix": "— nhân viên sẽ mang đến bàn",
   "default_area": "Tầng 1",
-
   "group_cash_delivery_note": "Tiền mặt sẽ được shipper thu khi giao hàng thành công — bạn không cần làm gì thêm.",
-
   "terms_updated": "Cập nhật lần cuối: tháng 5 năm 2026",
   "privacy_updated": "Cập nhật lần cuối: tháng 5 năm 2026",
   "terms_intro": "Các điều khoản này điều chỉnh mối quan hệ giữa UjCha và người dùng khi sử dụng ứng dụng đặt đồ uống, chương trình tích điểm và các dịch vụ liên quan của UjCha.",
-
   "error_phone_required": "Vui lòng nhập số điện thoại",
   "error_phone_invalid": "Số điện thoại không hợp lệ (9–11 chữ số)",
   "error_password_required": "Vui lòng nhập mật khẩu",
   "error_password_min": "Mật khẩu cần ít nhất 6 ký tự",
   "error_name_required": "Vui lòng nhập họ và tên",
   "error_name_min": "Họ tên cần ít nhất 2 ký tự",
-
   "ts1_title": "1. Chấp nhận điều khoản",
   "ts1_body": "Bằng cách tạo tài khoản hoặc sử dụng bất kỳ dịch vụ nào của UjCha, bạn xác nhận đã đọc, hiểu và đồng ý bị ràng buộc bởi các Điều khoản dịch vụ này. Nếu bạn không đồng ý, vui lòng không sử dụng dịch vụ.",
-
   "ts2_title": "2. Tài khoản người dùng",
   "ts2_p1_sub": "Đăng ký",
   "ts2_p1_body": "Để đặt hàng và tích điểm, bạn cần tạo tài khoản với số điện thoại hợp lệ tại Việt Nam. Một số điện thoại chỉ được liên kết với một tài khoản. Bạn phải cung cấp thông tin chính xác và cập nhật khi có thay đổi.",
@@ -977,7 +954,6 @@
   "ts2_p2_body": "Bạn chịu trách nhiệm bảo mật thông tin đăng nhập và toàn bộ hoạt động xảy ra dưới tài khoản của mình. Thông báo ngay cho UjCha nếu phát hiện truy cập trái phép.",
   "ts2_p3_sub": "Độ tuổi",
   "ts2_p3_body": "Dịch vụ dành cho người dùng từ 16 tuổi trở lên. Người dưới 18 tuổi cần có sự đồng ý của cha mẹ hoặc người giám hộ hợp pháp.",
-
   "ts3_title": "3. Đặt hàng và thanh toán",
   "ts3_p1_sub": "Xác nhận đơn hàng",
   "ts3_p1_body": "Đơn hàng được coi là đã xác nhận khi bạn nhận được thông báo xác nhận từ hệ thống. UjCha có quyền hủy đơn trong trường hợp sản phẩm hết hàng hoặc phát hiện thông tin gian lận.",
@@ -985,7 +961,6 @@
   "ts3_p2_body": "Giá hiển thị trên ứng dụng đã bao gồm VAT (nếu áp dụng). UjCha chấp nhận thanh toán tiền mặt, chuyển khoản ngân hàng và các phương thức được liệt kê trong ứng dụng. Giá có thể thay đổi mà không cần báo trước.",
   "ts3_p3_sub": "Voucher và ưu đãi",
   "ts3_p3_body": "Voucher chỉ áp dụng theo điều kiện được nêu rõ và không thể quy đổi thành tiền mặt. Mỗi voucher chỉ được dùng một lần trừ khi có quy định khác. UjCha có quyền thu hồi voucher nếu phát hiện sử dụng gian lận.",
-
   "ts4_title": "4. Hủy đơn và hoàn tiền",
   "ts4_p1_sub": "Hủy đơn",
   "ts4_p1_body": "Bạn có thể hủy đơn trong vòng 5 phút kể từ khi đặt hàng thành công nếu đơn chưa được xác nhận bởi cửa hàng. Sau khi cửa hàng xác nhận, đơn hàng không thể hủy.",
@@ -993,7 +968,6 @@
   "ts4_p2_body": "Trong trường hợp đơn hàng bị hủy do lỗi từ phía UjCha (hết hàng, lỗi hệ thống), chúng tôi hoàn tiền đầy đủ qua cùng phương thức thanh toán trong vòng 3–7 ngày làm việc.",
   "ts4_p3_sub": "Khiếu nại chất lượng",
   "ts4_p3_body": "Nếu sản phẩm nhận được không đúng mô tả hoặc kém chất lượng, vui lòng liên hệ trong vòng 1 giờ kể từ khi nhận hàng kèm ảnh chụp. Chúng tôi sẽ xem xét và hoàn tiền/bù đắp trong trường hợp khiếu nại hợp lệ.",
-
   "ts5_title": "5. Điểm thưởng và chương trình khách hàng thân thiết",
   "ts5_p1_sub": "Tích điểm",
   "ts5_p1_body": "Điểm thưởng được tính tự động sau khi đơn hàng hoàn thành theo tỷ lệ hiện hành. Điểm không được tính cho đơn hàng bị hủy hoặc hoàn tiền.",
@@ -1001,22 +975,16 @@
   "ts5_p2_body": "Điểm tích lũy chỉ có thể đổi lấy voucher giảm giá tại trang Phần thưởng. Điểm không có giá trị quy đổi tiền mặt và không thể chuyển nhượng giữa các tài khoản.",
   "ts5_p3_sub": "Hết hạn",
   "ts5_p3_body": "Điểm không có thời hạn miễn tài khoản vẫn hoạt động. Nếu tài khoản không có giao dịch trong 24 tháng liên tiếp, điểm có thể bị thu hồi với thông báo trước 30 ngày.",
-
   "ts6_title": "6. Hành vi bị cấm",
   "ts6_body": "Người dùng không được: (1) Tạo nhiều tài khoản để lạm dụng ưu đãi; (2) Sử dụng công cụ tự động để đặt hàng hoặc tích điểm; (3) Chia sẻ tài khoản với người khác nhằm trục lợi ưu đãi; (4) Cung cấp thông tin sai lệch; (5) Thực hiện bất kỳ hành vi gian lận nào ảnh hưởng đến hệ thống hoặc người dùng khác. Vi phạm có thể dẫn đến khóa tài khoản vĩnh viễn và thu hồi toàn bộ điểm thưởng.",
-
   "ts7_title": "7. Giới hạn trách nhiệm",
   "ts7_body": "UjCha cung cấp dịch vụ theo hiện trạng và không đảm bảo dịch vụ sẽ không bị gián đoạn. Trong phạm vi tối đa cho phép bởi pháp luật, UjCha không chịu trách nhiệm cho thiệt hại gián tiếp, ngẫu nhiên hoặc hậu quả phát sinh từ việc sử dụng dịch vụ.",
-
   "ts8_title": "8. Thay đổi điều khoản",
   "ts8_body": "UjCha có quyền cập nhật Điều khoản này bất kỳ lúc nào. Thay đổi có hiệu lực ngay khi được đăng tải. Chúng tôi sẽ thông báo qua ứng dụng hoặc email cho các thay đổi quan trọng. Việc tiếp tục sử dụng dịch vụ sau khi thay đổi được coi là bạn đã chấp nhận điều khoản mới.",
-
   "ts9_title": "9. Luật áp dụng",
   "ts9_body": "Điều khoản này được điều chỉnh bởi pháp luật nước Cộng hòa xã hội chủ nghĩa Việt Nam. Mọi tranh chấp sẽ được giải quyết tại tòa án có thẩm quyền tại địa phương nơi UjCha đặt trụ sở.",
-
   "ts10_title": "10. Liên hệ",
   "ts10_body": "Với bất kỳ câu hỏi nào về Điều khoản dịch vụ, vui lòng liên hệ bộ phận hỗ trợ UjCha qua ứng dụng hoặc đến trực tiếp cửa hàng. Chúng tôi sẵn sàng giải đáp trong giờ làm việc.",
-
   "notif_just_now": "Vừa xong",
   "notif_minutes_ago": "{m} phút trước",
   "notif_hours_ago": "{h} giờ trước",
@@ -1102,7 +1070,6 @@
   "ship_guide_free_amount": "Freeship theo giá trị đơn",
   "ship_guide_free_amount_desc": "Miễn phí ship khi tổng đơn ≥ {amount}",
   "ship_guide_formula": "Công thức: {base} (cho {baseKm} km đầu) + {perKm}/km tiếp theo",
-
   "guest_name_placeholder": "Tên của bạn (vd: Minh)",
   "guest_checkout_banner": "Đăng nhập để tích điểm & dùng voucher",
   "guest_checkout_login_cta": "Đăng nhập",
@@ -1140,7 +1107,6 @@
   "group_participants_card_title": "Người đặt & Món chọn",
   "group_split_payment_card_eyebrow": "THANH TOÁN",
   "group_split_payment_card_title": "Thanh toán phần của bạn",
-
   "GROUP_ORDER_NOT_FOUND": "Không tìm thấy đơn nhóm.",
   "GROUP_ORDER_EXPIRED": "Đơn nhóm đã hết hạn.",
   "GROUP_ORDER_NOT_COLLECTING": "Đơn nhóm không còn nhận thành viên mới.",
@@ -1166,5 +1132,10 @@
   "ORDER_OPTIONS_INVALID": "Tuỳ chọn không hợp lệ.",
   "ORDER_TOPPING_INVALID": "Topping không hợp lệ hoặc đã tắt.",
   "ORDER_DISCOUNT_EXCEEDS_TOTAL": "Giảm giá không được vượt tổng tiền hàng.",
-  "ORDER_DISCOUNT_NEGATIVE": "Giá trị giảm giá không hợp lệ."
+  "ORDER_DISCOUNT_NEGATIVE": "Giá trị giảm giá không hợp lệ.",
+  "review_showcase_eyebrow": "Khách hàng nói gì",
+  "review_showcase_title": "Đánh giá thực tế",
+  "review_showcase_count": "{count} đánh giá nổi bật",
+  "review_card_ordered_item": "Món đã đặt",
+  "review_card_anonymous": "Khách hàng"
 }

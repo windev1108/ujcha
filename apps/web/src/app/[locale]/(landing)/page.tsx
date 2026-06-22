@@ -4,6 +4,7 @@ import { Categories } from "@/app/[locale]/(landing)/components/Categories";
 import { Hero } from "@/app/[locale]/(landing)/components/Hero";
 import { ProductGallery } from "@/app/[locale]/(landing)/components/ProductGallery";
 import { PromoBanner } from "@/app/[locale]/(landing)/components/PromoBanner";
+import { ReviewShowcaseSection } from "@/app/[locale]/(landing)/components/ReviewShowcaseSection";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ujcha.vercel.app";
 
@@ -105,6 +106,7 @@ export default function HomePage() {
         <Hero />
         <Categories />
         <ProductGallery />
+        <ReviewShowcaseSection />
         <PromoBanner />
       </div>
     </>

@@ -136,7 +136,7 @@
   "change_avatar": "Change avatar",
   "connecting": "Connecting…",
   "contact_info": "Contact info",
-  "online": "Online",
+  "online": "Live tracking",
   "edit_profile": "Edit profile",
   "guest": "Guest",
   "group_order_badge": "Group order",
@@ -258,7 +258,7 @@
   "about_story_p3": "We aim to build a space — both physical and digital — where you can slow down, savour, and find your own quiet moment. Every cup of tea is a reminder: be present.",
   "about_values_eyebrow": "Core values",
   "about_values_h2": "What we believe in",
-  "update_automatically": "Update automatically",
+  "update_automatically": "Updates automatically",
   "stat_customers": "Happy customers",
   "stat_products": "Handcrafted products",
   "stat_years_exp": "Years of experience",
@@ -291,7 +291,7 @@
   "read_more": "Read more",
   "reading_time": "Reading time",
   "read_time_approx": "~{count} min",
-  "referral_and_earn": "Referral",
+  "referral_and_earn": "Refer & earn",
   "see_all_posts": "See all posts",
   "topic": "Topic",
   "total_posts": "{count} articles",
@@ -316,7 +316,6 @@
   "anonymous_feedback": "You are submitting feedback anonymously",
   "apply": "Apply",
   "average_rating": "Average",
-  "blog": "Blog",
   "back": "Back",
   "back_home": "Back to home",
   "back_to_menu": "Back to menu",
@@ -408,7 +407,6 @@
   "hide_password": "Hide password",
   "logging_in": "Logging in…",
   "login_welcome": "Welcome back! Enter your details to continue.",
-  "no_account": "Don't have an account?",
   "password_placeholder": "Your password",
   "phone_placeholder": "Your phone number",
   "privacy": "Privacy",
@@ -554,8 +552,8 @@
   "step_lock_title": "Lock & get discount",
   "step_order_desc": "Everyone picks their items. Real-time — everyone sees it instantly.",
   "step_order_title": "Order together",
-    "choose_dish": "Choose dish",
-    "edit_dish": "Edit dish",
+  "choose_dish": "Choose dish",
+  "edit_dish": "Edit dish",
   "tier_active": "Currently applied to your group",
   "tier_min_members": "{count}+ members",
   "tier_need_more": "{count} more members needed",
@@ -631,7 +629,6 @@
   "quick_order_desc": "Quick order right at your table",
   "quick_order_subtitle": "Seamless digital experience — order without waiting for staff.",
   "rate_experience": "Rate your experience",
-  "referral_and_earn": "Refer & earn",
   "related_products": "Related products",
   "remove": "Remove",
   "remove_voucher": "Remove voucher",
@@ -792,16 +789,13 @@
   "welcome_voucher": "Welcome voucher",
   "welcome_voucher_desc": "Received immediately on successful registration — applied to the first order at UjCha",
   "who_gets_what": "Who gets what?",
-  "who_pays_for_group": "Who will pay for the group?",
-  "waiting_shipper_turn_on_location": "Waiting for shipper to turn on location…",
+  "waiting_shipper_turn_on_location": "Waiting for shipper location",
   "you_label": "You",
   "your_code": "Your code",
   "your_referral_code": "Your referral code",
   "your_referral_vouchers": "Your referral vouchers",
-
   "tab_delivery": "Delivery",
   "tab_pickup": "Pick up in store",
-
   "delivery_address_title": "Delivery address",
   "add_new_address_option": "New address",
   "select_on_map": "Select on map",
@@ -828,7 +822,6 @@
   "pickup_asap": "Now (15–20 min)",
   "pickup_schedule": "Schedule time",
   "contact_name_label": "Contact name",
-
   "order_summary": "Order summary",
   "shipping_undetermined": "Not yet calculated",
   "out_of_delivery_range": "Out of delivery range",
@@ -843,17 +836,14 @@
   "confirm_store_order": "Confirm pickup order",
   "confirm_order_short": "Confirm order",
   "order_terms_prefix": "By placing your order, you agree to our",
-
   "points_count": "{count} points",
   "points_saving": "Save -{amount}",
   "points_est_value": "≈ {amount}",
-
   "voucher_percent_off": "{percent}% off",
   "voucher_percent_off_capped": "{percent}% off (max {max})",
   "voucher_fixed_off": "{amount} off",
   "voucher_apply_failed": "Unable to apply voucher.",
   "voucher_shortfall": "Need {amount} more",
-
   "error_cart_empty": "Your cart is empty.",
   "error_table_not_found_qr": "Table info not found. Please scan the QR code again.",
   "error_delivery_out_of_range": "Delivery address is outside the service area.",
@@ -867,7 +857,6 @@
   "order_failed": "Order failed. Please try again.",
   "voucher_and_points_info": "Voucher codes and UjCha points are applied at checkout",
   "group_order_cart_desc": "Invite friends to order together — more people, bigger discounts",
-
   "order_not_found": "Order not found",
   "back_to_order_history": "Back to order history",
   "earned_points_from_order": "Points earned from this order",
@@ -889,7 +878,6 @@
   "open_in_google_maps": "Open in Google Maps",
   "table_area_label": "Area {area}",
   "paid": "Paid",
-
   "status_pending_desc": "Order has just been placed",
   "status_confirmed_desc": "Store has received the order",
   "status_preparing_desc": "Preparing your order",
@@ -899,35 +887,24 @@
   "status_arrived_desc": "Shipper has arrived at your address",
   "status_completed_desc": "Order has been delivered successfully",
   "status_cancelled_desc": "Order was cancelled",
-
-  "connecting": "Connecting…",
-  "online": "Live tracking",
-  "waiting_shipper_turn_on_location": "Waiting for shipper location",
-  "update_automatically": "Updates automatically",
   "tap_to_fullscreen": "Tap to view fullscreen",
-
   "table_distance_hint": "Distance: {distance}m · Allowed radius: {radius}m",
   "table_basket_info_prefix": "Ordered at",
   "table_basket_info_suffix": "— staff will bring it to your table",
   "default_area": "Floor 1",
-
   "group_cash_delivery_note": "Cash will be collected by the shipper upon successful delivery — no action required from you.",
-
   "terms_updated": "Last updated: May 2026",
   "privacy_updated": "Last updated: May 2026",
   "terms_intro": "These Terms govern the relationship between UjCha and its users when using the beverage ordering app, loyalty programme, and related UjCha services.",
   "privacy_intro": "At UjCha, we value your privacy. This Policy clearly explains what information is collected, how it is used, and how we protect your personal data when you use the UjCha app and services.",
-
   "error_phone_required": "Please enter your phone number",
   "error_phone_invalid": "Invalid phone number (9–11 digits)",
   "error_password_required": "Password is required",
   "error_password_min": "Password must be at least 6 characters",
   "error_name_required": "Please enter your full name",
   "error_name_min": "Name must be at least 2 characters",
-
   "ts1_title": "1. Acceptance of terms",
   "ts1_body": "By creating an account or using any UjCha service, you confirm that you have read, understood, and agree to be bound by these Terms of Service. If you do not agree, please do not use the service.",
-
   "ts2_title": "2. User account",
   "ts2_p1_sub": "Registration",
   "ts2_p1_body": "To place orders and earn loyalty points, you need to create an account with a valid Vietnamese phone number. One phone number may only be linked to one account. You must provide accurate information and update it when changes occur.",
@@ -935,7 +912,6 @@
   "ts2_p2_body": "You are responsible for keeping your login credentials secure and for all activity that occurs under your account. Notify UjCha immediately if you discover any unauthorised access.",
   "ts2_p3_sub": "Age requirement",
   "ts2_p3_body": "The service is intended for users aged 16 and over. Users under 18 require the consent of a parent or legal guardian.",
-
   "ts3_title": "3. Ordering and payment",
   "ts3_p1_sub": "Order confirmation",
   "ts3_p1_body": "An order is considered confirmed when you receive a confirmation notification from the system. UjCha reserves the right to cancel an order if a product is out of stock or if fraudulent information is detected.",
@@ -943,7 +919,6 @@
   "ts3_p2_body": "Prices shown in the app include VAT (where applicable). UjCha accepts cash, bank transfer, and other payment methods listed in the app. Prices may change without prior notice.",
   "ts3_p3_sub": "Vouchers and promotions",
   "ts3_p3_body": "Vouchers are only valid under the conditions stated and cannot be exchanged for cash. Each voucher may only be used once unless otherwise specified. UjCha reserves the right to revoke vouchers if fraudulent use is detected.",
-
   "ts4_title": "4. Cancellations and refunds",
   "ts4_p1_sub": "Order cancellation",
   "ts4_p1_body": "You may cancel an order within 5 minutes of placing it, provided the store has not yet confirmed it. Once the store confirms the order, it cannot be cancelled.",
@@ -951,7 +926,6 @@
   "ts4_p2_body": "If an order is cancelled due to an error on UjCha's part (out of stock, system error), we will issue a full refund via the same payment method within 3–7 business days.",
   "ts4_p3_sub": "Quality complaints",
   "ts4_p3_body": "If the product received does not match its description or is of poor quality, please contact us within 1 hour of receiving the order and attach photos. We will review the complaint and provide a refund or compensation where the claim is valid.",
-
   "ts5_title": "5. Loyalty points and rewards",
   "ts5_p1_sub": "Earning points",
   "ts5_p1_body": "Points are credited automatically when an order is completed, at the current earning rate. Points are not awarded for cancelled or refunded orders.",
@@ -959,22 +933,16 @@
   "ts5_p2_body": "Accumulated points can only be redeemed for discount vouchers on the Rewards page. Points have no cash value and cannot be transferred between accounts.",
   "ts5_p3_sub": "Expiry",
   "ts5_p3_body": "Points do not expire as long as the account remains active. If an account has no transactions for 24 consecutive months, points may be forfeited with 30 days' notice.",
-
   "ts6_title": "6. Prohibited conduct",
   "ts6_body": "Users must not: (1) Create multiple accounts to abuse promotions; (2) Use automated tools to place orders or earn points; (3) Share an account with others to exploit offers; (4) Provide false information; (5) Engage in any fraudulent behaviour that affects the system or other users. Violations may result in permanent account suspension and forfeiture of all accumulated points.",
-
   "ts7_title": "7. Limitation of liability",
   "ts7_body": "UjCha provides the service on an as-is basis and does not guarantee uninterrupted service. To the fullest extent permitted by law, UjCha is not liable for any indirect, incidental, or consequential damages arising from the use of the service.",
-
   "ts8_title": "8. Changes to the terms",
   "ts8_body": "UjCha may update these Terms at any time. Changes take effect immediately upon publication. We will notify users via the app or email for significant changes. Continued use of the service after changes constitutes acceptance of the updated terms.",
-
   "ts9_title": "9. Governing law",
   "ts9_body": "These Terms are governed by the laws of the Socialist Republic of Vietnam. All disputes shall be resolved in the competent court at the locality where UjCha is headquartered.",
-
   "ts10_title": "10. Contact",
   "ts10_body": "If you have any questions about these Terms of Service, please contact UjCha support via the app or visit our store directly. We are happy to assist during business hours.",
-
   "ps1_title": "1. Information we collect",
   "ps1_b1_sub": "Information you provide",
   "ps1_b1_body": "When registering an account, you provide your name, phone number, and password. When placing an order, we record your delivery address and payment method. This information is required to complete a transaction.",
@@ -982,7 +950,6 @@
   "ps1_b2_body": "When you use the app, we automatically collect device data (device type, operating system), IP address, in-app browsing history, and shopping habits to improve your experience.",
   "ps1_b3_sub": "Transaction information",
   "ps1_b3_body": "Order history, accumulated points, vouchers used, and all financial activity on the UjCha platform are stored to support customer service and the loyalty programme.",
-
   "ps2_title": "2. How we use your information",
   "ps2_b1_sub": "Processing orders",
   "ps2_b1_body": "Personal information is used to process, confirm, and deliver orders to the correct address; to notify you of order status via SMS/push notifications; and to resolve transaction-related complaints.",
@@ -992,7 +959,6 @@
   "ps2_b3_body": "We analyse aggregated (anonymised) data to develop new products, optimise the app experience, and adjust the menu based on actual demand.",
   "ps2_b4_sub": "Communications",
   "ps2_b4_body": "We may send order notifications, policy updates, and — if you agree — marketing offers via SMS or email. You can unsubscribe from marketing communications at any time.",
-
   "ps3_title": "3. Sharing your information",
   "ps3_b1_sub": "We do not sell data",
   "ps3_b1_body": "UjCha commits to never selling, renting, or trading your personal information with third parties for commercial purposes.",
@@ -1000,13 +966,11 @@
   "ps3_b2_body": "We share the minimum necessary information with payment partners (bank payment gateways), delivery partners, and SMS service providers to carry out transactions. These partners are bound by strict confidentiality agreements.",
   "ps3_b3_sub": "Legal requirements",
   "ps3_b3_body": "We may disclose information when required by a competent state authority under Vietnamese law.",
-
   "ps4_title": "4. Data protection",
   "ps4_b1_sub": "Technical measures",
   "ps4_b1_body": "All data is transmitted over TLS-encrypted HTTPS connections. Passwords are hashed using the bcrypt algorithm and are never stored in plain text. Sensitive payment information is not stored directly on UjCha's systems.",
   "ps4_b2_sub": "Access control",
   "ps4_b2_body": "Only authorised personnel may access customer data within the scope of their role. All access is logged and reviewed periodically.",
-
   "ps5_title": "5. Your rights",
   "ps5_b1_sub": "Access and correction",
   "ps5_b1_body": "You may view and edit your personal information at any time in the Profile section of the app.",
@@ -1014,17 +978,14 @@
   "ps5_b2_body": "You may request deletion of your account and all personal data by contacting our support team. We will process the request within 30 business days, except for data we are legally required to retain.",
   "ps5_b3_sub": "Withdraw consent",
   "ps5_b3_body": "You can unsubscribe from marketing communications at any time via Settings → Notifications, or by contacting us directly.",
-
   "ps6_title": "6. Data retention",
   "ps6_b1_sub": "Account data",
   "ps6_b1_body": "Retained for the lifetime of the account and deleted 90 days after the account is closed (except transaction data required under accounting law).",
   "ps6_b2_sub": "Transaction history",
   "ps6_b2_body": "Under Vietnamese law, financial transaction data is retained for a minimum of 5 years.",
-
   "ps7_title": "7. Contact",
   "ps7_b1_sub": "Feedback and complaints",
   "ps7_b1_body": "If you have questions about this Privacy Policy or wish to exercise your rights, please contact us via our support email or visit a UjCha store in person. We are committed to responding within 3 business days.",
-
   "notif_just_now": "Just now",
   "notif_minutes_ago": "{m} min ago",
   "notif_hours_ago": "{h} hr ago",
@@ -1110,7 +1071,6 @@
   "ship_guide_free_amount": "Free on large orders",
   "ship_guide_free_amount_desc": "Free shipping when order total ≥ {amount}",
   "ship_guide_formula": "Formula: {base} (first {baseKm} km) + {perKm}/km after that",
-
   "guest_name_placeholder": "Your name (e.g. Minh)",
   "guest_checkout_banner": "Sign in to earn points & use vouchers",
   "guest_checkout_login_cta": "Sign in",
@@ -1148,7 +1108,6 @@
   "group_participants_card_title": "Members & Orders",
   "group_split_payment_card_eyebrow": "PAYMENT",
   "group_split_payment_card_title": "Your payment",
-
   "GROUP_ORDER_NOT_FOUND": "Group order not found.",
   "GROUP_ORDER_EXPIRED": "This group order has expired.",
   "GROUP_ORDER_NOT_COLLECTING": "This group order is no longer accepting members.",
@@ -1174,5 +1133,10 @@
   "ORDER_OPTIONS_INVALID": "Invalid option selection.",
   "ORDER_TOPPING_INVALID": "Invalid or inactive topping.",
   "ORDER_DISCOUNT_EXCEEDS_TOTAL": "Discount cannot exceed order total.",
-  "ORDER_DISCOUNT_NEGATIVE": "Invalid discount amount."
+  "ORDER_DISCOUNT_NEGATIVE": "Invalid discount amount.",
+  "review_showcase_eyebrow": "What our customers say",
+  "review_showcase_title": "Real reviews",
+  "review_showcase_count": "{count} featured reviews",
+  "review_card_ordered_item": "Ordered item",
+  "review_card_anonymous": "Customer"
 }

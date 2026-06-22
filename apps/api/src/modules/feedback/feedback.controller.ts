@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Req } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { FeedbackService } from './feedback.service';
@@ -8,6 +8,12 @@ import { CreateFeedbackDto } from './dto/create-feedback.dto';
 @Controller('feedback')
 export class FeedbackController {
   constructor(private readonly feedbackService: FeedbackService) {}
+
+  @Get('pinned')
+  @ApiOperation({ summary: 'Lấy danh sách đánh giá được ghim cho showcase' })
+  pinned() {
+    return this.feedbackService.findPinned();
+  }
 
   @Post()
   @HttpCode(201)

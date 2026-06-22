@@ -2,6 +2,13 @@ import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CreateFeedbackDto } from './dto/create-feedback.dto';
 
+const PINNED_PRODUCT_SELECT = {
+  id: true,
+  name: true,
+  slug: true,
+  imageUrls: true,
+} as const;
+
 @Injectable()
 export class FeedbackService {
   constructor(private readonly prisma: PrismaService) {}
@@ -30,6 +37,23 @@ export class FeedbackService {
         content: dto.content,
         rating: dto.rating,
         ip,
+      },
+    });
+  }
+
+  async findPinned() {
+    return this.prisma.feedback.findMany({
+      where: { isPinned: true },
+      orderBy: [{ rating: 'desc' }, { createdAt: 'desc' }],
+      take: 12,
+      select: {
+        id: true,
+        name: true,
+        content: true,
+        rating: true,
+        externalId: true,
+        createdAt: true,
+        linkedProduct: { select: PINNED_PRODUCT_SELECT },
       },
     });
   }

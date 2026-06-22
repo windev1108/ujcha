@@ -1,3 +1,10 @@
+export type AdminFeedbackLinkedProduct = {
+  id: string;
+  name: string;
+  slug: string;
+  imageUrls: string[];
+};
+
 export type AdminFeedback = {
   id: string;
   name: string | null;
@@ -5,6 +12,9 @@ export type AdminFeedback = {
   phone: string | null;
   content: string;
   rating: number | null;
+  externalId: string | null;
+  isPinned: boolean;
+  linkedProduct: AdminFeedbackLinkedProduct | null;
   createdAt: string;
 };
 

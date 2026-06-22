@@ -257,6 +257,7 @@ model Product {
   cartItems       CartItem[]
   orderItems      OrderItem[]
   groupOrderItems GroupOrderParticipantItem[]
+  feedbacks       Feedback[]
 
   @@index([categoryId])
   @@index([isAvailable])
@@ -810,17 +811,22 @@ model PosRelease {
 
 /// Phản hồi từ khách hàng — chỉ admin xem và xóa, không chỉnh sửa.
 model Feedback {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String?
-  email     String?
-  phone     String?
-  content   String   @db.Text
-  rating    Int?
-  ip        String?
-  createdAt DateTime @default(now())
+  id              String    @id @default(uuid()) @db.Uuid
+  name            String?
+  email           String?
+  phone           String?
+  content         String    @db.Text
+  rating          Int?
+  ip              String?
+  externalId      String?   @unique
+  isPinned        Boolean   @default(false)
+  linkedProductId String?   @db.Uuid
+  linkedProduct   Product?  @relation(fields: [linkedProductId], references: [id], onDelete: SetNull)
+  createdAt       DateTime  @default(now())
 
   @@index([createdAt])
   @@index([ip, createdAt])
+  @@index([isPinned])
 }
 
 /// Cấu hình phí vận chuyển — singleton id = "default".
