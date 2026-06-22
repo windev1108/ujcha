@@ -6,7 +6,7 @@ import { motion } from "motion/react";
 import Image from "next/image";
 import { Link } from "@/i18n/navigation";
 import { revealTransition } from "@/app/[locale]/(landing)/components/RevealSection";
-import { ShoppingBag, ExternalLink } from "lucide-react";
+import { ShoppingBag, ExternalLink, SpeakerIcon, SparklesIcon, StarIcon } from "lucide-react";
 import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { ProductQuickAddModal } from "./ProductQuickAddModal";
@@ -164,7 +164,7 @@ function ProductCardBadges({ hasDiscount, discountPercent, isSoldOut, isBestSell
     <>
       {isBestSeller && !isSoldOut && (
         <motion.span
-          className="absolute right-2.5 top-2.5 overflow-hidden rounded-full bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 px-2.5 py-0.5 text-[10px] font-bold text-amber-900 shadow-[0_0_10px_2px_rgba(251,191,36,0.55)]"
+          className="flex gap-1 absolute right-2.5 top-2.5 overflow-hidden rounded-full bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 px-1.5 py-0.5 text-[10px] font-bold text-amber-900 shadow-[0_0_10px_2px_rgba(251,191,36,0.55)]"
           initial={{ scale: 0.7, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ type: "spring", stiffness: 320, damping: 18, delay: 0.1 }}
@@ -183,7 +183,8 @@ function ProductCardBadges({ hasDiscount, discountPercent, isSoldOut, isBestSell
             animate={{ opacity: [0.6, 1, 0.6], scale: [1, 1.06, 1] }}
             transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
           />
-          <span className="relative">🏆 Best Seller</span>
+          <StarIcon className="size-3.5 text-amber-900" />
+          <span className="relative"> {t("bestseller")}</span>
         </motion.span>
       )}
       {hasDiscount && !isSoldOut && (

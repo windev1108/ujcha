@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { revealTransition } from "@/app/[locale]/(landing)/components/RevealSection";
-import { ShoppingCart, Check, Loader2, Minus, Plus, StickyNote } from "lucide-react";
+import { ShoppingCart, Check, Loader2, Minus, Plus, StickyNote, StarIcon } from "lucide-react";
 import { Button, Checkbox } from "@heroui/react";
 import { useAddToCartMutation } from "@/services/cart/hooks";
 import { useAuthStore } from "@/store/auth-store";
@@ -124,7 +124,7 @@ export function ProductOptionPanel({ product }: Props) {
           </span>
           {product.isBestSeller && !product.isSoldOut && (
             <motion.span
-              className="relative overflow-hidden rounded-full bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-amber-900 shadow-[0_0_12px_2px_rgba(251,191,36,0.45)]"
+              className="flex gap-1 relative overflow-hidden rounded-full bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 px-1.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-amber-900 shadow-[0_0_12px_2px_rgba(251,191,36,0.45)]"
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ type: "spring", stiffness: 320, damping: 18, delay: 0.15 }}
@@ -141,7 +141,8 @@ export function ProductOptionPanel({ product }: Props) {
                 animate={{ opacity: [0.5, 1, 0.5], scale: [1, 1.05, 1] }}
                 transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
               />
-              <span className="relative">🏆 Best Seller</span>
+              <StarIcon className="size-3.5 text-amber-900" />
+              <span className="relative">{t("bestseller")}</span>
             </motion.span>
           )}
           {product.isSoldOut && (
