@@ -40,8 +40,7 @@ export function ProductOptionPanel({ product }: Props) {
   useEffect(() => {
     const init: Record<string, string> = {};
     for (const g of optionGroups) {
-      const free = g.values.find((v) => v.priceDelta === 0) ?? g.values[0];
-      if (free) init[g.name] = free.label;
+      if (g.values[0]) init[g.name] = g.values[0].label;
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedOptions(init);

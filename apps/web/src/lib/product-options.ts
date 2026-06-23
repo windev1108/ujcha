@@ -13,6 +13,24 @@ export interface ProductOptionGroup {
   values: ProductOptionValue[]
 }
 
+const NORMAL_KEYWORDS = ['bình thường', 'vừa']
+
+/**
+ * Sort option values: cheapest first (priceDelta asc), with "bình thường"/"vừa"
+ * floated to the top when prices are equal.
+ */
+export function sortOptionValues(values: ProductOptionValue[]): ProductOptionValue[] {
+  const isNormal = (v: ProductOptionValue) => {
+    const check = (s: string) => NORMAL_KEYWORDS.some((kw) => s.toLowerCase().includes(kw))
+    return check(v.label) || Object.values(v.nameTranslation ?? {}).some(check)
+  }
+  return [...values].sort((a, b) => {
+    if (a.priceDelta !== b.priceDelta) return a.priceDelta - b.priceDelta
+    const an = isNormal(a), bn = isNormal(b)
+    return an === bn ? 0 : an ? -1 : 1
+  })
+}
+
 /** Normalise raw JSON from API → ProductOptionGroup[], preserving nameTranslation. */
 export function normalizeOptionGroups(raw: unknown): ProductOptionGroup[] {
   if (!Array.isArray(raw)) return []
@@ -51,7 +69,7 @@ export function normalizeOptionGroups(raw: unknown): ProductOptionGroup[] {
       ...(nt ? { nameTranslation: nt } : {}),
       ...(typeof o.selectionMin === 'number' ? { selectionMin: o.selectionMin } : {}),
       ...(typeof o.selectionMax === 'number' ? { selectionMax: o.selectionMax } : {}),
-      values,
+      values: sortOptionValues(values),
     }
   })
 }

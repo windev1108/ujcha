@@ -86,15 +86,15 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
         opts[grp.name] =
           editItem.selectedOptions[grp.name] ??
           editItem.selectedOptions[grp.id] ??
-          grp.values[0]?.label ?? "";
+          grp.values[0]?.label ??
+          "";
       }
       setSelectedOptions(opts);
       setNote("");
     } else {
       const init: Record<string, string> = {};
       for (const g of optionGroups) {
-        const free = g.values.find((v) => v.priceDelta === 0) ?? g.values[0];
-        if (free) init[g.name] = free.label;
+        if (g.values[0]) init[g.name] = g.values[0].label;
       }
       setSelectedOptions(init);
       setSelectedToppings(new Set());
