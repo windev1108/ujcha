@@ -74,6 +74,7 @@ const adminOrderInclude = {
           userId: true,
           guestName: true,
           isHost: true,
+          paymentStatus: true,
           user: { select: { id: true, name: true } },
           items: {
             select: {

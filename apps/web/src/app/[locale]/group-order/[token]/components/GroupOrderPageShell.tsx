@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useParams } from "next/navigation";
 import { useRouter } from "@/i18n/navigation";
 import { ROUTES } from "@/lib/routes";
@@ -16,6 +17,7 @@ import {
   Clock,
   Copy,
   Crown,
+  Info,
   Link2,
   Loader2,
   Lock,
@@ -29,6 +31,7 @@ import {
   Share2,
   ShoppingBag,
   StarIcon,
+  StickyNote,
   Trash2,
   Truck,
   UserX,
@@ -52,9 +55,8 @@ import { usePublicPaymentConfigQuery } from "@/services/payment-config/hooks";
 import { useProfileQuery } from "@/services/profile/hooks";
 import { usePublicStoreLocationQuery } from "@/services/store/hooks";
 import { CheckoutFulfillmentSection } from "@/app/[locale]/checkout/components/CheckoutFulfillmentSection";
-import { PaymentMethodSection } from "@/app/[locale]/checkout/components/PaymentMethodSection";
 import { CHECKOUT_TAB } from "@/app/[locale]/checkout/components/checkout-tab";
-import type { DeliveryForm, PickupForm, PaymentMethod } from "@/app/[locale]/checkout/components/checkout-types";
+import type { DeliveryForm, PickupForm } from "@/app/[locale]/checkout/components/checkout-types";
 import { ShippingFeeTooltip } from "@/components/common/ShippingFeeTooltip";
 import { clearGroupOrderSession } from "@/hooks/useGroupOrderSessions";
 import {
@@ -138,7 +140,7 @@ function StatusBadge({ status }: { status: GroupOrderState["status"] }) {
 }
 
 type ToppingDraft = { toppingId: string; name: string; price: number; nameTranslation?: Record<string, string> };
-type DraftValue = { quantity: number; selectedOptions: Record<string, string>; toppings: ToppingDraft[] };
+type DraftValue = { quantity: number; selectedOptions: Record<string, string>; toppings: ToppingDraft[]; note?: string };
 type DraftItem = DraftValue & { productId: string };
 
 // ── ProductCustomizeSheet ─────────────────────────────────────────────────────
@@ -161,6 +163,7 @@ function ProductCustomizeSheet({
   const basePrice = product.finalPrice ?? parseFloat(product.price);
 
   const [quantity, setQuantity] = useState(initial?.quantity ?? 1);
+  const [note, setNote] = useState(initial?.note ?? "");
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>(() => {
     const opts: Record<string, string> = {};
     for (const grp of optionGroups) {
@@ -189,6 +192,7 @@ function ProductCustomizeSheet({
       toppings: toppings
         .filter((t) => selectedToppings.has(t.id))
         .map((t) => ({ toppingId: t.id, name: t.name, price: t.price, nameTranslation: t.nameTranslation })),
+      note: note.trim() || undefined,
     });
   };
 
@@ -261,7 +265,7 @@ function ProductCustomizeSheet({
                 </p>
               )}
             </div>
-            <div className="space-y-1.5 rounded-2xl border border-black/6 bg-[#f9fafb] p-2">
+            <div className="max-h-44 overflow-y-auto rounded-2xl border border-black/6 bg-[#f9fafb] p-2">
               {toppings.map((top) => {
                 const active = selectedToppings.has(top.id);
                 return (
@@ -313,9 +317,28 @@ function ProductCustomizeSheet({
           </div>
         </div>
 
+        <div className="space-y-1.5">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/40">{t("group_note_label")}</p>
+          <div className="flex items-start gap-2 rounded-2xl border border-black/8 bg-[#f9fafb] px-3 py-2.5 focus-within:border-[#1a3c34]/30">
+            <StickyNote className="mt-0.5 size-3.5 shrink-0 text-foreground/35" />
+            <textarea
+              rows={2}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder={t("group_note_placeholder")}
+              className="flex-1 resize-none bg-transparent text-sm text-foreground placeholder:text-foreground/35 focus:outline-none"
+            />
+          </div>
+        </div>
+
         <div className="flex items-center justify-between rounded-2xl bg-[#1a3c34]/8 px-4 py-3">
-          <span className="text-sm font-semibold text-[#1a3c34]">{t("group_unit_price_label")}</span>
-          <span className="text-xl font-bold tabular-nums text-[#1a3c34]">{fmtVnd(unitPrice)}</span>
+          <div className="flex flex-col">
+            <span className="text-sm font-semibold text-[#1a3c34]">{t("group_unit_price_label")}</span>
+            {quantity > 1 && (
+              <span className="text-[11px] text-[#1a3c34]/55">{quantity} × {fmtVnd(unitPrice)}</span>
+            )}
+          </div>
+          <span className="text-xl font-bold tabular-nums text-[#1a3c34]">{fmtVnd(unitPrice * quantity)}</span>
         </div>
       </div>
 
@@ -356,6 +379,7 @@ function ProductPickerDrawer({
         quantity: item.quantity,
         selectedOptions: item.selectedOptions ?? {},
         toppings: item.toppings ?? [],
+        note: item.note ?? undefined,
       }),
     );
     return m;
@@ -405,6 +429,7 @@ function ProductPickerDrawer({
           quantity: item.quantity,
           selectedOptions: item.selectedOptions ?? {},
           toppings: item.toppings ?? [],
+          note: item.note ?? undefined,
         }),
       );
       return m;
@@ -428,7 +453,7 @@ function ProductPickerDrawer({
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 350 }}
-            className="relative flex h-[90dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-white sm:h-[85vh] sm:max-w-2xl sm:rounded-3xl"
+            className="relative flex h-[90dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-white sm:h-[88vh] sm:max-w-3xl sm:rounded-3xl lg:max-w-5xl"
           >
             <AnimatePresence>
               {customizeTarget && (
@@ -513,7 +538,7 @@ function ProductPickerDrawer({
                   {t("group_no_items_found")}
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                   {products.map((product) => {
                     const draftVal = draft.get(product.id);
                     const qty = draftVal?.quantity ?? 0;
@@ -1018,6 +1043,101 @@ function ShareLinkBox({ token: _token }: { token: string }) {
   );
 }
 
+type ShareBreakdown = {
+  subtotal: number;
+  discountPct: number;
+  discountAmt: number;
+  shippingShare: number;
+  isHostPaysShipping: boolean;
+  isHost: boolean;
+  total: number;
+};
+
+function ShareBreakdownPopup({ bd }: { bd: ShareBreakdown }) {
+  const t = useTranslations();
+  const [open, setOpen] = useState(false);
+  const [style, setStyle] = useState<React.CSSProperties>({});
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelClose = useCallback(() => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+  }, []);
+
+  const scheduleClose = useCallback(() => {
+    closeTimer.current = setTimeout(() => setOpen(false), 80);
+  }, []);
+
+  const openPopup = useCallback(() => {
+    cancelClose();
+    if (!btnRef.current) return;
+    const rect = btnRef.current.getBoundingClientRect();
+    setStyle({
+      position: "fixed",
+      bottom: `${window.innerHeight - rect.top + 8}px`,
+      left: `${rect.left + rect.width / 2}px`,
+      transform: "translateX(-50%)",
+      zIndex: 9999,
+    });
+    setOpen(true);
+  }, [cancelClose]);
+
+  useEffect(() => () => { if (closeTimer.current) clearTimeout(closeTimer.current); }, []);
+
+  return (
+    <span className="relative inline-flex">
+      <button
+        ref={btnRef}
+        type="button"
+        onMouseEnter={openPopup}
+        onMouseLeave={scheduleClose}
+        onClick={(e) => { e.stopPropagation(); open ? setOpen(false) : openPopup(); }}
+        className="flex items-center justify-center rounded-full p-0.5 transition-colors hover:bg-[#1a3c34]/10"
+      >
+        <Info className="size-3 text-[#1a3c34]/40" />
+      </button>
+      {open && typeof document !== "undefined" && createPortal(
+        <span
+          style={style}
+          onMouseEnter={cancelClose}
+          onMouseLeave={scheduleClose}
+          className="w-52 space-y-1.5 rounded-xl border border-black/8 bg-white p-3 text-[11px] font-normal text-foreground shadow-xl"
+        >
+          <span className="flex justify-between">
+            <span className="text-foreground/55">{t("group_split_items")}</span>
+            <span className="tabular-nums">{fmtVnd(bd.subtotal)}</span>
+          </span>
+          {bd.discountAmt > 0 && (
+            <span className="flex justify-between">
+              <span className="text-foreground/55">{t("group_split_discount_pct", { pct: bd.discountPct })}</span>
+              <span className="tabular-nums text-emerald-600">-{fmtVnd(bd.discountAmt)}</span>
+            </span>
+          )}
+          {bd.isHostPaysShipping ? (
+            bd.isHost ? (
+              <span className="flex justify-between">
+                <span className="text-foreground/55">{t("group_split_shipping_all")}</span>
+                <span className="tabular-nums">+{fmtVnd(bd.shippingShare)}</span>
+              </span>
+            ) : (
+              <span className="flex justify-between">
+                <span className="text-foreground/55">{t("group_split_shipping")}</span>
+                <span className="text-emerald-600">{t("group_split_shipping_host_free")}</span>
+              </span>
+            )
+          ) : bd.shippingShare > 0 ? (
+            <span className="flex justify-between">
+              <span className="text-foreground/55">{t("group_split_shipping")}</span>
+              <span className="tabular-nums">+{fmtVnd(bd.shippingShare)}</span>
+            </span>
+          ) : null}
+        </span>,
+        document.body,
+      )}
+    </span>
+  );
+}
+
 // ── GroupOrderPageShell ───────────────────────────────────────────────────────
 
 export function GroupOrderPageShell() {
@@ -1060,6 +1180,9 @@ export function GroupOrderPageShell() {
   const [pickerSaving, setPickerSaving] = useState(false);
   const [removingProductId, setRemovingProductId] = useState<string | null>(null);
 
+  // Derived from server state — not localStorage — so all participants see the same value
+  const shippingFeeMode = state?.shippingFeeMode ?? "split";
+
   // ── Inline fulfillment form state (host only, collecting) ─────────────────
   const [localType, setLocalType] = useState<"delivery" | "pickup">("delivery");
   const [localSelectedAddressId, setLocalSelectedAddressId] = useState<string | null>(null);
@@ -1069,7 +1192,6 @@ export function GroupOrderPageShell() {
   const [localPickupForm, setLocalPickupForm] = useState<PickupForm>({
     mode: "asap", scheduledTime: "", name: "", phone: "",
   });
-  const [localPaymentType, setLocalPaymentType] = useState<PaymentMethod>("cash");
   const splitCashConfirmRef = useRef(false);
   const autoSavePendingRef = useRef(false);
 
@@ -1100,6 +1222,15 @@ export function GroupOrderPageShell() {
         `group_order_meta_${token}`,
         JSON.stringify({ token: go.token, expiresAt: go.expiresAt, type: go.type, status: go.status }),
       );
+      // Participants who refresh after dissolution see status=cancelled but miss the socket event
+      if (go.status === "cancelled") {
+        const hadSession = !!localStorage.getItem(SESSION_KEY(token));
+        if (hadSession) {
+          clearGroupOrderSession(token);
+          setIsDissolved(true);
+          setTimeout(() => router.push(ROUTES.HOME), 2500);
+        }
+      }
     } catch {
       setError("Không tìm thấy đơn nhóm này.");
     } finally {
@@ -1257,6 +1388,7 @@ export function GroupOrderPageShell() {
     socket.on("dissolved", () => {
       clearGroupOrderSession(token);
       setIsDissolved(true);
+      setTimeout(() => router.push(ROUTES.HOME), 2500);
     });
     return () => {
       socket.disconnect();
@@ -1327,7 +1459,6 @@ export function GroupOrderPageShell() {
     if (!state) return;
     setLocalType((state.type === "table" ? "pickup" : state.type) as "delivery" | "pickup");
     setLocalSelectedAddressId(state.address?.id ?? null);
-    setLocalPaymentType((state.paymentType ?? "cash") as PaymentMethod);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.id]);
 
@@ -1384,7 +1515,7 @@ export function GroupOrderPageShell() {
   // Mark auto-save pending whenever the user changes type, address, or payment
   useEffect(() => {
     autoSavePendingRef.current = true;
-  }, [localType, localSelectedAddressId, localPaymentType]);
+  }, [localType, localSelectedAddressId]);
 
   // Trigger auto-save once shipping estimate settles (or immediately for pickup)
   useEffect(() => {
@@ -1417,8 +1548,8 @@ export function GroupOrderPageShell() {
           type: localType,
           addressId,
           shippingFee: localType === "delivery" ? localShippingFee : 0,
-          paymentType: localPaymentType,
           pickupTime,
+          shippingFeeMode: state?.shippingFeeMode,
         });
         setState(newState);
       } catch {
@@ -1428,15 +1559,26 @@ export function GroupOrderPageShell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localShippingFetching, localShippingFee]);
 
-  // Per-participant amount for split mode (discount proportional, shipping split evenly)
-  const myAmount = useMemo(() => {
-    if (!state || !me || state.paymentMode !== "split" || me.items.length === 0) return 0;
+  // Per-participant amount for split mode (discount proportional, shipping per shippingFeeMode)
+  const myAmountBreakdown = useMemo(() => {
+    if (!state || !me || state.paymentMode !== "split" || me.items.length === 0) return null;
     const activeCount = state.participants.filter((p) => p.items.length > 0).length;
-    const discount = resolveDiscount(activeCount, config);
-    const discounted = me.subtotal * (1 - discount / 100);
-    const shippingShare = activeCount > 0 ? state.shippingFee / activeCount : 0;
-    return Math.round(discounted + shippingShare);
-  }, [state, me, config]);
+    const discountPct = resolveDiscount(activeCount, config);
+    const discountAmt = Math.round(me.subtotal * discountPct / 100);
+    const shippingShare = Math.round(shippingFeeMode === "host_pays"
+      ? (isHost ? state.shippingFee : 0)
+      : (activeCount > 0 ? state.shippingFee / activeCount : 0));
+    return {
+      subtotal: me.subtotal,
+      discountPct,
+      discountAmt,
+      shippingShare,
+      isHostPaysShipping: shippingFeeMode === "host_pays",
+      isHost,
+      total: Math.round(me.subtotal - discountAmt + shippingShare),
+    };
+  }, [state, me, config, shippingFeeMode, isHost]);
+  const myAmount = myAmountBreakdown?.total ?? 0;
 
   const handleHostCheckout = useCallback(async () => {
     if (!sessionToken || !state) return;
@@ -1721,7 +1863,7 @@ export function GroupOrderPageShell() {
                 isDisabled={actionLoading || !allReady}
                 title={!allReady ? t("group_waiting_hint") : undefined}
                 onPress={
-                  state.paymentMode === "split" && localPaymentType === "cash"
+                  state.paymentMode === "split" && (state.paymentType ?? "cash") === "cash"
                     ? () => void handleSplitCashCheckout()
                     : () => void withAction(() => lockGroupOrder(token, sessionToken!))
                 }
@@ -1751,168 +1893,6 @@ export function GroupOrderPageShell() {
                 <DiscountBanner participantCount={activeParticipants.length} tiers={config} />
               </motion.div>
             )}
-
-            {/* Inline fulfillment + payment for host (collecting only) */}
-            {isHost && state.status === "collecting" && (
-              <>
-                <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.06 }}
-                  className="overflow-hidden rounded-3xl border border-black/6 bg-white"
-                >
-                  <div className="flex items-center gap-3 border-b border-black/6 px-5 py-4">
-                    <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-[#1a3c34]/8">
-                      <FulfillmentIcon className="size-4 text-[#1a3c34]" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{t("group_fulfillment_card_eyebrow")}</p>
-                      <p className="text-sm font-semibold text-foreground">{t("group_fulfillment_card_title")}</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-4 p-5">
-                    <div className="flex gap-2">
-                      {([{ id: "delivery", label: t("type_delivery"), Icon: Truck }, { id: "pickup", label: t("type_pickup"), Icon: ShoppingBag }] as const).map(({ id, label, Icon }) => (
-                        <button
-                          key={id}
-                          type="button"
-                          onClick={() => setLocalType(id)}
-                          className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${localType === id ? "bg-kun-primary text-white shadow-sm" : "bg-surface-card text-foreground/60 hover:bg-black/6"}`}
-                        >
-                          <Icon className="size-4" />
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-
-                    <CheckoutFulfillmentSection
-                      tab={localType === "delivery" ? CHECKOUT_TAB.DELIVERY : CHECKOUT_TAB.PICKUP}
-                      deliveryForm={localDeliveryForm}
-                      onDeliveryFormChange={(patch) => setLocalDeliveryForm((p) => ({ ...p, ...patch }))}
-                      pickupForm={localPickupForm}
-                      onPickupFormChange={(patch) => setLocalPickupForm((p) => ({ ...p, ...patch }))}
-                      savedAddresses={savedAddresses}
-                      selectedAddressId={localSelectedAddressId}
-                      onSelectAddress={setLocalSelectedAddressId}
-                      storeLocation={storeLocation ? { lat: storeLocation.lat, lng: storeLocation.lng, address: storeLocation.address } : null}
-                      profileName={profile?.name}
-                      profilePhone={profile?.phone}
-                    />
-
-                    <AnimatePresence initial={false}>
-                      {localType === "delivery" && (localShippingFetching || localShippingEstimate) && (
-                        <motion.div
-                          key="ship-badge"
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: "auto" }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.2 }}
-                          className="overflow-hidden"
-                        >
-                          <div className={`flex items-center justify-between rounded-2xl px-4 py-3 text-sm ${localShippingFetching
-                            ? "bg-surface-card text-foreground/50"
-                            : localShippingIsOutOfRange
-                              ? "bg-red-50 text-red-700"
-                              : localShippingIsFree
-                                ? "bg-emerald-50 text-emerald-700"
-                                : "bg-kun-mint/20 text-kun-products-forest"
-                            }`}>
-                            <div className="flex items-center gap-1.5">
-                              {localShippingFetching ? (
-                                <Loader2 className="size-4 animate-spin" />
-                              ) : (
-                                <Bike className="size-4" />
-                              )}
-                              <span className="font-medium">
-                                {localShippingFetching
-                                  ? t("group_calculating_ship")
-                                  : localShippingIsOutOfRange
-                                    ? t("group_out_of_range_badge")
-                                    : `${localShippingEstimate!.distanceKm.toFixed(1)} km`
-                                }
-                              </span>
-                            </div>
-                            {!localShippingFetching && !localShippingIsOutOfRange && (
-                              <span className="font-bold tabular-nums">
-                                {localShippingIsFree ? t("group_shipping_free") : formatVnd(localShippingFee)}
-                              </span>
-                            )}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                </motion.div>
-
-                <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.08 }}
-                  className="overflow-hidden rounded-3xl border border-black/6 bg-white"
-                >
-                  <div className="flex items-center gap-3 border-b border-black/6 px-5 py-4">
-                    <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-[#1a3c34]/8">
-                      <Banknote className="size-4 text-[#1a3c34]" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{t("group_payment_card_eyebrow")}</p>
-                      <p className="text-sm font-semibold text-foreground">{t("group_payment_card_title")}</p>
-                    </div>
-                  </div>
-                  <div className="p-5">
-                    <PaymentMethodSection selected={localPaymentType} onSelect={setLocalPaymentType} hideHeader />
-                  </div>
-                </motion.div>
-              </>
-            )}
-
-            {/* Fulfilled info (read-only, locked/completed) */}
-            {(state.status === "locked" || state.status === "completed") &&
-              (state.address || state.type !== "delivery") && (
-                <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.06 }}
-                  className="overflow-hidden rounded-3xl border border-black/6 bg-white"
-                >
-                  <div className="flex items-center gap-3 border-b border-black/6 px-5 py-4">
-                    <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-[#1a3c34]/8">
-                      <FulfillmentIcon className="size-4 text-[#1a3c34]" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{t("group_fulfillment_card_eyebrow")}</p>
-                      <p className="text-sm font-semibold text-foreground">{t("group_fulfillment_card_title")}</p>
-                    </div>
-                  </div>
-                  <div className="px-5 py-4 space-y-1">
-                    <p className="text-sm font-semibold text-foreground">{fulfillmentLabel}</p>
-                    {state.address && (
-                      <p className="truncate text-xs text-foreground/55">{state.address.fullAddress}</p>
-                    )}
-                    {state.table && (
-                      <p className="text-xs text-foreground/55">
-                        Bàn {state.table.name} · {state.table.area}
-                      </p>
-                    )}
-                    {isHost && state.paymentMode === "host_pays" && (
-                      <p className="flex items-center gap-1 text-xs text-foreground/50">
-                        {state.paymentType === "cash" ? (
-                          <Banknote className="size-3 shrink-0" />
-                        ) : (
-                          <QrCode className="size-3 shrink-0" />
-                        )}
-                        {state.paymentType === "cash" ? "Tiền mặt" : "Chuyển khoản"}
-                      </p>
-                    )}
-                    {state.shippingFee > 0 && (
-                      <div className="flex items-center justify-between pt-2">
-                        <span className="text-xs text-foreground/50">{t("shipping_fee")}</span>
-                        <span className="text-sm font-semibold tabular-nums text-foreground/70">+{fmtVnd(state.shippingFee)}</span>
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              )}
 
             {/* Participants */}
             <div className="overflow-hidden rounded-3xl border border-black/6 bg-white">
@@ -1992,6 +1972,147 @@ export function GroupOrderPageShell() {
               </div>
             )}
 
+            {/* Inline fulfillment for host (collecting only) */}
+            {isHost && state.status === "collecting" && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.06 }}
+                className="overflow-hidden rounded-3xl border border-black/6 bg-white"
+              >
+                <div className="flex items-center gap-3 border-b border-black/6 px-5 py-4">
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-[#1a3c34]/8">
+                    <FulfillmentIcon className="size-4 text-[#1a3c34]" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{t("group_fulfillment_card_eyebrow")}</p>
+                    <p className="text-sm font-semibold text-foreground">{t("group_fulfillment_card_title")}</p>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-4 p-5">
+                  <div className="flex gap-2">
+                    {([{ id: "delivery", label: t("type_delivery"), Icon: Truck }, { id: "pickup", label: t("type_pickup"), Icon: ShoppingBag }] as const).map(({ id, label, Icon }) => (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setLocalType(id)}
+                        className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${localType === id ? "bg-kun-primary text-white shadow-sm" : "bg-surface-card text-foreground/60 hover:bg-black/6"}`}
+                      >
+                        <Icon className="size-4" />
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <CheckoutFulfillmentSection
+                    tab={localType === "delivery" ? CHECKOUT_TAB.DELIVERY : CHECKOUT_TAB.PICKUP}
+                    deliveryForm={localDeliveryForm}
+                    onDeliveryFormChange={(patch) => setLocalDeliveryForm((p) => ({ ...p, ...patch }))}
+                    pickupForm={localPickupForm}
+                    onPickupFormChange={(patch) => setLocalPickupForm((p) => ({ ...p, ...patch }))}
+                    savedAddresses={savedAddresses}
+                    selectedAddressId={localSelectedAddressId}
+                    onSelectAddress={setLocalSelectedAddressId}
+                    storeLocation={storeLocation ? { lat: storeLocation.lat, lng: storeLocation.lng, address: storeLocation.address } : null}
+                    profileName={profile?.name}
+                    profilePhone={profile?.phone}
+                  />
+
+                  <AnimatePresence initial={false}>
+                    {localType === "delivery" && (localShippingFetching || localShippingEstimate) && (
+                      <motion.div
+                        key="ship-badge"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                      >
+                        <div className={`flex items-center justify-between rounded-2xl px-4 py-3 text-sm ${localShippingFetching
+                          ? "bg-surface-card text-foreground/50"
+                          : localShippingIsOutOfRange
+                            ? "bg-red-50 text-red-700"
+                            : localShippingIsFree
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-kun-mint/20 text-kun-products-forest"
+                          }`}>
+                          <div className="flex items-center gap-1.5">
+                            {localShippingFetching ? (
+                              <Loader2 className="size-4 animate-spin" />
+                            ) : (
+                              <Bike className="size-4" />
+                            )}
+                            <span className="font-medium">
+                              {localShippingFetching
+                                ? t("group_calculating_ship")
+                                : localShippingIsOutOfRange
+                                  ? t("group_out_of_range_badge")
+                                  : `${localShippingEstimate!.distanceKm.toFixed(1)} km`
+                              }
+                            </span>
+                          </div>
+                          {!localShippingFetching && !localShippingIsOutOfRange && (
+                            <span className="font-bold tabular-nums">
+                              {localShippingIsFree ? t("group_shipping_free") : formatVnd(localShippingFee)}
+                            </span>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </motion.div>
+
+            )}
+
+            {/* Fulfilled info (read-only, locked/completed) */}
+            {(state.status === "locked" || state.status === "completed") &&
+              (state.address || state.type !== "delivery") && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.06 }}
+                  className="overflow-hidden rounded-3xl border border-black/6 bg-white"
+                >
+                  <div className="flex items-center gap-3 border-b border-black/6 px-5 py-4">
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-[#1a3c34]/8">
+                      <FulfillmentIcon className="size-4 text-[#1a3c34]" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{t("group_fulfillment_card_eyebrow")}</p>
+                      <p className="text-sm font-semibold text-foreground">{t("group_fulfillment_card_title")}</p>
+                    </div>
+                  </div>
+                  <div className="px-5 py-4 space-y-1">
+                    <p className="text-sm font-semibold text-foreground">{fulfillmentLabel}</p>
+                    {state.address && (
+                      <p className="truncate text-xs text-foreground/55">{state.address.fullAddress}</p>
+                    )}
+                    {state.table && (
+                      <p className="text-xs text-foreground/55">
+                        Bàn {state.table.name} · {state.table.area}
+                      </p>
+                    )}
+                    {isHost && state.paymentMode === "host_pays" && (
+                      <p className="flex items-center gap-1 text-xs text-foreground/50">
+                        {state.paymentType === "cash" ? (
+                          <Banknote className="size-3 shrink-0" />
+                        ) : (
+                          <QrCode className="size-3 shrink-0" />
+                        )}
+                        {state.paymentType === "cash" ? "Tiền mặt" : "Chuyển khoản"}
+                      </p>
+                    )}
+                    {state.shippingFee > 0 && (
+                      <div className="flex items-center justify-between pt-2">
+                        <span className="text-xs text-foreground/50">{t("shipping_fee")}</span>
+                        <span className="text-sm font-semibold tabular-nums text-foreground/70">+{fmtVnd(state.shippingFee)}</span>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+
             {/* Split bank-transfer payment is now handled on the order detail page after lock */}
           </div>
 
@@ -2003,7 +2124,7 @@ export function GroupOrderPageShell() {
             className="lg:sticky lg:top-28"
           >
             <Card className="rounded-3xl border border-black/6 bg-white shadow-[0_12px_40px_-20px_rgba(0,0,0,0.12)]">
-              <CardContent className="space-y-4 p-6">
+              <CardContent className="space-y-4 xl:p-3 p-1">
                 {/* Summary header */}
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-sm font-semibold text-foreground">{t("group_order_summary")}</p>
@@ -2053,6 +2174,16 @@ export function GroupOrderPageShell() {
                       {state.paymentType === "cash" ? t("cash") : t("bank_transfer")}
                     </span>
                   </div>
+
+                  {state.paymentMode === "split" && state.type === "delivery" && (
+                    <div className="flex items-center gap-2.5 px-3 py-2.5">
+                      <Truck className="size-3.5 shrink-0 text-foreground/45" />
+                      <span className="flex-1 text-xs font-medium text-foreground/70">{t("shipping_fee")}</span>
+                      <span className={`text-[11px] font-semibold ${shippingFeeMode === "host_pays" ? "text-amber-600" : "text-foreground/55"}`}>
+                        {shippingFeeMode === "host_pays" ? t("group_shipping_fee_host_pays") : t("group_shipping_fee_split")}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Totals */}
@@ -2100,6 +2231,17 @@ export function GroupOrderPageShell() {
                             {fmtVnd(displayFinalAmount)}
                           </span>
                         </div>
+                        {myAmountBreakdown && myAmountBreakdown.total > 0 && (
+                          <div className="mt-3 flex items-center justify-between rounded-xl bg-[#f0faf6] px-3 py-2.5">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-semibold text-[#1a3c34]/70">{t("group_your_share")}</span>
+                              <ShareBreakdownPopup bd={myAmountBreakdown} />
+                            </div>
+                            <span className="text-base font-bold tabular-nums text-[#1a3c34]">
+                              {fmtVnd(myAmountBreakdown.total)}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </>
                   );
@@ -2211,20 +2353,29 @@ export function GroupOrderPageShell() {
 
       {isDissolved && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-3xl border border-black/6 bg-white p-8 text-center shadow-[0_4px_20px_-8px_rgba(0,0,0,0.18)]">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.94, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ type: "spring", damping: 22, stiffness: 280 }}
+            className="w-full max-w-sm rounded-3xl border border-black/6 bg-white p-8 text-center shadow-[0_4px_20px_-8px_rgba(0,0,0,0.18)]"
+          >
             <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-amber-50 ring-1 ring-amber-200">
               <Users className="size-8 text-amber-500" />
             </div>
             <h3 className="text-lg font-bold text-foreground">{t("group_dissolved_title")}</h3>
             <p className="mt-2 text-sm text-muted">{t("group_dissolved_desc")}</p>
+            <div className="mt-5 flex items-center justify-center gap-2 text-sm text-foreground/45">
+              <Loader2 className="size-4 animate-spin" />
+              <span>{t("group_go_home")}…</span>
+            </div>
             <button
               type="button"
               onClick={() => router.push(ROUTES.HOME)}
-              className="mt-6 w-full rounded-full bg-[#1a3c34] px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+              className="mt-3 text-xs font-semibold text-[#1a3c34] underline underline-offset-2 hover:opacity-70"
             >
-              {t("group_go_home")}
+              {t("group_go_home_now")}
             </button>
-          </div>
+          </motion.div>
         </div>
       )}
     </>

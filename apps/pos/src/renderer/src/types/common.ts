@@ -294,6 +294,7 @@ export interface AdminOrder {
       userId: string | null
       guestName: string | null
       isHost: boolean
+      paymentStatus: 'pending' | 'paid'
       user: { id: string; name: string } | null
       items: Array<{
         id: string

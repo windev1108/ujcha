@@ -136,6 +136,10 @@ export class SetFulfillmentDto {
   @IsOptional()
   @IsEnum(['cash', 'bank_transfer'])
   paymentType?: string;
+
+  @IsOptional()
+  @IsEnum(['split', 'host_pays'])
+  shippingFeeMode?: string;
 }
 
 export class DiscountTierDto {

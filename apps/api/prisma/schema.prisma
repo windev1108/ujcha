@@ -916,9 +916,10 @@ model GroupOrder {
   tableId     String?          @db.Uuid
   table       Table?           @relation(fields: [tableId], references: [id], onDelete: SetNull)
   pickupTime  DateTime?
-  paymentType GroupParticipantPaymentType @default(cash)
-  shippingFee Decimal          @default(0) @db.Decimal(12, 2)
-  note        String?
+  paymentType      GroupParticipantPaymentType @default(cash)
+  shippingFee      Decimal          @default(0) @db.Decimal(12, 2)
+  shippingFeeMode  String           @default("split")
+  note             String?
   expiresAt   DateTime
   orderId     String?          @unique @db.Uuid
   order       Order?           @relation(fields: [orderId], references: [id], onDelete: SetNull)

@@ -4,9 +4,10 @@ import {
     Star, Receipt, Box, Circle, Ban, ExternalLink, Phone, User,
     Bike, UtensilsCrossed, Package, Truck, UserPlus, Users, Crown, XCircle, UserCheck, Sparkles,
 } from 'lucide-react'
-import { Fragment, useState, useEffect } from 'react'
+import { Fragment, useState, useEffect, useRef } from 'react'
 import { DEFAULT_BILL_CONFIG, DEFAULT_LABEL_CONFIG, type AdminOrder, type OrderStatus } from '../types/common'
-import { fetchShippers, assignShipper, updateOrderStatus, fetchShippingEstimate } from '../api'
+import { fetchShippers, assignShipper, updateOrderStatus, fetchShippingEstimate, fetchGroupOrderLive, type GroupOrderLive, API_URL } from '../api'
+import { io, type Socket } from 'socket.io-client'
 import { buildOrderLabels, buildReceiptDocumentHtml, buildKunLoyaltyQrUrl } from '@/lib/receipt-shared'
 import { KEYS, loadLocal } from '@/lib/local-storage'
 import { formatDate } from '@/lib/utils'
@@ -209,6 +210,8 @@ export function OrderDetailModal({
     const [distanceKm, setDistanceKm] = useState<number | null>(null)
     const [actionBusy, setActionBusy] = useState(false)
     const [localStatus, setLocalStatus] = useState<OrderStatus>(order.status)
+    const [groupLive, setGroupLive] = useState<GroupOrderLive | null>(null)
+    const groupSocketRef = useRef<Socket | null>(null)
 
     useEffect(() => {
         setBillCfg(loadLocal<BillConfig>(KEYS.bill, DEFAULT_BILL_CONFIG))
@@ -216,6 +219,24 @@ export function OrderDetailModal({
     }, [])
 
     useEffect(() => { setLocalStatus(order.status) }, [order.status])
+
+    // Fetch live group order state and subscribe to socket for real-time paid count
+    useEffect(() => {
+        const token = order.groupOrder?.token
+        if (!token || order.groupOrder?.paymentMode !== 'split') return
+
+        void fetchGroupOrderLive(token).then(setGroupLive).catch(() => {})
+
+        const socket = io(`${API_URL}/group`, { transports: ['websocket', 'polling'] })
+        groupSocketRef.current = socket
+        socket.emit('join-room', { token })
+        socket.on('updated', (state: GroupOrderLive) => setGroupLive(state))
+
+        return () => {
+            socket.disconnect()
+            groupSocketRef.current = null
+        }
+    }, [order.groupOrder?.token, order.groupOrder?.paymentMode])
 
     useEffect(() => {
         if (order.type !== 'delivery') return
@@ -482,7 +503,7 @@ export function OrderDetailModal({
 
                         {/* Items */}
                         {order.groupOrder ? (
-                            <GroupOrderItemsSection go={order.groupOrder} totalQty={totalQty} />
+                            <GroupOrderItemsSection go={order.groupOrder} totalQty={totalQty} liveParticipants={groupLive?.participants} />
                         ) : (
                             <div className="rounded-2xl border border-gray-100 overflow-hidden">
                                 <p className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
@@ -536,7 +557,23 @@ export function OrderDetailModal({
                         {/* Pricing */}
                         <div className="rounded-2xl border border-gray-100 overflow-hidden">
                             <div className="px-4 py-3.5 space-y-2.5 bg-gray-50/80">
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Thanh toán</p>
+                                <div className="flex items-center justify-between">
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Thanh toán</p>
+                                    {order.groupOrder?.paymentMode === 'split' && (() => {
+                                        const activeP = order.groupOrder.participants.filter((p) => p.items.length > 0)
+                                        const paidC = groupLive
+                                            ? groupLive.participants.filter((lp) => activeP.some((p) => p.id === lp.id) && lp.paymentStatus === 'paid').length
+                                            : activeP.filter((p) => p.paymentStatus === 'paid').length
+                                        return (
+                                            <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ${
+                                                paidC === activeP.length ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-600'
+                                            }`}>
+                                                {paidC === activeP.length && <CheckCircle2 className="size-3" />}
+                                                {paidC}/{activeP.length} đã TT
+                                            </span>
+                                        )
+                                    })()}
+                                </div>
                                 <PriceRow label="Tạm tính" value={fmt(subtotal)} />
                                 {discount > 0 && (
                                     <PriceRow label="Giảm giá" value={`-${fmt(discount)}`} valueClass="text-green-600" icon={<Percent className="size-3" />} />
@@ -673,11 +710,17 @@ function PaymentBadge({ status }: { status: string }) {
 function GroupOrderItemsSection({
     go,
     totalQty,
+    liveParticipants,
 }: {
     go: NonNullable<AdminOrder['groupOrder']>
     totalQty: number
+    liveParticipants?: Array<{ id: string; paymentStatus: 'pending' | 'paid' }>
 }) {
     const withItems = go.participants.filter((p) => p.items.length > 0)
+    const paidCount = liveParticipants
+        ? liveParticipants.filter((lp) => withItems.some((p) => p.id === lp.id) && lp.paymentStatus === 'paid').length
+        : withItems.filter((p) => p.paymentStatus === 'paid').length
+    const isSplit = go.paymentMode === 'split'
     return (
         <div className="rounded-2xl border border-violet-100 overflow-hidden">
             <div className="flex items-center gap-2 px-4 pt-3 pb-2 bg-violet-50/60">
@@ -685,9 +728,21 @@ function GroupOrderItemsSection({
                 <p className="text-[10px] font-bold uppercase tracking-widest text-violet-500">
                     Đơn nhóm · {withItems.length} thành viên · {totalQty} món
                 </p>
-                <span className="ml-auto text-[10px] font-semibold text-violet-400">
-                    {go.paymentMode === 'split' ? 'Chia tiền' : 'Chủ nhóm trả'}
-                </span>
+                <div className="ml-auto flex items-center gap-2">
+                    {isSplit && (
+                        <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ${
+                            paidCount === withItems.length
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : 'bg-violet-100 text-violet-700'
+                        }`}>
+                            {paidCount === withItems.length && <CheckCircle2 className="size-3" />}
+                            {paidCount}/{withItems.length} TT
+                        </span>
+                    )}
+                    <span className="text-[10px] font-semibold text-violet-400">
+                        {isSplit ? 'Chia tiền' : 'Chủ nhóm trả'}
+                    </span>
+                </div>
             </div>
             <div className="divide-y divide-gray-50">
                 {withItems.map((p) => {
@@ -698,6 +753,9 @@ function GroupOrderItemsSection({
                             : 0
                         return s + (Number(i.unitPrice) + toppings) * i.quantity
                     }, 0)
+                    const livePaid = liveParticipants
+                        ? liveParticipants.find((lp) => lp.id === p.id)?.paymentStatus === 'paid'
+                        : p.paymentStatus === 'paid'
                     return (
                         <div key={p.id}>
                             {/* Participant header */}
@@ -708,6 +766,11 @@ function GroupOrderItemsSection({
                                 <span className="flex-1 text-xs font-semibold text-gray-700">{memberName}</span>
                                 {p.isHost && (
                                     <span className="text-[9px] font-bold uppercase tracking-wide text-amber-600">Chủ nhóm</span>
+                                )}
+                                {isSplit && (
+                                    livePaid
+                                        ? <CheckCircle2 className="size-4 shrink-0 text-emerald-500" />
+                                        : <Loader2 className="size-3.5 shrink-0 animate-spin text-gray-300" />
                                 )}
                                 <span className="text-xs font-semibold text-gray-600 tabular-nums">{fmt(memberSubtotal)}</span>
                             </div>

@@ -67,6 +67,7 @@ export class GroupOrderService {
       paymentType: go.paymentType ?? 'cash',
       type: go.type,
       shippingFee: go.shippingFee ? Number(go.shippingFee) : 0,
+      shippingFeeMode: (go.shippingFeeMode as 'split' | 'host_pays') ?? 'split',
       note: go.note,
       expiresAt: go.expiresAt,
       createdAt: go.createdAt,
@@ -178,6 +179,20 @@ export class GroupOrderService {
       include: this.fullInclude(),
     });
     if (!go) throw new NotFoundException('Khong tim thay don nhom.');
+
+    const isExpired =
+      go.expiresAt < new Date() &&
+      (go.status === GroupOrderStatus.collecting || go.status === GroupOrderStatus.locked);
+
+    if (isExpired) {
+      const cancelled = await this.prisma.groupOrder.update({
+        where: { id: go.id },
+        data: { status: GroupOrderStatus.cancelled },
+        include: this.fullInclude(),
+      });
+      return this.serialize(cancelled);
+    }
+
     return this.serialize(go);
   }
 
@@ -604,7 +619,7 @@ export class GroupOrderService {
   async setFulfillment(
     token: string,
     sessionToken: string,
-    dto: { type: string; addressId?: string; tableId?: string; pickupTime?: string; shippingFee?: number; paymentType?: string },
+    dto: { type: string; addressId?: string; tableId?: string; pickupTime?: string; shippingFee?: number; paymentType?: string; shippingFeeMode?: string },
   ) {
     const { go, participant } = await this.resolveParticipant(token, sessionToken);
 
@@ -618,6 +633,7 @@ export class GroupOrderService {
     const data: any = {
       type: dto.type,
       shippingFee: new Prisma.Decimal(dto.shippingFee ?? 0),
+      ...(dto.shippingFeeMode !== undefined ? { shippingFeeMode: dto.shippingFeeMode } : {}),
       addressId: null,
       tableId: null,
       pickupTime: null,

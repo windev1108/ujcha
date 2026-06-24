@@ -1,11 +1,12 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { motion } from "motion/react";
 import Image from "next/image";
 import {
   ArrowLeft, BadgeCheck, Ban, Box, CheckCircle2, Circle, Clock,
-  CreditCard, ExternalLink, Info, Loader2, MapPin, Package, Phone, Printer, QrCode, Star, Truck, Users, Utensils,
+  CreditCard, ExternalLink, Info, Loader2, MapPin, MessageCircle, Package, Phone, Printer, QrCode, Star, Truck, Users, Utensils,
   Bike,
   UserPlus,
 } from "lucide-react";
@@ -60,31 +61,57 @@ function fmtStepTime(iso: string, locale: string) {
 
 function InfoPopup({ children, size = "md" }: { children: React.ReactNode; size?: "sm" | "md" }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLSpanElement>(null);
+  const [style, setStyle] = useState<React.CSSProperties>({});
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+  const cancelClose = useCallback(() => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+  }, []);
+
+  const scheduleClose = useCallback(() => {
+    closeTimer.current = setTimeout(() => setOpen(false), 80);
+  }, []);
+
+  const openPopup = useCallback(() => {
+    cancelClose();
+    if (!btnRef.current) return;
+    const rect = btnRef.current.getBoundingClientRect();
+    setStyle({
+      position: "fixed",
+      bottom: `${window.innerHeight - rect.top + 8}px`,
+      left: `${rect.left + rect.width / 2}px`,
+      transform: "translateX(-50%)",
+      zIndex: 9999,
+    });
+    setOpen(true);
+  }, [cancelClose]);
+
+  useEffect(() => () => { if (closeTimer.current) clearTimeout(closeTimer.current); }, []);
 
   return (
-    <span ref={ref} className="relative inline-flex">
+    <span className="relative inline-flex">
       <button
+        ref={btnRef}
         type="button"
-        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        onMouseEnter={openPopup}
+        onMouseLeave={scheduleClose}
+        onClick={(e) => { e.stopPropagation(); open ? setOpen(false) : openPopup(); }}
         className="flex items-center justify-center rounded-full p-0.5 transition-colors hover:bg-black/6"
         aria-label="Chi tiết"
       >
         <Info className={size === "sm" ? "size-3 text-foreground/30" : "size-3.5 text-foreground/35"} />
       </button>
-      {open && (
-        <span className="absolute bottom-full right-0 z-20 mb-2 w-52 rounded-xl border border-black/8 bg-white p-3 text-[11px] font-normal text-foreground shadow-xl">
+      {open && typeof document !== "undefined" && createPortal(
+        <span
+          style={style}
+          onMouseEnter={cancelClose}
+          onMouseLeave={scheduleClose}
+          className="w-52 space-y-1.5 rounded-xl border border-black/8 bg-white p-3 text-[11px] font-normal text-foreground shadow-xl"
+        >
           {children}
-        </span>
+        </span>,
+        document.body,
       )}
     </span>
   );
@@ -461,12 +488,16 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
   const splitN = splitParticipants.length;
   const discountFraction = orderTotalItems > 0 ? orderDiscountAmt / orderTotalItems : 0;
   const perParticipantShipping = splitN > 0 ? Math.round(orderShipping / splitN) : 0;
-  function calcSplitAmount(subtotal: number) {
+  const splitShippingFeeMode = groupOrder?.shippingFeeMode ?? 'split';
+  function calcSplitAmount(subtotal: number, isParticipantHost = false) {
     const discountShare = Math.round(subtotal * discountFraction);
+    const shippingShare = splitShippingFeeMode === 'host_pays'
+      ? (isParticipantHost ? Math.round(orderShipping) : 0)
+      : perParticipantShipping;
     return {
-      total: Math.round(subtotal - discountShare + perParticipantShipping),
+      total: Math.round(subtotal - discountShare + shippingShare),
       discountShare,
-      shippingShare: perParticipantShipping,
+      shippingShare,
     };
   }
 
@@ -645,22 +676,22 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                 order.status === "completed" &&
                 order.paymentStatus === "paid" &&
                 !isGroupOrder && (
-                <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-[#f0faf6] px-4 py-3 ring-1 ring-[#1a3c34]/15">
-                  <div className="flex items-center gap-2.5">
-                    <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#1a3c34]/10">
-                      <Star className="size-4 text-[#1a3c34]" />
+                  <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-[#f0faf6] px-4 py-3 ring-1 ring-[#1a3c34]/15">
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#1a3c34]/10">
+                        <Star className="size-4 text-[#1a3c34]" />
+                      </div>
+                      <p className="text-xs font-semibold text-[#1a3c34]">{t("claim_points_hint")}</p>
                     </div>
-                    <p className="text-xs font-semibold text-[#1a3c34]">{t("claim_points_hint")}</p>
+                    <button
+                      type="button"
+                      onClick={() => router.push(ROUTES.LOYALTY(order.paymentCode))}
+                      className="shrink-0 rounded-full bg-[#1a3c34] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"
+                    >
+                      {t("claim_points_cta")}
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => router.push(ROUTES.LOYALTY(order.paymentCode))}
-                    className="shrink-0 rounded-full bg-[#1a3c34] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"
-                  >
-                    {t("claim_points_cta")}
-                  </button>
-                </div>
-              )}
+                )}
             </div>
           </motion.div>
 
@@ -886,6 +917,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ ...revealTransition, delay: 0.16 }}
+              className="space-y-4"
             >
               <BankTransferQR
                 orderId={order.id}
@@ -900,6 +932,29 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                 onPaid={handlePaid}
                 onExpired={handleExpired}
               />
+              {storeLocation?.phone && (
+                <div className="flex items-start gap-3 rounded-3xl border border-[#1a3c34]/12 bg-[#f0faf6] px-5 py-4">
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#1a3c34]/10">
+                    <MessageCircle className="size-4 text-[#1a3c34]" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-[#1a3c34]">{t("zalo_complaint_title")}</p>
+                    <p className="mt-0.5 text-xs text-[#1a3c34]/70">{t("zalo_complaint_desc")}</p>
+                    <div className="mt-3 flex flex-wrap items-center gap-3">
+                      <a
+                        href={`https://zalo.me/${storeLocation.phone.replace(/^0/, "84")}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-full bg-[#1a3c34] px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90"
+                      >
+                        <MessageCircle className="size-3" />
+                        {t("zalo_contact_cta")}
+                      </a>
+                      <span className="font-mono text-xs text-foreground/50">#{order.paymentCode}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </motion.div>
           )}
 
@@ -980,7 +1035,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                           amount: String(
                             groupOrder.paymentMode === "host_pays"
                               ? Math.round(parseFloat(order.finalAmount))
-                              : calcSplitAmount(myGroupParticipant.subtotal).total,
+                              : calcSplitAmount(myGroupParticipant.subtotal, myGroupParticipant.isHost).total,
                           ),
                           des: myGroupParticipant.paymentQrToken.replace(/-/g, "").slice(0, 12).toUpperCase(),
                         }).toString()}`}
@@ -1012,33 +1067,33 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                             {groupOrder.paymentMode === "host_pays"
                               ? fmtVnd(parseFloat(order.finalAmount))
                               : (() => {
-                                  const { total, discountShare, shippingShare } = calcSplitAmount(myGroupParticipant.subtotal);
-                                  return (
-                                    <>
-                                      {fmtVnd(total)}
-                                      {(discountShare > 0 || shippingShare > 0) && (
-                                        <InfoPopup>
+                                const { total, discountShare, shippingShare } = calcSplitAmount(myGroupParticipant.subtotal, myGroupParticipant.isHost);
+                                return (
+                                  <>
+                                    {fmtVnd(total)}
+                                    {(discountShare > 0 || shippingShare > 0) && (
+                                      <InfoPopup>
+                                        <span className="flex justify-between">
+                                          <span className="text-foreground/60">{t("group_split_items")}</span>
+                                          <span>{fmtVnd(myGroupParticipant.subtotal)}</span>
+                                        </span>
+                                        {discountShare > 0 && (
                                           <span className="flex justify-between">
-                                            <span className="text-foreground/60">{t("group_split_items")}</span>
-                                            <span>{fmtVnd(myGroupParticipant.subtotal)}</span>
+                                            <span className="text-foreground/60">{t("group_split_discount")}</span>
+                                            <span className="text-emerald-600">-{fmtVnd(discountShare)}</span>
                                           </span>
-                                          {discountShare > 0 && (
-                                            <span className="flex justify-between">
-                                              <span className="text-foreground/60">{t("group_split_discount")}</span>
-                                              <span className="text-emerald-600">-{fmtVnd(discountShare)}</span>
-                                            </span>
-                                          )}
-                                          {shippingShare > 0 && (
-                                            <span className="flex justify-between">
-                                              <span className="text-foreground/60">{t("group_split_shipping")}</span>
-                                              <span>+{fmtVnd(shippingShare)}</span>
-                                            </span>
-                                          )}
-                                        </InfoPopup>
-                                      )}
-                                    </>
-                                  );
-                                })()}
+                                        )}
+                                        {shippingShare > 0 && (
+                                          <span className="flex justify-between">
+                                            <span className="text-foreground/60">{t(splitShippingFeeMode === 'host_pays' ? "group_split_shipping_all" : "group_split_shipping")}</span>
+                                            <span>+{fmtVnd(shippingShare)}</span>
+                                          </span>
+                                        )}
+                                      </InfoPopup>
+                                    )}
+                                  </>
+                                );
+                              })()}
                           </span>
                         </div>
                         <div className="flex justify-between">
@@ -1059,70 +1114,107 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                   </p>
                 )}
 
-                {/* Split mode: all participants payment status */}
-                {groupOrder.paymentMode === "split" && (
-                  <div className="space-y-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-                      {t("group_payment_status_members")}
-                    </p>
-                    <ul className="space-y-2">
-                      {groupOrder.participants
-                        .filter((p) => p.items.length > 0)
-                        .map((p) => (
-                          <li key={p.id} className="flex items-center gap-2.5">
-                            {p.avatar ? (
-                              <div className="relative size-7 shrink-0 overflow-hidden rounded-full ring-1 ring-black/8">
-                                <Image src={p.avatar} alt={p.name} fill className="object-cover" sizes="28px" />
-                              </div>
-                            ) : (
-                              <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#1a3c34]/10 text-[11px] font-bold text-[#1a3c34]">
-                                {p.name[0]}
-                              </div>
-                            )}
-                            <span className="flex-1 text-sm text-foreground">{p.name}</span>
-                            <span className="flex items-center gap-1 text-sm font-medium tabular-nums text-foreground/60">
-                              {(() => {
-                                const { total, discountShare, shippingShare } = calcSplitAmount(p.subtotal);
-                                return (
-                                  <>
-                                    {fmtVnd(total)}
-                                    {(discountShare > 0 || shippingShare > 0) && (
-                                      <InfoPopup size="sm">
-                                        <span className="flex justify-between">
-                                          <span className="text-foreground/60">{t("group_split_items")}</span>
-                                          <span>{fmtVnd(p.subtotal)}</span>
-                                        </span>
-                                        {discountShare > 0 && (
-                                          <span className="flex justify-between">
-                                            <span className="text-foreground/60">{t("group_split_discount")}</span>
-                                            <span className="text-emerald-600">-{fmtVnd(discountShare)}</span>
-                                          </span>
-                                        )}
-                                        {shippingShare > 0 && (
-                                          <span className="flex justify-between">
-                                            <span className="text-foreground/60">{t("group_split_shipping")}</span>
-                                            <span>+{fmtVnd(shippingShare)}</span>
-                                          </span>
-                                        )}
-                                      </InfoPopup>
-                                    )}
-                                  </>
-                                );
-                              })()}
-                            </span>
-                            {p.paymentStatus === "paid" ? (
-                              <CheckCircle2 className="size-4 shrink-0 text-emerald-500" />
-                            ) : (
-                              <span className="flex items-center gap-1 shrink-0">
-                                <span className="text-[10px] font-medium text-foreground/40">{t("group_unpaid_label")}</span>
-                                <Loader2 className="size-3.5 animate-spin text-[#1a3c34]/40" />
-                              </span>
-                            )}
-                          </li>
-                        ))}
-                    </ul>
+                {myGroupParticipant?.paymentQrToken && storeLocation?.phone && (
+                  <div className="my-4 flex items-start gap-3 rounded-2xl border border-[#1a3c34]/12 bg-[#f0faf6] px-4 py-4">
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#1a3c34]/10">
+                      <MessageCircle className="size-4 text-[#1a3c34]" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-[#1a3c34]">{t("zalo_complaint_title")}</p>
+                      <p className="mt-0.5 text-xs text-[#1a3c34]/70">{t("zalo_complaint_desc")}</p>
+                      <div className="mt-2.5 flex flex-wrap items-center gap-3">
+                        <a
+                          href={`https://zalo.me/${storeLocation.phone.replace(/^0/, "84")}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-full bg-[#1a3c34] px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90"
+                        >
+                          <MessageCircle className="size-3" />
+                          {t("zalo_contact_cta")}
+                        </a>
+                        <span className="font-mono text-xs text-foreground/50">#{order.paymentCode}</span>
+                      </div>
+                    </div>
                   </div>
                 )}
+
+                {/* Split mode: all participants payment status */}
+                {groupOrder.paymentMode === "split" && (() => {
+                  const activeParts = groupOrder.participants.filter((p) => p.items.length > 0);
+                  const paidCount = activeParts.filter((p) => p.paymentStatus === "paid").length;
+                  return (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
+                          {t("group_payment_status_members")}
+                        </p>
+                        <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums ${paidCount === activeParts.length
+                            ? "bg-emerald-50 text-emerald-600"
+                            : "bg-[#1a3c34]/8 text-[#1a3c34]"
+                          }`}>
+                          {paidCount === activeParts.length && <CheckCircle2 className="size-3" />}
+                          {paidCount}/{activeParts.length}
+                        </span>
+                      </div>
+                      <ul className="space-y-2">
+                        {groupOrder.participants
+                          .filter((p) => p.items.length > 0)
+                          .map((p) => (
+                            <li key={p.id} className="flex items-center gap-2.5">
+                              {p.avatar ? (
+                                <div className="relative size-7 shrink-0 overflow-hidden rounded-full ring-1 ring-black/8">
+                                  <Image src={p.avatar} alt={p.name} fill className="object-cover" sizes="28px" />
+                                </div>
+                              ) : (
+                                <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#1a3c34]/10 text-[11px] font-bold text-[#1a3c34]">
+                                  {p.name[0]}
+                                </div>
+                              )}
+                              <span className="flex-1 text-sm text-foreground">{p.name}</span>
+                              <span className="flex items-center gap-1 text-sm font-medium tabular-nums text-foreground/60">
+                                {(() => {
+                                  const { total, discountShare, shippingShare } = calcSplitAmount(p.subtotal, p.isHost);
+                                  return (
+                                    <>
+                                      {fmtVnd(total)}
+                                      {(discountShare > 0 || shippingShare > 0) && (
+                                        <InfoPopup size="sm">
+                                          <span className="flex justify-between">
+                                            <span className="text-foreground/60">{t("group_split_items")}</span>
+                                            <span>{fmtVnd(p.subtotal)}</span>
+                                          </span>
+                                          {discountShare > 0 && (
+                                            <span className="flex justify-between">
+                                              <span className="text-foreground/60">{t("group_split_discount")}</span>
+                                              <span className="text-emerald-600">-{fmtVnd(discountShare)}</span>
+                                            </span>
+                                          )}
+                                          {shippingShare > 0 && (
+                                            <span className="flex justify-between">
+                                              <span className="text-foreground/60">{t(splitShippingFeeMode === 'host_pays' ? "group_split_shipping_all" : "group_split_shipping")}</span>
+                                              <span>+{fmtVnd(shippingShare)}</span>
+                                            </span>
+                                          )}
+                                        </InfoPopup>
+                                      )}
+                                    </>
+                                  );
+                                })()}
+                              </span>
+                              {p.paymentStatus === "paid" ? (
+                                <CheckCircle2 className="size-4 shrink-0 text-emerald-500" />
+                              ) : (
+                                <span className="flex items-center gap-1 shrink-0">
+                                  <span className="text-[10px] font-medium text-foreground/40">{t("group_unpaid_label")}</span>
+                                  <Loader2 className="size-3.5 animate-spin text-[#1a3c34]/40" />
+                                </span>
+                              )}
+                            </li>
+                          ))}
+                      </ul>
+                    </div>
+                  );
+                })()}
               </div>
             </motion.div>
           )}
@@ -1142,10 +1234,10 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                   <p className="mb-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
                     {t("items_count", { count: totalItemCount })}
                   </p>
-                  <div className="divide-y divide-black/6">
+                  <div>
                     {participantsWithItems.map((participant, pIdx) => (
-                      <div key={participant.id} className={pIdx > 0 ? "pt-5" : ""}>
-                        <div className="mb-3 flex items-center gap-2.5">
+                      <div key={participant.id} className={pIdx > 0 ? "mt-6 border-t border-black/6 pt-6" : ""}>
+                        <div className="mb-3 flex items-center gap-2">
                           {participant.avatar ? (
                             <div className="relative size-7 shrink-0 overflow-hidden rounded-full ring-1 ring-black/8">
                               <Image src={participant.avatar} alt={participant.name} fill className="object-cover" sizes="28px" />
@@ -1161,9 +1253,6 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                               {t("group_host")}
                             </span>
                           )}
-                          <span className="ml-auto text-sm font-bold tabular-nums text-kun-primary">
-                            {fmtVnd(participant.subtotal)}
-                          </span>
                         </div>
 
                         <ul className="space-y-3">
@@ -1224,6 +1313,14 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                             );
                           })}
                         </ul>
+                        <div className="mt-3 flex items-center justify-between rounded-xl bg-[#1a3c34]/5 px-3 py-2">
+                          <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[#1a3c34]/50">
+                            {t("participant_subtotal")}
+                          </span>
+                          <span className="font-bold tabular-nums text-[#1a3c34]">
+                            {fmtVnd(participant.subtotal)}
+                          </span>
+                        </div>
                       </div>
                     ))}
                   </div>

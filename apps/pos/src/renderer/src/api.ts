@@ -110,3 +110,19 @@ export const fetchExternalOrders = (page = 1, pageSize = 100, from?: string, to?
   api.get('/admin/orders', {
     params: { page, pageSize, isExternal: true, ...(from && { from }), ...(to && { to }) },
   }).then((r) => r.data)
+
+export interface GroupParticipantLive {
+  id: string
+  paymentStatus: 'pending' | 'paid'
+  items: Array<unknown>
+  isHost: boolean
+}
+
+export interface GroupOrderLive {
+  token: string
+  paymentMode: 'host_pays' | 'split'
+  participants: GroupParticipantLive[]
+}
+
+export const fetchGroupOrderLive = (token: string) =>
+  api.get<GroupOrderLive>(`/group-orders/${token}`).then((r) => r.data)

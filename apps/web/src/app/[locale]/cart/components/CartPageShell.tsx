@@ -1,11 +1,14 @@
 "use client";
 
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { CartLineList } from "./CartLineList";
 import { CartEditModal } from "./CartEditModal";
 import { EmptyCart } from "./EmptyCart";
 import { OrderSummary } from "./OrderSummary";
+import { CreateGroupOrderModal } from "@/components/group-order/CreateGroupOrderModal";
+import type { GroupOrderAfterCreatePayload } from "@/components/group-order/CreateGroupOrderModal";
 import {
   useCartQuery,
   useUpdateCartItemMutation,
@@ -15,6 +18,8 @@ import { useAuthStore } from "@/store/auth-store";
 import { useCartStore } from "@/store/cart-store";
 import type { ApiCartItem } from "@/services/cart/types";
 import { normalizeOptionGroups, computeOptionSurcharge } from "@/lib/product-options";
+import { fetchMyGroupOrderSessions, updateGroupOrderItems } from "@/services/group-order/api";
+import { ROUTES } from "@/lib/routes";
 
 function CartSkeleton() {
   return (
@@ -44,6 +49,7 @@ function CartSkeleton() {
 }
 
 export function CartPageShell() {
+  const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
   const isGuest = !accessToken;
 
@@ -59,9 +65,40 @@ export function CartPageShell() {
 
   const [editingItem, setEditingItem] = useState<ApiCartItem | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showGroupOrderModal, setShowGroupOrderModal] = useState(false);
+  const [hasActiveSession, setHasActiveSession] = useState(false);
 
   const items = isGuest ? localItems : (serverCart?.items ?? []);
   const isLoading = isGuest ? false : serverCartLoading;
+
+  const handleGroupOrderClick = () => {
+    if (!accessToken) {
+      router.push(`${ROUTES.LOGIN}?redirect=/cart`);
+      return;
+    }
+    fetchMyGroupOrderSessions()
+      .then((list) => setHasActiveSession(list.length > 0))
+      .catch(() => setHasActiveSession(false))
+      .finally(() => setShowGroupOrderModal(true));
+  };
+
+  const handleAfterGroupOrderCreate = async ({ token, sessionToken }: GroupOrderAfterCreatePayload) => {
+    const selectedItems = items.filter((item) => selectedIds.has(item.id));
+    if (selectedItems.length === 0) return;
+    const groupItems = selectedItems.map((item) => ({
+      productId: item.productId,
+      quantity: item.quantity,
+      selectedOptions: item.selectedOptions,
+      toppings: item.toppings.map((t) => ({
+        toppingId: t.toppingId,
+        name: t.topping.name,
+        price: Number(t.topping.price),
+        nameTranslation: t.topping.nameTranslation,
+      })),
+      note: item.note ?? undefined,
+    }));
+    await updateGroupOrderItems(token, sessionToken, groupItems);
+  };
 
   useEffect(() => {
     setSelectedIds(new Set(items.map((i) => i.id)));
@@ -157,6 +194,7 @@ export function CartPageShell() {
               total={subtotal}
               selectedCount={selectedIds.size}
               selectedIds={selectedIds}
+              onGroupOrder={handleGroupOrderClick}
             />
           </motion.div>
         </div>
@@ -166,6 +204,16 @@ export function CartPageShell() {
         item={editingItem}
         onClose={() => setEditingItem(null)}
       />
+
+      <AnimatePresence>
+        {showGroupOrderModal && (
+          <CreateGroupOrderModal
+            onClose={() => setShowGroupOrderModal(false)}
+            hasActiveSession={hasActiveSession}
+            onAfterCreate={handleAfterGroupOrderCreate}
+          />
+        )}
+      </AnimatePresence>
     </>
   );
 }

@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState, Suspense, type ReactNode } from "react";
+import { Toaster } from "sonner";
 
 import { useAuthStore } from "@/store/auth-store";
 import { RefCodeCapture } from "@/components/common/RefCodeCapture";
@@ -38,6 +39,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     <>
       <AuthPersistHydration />
       <Suspense fallback={null}><RefCodeCapture /></Suspense>
+      <Toaster position="top-right" richColors />
       <QueryClientProvider client={queryClient}>
         {children}
       </QueryClientProvider>

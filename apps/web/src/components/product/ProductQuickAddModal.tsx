@@ -90,7 +90,7 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
           "";
       }
       setSelectedOptions(opts);
-      setNote("");
+      setNote(editItem.note ?? "");
     } else {
       const init: Record<string, string> = {};
       for (const g of optionGroups) {
@@ -162,6 +162,7 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
               toppingId: top.id,
               topping: { id: top.id, name: top.name, price: String(top.price), nameTranslation: top.nameTranslation ?? {} },
             })),
+          note: note || undefined,
         },
         { onSuccess: onClose },
       );
@@ -446,22 +447,20 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
                     </div>
                   )}
 
-                  {/* Note — only in add mode */}
-                  {!isEditMode && (
-                    <div className="mt-4 space-y-1.5">
-                      <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-muted">
-                        <StickyNote className="size-3" />
-                        {t("note")}
-                      </label>
-                      <input
-                        type="text"
-                        value={note}
-                        onChange={(e) => setNote(e.target.value)}
-                        placeholder={t("note_placeholder")}
-                        className="h-10 w-full rounded-xl border border-black/[0.09] bg-white px-3.5 text-[13px] text-foreground placeholder:text-muted/60 focus:border-kun-primary focus:outline-none focus:ring-2 focus:ring-kun-primary/20"
-                      />
-                    </div>
-                  )}
+                  {/* Note */}
+                  <div className="mt-4 space-y-1.5">
+                    <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-muted">
+                      <StickyNote className="size-3" />
+                      {t("note")}
+                    </label>
+                    <input
+                      type="text"
+                      value={note}
+                      onChange={(e) => setNote(e.target.value)}
+                      placeholder={t("note_placeholder")}
+                      className="h-10 w-full rounded-xl border border-black/[0.09] bg-white px-3.5 text-[13px] text-foreground placeholder:text-muted/60 focus:border-kun-primary focus:outline-none focus:ring-2 focus:ring-kun-primary/20"
+                    />
+                  </div>
                 </div>
 
                 {/* Sticky footer */}

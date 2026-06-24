@@ -40,6 +40,7 @@ export interface GroupOrderState {
   paymentType: 'cash' | 'bank_transfer'
   type: 'delivery' | 'pickup' | 'table'
   shippingFee: number
+  shippingFeeMode: 'split' | 'host_pays'
   note: string | null
   expiresAt: string
   createdAt: string
@@ -216,6 +217,7 @@ export async function setGroupOrderFulfillment(
     pickupTime?: string
     shippingFee?: number
     paymentType?: 'cash' | 'bank_transfer'
+    shippingFeeMode?: 'split' | 'host_pays'
   },
 ): Promise<GroupOrderState> {
   const { data } = await api.patch<GroupOrderState>(`/group-orders/${token}/fulfillment`, {

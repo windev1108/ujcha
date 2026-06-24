@@ -4,255 +4,16 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, useInView } from "motion/react";
 import {
-  ArrowRight, CheckCircle2, ChevronRight, Crown, Loader2,
-  Share2, ShoppingBag, Sparkles, Timer, Truck, Users, X, Zap,
+  ArrowRight, ChevronRight, Loader2,
+  Share2, ShoppingBag, Sparkles, Timer, Truck, Users, Zap,
 } from "lucide-react";
 import { Button } from "@heroui/react";
 import { ROUTES } from "@/lib/routes";
 import { useAuthStore } from "@/store/auth-store";
-import { createGroupOrder, fetchGroupOrderConfig, type GroupDiscountTier } from "@/services/group-order/api";
-import { getDeviceId } from "@/hooks/useDeviceId";
+import { fetchGroupOrderConfig, type GroupDiscountTier } from "@/services/group-order/api";
 import { fetchMyGroupOrderSessions } from "@/services/group-order/api";
 import { useTranslations } from "next-intl";
-
-type OrderTypeOpt = "pickup" | "delivery";
-type PaymentModeOpt = "split" | "host_pays";
-
-// ─── Create Modal ──────────────────────────────────────────────────────────────
-
-function CreateGroupModal({ onClose, hasActiveSession }: { onClose: () => void; hasActiveSession: boolean }) {
-  const router = useRouter();
-  const t = useTranslations();
-  const accessToken = useAuthStore((s) => s.accessToken);
-  const [step, setStep] = useState<"type" | "payment">("type");
-  const [orderType, setOrderType] = useState<OrderTypeOpt>("pickup");
-  const [paymentMode, setPaymentMode] = useState<PaymentModeOpt>("split");
-  const [creating, setCreating] = useState(false);
-
-  if (hasActiveSession) {
-    return (
-      <motion.div
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center"
-        onClick={(e) => e.target === e.currentTarget && onClose()}
-      >
-        <motion.div
-          initial={{ y: "100%", opacity: 0 }} animate={{ y: 0, opacity: 1 }}
-          exit={{ y: "100%", opacity: 0 }}
-          transition={{ type: "spring", damping: 32, stiffness: 380 }}
-          className="w-full max-w-md overflow-hidden rounded-t-[2rem] bg-white sm:rounded-[2rem]"
-        >
-          <div className="flex items-center justify-between px-6 py-4">
-            <div className="flex items-center gap-3">
-              <div className="flex size-9 items-center justify-center rounded-xl bg-amber-50">
-                <Users className="size-4.5 text-amber-600" />
-              </div>
-              <h2 className="text-base font-bold text-foreground">{t("group_orders")}</h2>
-            </div>
-            <button type="button" onClick={onClose}
-              className="flex size-8 items-center justify-center rounded-full bg-black/6 text-foreground/50 hover:bg-black/10"
-            >
-              <X className="size-4" />
-            </button>
-          </div>
-          <div className="px-6 pb-8 pt-2 text-center">
-            <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-amber-50 ring-1 ring-amber-200">
-              <Users className="size-6 text-amber-600" />
-            </div>
-            <p className="text-sm font-semibold text-foreground">{t("active_group_order_exists")}</p>
-            <div className="mt-5 flex flex-col gap-2.5">
-              <Button
-                className="h-12 w-full rounded-full bg-[#1a3c34] text-sm font-semibold text-white"
-                onPress={() => { onClose(); router.push(ROUTES.GROUP_ORDER_SESSIONS); }}
-              >
-                {t("active_group_order_exists_cta")}
-              </Button>
-              <Button
-                className="h-10 w-full rounded-full border border-black/10 bg-white text-sm font-semibold text-foreground/60"
-                onPress={onClose}
-              >
-                {t("back")}
-              </Button>
-            </div>
-          </div>
-        </motion.div>
-      </motion.div>
-    );
-  }
-
-  const handleCreate = async () => {
-    if (!accessToken) { router.push(ROUTES.LOGIN); return; }
-    setCreating(true);
-    try {
-      const deviceId = await getDeviceId();
-      const result = await createGroupOrder({ type: orderType, paymentMode, deviceId });
-      for (const key of Object.keys(localStorage)) {
-        if (
-          key.startsWith('group_order_session_') ||
-          key.startsWith('group_order_participant_') ||
-          key.startsWith('group_order_meta_')
-        ) {
-          localStorage.removeItem(key);
-        }
-      }
-      localStorage.setItem(`group_order_session_${result.token}`, result.hostSessionToken);
-      if (result.hostParticipantId) {
-        localStorage.setItem(`group_order_participant_${result.token}`, result.hostParticipantId);
-      }
-      localStorage.setItem(
-        `group_order_meta_${result.token}`,
-        JSON.stringify({ token: result.token, expiresAt: result.expiresAt, type: orderType, status: result.status }),
-      );
-      router.push(ROUTES.GROUP_ORDER(result.token));
-    } catch {
-      alert(t("create_group_order_error"));
-      setCreating(false);
-    }
-  };
-
-  const ORDER_TYPES = [
-    { value: "pickup" as const, label: t("pickup"), Icon: ShoppingBag, desc: t("pickup_desc") },
-    { value: "delivery" as const, label: t("delivery"), Icon: Truck, desc: t("delivery_desc") },
-  ];
-
-  const PAYMENT_MODES = [
-    { value: "split" as const, label: t("split_payment"), Icon: Users, desc: t("split_payment_desc") },
-    { value: "host_pays" as const, label: t("host_pays"), Icon: Crown, desc: t("host_pays_desc") },
-  ];
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <motion.div
-        initial={{ y: "100%", opacity: 0 }} animate={{ y: 0, opacity: 1 }}
-        exit={{ y: "100%", opacity: 0 }}
-        transition={{ type: "spring", damping: 32, stiffness: 380 }}
-        className="w-full max-w-md overflow-hidden rounded-t-[2rem] bg-white sm:rounded-[2rem]"
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-xl bg-[#1a3c34]/8">
-              <Users className="size-4.5 text-[#1a3c34]" />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/35">
-                {step === "type" ? t("step_1_of_2") : t("step_2_of_2")}
-              </p>
-              <h2 className="text-base font-bold text-foreground">
-                {step === "type" ? t("delivery_type") : t("payment_method")}
-              </h2>
-            </div>
-          </div>
-          <button
-            type="button" onClick={onClose}
-            className="flex size-8 items-center justify-center rounded-full bg-black/6 text-foreground/50 hover:bg-black/10 hover:text-foreground"
-          >
-            <X className="size-4" />
-          </button>
-        </div>
-
-        {/* Step bar */}
-        <div className="flex gap-1.5 px-6 pt-4">
-          {["type", "payment"].map((s, i) => (
-            <div key={s} className={`h-1 flex-1 rounded-full transition-all duration-300 ${
-              i === 0 ? "bg-[#1a3c34]" : step === "payment" ? "bg-[#1a3c34]" : "bg-black/10"
-            }`} />
-          ))}
-        </div>
-
-        <AnimatePresence mode="wait">
-          {step === "type" ? (
-            <motion.div key="type" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }} className="px-6 py-5"
-            >
-              <p className="mb-3 text-sm text-foreground/55">{t("select_delivery_method")}</p>
-              <div className="grid grid-cols-2 gap-2.5">
-                {ORDER_TYPES.map((opt) => (
-                  <button key={opt.value} type="button" onClick={() => setOrderType(opt.value)}
-                    className={`flex flex-col items-center gap-2 rounded-2xl border-2 px-2 py-4 text-center transition-all ${
-                      orderType === opt.value
-                        ? "border-[#1a3c34] bg-[#f0faf6]"
-                        : "border-black/8 bg-[#fafafa] hover:border-black/16 hover:bg-white"
-                    }`}
-                  >
-                    <div className={`flex size-10 items-center justify-center rounded-xl ${orderType === opt.value ? "bg-[#1a3c34]/12" : "bg-black/6"}`}>
-                      <opt.Icon className={`size-5 ${orderType === opt.value ? "text-[#1a3c34]" : "text-foreground/50"}`} />
-                    </div>
-                    <div>
-                      <p className={`text-xs font-bold ${orderType === opt.value ? "text-[#1a3c34]" : "text-foreground"}`}>{opt.label}</p>
-                      <p className="mt-0.5 text-[10px] leading-tight text-foreground/40">{opt.desc}</p>
-                    </div>
-                    {orderType === opt.value && (
-                      <div className="flex size-4 items-center justify-center rounded-full bg-[#1a3c34]">
-                        <CheckCircle2 className="size-3 text-white" />
-                      </div>
-                    )}
-                  </button>
-                ))}
-              </div>
-              <Button className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#1a3c34] text-sm font-semibold text-white"
-                onPress={() => setStep("payment")}
-              >
-                {t("continue")} <ChevronRight className="size-4" />
-              </Button>
-            </motion.div>
-          ) : (
-            <motion.div key="payment" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }} className="px-6 py-5"
-            >
-              <p className="mb-3 text-sm text-foreground/55">{t("who_pays_for_group")}</p>
-              <div className="flex flex-col gap-2.5">
-                {PAYMENT_MODES.map((opt) => (
-                  <button key={opt.value} type="button" onClick={() => setPaymentMode(opt.value)}
-                    className={`flex items-start gap-4 rounded-2xl border-2 px-4 py-4 text-left transition-all ${
-                      paymentMode === opt.value
-                        ? "border-[#1a3c34] bg-[#f0faf6]"
-                        : "border-black/8 bg-[#fafafa] hover:border-black/16 hover:bg-white"
-                    }`}
-                  >
-                    <div className={`mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl ${paymentMode === opt.value ? "bg-[#1a3c34]/12" : "bg-black/6"}`}>
-                      <opt.Icon className={`size-4.5 ${paymentMode === opt.value ? "text-[#1a3c34]" : "text-foreground/50"}`} />
-                    </div>
-                    <div className="flex-1">
-                      <p className={`text-sm font-bold ${paymentMode === opt.value ? "text-[#1a3c34]" : "text-foreground"}`}>{opt.label}</p>
-                      <p className="mt-1 text-xs leading-relaxed text-foreground/50">{opt.desc}</p>
-                    </div>
-                    <div className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition-all ${
-                      paymentMode === opt.value ? "border-[#1a3c34] bg-[#1a3c34]" : "border-black/20"
-                    }`}>
-                      {paymentMode === opt.value && <div className="size-2 rounded-full bg-white" />}
-                    </div>
-                  </button>
-                ))}
-              </div>
-              <div className="mt-5 flex gap-2.5">
-                <Button className="flex h-12 w-24 items-center justify-center gap-1.5 rounded-full border border-black/10 bg-white text-sm font-semibold text-foreground hover:bg-black/4"
-                  onPress={() => setStep("type")}
-                >
-                  {t("back")}
-                </Button>
-                <Button className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-[#1a3c34] text-sm font-semibold text-white"
-                  isDisabled={creating} onPress={() => void handleCreate()}
-                >
-                  {creating ? (
-                    <><Loader2 className="size-4 animate-spin" />{t("creating")}</>
-                  ) : (
-                    <><Share2 className="size-4" />{t("create_and_share")}</>
-                  )}
-                </Button>
-              </div>
-              <p className="mt-3 text-center text-[11px] text-foreground/35">{t("group_order_friends_note")}</p>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
-    </motion.div>
-  );
-}
+import { CreateGroupOrderModal } from "@/components/group-order/CreateGroupOrderModal";
 
 // ─── Animated counter ──────────────────────────────────────────────────────────
 
@@ -286,15 +47,14 @@ function DiscountTierCard({ tier, index, isMax, isActive, activeCount }: {
     <motion.div
       initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-24px" }} transition={{ delay: index * 0.08 }}
-      className={`relative flex items-center gap-4 overflow-hidden rounded-2xl border px-5 py-4 transition-all ${
-        isMax ? "border-[#1a3c34]/25 bg-gradient-to-r from-[#f0faf6] to-white shadow-[0_4px_20px_-8px_rgba(26,60,52,0.15)]"
-          : isActive ? "border-[#1a3c34]/15 bg-[#f7fcfa]" : "border-black/6 bg-white"
-      }`}
+      className={`relative flex items-center gap-4 overflow-hidden rounded-2xl border px-5 py-4 transition-all ${isMax ? "border-[#1a3c34]/25 bg-gradient-to-r from-[#f0faf6] to-white shadow-[0_4px_20px_-8px_rgba(26,60,52,0.15)]"
+        : isActive ? "border-[#1a3c34]/15 bg-[#f7fcfa]" : "border-black/6 bg-white"
+        }`}
     >
       <div className={`flex size-11 shrink-0 items-center justify-center rounded-xl ${isMax ? "bg-[#1a3c34]/12" : "bg-black/4"}`}>
         {index === 0 ? <Users className={`size-5 ${isMax ? "text-[#1a3c34]" : "text-foreground/50"}`} />
           : index === 1 ? <Sparkles className={`size-5 ${isMax ? "text-[#1a3c34]" : "text-foreground/50"}`} />
-          : <Zap className={`size-5 ${isMax ? "text-[#1a3c34]" : "text-foreground/50"}`} />}
+            : <Zap className={`size-5 ${isMax ? "text-[#1a3c34]" : "text-foreground/50"}`} />}
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-bold text-foreground">{t("tier_min_members", { count: tier.minParticipants })}</p>
@@ -348,7 +108,7 @@ export function GroupOrderLandingShell() {
     if (!accessToken) return;
     fetchMyGroupOrderSessions()
       .then((list) => setHasActiveSession(list.length > 0))
-      .catch(() => {});
+      .catch(() => { });
   }, [accessToken]);
 
   const handleCreatePress = () => {
@@ -368,7 +128,7 @@ export function GroupOrderLandingShell() {
         setTiers(cfg.discountTiers);
         if (cfg.expiryMinutes) setExpiryMinutes(cfg.expiryMinutes);
       })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setConfigLoaded(true));
   }, []);
 
@@ -377,22 +137,22 @@ export function GroupOrderLandingShell() {
 
   const HOW_IT_WORKS = [
     { Icon: Sparkles, step: "01", title: t("step_create_title"), desc: t("step_create_desc") },
-    { Icon: Share2,   step: "02", title: t("step_invite_title"), desc: t("step_invite_desc") },
+    { Icon: Share2, step: "02", title: t("step_invite_title"), desc: t("step_invite_desc") },
     { Icon: ShoppingBag, step: "03", title: t("step_order_title"), desc: t("step_order_desc") },
-    { Icon: Zap,      step: "04", title: t("step_lock_title"),  desc: t("step_lock_desc") },
+    { Icon: Zap, step: "04", title: t("step_lock_title"), desc: t("step_lock_desc") },
   ];
 
   const FEATURES = [
-    { icon: <Share2 className="size-4.5 text-[#1a3c34]" />,      title: t("feature_fraud_title"),    desc: t("feature_fraud_desc") },
-    { icon: <Zap className="size-4.5 text-[#1a3c34]" />,         title: t("feature_realtime_title"), desc: t("feature_realtime_desc") },
-    { icon: <ShoppingBag className="size-4.5 text-[#1a3c34]" />, title: t("feature_payment_title"),  desc: t("feature_payment_desc") },
-    { icon: <Timer className="size-4.5 text-[#1a3c34]" />,       title: t("feature_expiry_title", { time: fmtExpiry(expiryMinutes, locale) }),   desc: t("feature_expiry_desc") },
+    { icon: <Share2 className="size-4.5 text-[#1a3c34]" />, title: t("feature_fraud_title"), desc: t("feature_fraud_desc") },
+    { icon: <Zap className="size-4.5 text-[#1a3c34]" />, title: t("feature_realtime_title"), desc: t("feature_realtime_desc") },
+    { icon: <ShoppingBag className="size-4.5 text-[#1a3c34]" />, title: t("feature_payment_title"), desc: t("feature_payment_desc") },
+    { icon: <Timer className="size-4.5 text-[#1a3c34]" />, title: t("feature_expiry_title", { time: fmtExpiry(expiryMinutes, locale) }), desc: t("feature_expiry_desc") },
   ];
 
   return (
     <>
       <AnimatePresence>
-        {showModal && <CreateGroupModal onClose={() => setShowModal(false)} hasActiveSession={hasActiveSession} />}
+        {showModal && <CreateGroupOrderModal onClose={() => setShowModal(false)} hasActiveSession={hasActiveSession} />}
       </AnimatePresence>
 
       {/* ── Hero ── */}
@@ -430,8 +190,8 @@ export function GroupOrderLandingShell() {
               >
                 {[
                   { label: t("max_discount_label"), value: <><CountUp to={maxDiscount} />%</> },
-                  { label: t("one_per_account"),    value: t("fair_value") },
-                  { label: t("time_limit_label"),   value: fmtExpiry(expiryMinutes, locale) },
+                  { label: t("one_per_account"), value: t("fair_value") },
+                  { label: t("time_limit_label"), value: fmtExpiry(expiryMinutes, locale) },
                 ].map((s) => (
                   <div key={s.label} className="text-center">
                     <p className="text-2xl font-bold text-white sm:text-3xl">{s.value}</p>

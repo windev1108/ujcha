@@ -2,7 +2,7 @@
 
 import { Button, Card, CardContent } from "@heroui/react";
 import { motion } from "motion/react";
-import { ShoppingBag, Tag, Users } from "lucide-react";
+import { ChevronRight, ShoppingBag, Tag, Users } from "lucide-react";
 import { revealTransition } from "@/app/[locale]/(landing)/components/RevealSection";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -18,9 +18,10 @@ type Props = {
   total: number;
   selectedCount: number;
   selectedIds: Set<string>;
+  onGroupOrder?: () => void;
 };
 
-export function OrderSummary({ subtotal, total, selectedCount, selectedIds }: Props) {
+export function OrderSummary({ subtotal, total, selectedCount, selectedIds, onGroupOrder }: Props) {
   const t = useTranslations();
   const checkoutDisabled = selectedCount === 0;
 
@@ -81,18 +82,35 @@ export function OrderSummary({ subtotal, total, selectedCount, selectedIds }: Pr
           {t("voucher_and_points_info")}
         </div>
 
-        <Link
-          href={ROUTES.GROUP_ORDERS}
-          className="flex w-full items-center gap-3 rounded-2xl border border-dashed border-[#1a3c34]/30 bg-gradient-to-br from-[#f0faf6] to-white px-4 py-3.5 text-left transition hover:border-[#1a3c34]/50 hover:from-[#e6f5ef]"
-        >
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#1a3c34]/10">
-            <Users className="size-4.5 text-[#1a3c34]" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-[#1a3c34]">{t("group_orders")}</p>
-            <p className="text-[11px] text-[#1a3c34]/60">{t("group_order_cart_desc")}</p>
-          </div>
-        </Link>
+        {onGroupOrder ? (
+          <button
+            type="button"
+            onClick={onGroupOrder}
+            className="cursor-pointer flex w-full items-center gap-3 rounded-2xl border border-dashed border-[#1a3c34]/30 bg-gradient-to-br from-[#f0faf6] to-white px-4 py-3.5 text-left transition hover:border-[#1a3c34]/50 hover:from-[#e6f5ef]"
+          >
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#1a3c34]/10">
+              <Users className="size-4.5 text-[#1a3c34]" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-[#1a3c34]">{t("group_orders")}</p>
+              <p className="text-[11px] text-[#1a3c34]/60">{t("group_order_cart_desc")}</p>
+            </div>
+            <ChevronRight className="size-4 shrink-0 text-[#1a3c34]/40" />
+          </button>
+        ) : (
+          <Link
+            href={ROUTES.GROUP_ORDERS}
+            className="cursor-pointer flex w-full items-center gap-3 rounded-2xl border border-dashed border-[#1a3c34]/30 bg-gradient-to-br from-[#f0faf6] to-white px-4 py-3.5 text-left transition hover:border-[#1a3c34]/50 hover:from-[#e6f5ef]"
+          >
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#1a3c34]/10">
+              <Users className="size-4.5 text-[#1a3c34]" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-[#1a3c34]">{t("group_orders")}</p>
+              <p className="text-[11px] text-[#1a3c34]/60">{t("group_order_cart_desc")}</p>
+            </div>
+          </Link>
+        )}
       </div>
     </motion.aside>
   );
