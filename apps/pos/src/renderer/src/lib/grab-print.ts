@@ -150,6 +150,7 @@ export async function printGrabLabels(order: AdminOrder): Promise<{ ok: boolean;
     const fontBase64 = await getFontBase64()
     const labels = buildOrderLabels(order, {
       labelWidth: labelCfg.labelWidth,
+      labelHeight: labelCfg.labelHeight,
       showProductName: labelCfg.showProductName ?? true,
       showPrice: labelCfg.showPrice ?? true,
       showNote: labelCfg.showNote ?? true,

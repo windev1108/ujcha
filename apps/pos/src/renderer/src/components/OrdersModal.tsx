@@ -322,6 +322,9 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
       setOrders(prev => prev.map(o =>
         o.id === payload.orderId ? { ...o, paymentStatus: 'paid' as const } : o
       ))
+      setSelectedOrder(prev =>
+        prev && prev.id === payload.orderId ? { ...prev, paymentStatus: 'paid' as const } : prev
+      )
     })
     socket.on('order:new', () => fullReload(true))
     socket.on('order:shipper-assigned', () => fullReload(false))

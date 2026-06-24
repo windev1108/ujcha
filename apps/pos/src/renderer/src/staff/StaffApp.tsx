@@ -103,7 +103,8 @@ export function StaffApp() {
           if (addr) {
             const fontBase64 = await getFontBase64()
             const labels = buildOrderLabels(o, {
-              labelWidth: labelCfg.labelWidth, showProductName: labelCfg.showProductName,
+              labelWidth: labelCfg.labelWidth, labelHeight: labelCfg.labelHeight,
+              showProductName: labelCfg.showProductName,
               showPrice: labelCfg.showPrice, showNote: labelCfg.showNote,
               customText: labelCfg.customText, lineSpacing: labelCfg.lineSpacing,
               feedAfterCut: labelCfg.feedAfterCut, paddingTop: labelCfg.paddingTop,

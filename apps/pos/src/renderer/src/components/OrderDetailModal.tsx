@@ -292,6 +292,7 @@ export function OrderDetailModal({
             const fontBase64 = await getFontBase64()
             const allLabels = buildOrderLabels(order, {
                 labelWidth: labelCfg.labelWidth,
+                labelHeight: labelCfg.labelHeight,
                 showProductName: labelCfg.showProductName,
                 showPrice: labelCfg.showPrice,
                 showNote: labelCfg.showNote,
@@ -329,7 +330,17 @@ export function OrderDetailModal({
     const vatRate = Number(order.vatRate) || 0
     const finalAmount = subtotal - discount - pointDiscount + shippingFee + vatAmount
     const totalQty = order.items.reduce((s, i) => s + i.quantity, 0)
-    const isPaid = order.paymentStatus === 'paid'
+
+    // Derive effective payment status from groupLive for real-time badge update:
+    // when all split-pay participants show paid in the /group socket, reflect that immediately
+    // without waiting for the order prop to refresh from the parent.
+    const isSplitPay = order.groupOrder?.paymentMode === 'split'
+    const activeParticipants = order.groupOrder?.participants.filter(p => p.items.length > 0) ?? []
+    const allParticipantsPaid = isSplitPay && groupLive !== null && activeParticipants.length > 0
+        && activeParticipants.every(p => groupLive.participants.find(lp => lp.id === p.id)?.paymentStatus === 'paid')
+    const effectivePaymentStatus = (allParticipantsPaid && order.paymentStatus !== 'paid') ? 'paid' : order.paymentStatus
+
+    const isPaid = effectivePaymentStatus === 'paid'
 
     const hasBillPrinter = billCfg.enabled && !!(billCfg.address || billCfg.printerId)
     const hasLabelPrinter = labelCfg.enabled && !!(labelCfg.address || labelCfg.printerId)
@@ -376,7 +387,7 @@ export function OrderDetailModal({
                                     <Users className="size-3" /> Đơn nhóm
                                 </span>
                             )}
-                            <PaymentBadge status={order.paymentStatus} />
+                            <PaymentBadge status={effectivePaymentStatus} />
                             {isReturning === true && (
                                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-200">
                                     <UserCheck className="size-3" /> Khách quen

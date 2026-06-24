@@ -413,6 +413,7 @@ export function buildReceiptDocumentHtml(
 
 export interface LabelHtmlConfig {
   labelWidth: number
+  labelHeight?: number
   showProductName: boolean
   showPrice: boolean
   showNote: boolean
@@ -444,60 +445,78 @@ export function buildSingleLabelHtml(
   const extras = parseExtras(item.extrasJson)
   const priceStr = formatVnd(Number.parseFloat(item.price))
   const w = cfg.labelWidth
-  // Tighten name font by 1px when participant row is added to keep 40×30mm budget
-  const nameFs = participantName ? 10 : 11
+  const h = cfg.labelHeight ?? 30
 
-  const lines: string[] = []
+  // ── Header (always at top) ────────────────────────────────────────────────
+  const headerHtml =
+    `<div style="flex-shrink:0;">` +
+    `<div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;font-weight:bold;">` +
+    `<span style="font-size:11px;color:#000;">${orderRef}</span>` +
+    `<span style="font-size:11px;color:#000;">${itemIndex}/${totalLabels}</span>` +
+    `</div>` +
+    `<div style="border-top:1px dashed #000;margin:1px 0;"></div>` +
+    `</div>`
 
-  lines.push(
-    `<div style="display:flex;justify-content:space-between;align-items:center;font-weight:bold;font-size:10px;">` +
-    `<span style="color:#000;font-size:11px;">${orderRef}</span>` +
-    `<span style="color:#000;font-size:11px;">${itemIndex}/${totalLabels}</span>` +
-    `</div>`,
-  )
-
-  lines.push(`<div style="border-top:1px dashed #000;margin:1px 0;"></div>`)
-
-  if (participantName) {
-    lines.push(
-      `<div style="display:flex;align-items:center;gap:2px;font-size:9px;font-weight:bold;line-height:1.1;color:#000;margin-bottom:1px;">${userIcon(9)}<span>${esc(participantName)}</span></div>`,
-    )
-  }
+  // ── Content middle (clips overflow — never pushes to page 2) ─────────────
+  const contentLines: string[] = []
 
   if (cfg.showProductName) {
-    lines.push(`<div style="font-weight:bold;font-size:${nameFs}px;line-height:1.05;color:#000;">${esc(item.product.name)}</div>`)
+    contentLines.push(`<div style="font-weight:bold;font-size:10px;line-height:1.1;color:#000;">${esc(item.product.name)}</div>`)
   }
 
   for (const [k, v] of optEntries) {
     const kLower = k.toLowerCase()
+    const vLower = v.toLowerCase()
     const isNgot = kLower.includes('ngọt')
-    const hideKey = kLower.includes('size') || kLower.includes('đá') || isNgot
-    const displayVal = isNgot
-      ? v.toLowerCase().includes('ngọt') ? v : `Ngọt ${v.charAt(0).toLowerCase()}${v.slice(1)}`
-      : v
+    const hasSweetener = vLower.includes('sữa') || vLower.includes('đường')
+    const isSweetenerAdd = hasSweetener && !vLower.includes('không')
+    const isSweetenerNone = hasSweetener && vLower.includes('không')
+    const hideKey = kLower.includes('size') || kLower.includes('đá') || kLower.includes('kích cỡ') || kLower.includes('chọn ly') || isNgot || isSweetenerAdd || isSweetenerNone
+    let displayVal: string
+    if (isSweetenerNone) {
+      displayVal = 'Ít Ngọt'
+    } else if (isSweetenerAdd) {
+      displayVal = 'Ngọt vừa'
+    } else if (isNgot) {
+      displayVal = vLower.includes('ngọt') ? v : `Ngọt ${v.charAt(0).toLowerCase()}${v.slice(1)}`
+    } else {
+      displayVal = v
+    }
     const label = hideKey ? esc(displayVal) : `${esc(k)}: ${esc(displayVal)}`
-    lines.push(`<div style="font-size:9px;line-height:1.1;color:#000;font-weight:bold;">+ ${label}</div>`)
+    contentLines.push(`<div style="font-size:9px;line-height:1.1;color:#000;font-weight:bold;">+ ${label}</div>`)
   }
 
   for (const ex of extras) {
-    lines.push(`<div style="font-size:9px;line-height:1.1;color:#000;font-weight:bold;">+ ${esc(ex.name)}</div>`)
+    contentLines.push(`<div style="font-size:9px;line-height:1.1;color:#000;font-weight:bold;">+ ${esc(ex.name)}</div>`)
   }
 
   if (cfg.showNote && item.note) {
-    lines.push(`<div style="display:flex;align-items:center;gap:2px;font-size:9px;line-height:1.1;color:#000;">${stickyNoteIcon(9)}<span>${esc(item.note)}</span></div>`)
+    contentLines.push(`<div style="display:flex;align-items:center;gap:2px;font-size:9px;line-height:1.1;color:#000;">${stickyNoteIcon(9)}<span style="line-height:1;">${esc(item.note)}</span></div>`)
+  }
+
+  if (participantName) {
+    contentLines.push(
+      `<div style="display:flex;align-items:center;gap:3px;font-size:9px;font-weight:bold;color:#000;">${userIcon(9)}<span style="line-height:1;">${esc(participantName)}</span></div>`,
+    )
   }
 
   if (cfg.customText) {
-    lines.push(`<div style="font-size:9px;color:#000;">${esc(cfg.customText)}</div>`)
+    contentLines.push(`<div style="font-size:9px;color:#000;">${esc(cfg.customText)}</div>`)
   }
 
-  const footerLeft = cfg.showPrice ? priceStr : ''
-  lines.push(
-    `<div style="display:flex;justify-content:space-between;align-items:center;font-size:9px;margin-top:1px;">` +
-    `<span style="color:#000;">${esc(footerLeft)}</span>` +
+  const contentHtml =
+    `<div style="flex:1;overflow:hidden;min-height:0;">` +
+    contentLines.join('') +
+    `</div>`
+
+  // ── Footer (price/time — pinned to bottom, offset 2mm from edge) ──────────
+  const footerHtml =
+    `<div style="flex-shrink:0;">` +
+    `<div style="display:flex;justify-content:space-between;align-items:center;font-size:9px;">` +
+    `<span style="color:#000;">${esc(cfg.showPrice ? priceStr : '')}</span>` +
     `<span style="color:#000;">${esc(printedAt)}</span>` +
-    `</div>`,
-  )
+    `</div>` +
+    `</div>`
 
   const titleText = `Label ${itemIndex} of ${totalLabels}`
   const fontFace = getFontFaceStyle(fontBase64)
@@ -506,19 +525,21 @@ export function buildSingleLabelHtml(
     `<title>${titleText}</title>` +
     `<style>` +
     fontFace +
-    `@page { size: ${w}mm auto; margin: 0; }` +
+    `@page { size: ${w}mm ${h}mm; margin: 0; }` +
     `* { box-sizing: border-box; }` +
     `html { -webkit-text-size-adjust: none; text-size-adjust: none; }` +
     `body {` +
     `  font-family: ${FONT_FAMILY};` +
     `  font-weight: 700;` +
     `  ${FONT_SMOOTHING}` +
-    `  margin: 0; padding: 0.5mm 2mm;` +
-    `  width: ${w - 2}mm; color: #000; background: #fff;` +
+    `  margin: 0; padding: 0.5mm 2mm 1.5mm;` +
+    `  width: ${w - 2}mm; height: ${h}mm;` +
+    `  color: #000; background: #fff;` +
     `  font-size: 10px;` +
+    `  display: flex; flex-direction: column; overflow: hidden;` +
     `}` +
     `</style></head><body>` +
-    lines.join('') +
+    headerHtml + contentHtml + footerHtml +
     `</body></html>`
   )
 }
@@ -530,7 +551,7 @@ export function buildOrderLabels(
 ): string[] {
   const labels: string[] = []
   const now = new Date()
-  const printedAt = dayjs(now).locale('vi').format('DD/MM/YYYY HH:mm ')
+  const printedAt = dayjs(now).format('DD/MM HH:mm')
   const totalLabels = order.items.reduce((sum, item) => sum + item.quantity, 0)
   const participantMap = buildGroupParticipantMap(order.groupOrder)
   let labelIndex = 1
