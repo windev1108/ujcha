@@ -348,13 +348,24 @@ export class GroupOrderService {
           const product = await tx.product.findUnique({ where: { id: item.productId } });
           if (!product) continue;
           const effectiveDiscount = globalDiscount > 0 ? globalDiscount : (product.discountPercent ?? 0);
-          const finalUnitPrice = computeFinalPrice(product.price, effectiveDiscount);
+          const basePrice = computeFinalPrice(product.price, effectiveDiscount);
+
+          const productOptionGroups = Array.isArray(product.optionGroups) ? product.optionGroups as any[] : [];
+          let optionSurcharge = 0;
+          for (const grp of productOptionGroups) {
+            const sel = item.selectedOptions?.[grp.name];
+            if (!sel) continue;
+            const vals = Array.isArray(grp.values) ? grp.values : [];
+            const matched = vals.find((v: any) => String(v.label ?? v).trim() === String(sel).trim());
+            if (matched?.priceDelta) optionSurcharge += Number(matched.priceDelta);
+          }
+
           await tx.groupOrderParticipantItem.create({
             data: {
               participantId: participant.id,
               productId: item.productId,
               quantity: item.quantity,
-              unitPrice: new Prisma.Decimal(finalUnitPrice),
+              unitPrice: new Prisma.Decimal(basePrice + optionSurcharge),
               selectedOptions: item.selectedOptions ?? {},
               toppingsJson: (item.toppings ?? []) as any,
               note: item.note ?? null,

@@ -389,8 +389,9 @@ function ProductPickerDrawer({
   const [customizeTarget, setCustomizeTarget] = useState<ApiProduct | null>(null);
 
   const { data: categories = [] } = useCategoriesQuery();
+  const effectiveCategoryId = search.trim() ? undefined : activeCategoryId;
   const { data: allProducts = [], isLoading: productsLoading } = useProductsQuery({
-    categoryId: activeCategoryId,
+    categoryId: effectiveCategoryId,
   });
   const products = (search.trim()
     ? allProducts.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()))
