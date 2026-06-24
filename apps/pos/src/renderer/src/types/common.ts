@@ -43,6 +43,8 @@ export interface Product {
   isAvailable: boolean
   isSoldOut: boolean
   discountPercent: number
+  /** Product-specific discount wins if set; global is fallback. Always use this for display. */
+  effectiveDiscountPercent?: number
   finalPrice?: number
 }
 

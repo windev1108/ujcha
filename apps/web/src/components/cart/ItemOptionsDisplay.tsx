@@ -1,5 +1,5 @@
 import type { ApiCartItem } from "@/services/cart/types";
-import { normalizeOptionGroups } from "@/lib/product-options";
+import { normalizeOptionGroups, formatOptionLabel } from "@/lib/product-options";
 import { useLocale } from "next-intl";
 import { getDisplayName, getValueLabel } from "@/lib/product-name";
 import { StickyNote } from "lucide-react";
@@ -42,13 +42,13 @@ export function ItemOptionsDisplay({ item }: Props) {
   return (
     <div className="mt-1.5 space-y-1.5">
       {(optionPills.length > 0 || toppingPills.length > 0) && (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-col items-start gap-1">
           {optionPills.map((p) => (
             <span
               key={p.key}
               className="inline-flex items-center gap-1 rounded-full bg-surface-secondary px-2.5 py-0.5 text-[11px] font-medium text-foreground/70"
             >
-              {p.groupName}: {p.label}
+              {formatOptionLabel(p.groupName, p.label, locale)}
               {p.delta > 0 && (
                 <span className="text-[10px] text-muted">+{fmt(p.delta)}</span>
               )}

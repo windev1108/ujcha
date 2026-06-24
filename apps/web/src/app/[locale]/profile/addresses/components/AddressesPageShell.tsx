@@ -348,11 +348,11 @@ function AddressModal({
             />
             {errors.fullAddress && <p className="mt-1 text-xs text-red-500">{errors.fullAddress}</p>}
             {geoError && <p className="mt-1 text-xs text-red-500">{geoError}</p>}
-            {form.lat != null && form.lng != null && (
+            {/* {form.lat != null && form.lng != null && (
               <p className="mt-1 text-xs text-kun-products-forest">
                 GPS: {form.lat.toFixed(5)}, {form.lng.toFixed(5)}
               </p>
-            )}
+            )} */}
             {errors.lat && !geoError && <p className="mt-1 text-xs text-red-500">{errors.lat}</p>}
           </div>
 
@@ -371,9 +371,8 @@ function AddressModal({
               role="checkbox"
               aria-checked={form.isDefault}
               onClick={() => patch({ isDefault: !form.isDefault })}
-              className={`flex size-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${
-                form.isDefault ? "border-kun-products-forest bg-kun-products-forest" : "border-black/20 bg-white"
-              }`}
+              className={`flex size-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${form.isDefault ? "border-kun-products-forest bg-kun-products-forest" : "border-black/20 bg-white"
+                }`}
             >
               {form.isDefault && (
                 <svg className="size-3 text-white" viewBox="0 0 12 12" fill="none">

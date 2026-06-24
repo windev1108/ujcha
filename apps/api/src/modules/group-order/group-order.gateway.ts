@@ -35,4 +35,8 @@ export class GroupOrderGateway {
   broadcastDissolved(token: string) {
     this.server.to(`room:${token}`).emit('dissolved');
   }
+
+  broadcastLeave(token: string, name: string) {
+    this.server.to(`room:${token}`).emit('member-left', { name });
+  }
 }

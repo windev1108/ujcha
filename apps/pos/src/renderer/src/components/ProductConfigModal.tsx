@@ -42,8 +42,9 @@ export function ProductConfigModal({ product, onClose, onConfirm }: Props) {
     if (!product) return null
 
     const base = parseFloat(product.price)
-    const hasDiscount = product.discountPercent > 0
-    const discountedBase = product.finalPrice ?? applyProductDiscount(base, product.discountPercent)
+    const effectiveDiscount = product.effectiveDiscountPercent ?? product.discountPercent
+    const hasDiscount = effectiveDiscount > 0
+    const discountedBase = product.finalPrice ?? applyProductDiscount(base, effectiveDiscount)
 
     const optionDelta = product.optionGroups.reduce((sum, g) => {
         const selected = g.values.find((v) => v.label === options[g.name])
@@ -109,7 +110,7 @@ export function ProductConfigModal({ product, onClose, onConfirm }: Props) {
                             {hasDiscount && (
                                 <>
                                     <p className="text-xs text-gray-400 line-through">{fmt(base)}</p>
-                                    <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">-{product.discountPercent}%</span>
+                                    <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">-{effectiveDiscount}%</span>
                                 </>
                             )}
                         </div>

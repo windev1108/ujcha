@@ -521,21 +521,32 @@ export function ProductEditorClient({ mode, productId }: Props) {
                 />
                 {(() => {
                   const disc = Number.parseInt(discountPercent, 10);
+                  const productDisc = Number.isFinite(disc) ? Math.min(100, Math.max(0, disc)) : 0;
+                  const globalDisc = existing?.globalDiscountPercent ?? 0;
+                  // Product-specific wins if set; global is fallback
+                  const effective = productDisc > 0 ? productDisc : globalDisc;
                   const basePrice = Number.parseFloat(price);
-                  if (Number.isFinite(disc) && disc > 0 && Number.isFinite(basePrice) && basePrice > 0) {
-                    return (
-                      <Description className="text-xs text-foreground/50">
-                        Giá sau giảm riêng:{" "}
-                        <span className="font-semibold tabular-nums text-[#1a3c34]">
-                          {formatVnd(computeAdminFinalPrice(basePrice, disc))}
-                        </span>
-                        . Nếu giảm giá toàn shop đang bật, mức toàn shop sẽ ghi đè.
-                      </Description>
-                    );
-                  }
+                  const hasPrice = Number.isFinite(basePrice) && basePrice > 0;
                   return (
                     <Description className="text-xs text-foreground/50">
-                      0–100%. Nếu giảm giá toàn shop đang bật, mức toàn shop sẽ ghi đè mức này.
+                      {hasPrice && effective > 0 ? (
+                        <>
+                          Giá sau giảm:{" "}
+                          <span className="font-semibold tabular-nums text-[#1a3c34]">
+                            {formatVnd(computeAdminFinalPrice(basePrice, effective))}
+                          </span>
+                          {globalDisc > 0 && productDisc === 0 && (
+                            <span className="ml-1">(dùng giảm toàn shop {globalDisc}%)</span>
+                          )}
+                          {globalDisc > 0 && productDisc > 0 && (
+                            <span className="ml-1">(giảm riêng {productDisc}% — ghi đè toàn shop {globalDisc}%)</span>
+                          )}
+                          .{" "}
+                        </>
+                      ) : null}
+                      {globalDisc > 0
+                        ? `Toàn shop đang giảm ${globalDisc}%. Đặt giảm riêng ở đây sẽ ghi đè mức toàn shop cho sản phẩm này.`
+                        : "0–100%. Để trống (0) sẽ dùng giảm giá toàn shop nếu có."}
                     </Description>
                   );
                 })()}

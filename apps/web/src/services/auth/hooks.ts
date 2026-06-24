@@ -26,9 +26,9 @@ export function useMeQuery() {
   });
 }
 
-export function useSendOtpMutation() {
+export function useSendOtpMutation(purpose?: 'register' | 'reset') {
   return useMutation({
-    mutationFn: (phone: string) => postSendOtp({ phone }),
+    mutationFn: (phone: string) => postSendOtp({ phone, purpose }),
   });
 }
 

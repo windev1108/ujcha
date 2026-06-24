@@ -16,8 +16,9 @@ function fmt(price: string | number) {
 function ProductCard({ product, onPress }: { product: Product; onPress: (p: Product) => void }) {
   const sold = product.isSoldOut || !product.isAvailable
   const basePrice = parseFloat(product.price)
-  const hasDiscount = product.discountPercent > 0
-  const finalPrice = product.finalPrice ?? applyProductDiscount(basePrice, product.discountPercent)
+  const effectiveDiscount = product.effectiveDiscountPercent ?? product.discountPercent
+  const hasDiscount = effectiveDiscount > 0
+  const finalPrice = product.finalPrice ?? applyProductDiscount(basePrice, effectiveDiscount)
 
   return (
     <button
@@ -41,7 +42,7 @@ function ProductCard({ product, onPress }: { product: Product; onPress: (p: Prod
 
       {hasDiscount && !sold && (
         <span className="absolute left-2 top-2 z-10 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white shadow-sm">
-          -{product.discountPercent}%
+          -{effectiveDiscount}%
         </span>
       )}
 

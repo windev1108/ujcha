@@ -174,7 +174,7 @@ function ContactModeToggle({
           : "text-muted hover:text-foreground"
           }`}
       >
-        <User className="size-3.5" />
+        <User className="size-3.5 sm:block hidden" />
         {t("my_account")}
       </button>
       <button
@@ -438,12 +438,12 @@ function DeliveryFulfillmentCard({
                 {geoError && (
                   <p className="mt-1.5 text-xs text-red-500">{geoError}</p>
                 )}
-                {form.lat != null && form.lng != null && (
+                {/* {form.lat != null && form.lng != null && (
                   <p className="mt-1.5 flex items-center gap-1 text-xs tabular-nums text-kun-products-forest">
                     <Navigation className="size-3 shrink-0" />
                     {form.lat.toFixed(5)}, {form.lng.toFixed(5)}
                   </p>
-                )}
+                )} */}
               </div>
 
               {/* Recipient info — toggle between account and custom */}
@@ -640,7 +640,7 @@ function PickupDetailsCard({
         {t("pickup_details")}
       </p>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:gap-8">
+      <div className="grid grid-cols-1 gap-6">
         {/* Pickup time */}
         <div>
           <label className="mb-3 block text-xs font-medium text-foreground/70">

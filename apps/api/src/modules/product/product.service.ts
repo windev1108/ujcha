@@ -121,7 +121,8 @@ function applyLocale<T extends { name: string; nameTranslation: Record<string, s
 
 function applyGlobalDiscount<T extends { discountPercent: number }>(product: T, globalDiscount: number): T {
     if (!globalDiscount) return product;
-    // Global discount overrides per-product discount (not additive)
+    // Product-specific discount takes priority; global is the fallback when product has none
+    if (product.discountPercent > 0) return product;
     return { ...product, discountPercent: globalDiscount };
 }
 

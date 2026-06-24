@@ -12,8 +12,11 @@ import { useLocalizedHref } from "@/i18n/use-localized-href";
 import { useSendOtpMutation, useResetPasswordMutation } from "@/services/auth/hooks";
 import { useTranslations } from "next-intl";
 
-function axiosErrorMessage(e: unknown, fallback: string): string {
-  const err = e as { response?: { data?: { message?: string } }; message?: string };
+function resolveApiError(e: unknown, t: (key: string) => string, fallback: string): string {
+  const err = e as { response?: { data?: { message?: string; code?: string } }; message?: string };
+  const code = err.response?.data?.code;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (code) return t(code as any);
   return err.response?.data?.message ?? err.message ?? fallback;
 }
 
@@ -72,7 +75,7 @@ function ForgotPasswordContent() {
   const [showPwd, setShowPwd] = useState(false);
   const countdown = useOtpCountdown();
 
-  const sendOtp = useSendOtpMutation();
+  const sendOtp = useSendOtpMutation('reset');
   const resetPassword = useResetPasswordMutation();
 
   const pwdMismatch = confirmPwd.length > 0 && newPassword !== confirmPwd;
@@ -82,16 +85,24 @@ function ForgotPasswordContent() {
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!phone.trim()) return;
-    await sendOtp.mutateAsync(phone.trim());
-    countdown.start();
-    setStep("otp");
+    try {
+      await sendOtp.mutateAsync(phone.trim());
+      countdown.start();
+      setStep("otp");
+    } catch {
+      // error displayed via sendOtp.isError
+    }
   };
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!step2Valid) return;
-    await resetPassword.mutateAsync({ phone: phone.trim(), code: otp.replace(/\s/g, ""), newPassword });
-    setStep("success");
+    try {
+      await resetPassword.mutateAsync({ phone: phone.trim(), code: otp.replace(/\s/g, ""), newPassword });
+      setStep("success");
+    } catch {
+      // error displayed via resetPassword.isError
+    }
   };
 
   if (step === "success") {
@@ -138,7 +149,7 @@ function ForgotPasswordContent() {
 
             {sendOtp.isError && (
               <div className="rounded-xl border border-red-100 bg-red-50 px-3.5 py-2.5 text-xs text-red-700">
-                {axiosErrorMessage(sendOtp.error, t("generic_error"))}
+                {resolveApiError(sendOtp.error, t, t("generic_error"))}
               </div>
             )}
 
@@ -202,7 +213,7 @@ function ForgotPasswordContent() {
 
             {resetPassword.isError && (
               <div className="rounded-xl border border-red-100 bg-red-50 px-3.5 py-2.5 text-xs text-red-700">
-                {axiosErrorMessage(resetPassword.error, t("generic_error"))}
+                {resolveApiError(resetPassword.error, t, t("generic_error"))}
               </div>
             )}
 

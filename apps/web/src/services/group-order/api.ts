@@ -195,6 +195,14 @@ export async function dissolveGroupOrder(
   return data
 }
 
+export async function leaveGroupOrder(
+  token: string,
+  sessionToken: string,
+): Promise<GroupOrderState> {
+  const { data } = await api.post<GroupOrderState>(`/group-orders/${token}/leave`, { sessionToken })
+  return data
+}
+
 export async function kickGroupOrderParticipant(
   token: string,
   sessionToken: string,

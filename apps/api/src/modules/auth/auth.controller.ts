@@ -49,7 +49,7 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Đã chấp nhận yêu cầu' })
   async sendOtp(@Body() dto: SendOtpDto, @Req() req: Request) {
     const ip = getClientIp(req);
-    await this.authService.sendOtp(dto.phone, ip);
+    await this.authService.sendOtp(dto.phone, ip, dto.purpose);
     return { message: 'OK' };
   }
 

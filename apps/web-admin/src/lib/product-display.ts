@@ -19,22 +19,22 @@ export function formatVnd(amount: string | number): string {
   return `${new Intl.NumberFormat("vi-VN").format(Math.round(n))}₫`;
 }
 
-/** Giảm giá hiển thị: global override per-product (không cộng gộp). */
+/** Giảm giá hiển thị: sản phẩm có giảm riêng thì dùng riêng, không thì dùng global. */
 export function effectiveDiscountPercent(
   p: AdminProduct,
   globalDiscountPercent: number,
 ): number {
   const g = Math.min(100, Math.max(0, Math.round(globalDiscountPercent)));
   const d = Math.min(100, Math.max(0, Math.round(p.discountPercent ?? 0)));
-  return g > 0 ? g : d;
+  return d > 0 ? d : g;
 }
 
-/** Giá sau giảm, làm tròn xuống 1000đ. */
+/** Giá sau giảm, làm tròn giữa sang 1000đ gần nhất (≥500 làm tròn lên). */
 export function computeAdminFinalPrice(price: string | number, effectiveDiscount: number): number {
   const base = typeof price === "string" ? Number.parseFloat(price) : price;
   if (!Number.isFinite(base)) return 0;
   if (!effectiveDiscount) return base;
-  return Math.floor((base * (1 - effectiveDiscount / 100)) / 1000) * 1000;
+  return Math.round((base * (1 - effectiveDiscount / 100)) / 1000) * 1000;
 }
 
 const badgePalette: Record<string, string> = {

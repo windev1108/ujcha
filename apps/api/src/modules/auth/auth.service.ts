@@ -47,7 +47,16 @@ export class AuthService {
   ) { }
 
   /** Gửi OTP để đăng ký hoặc quên mật khẩu. */
-  async sendOtp(phone: string, requestIp: string): Promise<void> {
+  async sendOtp(phone: string, requestIp: string, purpose?: 'register' | 'reset'): Promise<void> {
+    if (purpose === 'reset') {
+      const user = await this.userService.findByPhone(phone);
+      if (!user) {
+        throw new NotFoundException({
+          message: 'Số điện thoại chưa được đăng ký.',
+          code: 'USER_NOT_FOUND',
+        });
+      }
+    }
     const { code } = await this.otpService.generateOtp(phone, requestIp);
     await this.smsService.sendOtp(phone, code);
   }

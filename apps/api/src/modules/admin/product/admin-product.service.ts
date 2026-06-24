@@ -303,10 +303,14 @@ export class AdminProductService {
 }
 
 function normalizeProductRow<T extends { price: unknown; discountPercent: number; optionGroups: unknown; toppings: unknown; nameTranslation: unknown; descriptionTranslation: unknown }>(row: T, globalDiscount = 0) {
-  const effectiveDiscount = Math.min(100, row.discountPercent + globalDiscount);
+  // Product-specific discount takes priority; global is the fallback when product has none
+  const effectiveDiscount = row.discountPercent > 0 ? row.discountPercent : globalDiscount;
   return {
     ...row,
-    discountPercent: effectiveDiscount,
+    // discountPercent stays as the RAW stored value so the admin editor can round-trip it without accumulation
+    discountPercent: row.discountPercent,
+    effectiveDiscountPercent: effectiveDiscount,
+    globalDiscountPercent: globalDiscount,
     optionGroups: normalizeInlineOptionGroups(row.optionGroups as any),
     toppings: normalizeInlineToppings(row.toppings as any),
     nameTranslation: (row.nameTranslation && typeof row.nameTranslation === 'object' ? row.nameTranslation : {}) as Record<string, string>,

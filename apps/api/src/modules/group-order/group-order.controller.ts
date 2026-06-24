@@ -189,6 +189,18 @@ export class GroupOrderController {
     return result.groupOrder;
   }
 
+  @Post(':token/leave')
+  @HttpCode(200)
+  async leaveGroupOrder(
+    @Param('token') token: string,
+    @Body() dto: SessionActionDto,
+  ) {
+    const result = await this.service.leaveGroupOrder(token, dto.sessionToken);
+    this.gateway.broadcastLeave(token, result.leaverName);
+    this.gateway.broadcast(token, result.groupOrder);
+    return result.groupOrder;
+  }
+
   @Post(':token/confirm-paid')
   @HttpCode(200)
   async confirmPaid(

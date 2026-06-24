@@ -21,7 +21,7 @@ import {
   Link2,
   Loader2,
   Lock,
-  LockOpen,
+  LogOut,
   MapPin,
   Minus,
   Pencil,
@@ -46,7 +46,7 @@ import { useAuthStore } from "@/store/auth-store";
 import { useProductsQuery } from "@/services/product/hooks";
 import type { ApiProduct } from "@/services/product/types";
 import { useCategoriesQuery } from "@/services/category/hooks";
-import { normalizeOptionGroups, computeOptionSurcharge, formatVnd } from "@/lib/product-options";
+import { normalizeOptionGroups, computeOptionSurcharge, formatVnd, formatOptionLabel } from "@/lib/product-options";
 
 import { useAddressesQuery } from "@/services/order/hooks";
 import { createAddress } from "@/services/order/api";
@@ -65,18 +65,19 @@ import {
   updateGroupOrderItems,
   markGroupOrderReady,
   lockGroupOrder,
-  unlockGroupOrder,
   setGroupOrderFulfillment,
   checkoutHostPays,
   confirmParticipantPaid,
   checkoutSplitCash,
   kickGroupOrderParticipant,
+  leaveGroupOrder,
   dissolveGroupOrder,
   fetchGroupOrderConfig,
   type GroupOrderState,
   type GroupOrderItem,
   type GroupDiscountTier,
 } from "@/services/group-order/api";
+import { toast } from "sonner";
 import { useLocale, useTranslations } from "next-intl";
 import { getDisplayName } from "@/lib/product-name";
 import { getDeviceId } from "@/hooks/useDeviceId";
@@ -454,7 +455,7 @@ function ProductPickerDrawer({
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 350 }}
-            className="relative flex h-[90dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-white sm:h-[88vh] sm:max-w-3xl sm:rounded-3xl lg:max-w-5xl"
+            className="relative flex h-[90dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-white sm:h-[88vh] sm:max-w-3xl sm:rounded-3xl lg:max-w-5xl xl:max-w-6xl"
           >
             <AnimatePresence>
               {customizeTarget && (
@@ -539,7 +540,7 @@ function ProductPickerDrawer({
                   {t("group_no_items_found")}
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                   {products.map((product) => {
                     const draftVal = draft.get(product.id);
                     const qty = draftVal?.quantity ?? 0;
@@ -726,7 +727,7 @@ function ParticipantRow({
 
   return (
     <div className="transition-all">
-      <div className="flex items-center justify-between gap-3">
+      <div className={`sticky top-0 z-10 flex items-center justify-between gap-3 px-4 py-3 ${isMe ? "bg-[#f0faf6]" : "bg-white"}`}>
         <div className="flex items-center gap-2.5">
           {participant.avatar ? (
             <Image
@@ -754,7 +755,8 @@ function ParticipantRow({
               )}
             </p>
             <p className="text-xs text-foreground/50">
-              {t("group_items_amount", { count: participant.items.length, amount: fmtVnd(participant.subtotal) })}
+              {participant.items.length} món ·{" "}
+              <span className="text-sm font-bold tabular-nums text-[#1a3c34]">{fmtVnd(participant.subtotal)}</span>
             </p>
           </div>
         </div>
@@ -814,7 +816,7 @@ function ParticipantRow({
       </div>
 
       {participant.items.length > 0 && (
-        <div className="mt-3 space-y-3 border-t border-black/6 pt-3">
+        <div className="space-y-3 border-t border-black/6 px-4 pb-4 pt-3">
           {participant.items.map((item) => {
             const imageUrl = item.product?.imageUrls[0] ?? null;
             const displayName = item.product ? getDisplayName(item.product, locale) : "Sản phẩm";
@@ -869,36 +871,41 @@ function ParticipantRow({
                     </p>
                   </div>
 
-                  {(resolvedOptions.length > 0 || (item.toppings && item.toppings.length > 0)) && (
-                    <div className="mt-1.5 flex flex-wrap gap-1.5">
-                      {resolvedOptions.map((o, i) => (
-                        <span
-                          key={i}
-                          className="inline-flex items-center gap-1 rounded-full bg-surface-card px-2.5 py-0.5 text-[11px] font-medium text-foreground/70"
-                        >
-                          {o.groupName}: {o.label}
-                          {o.priceDelta > 0 && (
-                            <span className="text-[10px] text-muted">+{fmtVnd(o.priceDelta)}</span>
-                          )}
-                        </span>
-                      ))}
-                      {item.toppings?.map((top) => (
-                        <span
-                          key={top.toppingId}
-                          className="inline-flex items-center gap-1 rounded-full bg-kun-mint/20 px-2.5 py-0.5 text-[11px] font-medium text-kun-products-forest"
-                        >
-                          + {top.nameTranslation?.[locale] ?? top.name}
-                          {top.price > 0 && (
-                            <span className="text-[10px] text-kun-products-forest/60">+{fmtVnd(top.price)}</span>
-                          )}
-                        </span>
-                      ))}
+                  {(resolvedOptions.length > 0 || (item.toppings && item.toppings.length > 0) || item.note) && (
+                    <div className="mt-1.5 space-y-1.5">
+                      {(resolvedOptions.length > 0 || (item.toppings && item.toppings.length > 0)) && (
+                        <div className="flex flex-col items-start gap-1">
+                          {resolvedOptions.map((o, i) => (
+                            <span
+                              key={i}
+                              className="inline-flex items-center gap-1 rounded-full bg-surface-card px-2.5 py-0.5 text-[11px] font-medium text-foreground/70"
+                            >
+                              {formatOptionLabel(o.groupName, o.label, locale)}
+                              {o.priceDelta > 0 && (
+                                <span className="text-[10px] text-muted">+{fmtVnd(o.priceDelta)}</span>
+                              )}
+                            </span>
+                          ))}
+                          {item.toppings?.map((top) => (
+                            <span
+                              key={top.toppingId}
+                              className="inline-flex items-center gap-1 rounded-full bg-kun-mint/20 px-2.5 py-0.5 text-[11px] font-medium text-kun-products-forest"
+                            >
+                              + {top.nameTranslation?.[locale] ?? top.name}
+                              {top.price > 0 && (
+                                <span className="text-[10px] text-kun-products-forest/60">+{fmtVnd(top.price)}</span>
+                              )}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {item.note && (
+                        <p className="flex items-center gap-1 text-[11px] text-muted italic">
+                          <StickyNote className="size-3 shrink-0 text-muted/70" />
+                          {item.note}
+                        </p>
+                      )}
                     </div>
-                  )}
-
-                  {/* Note */}
-                  {item.note && (
-                    <p className="mt-0.5 text-[11px] italic text-foreground/35">"{item.note}"</p>
                   )}
                 </div>
 
@@ -1166,6 +1173,9 @@ export function GroupOrderPageShell() {
   const [showDissolveConfirm, setShowDissolveConfirm] = useState(false);
   const [kickingId, setKickingId] = useState<string | null>(null);
   const [joinNotif, setJoinNotif] = useState<string | null>(null);
+  const [leaveNotif, setLeaveNotif] = useState<string | null>(null);
+  const [isLeaving, setIsLeaving] = useState(false);
+  const [showLockConfirm, setShowLockConfirm] = useState(false);
   const [joining, setJoining] = useState(false);
   useEffect(() => { myParticipantIdRef.current = myParticipantId; }, [myParticipantId]);
   useEffect(() => {
@@ -1173,6 +1183,11 @@ export function GroupOrderPageShell() {
     const id = setTimeout(() => setJoinNotif(null), 3000);
     return () => clearTimeout(id);
   }, [joinNotif]);
+  useEffect(() => {
+    if (!leaveNotif) return;
+    const id = setTimeout(() => setLeaveNotif(null), 3000);
+    return () => clearTimeout(id);
+  }, [leaveNotif]);
   const [needsGuestName, setNeedsGuestName] = useState(false);
   const [guestNameInput, setGuestNameInput] = useState("");
   const [duplicateTab, setDuplicateTab] = useState(false);
@@ -1361,6 +1376,9 @@ export function GroupOrderPageShell() {
     });
     socketRef.current = socket;
     socket.emit("join-room", { token });
+    socket.on("member-left", (data: { name: string }) => {
+      setLeaveNotif(data.name);
+    });
     socket.on("updated", (newState: GroupOrderState) => {
       const prevIds = prevParticipantIdsRef.current;
       const pid = myParticipantIdRef.current;
@@ -1432,7 +1450,7 @@ export function GroupOrderPageShell() {
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string | string[] } } };
       const msg = err?.response?.data?.message ?? "Có lỗi xảy ra.";
-      alert(typeof msg === "string" ? msg : msg.join(", "));
+      toast.error(typeof msg === "string" ? msg : msg.join(", "));
     } finally {
       setActionLoading(false);
     }
@@ -1448,7 +1466,7 @@ export function GroupOrderPageShell() {
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string | string[] } } };
       const msg = err?.response?.data?.message ?? "Có lỗi xảy ra.";
-      alert(typeof msg === "string" ? msg : msg.join(", "));
+      toast.error(typeof msg === "string" ? msg : msg.join(", "));
       setShowDissolveConfirm(false);
     } finally {
       setActionLoading(false);
@@ -1586,6 +1604,9 @@ export function GroupOrderPageShell() {
     const paymentType = state.paymentType ?? "cash";
     setActionLoading(true);
     try {
+      if (state.status === "collecting") {
+        await lockGroupOrder(token, sessionToken);
+      }
       const res = await checkoutHostPays(token, sessionToken, paymentType);
       const go = res.groupOrder;
       setState(go);
@@ -1595,7 +1616,7 @@ export function GroupOrderPageShell() {
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string | string[] } } };
       const msg = err?.response?.data?.message ?? "Có lỗi xảy ra.";
-      alert(typeof msg === "string" ? msg : msg.join(", "));
+      toast.error(typeof msg === "string" ? msg : msg.join(", "));
     } finally {
       setActionLoading(false);
     }
@@ -1614,7 +1635,7 @@ export function GroupOrderPageShell() {
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string | string[] } } };
       const msg = err?.response?.data?.message ?? "Có lỗi xảy ra.";
-      alert(typeof msg === "string" ? msg : msg.join(", "));
+      toast.error(typeof msg === "string" ? msg : msg.join(", "));
     } finally {
       setActionLoading(false);
     }
@@ -1630,7 +1651,7 @@ export function GroupOrderPageShell() {
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string | string[] } } };
       const msg = err?.response?.data?.message ?? "Có lỗi xảy ra.";
-      alert(typeof msg === "string" ? msg : msg.join(", "));
+      toast.error(typeof msg === "string" ? msg : msg.join(", "));
     } finally {
       setPickerSaving(false);
     }
@@ -1654,11 +1675,28 @@ export function GroupOrderPageShell() {
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string | string[] } } };
       const msg = err?.response?.data?.message ?? "Có lỗi xảy ra.";
-      alert(typeof msg === "string" ? msg : msg.join(", "));
+      toast.error(typeof msg === "string" ? msg : msg.join(", "));
     } finally {
       setRemovingProductId(null);
     }
   };
+
+  const handleLeave = useCallback(async () => {
+    if (!sessionToken) return;
+    setIsLeaving(true);
+    try {
+      await leaveGroupOrder(token, sessionToken);
+      localStorage.removeItem(SESSION_KEY(token));
+      localStorage.removeItem(PARTICIPANT_KEY(token));
+      clearGroupOrderSession(token);
+      router.push(ROUTES.HOME);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string | string[] } } };
+      const msg = err?.response?.data?.message ?? "Có lỗi xảy ra.";
+      toast.error(typeof msg === "string" ? msg : msg.join(", "));
+      setIsLeaving(false);
+    }
+  }, [sessionToken, token, router]);
 
   if (loading) {
     return (
@@ -1758,7 +1796,7 @@ export function GroupOrderPageShell() {
 
   return (
     <>
-      {/* New participant join toast */}
+      {/* New participant join / leave toasts */}
       <AnimatePresence>
         {joinNotif && (
           <motion.div
@@ -1772,6 +1810,21 @@ export function GroupOrderPageShell() {
             <div className="flex items-center gap-2.5 rounded-full bg-[#1a3c34] px-4 py-2.5 text-sm font-semibold text-white shadow-lg">
               <Users className="size-4 shrink-0" />
               <span>{t("group_joined_notif", { name: joinNotif })}</span>
+            </div>
+          </motion.div>
+        )}
+        {leaveNotif && (
+          <motion.div
+            key="leave-notif"
+            initial={{ opacity: 0, y: -16, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -16, scale: 0.95 }}
+            transition={{ type: "spring", damping: 22, stiffness: 380 }}
+            className="fixed left-1/2 top-5 z-50 -translate-x-1/2"
+          >
+            <div className="flex items-center gap-2.5 rounded-full bg-foreground/80 px-4 py-2.5 text-sm font-semibold text-white shadow-lg">
+              <LogOut className="size-4 shrink-0" />
+              <span>{t("group_left_notif", { name: leaveNotif })}</span>
             </div>
           </motion.div>
         )}
@@ -1830,21 +1883,6 @@ export function GroupOrderPageShell() {
           <div className="flex flex-wrap items-center gap-2">
             <ShareLinkBox token={token} />
 
-            {state.status === "locked" && isHost && (() => {
-              const anyPaid = state.participants.some((p) => p.paymentStatus === "paid");
-              return !anyPaid ? (
-                <Button
-                  size="sm"
-                  className="gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-4 font-semibold text-amber-700 hover:bg-amber-100"
-                  isDisabled={actionLoading}
-                  onPress={() => void withAction(() => unlockGroupOrder(token, sessionToken!))}
-                >
-                  <LockOpen className="size-3.5" />
-                  {t("group_unlock")}
-                </Button>
-              ) : null;
-            })()}
-
             {state.status === "collecting" && isHost && (
               <Button
                 size="sm"
@@ -1857,19 +1895,37 @@ export function GroupOrderPageShell() {
               </Button>
             )}
 
+            {state.status === "collecting" && me && !isHost && (
+              <Button
+                size="sm"
+                className="gap-1.5 rounded-full border border-red-200 bg-red-50 px-4 font-semibold text-red-600 hover:bg-red-100"
+                isDisabled={isLeaving}
+                onPress={() => void handleLeave()}
+              >
+                {isLeaving ? <Loader2 className="size-3.5 animate-spin" /> : <LogOut className="size-3.5" />}
+                {isLeaving ? t("group_leaving") : t("group_leave_btn")}
+              </Button>
+            )}
+
             {state.status === "collecting" && isHost && (
               <Button
                 size="sm"
                 className="gap-1.5 rounded-full bg-[#1a3c34] px-4 font-semibold text-white disabled:opacity-60"
-                isDisabled={actionLoading || !allReady}
-                title={!allReady ? t("group_waiting_hint") : undefined}
-                onPress={
-                  state.paymentMode === "split" && (state.paymentType ?? "cash") === "cash"
-                    ? () => void handleSplitCashCheckout()
-                    : () => void withAction(() => lockGroupOrder(token, sessionToken!))
-                }
+                isDisabled={actionLoading}
+                onPress={() => {
+                  const unconfirmed = state.participants.filter((p) => !p.isReady);
+                  if (unconfirmed.length > 0) {
+                    setShowLockConfirm(true);
+                  } else if (state.paymentMode === "split" && (state.paymentType ?? "cash") === "cash") {
+                    void handleSplitCashCheckout();
+                  } else if (state.paymentMode === "host_pays" && (state.paymentType ?? "cash") !== "bank_transfer") {
+                    void handleHostCheckout();
+                  } else {
+                    void withAction(() => lockGroupOrder(token, sessionToken!));
+                  }
+                }}
               >
-                <Lock className="size-3.5" />
+                <Check className="size-3.5" />
                 {t("group_lock")}
                 {!allReady && (
                   <span className="ml-0.5 rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] tabular-nums leading-none">
@@ -1881,7 +1937,7 @@ export function GroupOrderPageShell() {
           </div>
         </motion.div>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-start">
           {/* Left — participants + actions */}
           <div className="flex flex-col gap-4 lg:col-span-2">
             {/* Discount banner */}
@@ -1907,37 +1963,39 @@ export function GroupOrderPageShell() {
                   {state.participants.length}
                 </span>
               </div>
-              <div className="divide-y divide-black/6">
-                {state.participants.map((p, i) => (
-                  <motion.div
-                    key={p.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.07 + i * 0.04 }}
-                    className={`p-4 transition-colors ${p.id === me?.id ? "bg-[#f0faf6]" : ""}`}
-                  >
-                    <ParticipantRow
-                      participant={p}
-                      isMe={p.id === me?.id}
-                      isMeHost={isHost}
-                      groupStatus={state.status}
-                      paymentMode={state.paymentMode}
-                      onConfirmPaid={(participantId) =>
-                        void withAction(() => confirmParticipantPaid(token, sessionToken!, participantId))
-                      }
-                      isKicking={kickingId === p.id}
-                      onKick={async (participantId) => {
-                        setKickingId(participantId);
-                        await withAction(() => kickGroupOrderParticipant(token, sessionToken!, participantId));
-                        setKickingId(null);
-                      }}
-                      removingProductId={removingProductId}
-                      onOpenPicker={() => setShowPicker(true)}
-                      onRemoveItem={(productId) => void handleRemoveItem(productId)}
-                    />
-                  </motion.div>
-                ))}
-              </div>
+              <div className="lg:max-h-[calc(100vh-19rem)] lg:overflow-y-scroll lg:[&::-webkit-scrollbar]:w-1.5 lg:[&::-webkit-scrollbar-track]:bg-transparent lg:[&::-webkit-scrollbar-thumb]:rounded-full lg:[&::-webkit-scrollbar-thumb]:bg-transparent lg:hover:[&::-webkit-scrollbar-thumb]:bg-black/20">
+                <div className="divide-y divide-black/6">
+                  {state.participants.map((p, i) => (
+                    <motion.div
+                      key={p.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.07 + i * 0.04 }}
+                      className={`transition-colors ${p.id === me?.id ? "bg-[#f0faf6]" : ""}`}
+                    >
+                      <ParticipantRow
+                        participant={p}
+                        isMe={p.id === me?.id}
+                        isMeHost={isHost}
+                        groupStatus={state.status}
+                        paymentMode={state.paymentMode}
+                        onConfirmPaid={(participantId) =>
+                          void withAction(() => confirmParticipantPaid(token, sessionToken!, participantId))
+                        }
+                        isKicking={kickingId === p.id}
+                        onKick={async (participantId) => {
+                          setKickingId(participantId);
+                          await withAction(() => kickGroupOrderParticipant(token, sessionToken!, participantId));
+                          setKickingId(null);
+                        }}
+                        removingProductId={removingProductId}
+                        onOpenPicker={() => setShowPicker(true)}
+                        onRemoveItem={(productId) => void handleRemoveItem(productId)}
+                      />
+                    </motion.div>
+                  ))}
+                </div>
+              </div>{/* end scroll wrapper */}
             </div>
 
             {/* My actions — pick / ready */}
@@ -1973,162 +2031,21 @@ export function GroupOrderPageShell() {
               </div>
             )}
 
-            {/* Inline fulfillment for host (collecting only) */}
-            {isHost && state.status === "collecting" && (
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.06 }}
-                className="overflow-hidden rounded-3xl border border-black/6 bg-white"
-              >
-                <div className="flex items-center gap-3 border-b border-black/6 px-5 py-4">
-                  <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-[#1a3c34]/8">
-                    <FulfillmentIcon className="size-4 text-[#1a3c34]" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{t("group_fulfillment_card_eyebrow")}</p>
-                    <p className="text-sm font-semibold text-foreground">{t("group_fulfillment_card_title")}</p>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-4 p-5">
-                  <div className="flex gap-2">
-                    {([{ id: "delivery", label: t("type_delivery"), Icon: Truck }, { id: "pickup", label: t("type_pickup"), Icon: ShoppingBag }] as const).map(({ id, label, Icon }) => (
-                      <button
-                        key={id}
-                        type="button"
-                        onClick={() => setLocalType(id)}
-                        className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${localType === id ? "bg-kun-primary text-white shadow-sm" : "bg-surface-card text-foreground/60 hover:bg-black/6"}`}
-                      >
-                        <Icon className="size-4" />
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <CheckoutFulfillmentSection
-                    tab={localType === "delivery" ? CHECKOUT_TAB.DELIVERY : CHECKOUT_TAB.PICKUP}
-                    deliveryForm={localDeliveryForm}
-                    onDeliveryFormChange={(patch) => setLocalDeliveryForm((p) => ({ ...p, ...patch }))}
-                    pickupForm={localPickupForm}
-                    onPickupFormChange={(patch) => setLocalPickupForm((p) => ({ ...p, ...patch }))}
-                    savedAddresses={savedAddresses}
-                    selectedAddressId={localSelectedAddressId}
-                    onSelectAddress={setLocalSelectedAddressId}
-                    storeLocation={storeLocation ? { lat: storeLocation.lat, lng: storeLocation.lng, address: storeLocation.address } : null}
-                    profileName={profile?.name}
-                    profilePhone={profile?.phone}
-                  />
-
-                  <AnimatePresence initial={false}>
-                    {localType === "delivery" && (localShippingFetching || localShippingEstimate) && (
-                      <motion.div
-                        key="ship-badge"
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="overflow-hidden"
-                      >
-                        <div className={`flex items-center justify-between rounded-2xl px-4 py-3 text-sm ${localShippingFetching
-                          ? "bg-surface-card text-foreground/50"
-                          : localShippingIsOutOfRange
-                            ? "bg-red-50 text-red-700"
-                            : localShippingIsFree
-                              ? "bg-emerald-50 text-emerald-700"
-                              : "bg-kun-mint/20 text-kun-products-forest"
-                          }`}>
-                          <div className="flex items-center gap-1.5">
-                            {localShippingFetching ? (
-                              <Loader2 className="size-4 animate-spin" />
-                            ) : (
-                              <Bike className="size-4" />
-                            )}
-                            <span className="font-medium">
-                              {localShippingFetching
-                                ? t("group_calculating_ship")
-                                : localShippingIsOutOfRange
-                                  ? t("group_out_of_range_badge")
-                                  : `${localShippingEstimate!.distanceKm.toFixed(1)} km`
-                              }
-                            </span>
-                          </div>
-                          {!localShippingFetching && !localShippingIsOutOfRange && (
-                            <span className="font-bold tabular-nums">
-                              {localShippingIsFree ? t("group_shipping_free") : formatVnd(localShippingFee)}
-                            </span>
-                          )}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </motion.div>
-
-            )}
-
-            {/* Fulfilled info (read-only, locked/completed) */}
-            {(state.status === "locked" || state.status === "completed") &&
-              (state.address || state.type !== "delivery") && (
-                <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.06 }}
-                  className="overflow-hidden rounded-3xl border border-black/6 bg-white"
-                >
-                  <div className="flex items-center gap-3 border-b border-black/6 px-5 py-4">
-                    <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-[#1a3c34]/8">
-                      <FulfillmentIcon className="size-4 text-[#1a3c34]" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{t("group_fulfillment_card_eyebrow")}</p>
-                      <p className="text-sm font-semibold text-foreground">{t("group_fulfillment_card_title")}</p>
-                    </div>
-                  </div>
-                  <div className="px-5 py-4 space-y-1">
-                    <p className="text-sm font-semibold text-foreground">{fulfillmentLabel}</p>
-                    {state.address && (
-                      <p className="truncate text-xs text-foreground/55">{state.address.fullAddress}</p>
-                    )}
-                    {state.table && (
-                      <p className="text-xs text-foreground/55">
-                        Bàn {state.table.name} · {state.table.area}
-                      </p>
-                    )}
-                    {isHost && state.paymentMode === "host_pays" && (
-                      <p className="flex items-center gap-1 text-xs text-foreground/50">
-                        {state.paymentType === "cash" ? (
-                          <Banknote className="size-3 shrink-0" />
-                        ) : (
-                          <QrCode className="size-3 shrink-0" />
-                        )}
-                        {state.paymentType === "cash" ? "Tiền mặt" : "Chuyển khoản"}
-                      </p>
-                    )}
-                    {state.shippingFee > 0 && (
-                      <div className="flex items-center justify-between pt-2">
-                        <span className="text-xs text-foreground/50">{t("shipping_fee")}</span>
-                        <span className="text-sm font-semibold tabular-nums text-foreground/70">+{fmtVnd(state.shippingFee)}</span>
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              )}
-
             {/* Split bank-transfer payment is now handled on the order detail page after lock */}
           </div>
 
-          {/* Right — order summary */}
+          {/* Right — order summary + fulfillment (sticky) */}
           <motion.aside
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="lg:sticky lg:top-28"
+            className="flex flex-col gap-4"
           >
             <Card className="rounded-3xl border border-black/6 bg-white shadow-[0_12px_40px_-20px_rgba(0,0,0,0.12)]">
               <CardContent className="space-y-4 xl:p-3 p-1">
                 {/* Summary header */}
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-foreground">{t("group_order_summary")}</p>
+                  <p className="text-sm font-semibold text-foreground">{t("order_summary")}</p>
                   <span
                     className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${state.paymentMode === "host_pays"
                       ? "bg-amber-50 text-amber-700 ring-amber-200"
@@ -2248,21 +2165,6 @@ export function GroupOrderPageShell() {
                   );
                 })()}
 
-                {/* Host pays cash checkout — bank_transfer redirects to order detail on lock */}
-                {state.status === "locked" && state.paymentMode === "host_pays" && isHost && state.paymentType !== "bank_transfer" && (
-                  <div className="space-y-2 pt-2">
-                    <p className="text-xs text-foreground/55">{t("group_host_pays_desc")}</p>
-                    <Button
-                      className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#1a3c34] text-sm font-semibold text-white"
-                      isDisabled={actionLoading}
-                      onPress={() => void handleHostCheckout()}
-                    >
-                      <Banknote className="size-4" />
-                      {t("group_pay_cash_btn")}
-                    </Button>
-                  </div>
-                )}
-
                 {state.status === "completed" && state.order && (
                   <div className="rounded-xl bg-emerald-50 px-4 py-3 text-center">
                     <Loader2 className="mx-auto mb-1.5 size-5 animate-spin text-emerald-600" />
@@ -2278,12 +2180,174 @@ export function GroupOrderPageShell() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Fulfillment form — host only, collecting state */}
+            {isHost && state.status === "collecting" && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.06 }}
+                className="overflow-hidden rounded-3xl border border-black/6 bg-white"
+              >
+                <div className="flex items-center gap-3 border-b border-black/6 px-5 py-4">
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-[#1a3c34]/8">
+                    <FulfillmentIcon className="size-4 text-[#1a3c34]" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{t("group_fulfillment_card_eyebrow")}</p>
+                    <p className="text-sm font-semibold text-foreground">{t("group_fulfillment_card_title")}</p>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-4 p-5">
+                  <div className="flex gap-2">
+                    {([{ id: "delivery", label: t("type_delivery"), Icon: Truck }, { id: "pickup", label: t("type_pickup"), Icon: ShoppingBag }] as const).map(({ id, label, Icon }) => (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setLocalType(id)}
+                        className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${localType === id ? "bg-kun-primary text-white shadow-sm" : "bg-surface-card text-foreground/60 hover:bg-black/6"}`}
+                      >
+                        <Icon className="size-4" />
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <CheckoutFulfillmentSection
+                    tab={localType === "delivery" ? CHECKOUT_TAB.DELIVERY : CHECKOUT_TAB.PICKUP}
+                    deliveryForm={localDeliveryForm}
+                    onDeliveryFormChange={(patch) => setLocalDeliveryForm((p) => ({ ...p, ...patch }))}
+                    pickupForm={localPickupForm}
+                    onPickupFormChange={(patch) => setLocalPickupForm((p) => ({ ...p, ...patch }))}
+                    savedAddresses={savedAddresses}
+                    selectedAddressId={localSelectedAddressId}
+                    onSelectAddress={setLocalSelectedAddressId}
+                    storeLocation={storeLocation ? { lat: storeLocation.lat, lng: storeLocation.lng, address: storeLocation.address } : null}
+                    profileName={profile?.name}
+                    profilePhone={profile?.phone}
+                  />
+
+                  <AnimatePresence initial={false}>
+                    {localType === "delivery" && (localShippingFetching || localShippingEstimate) && (
+                      <motion.div
+                        key="ship-badge"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                      >
+                        <div className={`flex items-center justify-between rounded-2xl px-4 py-3 text-sm ${localShippingFetching
+                          ? "bg-surface-card text-foreground/50"
+                          : localShippingIsOutOfRange
+                            ? "bg-red-50 text-red-700"
+                            : localShippingIsFree
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-kun-mint/20 text-kun-products-forest"
+                          }`}>
+                          <div className="flex items-center gap-1.5">
+                            {localShippingFetching ? (
+                              <Loader2 className="size-4 animate-spin" />
+                            ) : (
+                              <Bike className="size-4" />
+                            )}
+                            <span className="font-medium">
+                              {localShippingFetching
+                                ? t("group_calculating_ship")
+                                : localShippingIsOutOfRange
+                                  ? t("group_out_of_range_badge")
+                                  : `${localShippingEstimate!.distanceKm.toFixed(1)} km`
+                              }
+                            </span>
+                          </div>
+                          {!localShippingFetching && !localShippingIsOutOfRange && (
+                            <span className="font-bold tabular-nums">
+                              {localShippingIsFree ? t("group_shipping_free") : formatVnd(localShippingFee)}
+                            </span>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </motion.div>
+            )}
           </motion.aside>
         </div>
       </div>
 
       {/* Dissolve confirm modal */}
       <AnimatePresence>
+        {showLockConfirm && (() => {
+          const unconfirmed = state.participants.filter((p) => !p.isReady);
+          return (
+            <motion.div
+              key="lock-confirm-modal"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm"
+              onClick={(e) => e.target === e.currentTarget && setShowLockConfirm(false)}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 12 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 12 }}
+                transition={{ type: "spring", damping: 24, stiffness: 380 }}
+                className="w-full max-w-sm rounded-3xl border border-black/6 bg-white shadow-[0_4px_20px_-8px_rgba(0,0,0,0.18)]"
+              >
+                <div className="px-6 pb-5 pt-8 text-center">
+                  <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-amber-50 ring-1 ring-amber-200">
+                    <Lock className="size-7 text-amber-500" />
+                  </div>
+                  <h3 className="text-base font-bold text-foreground">
+                    {t("group_lock_unconfirmed_title", { count: unconfirmed.length })}
+                  </h3>
+                  <p className="mt-1.5 text-sm text-muted">{t("group_lock_unconfirmed_desc")}</p>
+                  <div className="mt-4 flex flex-col gap-1.5">
+                    {unconfirmed.map((p) => (
+                      <div key={p.id} className="flex items-center gap-2 rounded-xl bg-surface-soft px-3 py-2 text-left">
+                        <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-black/8 text-xs font-bold text-foreground/60">
+                          {p.name[0]?.toUpperCase()}
+                        </div>
+                        <span className="text-sm font-medium text-foreground">{p.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex divide-x divide-black/6 border-t border-black/6">
+                  <button
+                    type="button"
+                    disabled={actionLoading}
+                    onClick={() => setShowLockConfirm(false)}
+                    className="cursor-pointer flex h-13 flex-1 items-center justify-center rounded-bl-3xl text-sm font-semibold text-foreground/70 transition hover:bg-surface-soft disabled:opacity-50"
+                  >
+                    {t("cancel")}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={actionLoading}
+                    onClick={() => {
+                      setShowLockConfirm(false);
+                      if (state.paymentMode === "split" && (state.paymentType ?? "cash") === "cash") {
+                        void handleSplitCashCheckout();
+                      } else if (state.paymentMode === "host_pays" && (state.paymentType ?? "cash") !== "bank_transfer") {
+                        void handleHostCheckout();
+                      } else {
+                        void withAction(() => lockGroupOrder(token, sessionToken!));
+                      }
+                    }}
+                    className="cursor-pointer flex h-13 flex-1 items-center justify-center gap-1.5 rounded-br-3xl text-sm font-semibold text-[#1a3c34] transition hover:bg-[#f0faf6] disabled:opacity-50"
+                  >
+                    {actionLoading && <Loader2 className="size-3.5 animate-spin" />}
+                    {t("group_lock_unconfirmed_confirm")}
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          );
+        })()}
+
         {showDissolveConfirm && (
           <motion.div
             key="dissolve-modal"

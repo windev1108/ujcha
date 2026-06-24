@@ -243,6 +243,24 @@ export class GroupOrderService {
     return this.serialize(updated);
   }
 
+  async leaveGroupOrder(token: string, sessionToken: string) {
+    const go = await this.prisma.groupOrder.findUnique({
+      where: { token },
+      include: { participants: { include: { user: true } } },
+    });
+    if (!go) throw new NotFoundException('Không tìm thấy đơn nhóm.');
+    if (go.status !== 'collecting') {
+      throw new BadRequestException({ message: 'Không thể rời nhóm khi đơn đã khóa.', code: 'GROUP_ORDER_NOT_COLLECTING' });
+    }
+    const participant = go.participants.find((p) => p.sessionToken === sessionToken);
+    if (!participant) throw new NotFoundException('Không tìm thấy thành viên.');
+    if (participant.isHost) throw new ForbiddenException('Chủ nhóm không thể rời nhóm.');
+    const leaverName = participant.user?.name ?? participant.guestName ?? '?';
+    await this.prisma.groupOrderParticipant.delete({ where: { id: participant.id } });
+    const updated = await this.findByToken(token);
+    return { leaverName, groupOrder: updated };
+  }
+
   async kickParticipant(token: string, sessionToken: string, participantId: string) {
     const go = await this.prisma.groupOrder.findUnique({
       where: { token },

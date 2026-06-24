@@ -471,7 +471,6 @@ export function buildSingleLabelHtml(
     const hasSweetener = vLower.includes('sữa') || vLower.includes('đường')
     const isSweetenerAdd = hasSweetener && !vLower.includes('không')
     const isSweetenerNone = hasSweetener && vLower.includes('không')
-    const hideKey = kLower.includes('size') || kLower.includes('đá') || kLower.includes('kích cỡ') || kLower.includes('chọn ly') || isNgot || isSweetenerAdd || isSweetenerNone
     let displayVal: string
     if (isSweetenerNone) {
       displayVal = 'Ít Ngọt'
@@ -482,16 +481,15 @@ export function buildSingleLabelHtml(
     } else {
       displayVal = v
     }
-    const label = hideKey ? esc(displayVal) : `${esc(k)}: ${esc(displayVal)}`
-    contentLines.push(`<div style="font-size:9px;line-height:1.1;color:#000;font-weight:bold;">+ ${label}</div>`)
+    contentLines.push(`<div style="font-size:9px;line-height:1.1;color:#000;font-weight:400;">+ ${esc(displayVal)}</div>`)
   }
 
   for (const ex of extras) {
-    contentLines.push(`<div style="font-size:9px;line-height:1.1;color:#000;font-weight:bold;">+ ${esc(ex.name)}</div>`)
+    contentLines.push(`<div style="font-size:9px;line-height:1.1;color:#000;font-weight:400;">+ ${esc(ex.name)}</div>`)
   }
 
   if (cfg.showNote && item.note) {
-    contentLines.push(`<div style="display:flex;align-items:center;gap:2px;font-size:9px;line-height:1.1;color:#000;">${stickyNoteIcon(9)}<span style="line-height:1;">${esc(item.note)}</span></div>`)
+    contentLines.push(`<div style="display:flex;align-items:center;gap:2px;font-size:9px;line-height:1.1;color:#000;font-weight:400;">${stickyNoteIcon(9)}<span style="line-height:1;">${esc(item.note)}</span></div>`)
   }
 
   if (participantName) {
@@ -529,7 +527,7 @@ export function buildSingleLabelHtml(
     `* { box-sizing: border-box; }` +
     `html { -webkit-text-size-adjust: none; text-size-adjust: none; }` +
     `body {` +
-    `  font-family: ${FONT_FAMILY};` +
+    `  font-family: ui-sans-serif, system-ui, 'Segoe UI', Arial, sans-serif;` +
     `  font-weight: 700;` +
     `  ${FONT_SMOOTHING}` +
     `  margin: 0; padding: 0.5mm 2mm 1.5mm;` +

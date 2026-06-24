@@ -330,7 +330,7 @@ export function AIOrderPanel({ isOpen, onClose, onCheckout, onListeningChange, o
         // always identical to the manual-add path (ProductConfigModal).
         const product = products.find((p) => p.id === item.productId)
         const basePrice = product
-          ? (product.finalPrice ?? applyProductDiscount(parseFloat(product.price), product.discountPercent))
+          ? (product.finalPrice ?? applyProductDiscount(parseFloat(product.price), product.effectiveDiscountPercent ?? product.discountPercent))
           : item.basePrice
         addToCart({ ...item, basePrice })
       }

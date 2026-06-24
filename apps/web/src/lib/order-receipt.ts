@@ -1,6 +1,7 @@
 "use client";
 
 import { env } from "@/config/env";
+import { formatOptionLabel } from "@/lib/product-options";
 
 function esc(s: string): string {
   return s
@@ -110,7 +111,7 @@ function payLabel(type: string, i18n: I18nStrings): string {
   return type === "cash" ? i18n.pay_cash : i18n.pay_transfer;
 }
 
-function buildItemsHtml(items: ReceiptOrderItem[], i18n: I18nStrings): string {
+function buildItemsHtml(items: ReceiptOrderItem[], i18n: I18nStrings, locale: string): string {
   const lines: string[] = [];
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
@@ -124,7 +125,7 @@ function buildItemsHtml(items: ReceiptOrderItem[], i18n: I18nStrings): string {
     );
 
     for (const [k, v] of Object.entries(it.options)) {
-      lines.push(`<div style="margin-left:26px;font-size:11px;font-weight:bold;margin-bottom:1px;color:#000;">+ ${esc(k)}: ${esc(v)}</div>`);
+      lines.push(`<div style="margin-left:26px;font-size:11px;font-weight:bold;margin-bottom:1px;color:#000;">+ ${esc(formatOptionLabel(k, v, locale))}</div>`);
     }
     for (const ex of it.extras) {
       const exPrice = typeof ex.price === "string" ? parseFloat(ex.price) : ex.price;
@@ -175,7 +176,7 @@ export function buildReceiptHtml(order: ReceiptOrder, locale = "vi"): string {
       : "",
     `<div style="border-top:2px dashed #000;margin:6px 0;"></div>`,
 
-    buildItemsHtml(order.items, i18n),
+    buildItemsHtml(order.items, i18n, locale),
     `<div style="border-top:2px dashed #000;margin:6px 0;"></div>`,
 
     `<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;color:#000;"><span>${esc(i18n.subtotal)}</span><span style="white-space:nowrap;">${esc(vnd(subtotal))}</span></div>`,

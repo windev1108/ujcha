@@ -89,6 +89,38 @@ export function computeOptionSurcharge(
   return Math.round(add * 100) / 100
 }
 
+/**
+ * Formats an option key+value pair using the same display rules as the POS label printer:
+ * - Groups containing "size", "đá", "kích cỡ", "chọn ly" → hide key, show value only
+ * - Groups containing "ngọt" → show as "Ngọt {value}"
+ * - Values containing "sữa"/"đường" + "không" → "Ít Ngọt"
+ * - Values containing "sữa"/"đường" without "không" → "Ngọt vừa"
+ * - Otherwise → "{key}: {value}"
+ */
+/**
+ * Formats an option value for display, following the same rules as the POS label printer.
+ * Always shows only the value (key is never shown). Special cases:
+ * - Key contains "ngọt" → prepend "Ngọt " if value doesn't already include it
+ * - Value contains "sữa"/"đường" + "không" → "Ít Ngọt"
+ * - Value contains "sữa"/"đường" without "không" → "Ngọt vừa"
+ * - Otherwise → value as-is
+ */
+export function formatOptionLabel(key: string, value: string, locale = 'vi'): string {
+  if (locale !== 'vi') return `${key}: ${value}`
+
+  const kLower = key.toLowerCase()
+  const vLower = value.toLowerCase()
+  const isNgot = kLower.includes('ngọt')
+  const hasSweetener = vLower.includes('sữa') || vLower.includes('đường')
+  const isSweetenerAdd = hasSweetener && !vLower.includes('không')
+  const isSweetenerNone = hasSweetener && vLower.includes('không')
+
+  if (isSweetenerNone) return 'Ít Ngọt'
+  if (isSweetenerAdd) return 'Ngọt vừa'
+  if (isNgot) return vLower.includes('ngọt') ? value : `Ngọt ${value.charAt(0).toLowerCase()}${value.slice(1)}`
+  return value
+}
+
 export function formatVnd(amount: number | string) {
   const n = typeof amount === 'string' ? parseFloat(amount) : amount
   return new Intl.NumberFormat('vi-VN').format(Math.round(n)) + 'đ'

@@ -78,5 +78,5 @@ export function fmt(n: string | number) { return Number(n).toLocaleString('vi-VN
 
 export function applyProductDiscount(basePrice: number, discountPercent: number): number {
     if (!discountPercent) return basePrice;
-    return Math.floor(basePrice * (1 - discountPercent / 100) / 1000) * 1000;
+    return Math.round(basePrice * (1 - discountPercent / 100) / 1000) * 1000;
 }

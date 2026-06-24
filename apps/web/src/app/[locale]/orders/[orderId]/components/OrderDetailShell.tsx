@@ -6,7 +6,7 @@ import { motion } from "motion/react";
 import Image from "next/image";
 import {
   ArrowLeft, BadgeCheck, Ban, Box, CheckCircle2, Circle, Clock,
-  CreditCard, ExternalLink, Info, Loader2, MapPin, MessageCircle, Package, Phone, Printer, QrCode, Star, Truck, Users, Utensils,
+  CreditCard, ExternalLink, Info, Loader2, MapPin, MessageCircle, Package, Phone, Printer, QrCode, Star, StickyNote, Truck, Users, Utensils,
   Bike,
   UserPlus,
 } from "lucide-react";
@@ -24,6 +24,7 @@ import { printReceipt, type ReceiptOrder } from "@/lib/order-receipt";
 import { fetchGroupOrder, type GroupOrderParticipant, type GroupOrderState } from "@/services/group-order/api";
 import { useTranslations, useLocale } from "next-intl";
 import { getDisplayName } from "@/lib/product-name";
+import { formatOptionLabel } from "@/lib/product-options";
 import { usePublicStoreLocationQuery } from "@/services/store/hooks";
 import { usePublicPaymentConfigQuery } from "@/services/payment-config/hooks";
 import { useAuthStore } from "@/store/auth-store";
@@ -221,12 +222,13 @@ function toReceiptOrder(order: OrderDetail, locale: string): ReceiptOrder {
       quantity: item.quantity,
       price: item.price,
       productName: getDisplayName(item.product, locale),
-      options: Object.fromEntries(
-        getOptionDetails(item.optionDetailsJson).map((od) => [
-          od.group,
-          od.nameTranslation?.[locale] ?? od.label,
-        ]),
-      ),
+      options: (() => {
+        const fromDetail = getOptionDetails(item.optionDetailsJson);
+        if (fromDetail.length > 0) {
+          return Object.fromEntries(fromDetail.map((od) => [od.group, od.nameTranslation?.[locale] ?? od.label]));
+        }
+        return getOptions(item.optionsJson);
+      })(),
       extras: getExtras(item.extrasJson).map((e) => ({
         name: e.nameTranslation?.[locale] ?? e.name ?? "",
         price: e.price ?? 0,
@@ -238,36 +240,47 @@ function toReceiptOrder(order: OrderDetail, locale: string): ReceiptOrder {
 
 // ── pill badges ───────────────────────────────────────────────────────────────
 
-function OrderItemBadges({ optionDetails = [], extras, locale }: { optionDetails?: OptionDetail[]; extras: ExtraItem[]; locale: string }) {
-  if (optionDetails.length === 0 && extras.length === 0) return null;
+function OrderItemBadges({ optionDetails = [], extras, note, locale }: { optionDetails?: OptionDetail[]; extras: ExtraItem[]; note?: string | null; locale: string }) {
+  const hasOptions = optionDetails.length > 0 || extras.length > 0;
+  if (!hasOptions && !note) return null;
   return (
-    <div className="mt-1.5 flex flex-wrap gap-1.5">
-      {optionDetails.map((od, i) => {
-        const label = od.nameTranslation?.[locale] ?? od.label;
-        return (
-          <span
-            key={i}
-            className="inline-flex items-center rounded-full bg-surface-secondary px-2.5 py-0.5 text-[11px] font-medium text-foreground/70"
-          >
-            {label}
-          </span>
-        );
-      })}
-      {extras.map((e, i) => {
-        const price = e.price ? parseFloat(e.price) : 0;
-        const name = e.nameTranslation?.[locale] ?? e.name ?? "Topping";
-        return (
-          <span
-            key={i}
-            className="inline-flex items-center gap-1 rounded-full bg-kun-mint/20 px-2.5 py-0.5 text-[11px] font-medium text-kun-products-forest"
-          >
-            + {name}
-            {price > 0 && (
-              <span className="text-[10px] text-kun-products-forest/60">+{fmtVnd(price)}</span>
-            )}
-          </span>
-        );
-      })}
+    <div className="mt-1.5 space-y-1.5">
+      {hasOptions && (
+        <div className="flex flex-col items-start gap-1">
+          {optionDetails.map((od, i) => {
+            const displayLabel = od.nameTranslation?.[locale] ?? od.label;
+            return (
+              <span
+                key={i}
+                className="inline-flex items-center rounded-full bg-surface-secondary px-2.5 py-0.5 text-[11px] font-medium text-foreground/70"
+              >
+                {formatOptionLabel(od.group, displayLabel, locale)}
+              </span>
+            );
+          })}
+          {extras.map((e, i) => {
+            const price = e.price ? parseFloat(e.price) : 0;
+            const name = e.nameTranslation?.[locale] ?? e.name ?? "Topping";
+            return (
+              <span
+                key={i}
+                className="inline-flex items-center gap-1 rounded-full bg-kun-mint/20 px-2.5 py-0.5 text-[11px] font-medium text-kun-products-forest"
+              >
+                + {name}
+                {price > 0 && (
+                  <span className="text-[10px] text-kun-products-forest/60">+{fmtVnd(price)}</span>
+                )}
+              </span>
+            );
+          })}
+        </div>
+      )}
+      {note && (
+        <p className="flex items-center gap-1 text-[11px] text-muted italic">
+          <StickyNote className="size-3 shrink-0 text-muted/70" />
+          {note}
+        </p>
+      )}
     </div>
   );
 }
@@ -1237,22 +1250,30 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                   <div>
                     {participantsWithItems.map((participant, pIdx) => (
                       <div key={participant.id} className={pIdx > 0 ? "mt-6 border-t border-black/6 pt-6" : ""}>
-                        <div className="mb-3 flex items-center gap-2">
+                        <div className="mb-3 flex items-center gap-2.5">
                           {participant.avatar ? (
-                            <div className="relative size-7 shrink-0 overflow-hidden rounded-full ring-1 ring-black/8">
-                              <Image src={participant.avatar} alt={participant.name} fill className="object-cover" sizes="28px" />
+                            <div className="relative size-8 shrink-0 overflow-hidden rounded-full ring-1 ring-black/8">
+                              <Image src={participant.avatar} alt={participant.name} fill className="object-cover" sizes="32px" />
                             </div>
                           ) : (
-                            <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#1a3c34]/10 text-[11px] font-bold text-[#1a3c34]">
+                            <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#1a3c34]/10 text-[11px] font-bold text-[#1a3c34]">
                               {participant.name[0]}
                             </div>
                           )}
-                          <span className="text-sm font-semibold text-foreground">{participant.name}</span>
-                          {participant.isHost && (
-                            <span className="rounded-full bg-[#1a3c34]/8 px-2 py-0.5 text-[10px] font-semibold text-[#1a3c34]">
-                              {t("group_host")}
-                            </span>
-                          )}
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="text-sm font-semibold text-foreground">{participant.name}</span>
+                              {participant.isHost && (
+                                <span className="rounded-full bg-[#1a3c34]/8 px-2 py-0.5 text-[10px] font-semibold text-[#1a3c34]">
+                                  {t("group_host")}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-foreground/50">
+                              {participant.items.length} món ·{" "}
+                              <span className="text-sm font-bold tabular-nums text-[#1a3c34]">{fmtVnd(participant.subtotal)}</span>
+                            </p>
+                          </div>
                         </div>
 
                         <ul className="space-y-3">
@@ -1304,23 +1325,12 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                                       {fmtVnd(lineTotal)}
                                     </p>
                                   </div>
-                                  <OrderItemBadges optionDetails={optionDetails} extras={extras} locale={locale} />
-                                  {item.note && (
-                                    <p className="mt-1.5 text-xs italic text-foreground/45">&ldquo;{item.note}&rdquo;</p>
-                                  )}
+                                  <OrderItemBadges optionDetails={optionDetails} extras={extras} note={item.note} locale={locale} />
                                 </div>
                               </motion.li>
                             );
                           })}
                         </ul>
-                        <div className="mt-3 flex items-center justify-between rounded-xl bg-[#1a3c34]/5 px-3 py-2">
-                          <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[#1a3c34]/50">
-                            {t("participant_subtotal")}
-                          </span>
-                          <span className="font-bold tabular-nums text-[#1a3c34]">
-                            {fmtVnd(participant.subtotal)}
-                          </span>
-                        </div>
                       </div>
                     ))}
                   </div>
@@ -1335,7 +1345,10 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                   {order.items.map((item, idx) => {
                     const imageUrl = item.product.imageUrls[0] ?? null;
                     const productName = getDisplayName(item.product, locale);
-                    const optionDetails = getOptionDetails(item.optionDetailsJson);
+                    const rawOptionDetails = getOptionDetails(item.optionDetailsJson);
+                    const optionDetails: OptionDetail[] = rawOptionDetails.length > 0
+                      ? rawOptionDetails
+                      : Object.entries(getOptions(item.optionsJson)).map(([group, label]) => ({ group, label }));
                     const extras = getExtras(item.extrasJson);
                     const lineTotal = parseFloat(item.price) * item.quantity;
 
@@ -1376,10 +1389,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                               {fmtVnd(lineTotal)}
                             </p>
                           </div>
-                          <OrderItemBadges optionDetails={optionDetails} extras={extras} locale={locale} />
-                          {item.note && (
-                            <p className="mt-1.5 text-xs italic text-foreground/45">&ldquo;{item.note}&rdquo;</p>
-                          )}
+                          <OrderItemBadges optionDetails={optionDetails} extras={extras} note={item.note} locale={locale} />
                         </div>
                       </motion.li>
                     );

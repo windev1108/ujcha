@@ -107,8 +107,12 @@ export type AdminProduct = {
   isSoldOut: boolean;
   /** Gắn nhãn bán chạy — hiển thị badge Best Seller và ưu tiên trong danh sách nổi bật. */
   isBestSeller: boolean;
-  /** Giảm giá theo sản phẩm 0–100 (cộng với giảm giá toàn shop). */
+  /** Giảm giá riêng của sản phẩm 0–100 (giá trị lưu trong DB, không gộp toàn shop). */
   discountPercent: number;
+  /** Giảm giá hiệu lực = discountPercent + globalDiscountPercent, dùng để hiển thị. */
+  effectiveDiscountPercent: number;
+  /** Giảm giá toàn shop đang áp dụng tại thời điểm fetch. */
+  globalDiscountPercent: number;
   createdAt?: string;
   updatedAt?: string;
   category: { id: string; name: string; slug: string };

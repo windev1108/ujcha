@@ -1,7 +1,7 @@
 import { api } from "@/config/server";
 import type { AuthTokensResponse } from "./types";
 
-export async function postSendOtp(body: { phone: string }): Promise<void> {
+export async function postSendOtp(body: { phone: string; purpose?: 'register' | 'reset' }): Promise<void> {
   await api.post("/auth/send-otp", body);
 }
 
