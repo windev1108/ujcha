@@ -727,7 +727,7 @@ function ParticipantRow({
 
   return (
     <div className="transition-all">
-      <div className={`sticky top-0 z-10 flex items-center justify-between gap-3 px-4 py-3 ${isMe ? "bg-[#f0faf6]" : "bg-white"}`}>
+      <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           {participant.avatar ? (
             <Image
@@ -816,7 +816,7 @@ function ParticipantRow({
       </div>
 
       {participant.items.length > 0 && (
-        <div className="space-y-3 border-t border-black/6 px-4 pb-4 pt-3">
+        <div className="mt-3 space-y-3 border-t border-black/6 pt-3">
           {participant.items.map((item) => {
             const imageUrl = item.product?.imageUrls[0] ?? null;
             const displayName = item.product ? getDisplayName(item.product, locale) : "Sản phẩm";
@@ -1951,53 +1951,6 @@ export function GroupOrderPageShell() {
               </motion.div>
             )}
 
-            {/* Participants */}
-            <div className="overflow-hidden rounded-3xl border border-black/6 bg-white">
-              <div className="flex items-center justify-between gap-2 border-b border-black/6 px-5 py-4">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{t("group_participants_card_eyebrow")}</p>
-                  <p className="text-sm font-semibold text-foreground">{t("group_participants_card_title")}</p>
-                </div>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-card px-2.5 py-1 text-xs font-semibold text-foreground/60">
-                  <Users className="size-3" />
-                  {state.participants.length}
-                </span>
-              </div>
-              <div className="lg:max-h-[calc(100vh-19rem)] lg:overflow-y-scroll lg:[&::-webkit-scrollbar]:w-1.5 lg:[&::-webkit-scrollbar-track]:bg-transparent lg:[&::-webkit-scrollbar-thumb]:rounded-full lg:[&::-webkit-scrollbar-thumb]:bg-transparent lg:hover:[&::-webkit-scrollbar-thumb]:bg-black/20">
-                <div className="divide-y divide-black/6">
-                  {state.participants.map((p, i) => (
-                    <motion.div
-                      key={p.id}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: 0.07 + i * 0.04 }}
-                      className={`transition-colors ${p.id === me?.id ? "bg-[#f0faf6]" : ""}`}
-                    >
-                      <ParticipantRow
-                        participant={p}
-                        isMe={p.id === me?.id}
-                        isMeHost={isHost}
-                        groupStatus={state.status}
-                        paymentMode={state.paymentMode}
-                        onConfirmPaid={(participantId) =>
-                          void withAction(() => confirmParticipantPaid(token, sessionToken!, participantId))
-                        }
-                        isKicking={kickingId === p.id}
-                        onKick={async (participantId) => {
-                          setKickingId(participantId);
-                          await withAction(() => kickGroupOrderParticipant(token, sessionToken!, participantId));
-                          setKickingId(null);
-                        }}
-                        removingProductId={removingProductId}
-                        onOpenPicker={() => setShowPicker(true)}
-                        onRemoveItem={(productId) => void handleRemoveItem(productId)}
-                      />
-                    </motion.div>
-                  ))}
-                </div>
-              </div>{/* end scroll wrapper */}
-            </div>
-
             {/* My actions — pick / ready */}
             {me && state.status === "collecting" && !me.isReady && (
               <div className="flex gap-1">
@@ -2031,7 +1984,54 @@ export function GroupOrderPageShell() {
               </div>
             )}
 
-            {/* Split bank-transfer payment is now handled on the order detail page after lock */}
+            {/* Participants */}
+            <div className="overflow-hidden rounded-3xl border border-black/6 bg-white">
+              <div className="flex items-center justify-between gap-2 border-b border-black/6 px-5 py-4">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{t("group_participants_card_eyebrow")}</p>
+                  <p className="text-sm font-semibold text-foreground">{t("group_participants_card_title")}</p>
+                </div>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-card px-2.5 py-1 text-xs font-semibold text-foreground/60">
+                  <Users className="size-3" />
+                  {state.participants.length}
+                </span>
+              </div>
+              <div className="divide-y divide-black/6">
+                  {[...state.participants].sort((a, b) => {
+                    const rankA = a.id === me?.id ? 0 : a.isHost ? 1 : 2;
+                    const rankB = b.id === me?.id ? 0 : b.isHost ? 1 : 2;
+                    return rankA - rankB;
+                  }).map((p, i) => (
+                    <motion.div
+                      key={p.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.07 + i * 0.04 }}
+                      className={`p-4 transition-colors ${p.id === me?.id ? "bg-[#f0faf6]" : ""}`}
+                    >
+                      <ParticipantRow
+                        participant={p}
+                        isMe={p.id === me?.id}
+                        isMeHost={isHost}
+                        groupStatus={state.status}
+                        paymentMode={state.paymentMode}
+                        onConfirmPaid={(participantId) =>
+                          void withAction(() => confirmParticipantPaid(token, sessionToken!, participantId))
+                        }
+                        isKicking={kickingId === p.id}
+                        onKick={async (participantId) => {
+                          setKickingId(participantId);
+                          await withAction(() => kickGroupOrderParticipant(token, sessionToken!, participantId));
+                          setKickingId(null);
+                        }}
+                        removingProductId={removingProductId}
+                        onOpenPicker={() => setShowPicker(true)}
+                        onRemoveItem={(productId) => void handleRemoveItem(productId)}
+                      />
+                    </motion.div>
+                  ))}
+              </div>
+            </div>
           </div>
 
           {/* Right — order summary + fulfillment (sticky) */}
