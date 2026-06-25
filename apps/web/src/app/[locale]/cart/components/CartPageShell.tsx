@@ -18,7 +18,7 @@ import { useAuthStore } from "@/store/auth-store";
 import { useCartStore } from "@/store/cart-store";
 import type { ApiCartItem } from "@/services/cart/types";
 import { normalizeOptionGroups, computeOptionSurcharge } from "@/lib/product-options";
-import { fetchMyGroupOrderSessions, updateGroupOrderItems } from "@/services/group-order/api";
+import { fetchGroupOrderConfig, fetchMyGroupOrderSessions, updateGroupOrderItems } from "@/services/group-order/api";
 import { ROUTES } from "@/lib/routes";
 
 function CartSkeleton() {
@@ -67,6 +67,13 @@ export function CartPageShell() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showGroupOrderModal, setShowGroupOrderModal] = useState(false);
   const [hasActiveSession, setHasActiveSession] = useState(false);
+  const [groupOrderEnabled, setGroupOrderEnabled] = useState(true);
+
+  useEffect(() => {
+    fetchGroupOrderConfig()
+      .then((cfg) => setGroupOrderEnabled(cfg.isEnabled))
+      .catch(() => { });
+  }, []);
 
   const items = isGuest ? localItems : (serverCart?.items ?? []);
   const isLoading = isGuest ? false : serverCartLoading;
@@ -194,7 +201,7 @@ export function CartPageShell() {
               total={subtotal}
               selectedCount={selectedIds.size}
               selectedIds={selectedIds}
-              onGroupOrder={handleGroupOrderClick}
+              onGroupOrder={groupOrderEnabled ? handleGroupOrderClick : null}
             />
           </motion.div>
         </div>

@@ -408,7 +408,12 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
     socket.emit("join-room", { token: groupToken });
     socket.on("updated", (newState: GroupOrderState) => {
       queryClient.setQueryData(["group-order", groupToken], newState);
-      if (newState.status === "completed") {
+      const participantsWithItems = newState.participants.filter((p) => p.items.length > 0);
+      const allMembersPaid = participantsWithItems.length > 0 &&
+        participantsWithItems.every((p) => p.paymentStatus === "paid");
+      const hostPaid = newState.paymentMode === "host_pays" &&
+        newState.participants.find((p) => p.isHost)?.paymentStatus === "paid";
+      if (newState.status === "completed" || allMembersPaid || hostPaid) {
         queryClient.invalidateQueries({ queryKey: orderKeys.detail(paymentCode) });
       }
     });
@@ -1018,6 +1023,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                 {/* Member view when host is paying — no QR for them */}
                 {groupOrder.paymentMode === "host_pays" && !isCurrentUserHost && (() => {
                   const host = groupOrder.participants.find((p) => p.isHost);
+                  const hostPaid = host?.paymentStatus === "paid";
                   return (
                     <div className="flex flex-col items-center gap-4 py-4 text-center">
                       {host?.avatar ? (
@@ -1035,10 +1041,17 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                         </p>
                         <p className="text-xs text-foreground/50">{t("group_host_paying_desc")}</p>
                       </div>
-                      <span className="flex items-center gap-2 rounded-full bg-[#1a3c34]/6 px-4 py-2 text-xs font-semibold text-[#1a3c34]">
-                        <Loader2 className="size-3.5 animate-spin" />
-                        {t("group_waiting_host_payment")}
-                      </span>
+                      {hostPaid ? (
+                        <span className="flex items-center gap-2 rounded-full bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
+                          <CheckCircle2 className="size-3.5" />
+                          {t("group_host_paid_label")}
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-2 rounded-full bg-[#1a3c34]/6 px-4 py-2 text-xs font-semibold text-[#1a3c34]">
+                          <Loader2 className="size-3.5 animate-spin" />
+                          {t("group_waiting_host_payment")}
+                        </span>
+                      )}
                     </div>
                   );
                 })()}
@@ -1204,50 +1217,55 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                                   {p.name[0]}
                                 </div>
                               )}
-                              <span className="flex-1 text-sm text-foreground">
+                              <span className="flex-1 min-w-0 truncate text-sm text-foreground">
                                 {p.name}
                                 {p.id === myGroupParticipant?.id && (
                                   <span className="ml-1 text-[11px] font-semibold text-[#1a3c34]">(bạn)</span>
                                 )}
                               </span>
-                              <span className="flex items-center gap-1 text-sm font-medium tabular-nums text-foreground/60">
+                              {p.paymentStatus === "paid" ? (
+                                <span className="shrink-0 flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 ring-1 ring-emerald-200">
+                                  <CheckCircle2 className="size-3" />
+                                  {t("group_paid_label")}
+                                </span>
+                              ) : (
+                                <span className="shrink-0 flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-600 ring-1 ring-amber-200">
+                                  <Loader2 className="size-3 animate-spin" />
+                                  {t("group_unpaid_label")}
+                                </span>
+                              )}
+                              <span className="shrink-0 flex items-center gap-1 text-sm font-medium tabular-nums text-foreground/60">
                                 {(() => {
                                   const { total, discountShare, shippingShare } = calcSplitAmount(p.subtotal, p.isHost);
                                   return (
                                     <>
                                       {fmtVnd(total)}
-                                      {(discountShare > 0 || shippingShare > 0) && (
-                                        <InfoPopup size="sm">
+                                      <InfoPopup size="sm">
+                                        <span className="flex justify-between">
+                                          <span className="text-foreground/60">{t("group_split_items")}</span>
+                                          <span>{fmtVnd(p.subtotal)}</span>
+                                        </span>
+                                        {discountShare > 0 && (
                                           <span className="flex justify-between">
-                                            <span className="text-foreground/60">{t("group_split_items")}</span>
-                                            <span>{fmtVnd(p.subtotal)}</span>
+                                            <span className="text-foreground/60">{t("group_split_discount")}</span>
+                                            <span className="text-emerald-600">-{fmtVnd(discountShare)}</span>
                                           </span>
-                                          {discountShare > 0 && (
-                                            <span className="flex justify-between">
-                                              <span className="text-foreground/60">{t("group_split_discount")}</span>
-                                              <span className="text-emerald-600">-{fmtVnd(discountShare)}</span>
-                                            </span>
-                                          )}
-                                          {shippingShare > 0 && (
-                                            <span className="flex justify-between">
-                                              <span className="text-foreground/60">{t(splitShippingFeeMode === 'host_pays' ? "group_split_shipping_all" : "group_split_shipping")}</span>
-                                              <span>+{fmtVnd(shippingShare)}</span>
-                                            </span>
-                                          )}
-                                        </InfoPopup>
-                                      )}
+                                        )}
+                                        {shippingShare > 0 && (
+                                          <span className="flex justify-between">
+                                            <span className="text-foreground/60">{t(splitShippingFeeMode === 'host_pays' ? "group_split_shipping_all" : "group_split_shipping")}</span>
+                                            <span>+{fmtVnd(shippingShare)}</span>
+                                          </span>
+                                        )}
+                                        <span className="flex justify-between border-t border-black/6 pt-1.5 font-semibold text-foreground">
+                                          <span>{t("total")}</span>
+                                          <span>{fmtVnd(total)}</span>
+                                        </span>
+                                      </InfoPopup>
                                     </>
                                   );
                                 })()}
                               </span>
-                              {p.paymentStatus === "paid" ? (
-                                <CheckCircle2 className="size-4 shrink-0 text-emerald-500" />
-                              ) : (
-                                <span className="flex items-center gap-1 shrink-0">
-                                  <span className="text-[10px] font-medium text-foreground/40">{t("group_unpaid_label")}</span>
-                                  <Loader2 className="size-3.5 animate-spin text-[#1a3c34]/40" />
-                                </span>
-                              )}
                             </li>
                           ))}
                       </ul>

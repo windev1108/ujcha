@@ -106,4 +106,13 @@ export class AdminOrderController {
   ) {
     return this.adminOrderService.assignShipper(orderId, dto);
   }
+
+  @Patch(':orderId/group-participants/:participantId/payment')
+  @ApiOperation({ summary: 'Admin xác nhận thủ công thanh toán của 1 thành viên nhóm' })
+  markParticipantPaid(
+    @Param('orderId', ParseUUIDPipe) orderId: string,
+    @Param('participantId', ParseUUIDPipe) participantId: string,
+  ) {
+    return this.adminOrderService.markParticipantPaid(orderId, participantId);
+  }
 }

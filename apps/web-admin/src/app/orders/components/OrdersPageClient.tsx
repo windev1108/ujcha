@@ -47,7 +47,7 @@ function todayISO(): string {
 
 function initialFilters(): OrderFiltersValue {
   const t = todayISO();
-  return { q: "", type: "", status: "", from: t, to: t };
+  return { q: "", type: "", status: "", from: t, to: t, isGroupOrder: undefined };
 }
 
 function usePaginationWindow(
@@ -140,6 +140,7 @@ export function OrdersPageClient() {
     to: applied.to || undefined,
     page,
     pageSize: PAGE_SIZE,
+    isGroupOrder: applied.isGroupOrder,
   });
 
   const statsKey = adminKeys.orderStats(applied.from, applied.to);
@@ -155,6 +156,7 @@ export function OrdersPageClient() {
         to: applied.to || undefined,
         page,
         pageSize: PAGE_SIZE,
+        isGroupOrder: applied.isGroupOrder,
       }),
   });
 
@@ -216,10 +218,18 @@ export function OrdersPageClient() {
     void statsQuery.refetch();
   };
 
+  const handleReset = () => {
+    const init = initialFilters();
+    setDraft(init);
+    setApplied(init);
+    setPage(1);
+    setSelectedIds(new Set());
+  };
+
   const confirmDelete = async (o: AdminOrder) => {
     const ok = await confirm({
       title: "Xóa đơn hàng?",
-      description: `Xóa đơn ${o.paymentCode || o.id.slice(0, 8)}? Chỉ thực hiện được khi đơn chưa có giao dịch thanh toán.`,
+      description: `Xóa đơn ${o.paymentCode || o.id.slice(0, 8)}? Nếu đơn đã có thanh toán, giao dịch đó sẽ bị xóa theo. Hành động này không thể hoàn tác.`,
       tone: "danger",
       confirmLabel: "Xóa đơn",
     });
@@ -274,6 +284,7 @@ export function OrdersPageClient() {
       <OrderStats
         isLoading={statsQuery.isLoading}
         totalRevenue={statsQuery.data?.totalRevenue ?? 0}
+        totalOrders={ordersQuery.isLoading ? 0 : total}
         activeOrders={statsQuery.data?.activeOrders ?? 0}
         avgOrderValue={statsQuery.data?.avgOrderValue ?? 0}
         fulfillmentSuccessPercent={
@@ -286,6 +297,7 @@ export function OrdersPageClient() {
         onChange={setDraft}
         onApply={handleApply}
         onQuickApply={handleQuickApply}
+        onReset={handleReset}
       />
 
       {selectedIds.size > 0 && (

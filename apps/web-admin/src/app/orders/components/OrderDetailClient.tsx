@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   Circle,
   Clock,
+  Crown,
   ExternalLink,
   FileText,
   MapPin,
@@ -29,6 +30,7 @@ import {
   Truck,
   User,
   UserPlus,
+  Users,
   UtensilsCrossed,
   X,
 } from "lucide-react";
@@ -44,8 +46,8 @@ import { adminKeys } from "@/services/admin/keys";
 import {
   deleteAdminOrder,
   fetchAdminOrder,
+  markGroupParticipantPaid,
 } from "@/services/admin/orders-api";
-import { fetchPaymentConfig } from "@/services/admin/payment-config-api";
 import type { AdminOrder, AdminOrderStatus } from "@/services/admin/types";
 
 import { AssignShipperModal } from "./AssignShipperModal";
@@ -57,7 +59,7 @@ import {
   orderStatusLabel,
   serviceTypeLabel,
 } from "./order-display";
-import { buildVietQrUrl, groupOrderItems } from "./receipt-shared";
+import { groupOrderItems } from "./receipt-shared";
 import {
   parseOrderItemExtras,
   parseOrderItemOptions,
@@ -292,11 +294,6 @@ export function OrderDetailClient({ orderId }: Props) {
     queryFn: () => fetchAdminOrder(orderId),
   });
 
-  const { data: paymentConfig = null } = useQuery({
-    queryKey: adminKeys.paymentConfig,
-    queryFn: fetchPaymentConfig,
-  });
-
   const order = orderQuery.data;
 
   const deleteMut = useMutation({
@@ -304,6 +301,14 @@ export function OrderDetailClient({ orderId }: Props) {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
       router.push(ROUTES.ORDERS);
+    },
+    onError: async (e) => showAlert(axiosMessage(e), "Lỗi"),
+  });
+
+  const markPaidMut = useMutation({
+    mutationFn: (participantId: string) => markGroupParticipantPaid(orderId, participantId),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(adminKeys.order(orderId), updated);
     },
     onError: async (e) => showAlert(axiosMessage(e), "Lỗi"),
   });
@@ -339,11 +344,6 @@ export function OrderDetailClient({ orderId }: Props) {
     - Number(o.discountAmount)
     - Number(o.pointDiscountAmount)
     + (o.type === "delivery" ? Number(o.shippingFee) : 0);
-  const showPaymentQr = !isPaid && paymentConfig?.isEnabled && o.paymentType === "bank_transfer";
-  const paymentQrSrc = showPaymentQr
-    ? `/api/qr-proxy?url=${encodeURIComponent(buildVietQrUrl(paymentConfig!, Math.round(orderTotal), o.paymentCode))}`
-    : null;
-
   const hasDeliveryInfo = o.type === "delivery" && (o.guestDeliveryName || o.guestDeliveryPhone || o.guestDeliveryAddress || o.address);
   const mapLat = o.address?.lat;
   const mapLng = o.address?.lng;
@@ -444,7 +444,7 @@ export function OrderDetailClient({ orderId }: Props) {
             onPress={async () => {
               const ok = await confirm({
                 title: "Xóa đơn hàng?",
-                description: "Xóa đơn này? Chỉ khi chưa có giao dịch thanh toán.",
+                description: "Xóa đơn này? Nếu đã có thanh toán, giao dịch đó sẽ bị xóa theo. Không thể hoàn tác.",
                 tone: "danger",
                 confirmLabel: "Xóa đơn",
               });
@@ -515,94 +515,76 @@ export function OrderDetailClient({ orderId }: Props) {
       {/* Status timeline */}
       <StatusTimeline order={o} />
 
-      {/* QR payment */}
-      {showPaymentQr && paymentQrSrc && (
-        <Card className="rounded-2xl border border-amber-200 bg-amber-50/40">
-          <CardContent className="flex flex-col items-center gap-4 p-5 sm:flex-row sm:items-start">
-            <div className="shrink-0 overflow-hidden rounded-2xl border border-black/10 bg-white p-2 shadow-sm">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={paymentQrSrc}
-                alt="QR chuyển khoản"
-                className="h-44 w-44 object-contain"
-              />
-            </div>
-            <div className="flex-1 space-y-2 text-sm">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/45">
-                Chuyển khoản ngân hàng
-              </p>
-              <p className="text-xl font-bold tabular-nums text-[#1a3c34]">
-                {formatVnd(orderTotal)}
-              </p>
-              <div className="space-y-1 text-foreground/70">
-                <p><span className="font-medium">Ngân hàng:</span> {paymentConfig!.bankCode}</p>
-                <p><span className="font-medium">Số TK:</span> <span className="font-mono">{paymentConfig!.accountNumber}</span></p>
-                <p><span className="font-medium">Chủ TK:</span> {paymentConfig!.accountName}</p>
-                <p>
-                  <span className="font-medium">Nội dung CK:</span>{" "}
-                  <span className="font-mono font-semibold text-[#1a3c34]">{o.paymentCode}</span>
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
-      {/* Service card */}
+      {/* Service + recipient combined card */}
       <Card className="rounded-2xl border border-black/6">
-        <CardContent className="space-y-4 p-5">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/45">Dịch vụ</p>
-          <div className="flex flex-wrap gap-3 text-sm">
+        <CardContent className="p-5">
+          <p className="mb-4 text-[10px] font-bold uppercase tracking-wider text-foreground/45">
+            Dịch vụ &amp; Người nhận
+          </p>
+          <div className="flex flex-col gap-3">
+            {/* Service type */}
             {o.type === "delivery" && (
-              <span className="inline-flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-emerald-950">
-                <Bike className="size-4" />
-                Giao hàng{o.shipper ? ` · ${o.shipper.name}` : ""}
-              </span>
+              <div className="flex items-center gap-2.5">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-emerald-50">
+                  <Bike className="size-4 text-emerald-700" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground">Giao hàng</p>
+                  {o.shipper && (
+                    <p className="text-xs text-foreground/50">Shipper: {o.shipper.name}</p>
+                  )}
+                </div>
+              </div>
             )}
             {o.type === "table" && (
-              <span className="inline-flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-amber-950">
-                <UtensilsCrossed className="size-4" />
-                {o.table?.name ? `Bàn ${o.table.name}` : "Bàn"}
-              </span>
+              <div className="flex items-center gap-2.5">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-amber-50">
+                  <UtensilsCrossed className="size-4 text-amber-700" />
+                </span>
+                <p className="text-sm font-semibold text-foreground">
+                  {o.table?.name ? `Bàn ${o.table.name}` : "Bàn"}
+                </p>
+              </div>
             )}
             {o.type === "pickup" && (
-              <span className="inline-flex items-center gap-2 rounded-xl bg-violet-50 px-3 py-2 text-violet-950">
-                <ShoppingBag className="size-4" />
-                Mang đi
-              </span>
+              <div className="flex items-center gap-2.5">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-violet-50">
+                  <ShoppingBag className="size-4 text-violet-700" />
+                </span>
+                <p className="text-sm font-semibold text-foreground">Mang đi</p>
+              </div>
+            )}
+
+            {/* Recipient name */}
+            {(o.guestDeliveryName ?? o.user?.name) && (
+              <div className="flex items-center gap-2.5">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-sky-50">
+                  <User className="size-4 text-sky-600" />
+                </span>
+                <p className="text-sm font-semibold text-foreground">
+                  {o.guestDeliveryName ?? o.user?.name}
+                </p>
+              </div>
+            )}
+
+            {/* Recipient phone */}
+            {(o.guestDeliveryPhone ?? o.user?.phone) && (
+              <div className="flex items-center gap-2.5">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-sky-50">
+                  <Phone className="size-4 text-sky-600" />
+                </span>
+                <a
+                  href={`tel:${o.guestDeliveryPhone ?? o.user?.phone}`}
+                  className="font-mono text-sm text-[#1a3c34] hover:underline"
+                >
+                  {o.guestDeliveryPhone ?? o.user?.phone}
+                </a>
+              </div>
             )}
           </div>
         </CardContent>
       </Card>
-
-      {/* Recipient personal info card */}
-      {hasDeliveryInfo && (o.guestDeliveryName || o.guestDeliveryPhone || o.user) && (
-        <Card className="rounded-2xl border border-sky-200 bg-sky-50/40">
-          <CardContent className="p-5">
-            <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-foreground/45">
-              Người nhận
-            </p>
-            <div className="space-y-2.5">
-              {(o.guestDeliveryName ?? o.user?.name) && (
-                <div className="flex items-center gap-2.5 text-sm">
-                  <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-sky-100">
-                    <User className="size-4 text-sky-600" />
-                  </div>
-                  <span className="font-semibold text-foreground">{o.guestDeliveryName ?? o.user?.name}</span>
-                </div>
-              )}
-              {o.guestDeliveryPhone && (
-                <div className="flex items-center gap-2.5 text-sm">
-                  <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-sky-100">
-                    <Phone className="size-4 text-sky-600" />
-                  </div>
-                  <span className="font-mono text-foreground">{o.guestDeliveryPhone}</span>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Delivery address + map card */}
       {hasDeliveryInfo && deliveryAddress && (
@@ -642,12 +624,170 @@ export function OrderDetailClient({ orderId }: Props) {
         </Card>
       )}
 
-      {/* Items */}
-      <Card className="rounded-2xl border border-black/6">
+      {/* Group order participants */}
+      {o.groupOrder && o.groupOrder.participants.length > 0 && (() => {
+        const go = o.groupOrder!;
+        const isSplit = go.paymentMode === "split";
+        const shipping = o.type === "delivery" ? Number(o.shippingFee) : 0;
+        const discount = Number(o.discountAmount) + Number(o.pointDiscountAmount);
+        const activeParticipants = go.participants.filter((p) => p.items.length > 0);
+        const totalSubtotal = activeParticipants.reduce(
+          (s, p) => s + p.items.reduce((sum, it) => sum + Number(it.unitPrice) * it.quantity, 0), 0
+        );
+        const discountFraction = totalSubtotal > 0 ? discount / totalSubtotal : 0;
+        const shippingFeeMode = go.shippingFeeMode ?? "split";
+        const perPersonShipping = isSplit && shippingFeeMode === "split" && activeParticipants.length > 0
+          ? Math.round(shipping / activeParticipants.length) : 0;
+
+        function calcParticipantTotal(subtotal: number, isHost: boolean) {
+          if (!isSplit) return subtotal;
+          const discountShare = Math.round(subtotal * discountFraction);
+          const shippingShare = shippingFeeMode === "host_pays"
+            ? (isHost ? shipping : 0)
+            : perPersonShipping;
+          return { total: Math.round(subtotal - discountShare + shippingShare), discountShare, shippingShare };
+        }
+
+        return (
+        <Card className="rounded-2xl border border-violet-200 bg-violet-50/30">
+          <CardContent className="p-0">
+            <div className="flex items-center gap-2 border-b border-violet-200/60 px-5 py-4">
+              <Users className="size-4 text-violet-600" />
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-violet-700">
+                  Đơn nhóm · {go.participants.length} thành viên ·{" "}
+                  {go.paymentMode === "host_pays" ? "Chủ trả" : "Chia tiền"}
+                </p>
+              </div>
+              <a
+                href={`/group-orders/${go.token}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold text-violet-600 hover:underline"
+              >
+                <ExternalLink className="size-3" />
+                Xem nhóm
+              </a>
+            </div>
+            <div className="divide-y divide-black/5">
+              {go.participants.map((p) => {
+                const name = p.user?.name ?? p.guestName ?? "Khách";
+                const subtotal = p.items.reduce((s, it) => s + Number(it.unitPrice) * it.quantity, 0);
+                const paymentCalc = calcParticipantTotal(subtotal, p.isHost);
+                const paymentTotal = typeof paymentCalc === "object" ? paymentCalc.total : paymentCalc;
+                const hasExtra = isSplit && typeof paymentCalc === "object" && (paymentCalc.discountShare > 0 || paymentCalc.shippingShare > 0);
+                const isPaidParticipant = p.paymentStatus === "paid";
+                const isBusy = markPaidMut.isPending && markPaidMut.variables === p.id;
+                return (
+                  <div key={p.id} className="px-5 py-4">
+                    <div className="mb-3 flex items-center gap-2">
+                      <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[11px] font-bold text-violet-700">
+                        {name[0]?.toUpperCase()}
+                      </div>
+                      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
+                        {name}
+                      </span>
+                      {p.isHost && (
+                        <Crown className="size-3.5 shrink-0 text-amber-500" />
+                      )}
+                      <span className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                        isPaidParticipant
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-amber-100 text-amber-700"
+                      }`}>
+                        {isPaidParticipant ? (
+                          <><CheckCircle2 className="size-3" />Đã TT</>
+                        ) : "Chưa TT"}
+                      </span>
+                      {!isPaidParticipant && p.items.length > 0 && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="shrink-0 rounded-full px-2 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50"
+                          isDisabled={isBusy || markPaidMut.isPending}
+                          onPress={() => markPaidMut.mutate(p.id)}
+                        >
+                          {isBusy ? "…" : "Xác nhận TT"}
+                        </Button>
+                      )}
+                    </div>
+                    {p.items.length === 0 ? (
+                      <p className="text-xs text-foreground/40 italic">Chưa chọn món</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {p.items.map((it) => {
+                          const img = Array.isArray(it.product?.imageUrls) && typeof it.product?.imageUrls[0] === "string"
+                            ? it.product.imageUrls[0] : null;
+                          return (
+                            <div key={it.id} className="flex items-center gap-3">
+                              <div className="relative size-9 shrink-0 overflow-hidden rounded-lg bg-black/5">
+                                {img ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={img} alt="" className="size-full object-cover" />
+                                ) : (
+                                  <div className="flex size-full items-center justify-center text-[9px] text-foreground/30">—</div>
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-medium text-foreground">
+                                  {it.product?.name ?? "Sản phẩm"}
+                                </p>
+                                {it.note?.trim() && (
+                                  <p className="text-xs italic text-amber-700">&ldquo;{it.note.trim()}&rdquo;</p>
+                                )}
+                              </div>
+                              <div className="shrink-0 text-right">
+                                <p className="text-xs text-foreground/50">×{it.quantity}</p>
+                                <p className="text-sm font-semibold tabular-nums text-[#1a3c34]">
+                                  {formatVnd(Number(it.unitPrice) * it.quantity)}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div className="border-t border-black/6 pt-2 space-y-1">
+                          {hasExtra && typeof paymentCalc === "object" && (
+                            <>
+                              <div className="flex justify-between text-xs text-foreground/50">
+                                <span>Tạm tính</span>
+                                <span className="tabular-nums">{formatVnd(subtotal)}</span>
+                              </div>
+                              {paymentCalc.discountShare > 0 && (
+                                <div className="flex justify-between text-xs text-foreground/50">
+                                  <span>Giảm giá</span>
+                                  <span className="tabular-nums text-red-500">-{formatVnd(paymentCalc.discountShare)}</span>
+                                </div>
+                              )}
+                              {paymentCalc.shippingShare > 0 && (
+                                <div className="flex justify-between text-xs text-foreground/50">
+                                  <span>Phí ship</span>
+                                  <span className="tabular-nums">+{formatVnd(paymentCalc.shippingShare)}</span>
+                                </div>
+                              )}
+                            </>
+                          )}
+                          <div className="flex justify-between text-xs font-semibold text-foreground/60">
+                            <span>{isSplit ? "Phải trả" : `Tổng ${name.split(" ").pop()}`}</span>
+                            <span className="tabular-nums text-[#1a3c34]">{formatVnd(paymentTotal)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+        );
+      })()}
+
+      {/* Items — hidden for group orders (items shown per-participant above) */}
+      {!o.groupOrder && <Card className="rounded-2xl border border-black/6">
         <CardContent className="p-0">
           <div className="border-b border-black/6 px-5 py-4">
             <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/45">
-              Món trong đơn ({groupOrderItems(o.items).reduce((s, it) => s + it.quantity, 0)} món)
+              Tổng hợp món ({groupOrderItems(o.items).reduce((s, it) => s + it.quantity, 0)} món)
             </p>
           </div>
           <Table.Root aria-label="Chi tiết món">
@@ -750,7 +890,7 @@ export function OrderDetailClient({ orderId }: Props) {
             );
           })()}
         </CardContent>
-      </Card>
+      </Card>}
 
       <AssignShipperModal
         order={assignOpen}

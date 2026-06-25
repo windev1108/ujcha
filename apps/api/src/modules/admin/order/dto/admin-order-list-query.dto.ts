@@ -69,6 +69,16 @@ export class AdminOrderListQueryDto {
   @IsBoolean()
   unassignedShipper?: boolean;
 
+  @ApiPropertyOptional({ description: 'true = chỉ đơn nhóm; false = chỉ đơn thường' })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === true || value === 'true') return true;
+    if (value === false || value === 'false') return false;
+    return undefined;
+  })
+  @IsBoolean()
+  isGroupOrder?: boolean;
+
   @ApiPropertyOptional({
     description: 'true = chỉ đơn từ nguồn ngoài (GrabFood, ShopeeFood…)',
   })

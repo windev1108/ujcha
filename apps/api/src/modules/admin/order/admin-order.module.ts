@@ -6,6 +6,7 @@ import { PrismaModule } from '../../prisma/prisma.module';
 import { EventsModule } from '../../events/events.module';
 import { AdminAuthModule } from '../auth/admin-auth.module';
 import { NotificationModule } from '../../notification/notification.module';
+import { GroupOrderModule } from '../../group-order/group-order.module';
 import { AdminOrderController } from './admin-order.controller';
 import { AdminOrderService } from './admin-order.service';
 
@@ -18,6 +19,7 @@ import { AdminOrderService } from './admin-order.service';
     ReferralModule,
     EventsModule,
     NotificationModule,
+    GroupOrderModule,
   ],
   controllers: [AdminOrderController],
   providers: [AdminOrderService],

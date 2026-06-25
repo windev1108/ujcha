@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, Input, Label, ListBox, Select } from "@heroui/react";
-import { Filter, Search } from "lucide-react";
+import { Filter, RotateCcw, Search } from "lucide-react";
 
 import {
   adminFieldStack,
@@ -15,6 +15,7 @@ import { OrderDateRangePicker } from "./OrderDateRangePicker";
 
 const TYPE_ALL = "__all__";
 const STATUS_ALL = "__all__";
+const SOURCE_ALL = "__all__";
 
 export type OrderFiltersValue = {
   q: string;
@@ -22,6 +23,7 @@ export type OrderFiltersValue = {
   status: AdminOrderStatus | "";
   from: string;
   to: string;
+  isGroupOrder: boolean | undefined;
 };
 
 function toISODate(d: Date): string {
@@ -48,11 +50,19 @@ function thisMonthRange(): { from: string; to: string } {
   return { from: toISODate(first), to: toISODate(last) };
 }
 
+function thisYearRange(): { from: string; to: string } {
+  const now = new Date();
+  const first = new Date(now.getFullYear(), 0, 1);
+  const last = new Date(now.getFullYear(), 11, 31);
+  return { from: toISODate(first), to: toISODate(last) };
+}
+
 type Props = {
   value: OrderFiltersValue;
   onChange: (next: OrderFiltersValue) => void;
   onApply: () => void;
   onQuickApply: (partial: Pick<OrderFiltersValue, "from" | "to">) => void;
+  onReset: () => void;
 };
 
 const typeOptions: { id: string; label: string }[] = [
@@ -60,6 +70,12 @@ const typeOptions: { id: string; label: string }[] = [
   { id: "delivery", label: "Giao hàng" },
   { id: "table", label: "Tại bàn" },
   { id: "pickup", label: "Mang đi" },
+];
+
+const sourceOptions: { id: string; label: string }[] = [
+  { id: SOURCE_ALL, label: "Tất cả" },
+  { id: "normal", label: "Đơn thường" },
+  { id: "group", label: "Đơn nhóm" },
 ];
 
 const statusOptions: { id: string; label: string }[] = [
@@ -73,7 +89,7 @@ const statusOptions: { id: string; label: string }[] = [
   { id: "cancelled", label: "Đã hủy" },
 ];
 
-export function OrderFilters({ value, onChange, onApply, onQuickApply }: Props) {
+export function OrderFilters({ value, onChange, onApply, onQuickApply, onReset }: Props) {
   return (
     <div className="rounded-2xl border border-black/6 bg-white p-4 shadow-sm sm:p-5">
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -108,13 +124,20 @@ export function OrderFilters({ value, onChange, onApply, onQuickApply }: Props) 
         >
           Tháng này
         </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="rounded-full text-xs"
+          onPress={() => onQuickApply(thisYearRange())}
+        >
+          Năm nay
+        </Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-x-4 lg:gap-y-3">
-        <div className={`lg:col-span-4 ${adminFieldStack}`}>
-          <Label className={adminLabelClassFilter}>
-            Mã đơn / khách
-          </Label>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-12 lg:items-end lg:gap-x-3">
+        {/* Search — col 3 */}
+        <div className={`lg:col-span-3 ${adminFieldStack}`}>
+          <Label className={adminLabelClassFilter}>Mã đơn / khách</Label>
           <div className="relative">
             <Search
               className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-foreground/35"
@@ -123,29 +146,23 @@ export function OrderFilters({ value, onChange, onApply, onQuickApply }: Props) 
             <Input
               value={value.q}
               onChange={(e) => onChange({ ...value, q: e.target.value })}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") onApply();
-              }}
-              placeholder="Mã thanh toán, tên, SĐT, UUID đơn…"
+              onKeyDown={(e) => { if (e.key === "Enter") onApply(); }}
+              placeholder="Mã, tên, SĐT…"
               className="w-full rounded-xl border border-black/10 bg-[#fafafa] py-2 pl-9 pr-3 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]"
               aria-label="Tìm đơn"
             />
           </div>
         </div>
 
+        {/* Loại dịch vụ — col 2 */}
         <div className={`lg:col-span-2 ${adminFieldStack}`}>
-          <Label className={adminLabelClassFilter}>
-            Loại dịch vụ
-          </Label>
+          <Label className={adminLabelClassFilter}>Loại dịch vụ</Label>
           <Select
             className="w-full"
             value={value.type === "" ? TYPE_ALL : value.type}
             onChange={(key) => {
               const k = key == null ? TYPE_ALL : String(key);
-              onChange({
-                ...value,
-                type: k === TYPE_ALL ? "" : (k as AdminOrderType),
-              });
+              onChange({ ...value, type: k === TYPE_ALL ? "" : (k as AdminOrderType) });
             }}
             variant="secondary"
           >
@@ -156,12 +173,7 @@ export function OrderFilters({ value, onChange, onApply, onQuickApply }: Props) 
             <Select.Popover placement="bottom start">
               <ListBox className="max-h-60 min-w-(--trigger-width) overflow-y-auto outline-none">
                 {typeOptions.map((o) => (
-                  <ListBox.Item
-                    key={o.id}
-                    id={o.id}
-                    textValue={o.label}
-                    className="rounded-lg text-sm"
-                  >
+                  <ListBox.Item key={o.id} id={o.id} textValue={o.label} className="rounded-lg text-sm">
                     {o.label}
                   </ListBox.Item>
                 ))}
@@ -170,19 +182,43 @@ export function OrderFilters({ value, onChange, onApply, onQuickApply }: Props) 
           </Select>
         </div>
 
+        {/* Nguồn đơn — col 2 */}
         <div className={`lg:col-span-2 ${adminFieldStack}`}>
-          <Label className={adminLabelClassFilter}>
-            Trạng thái
-          </Label>
+          <Label className={adminLabelClassFilter}>Nguồn đơn</Label>
+          <Select
+            className="w-full"
+            value={value.isGroupOrder === true ? "group" : value.isGroupOrder === false ? "normal" : SOURCE_ALL}
+            onChange={(key) => {
+              const k = key == null ? SOURCE_ALL : String(key);
+              onChange({ ...value, isGroupOrder: k === "group" ? true : k === "normal" ? false : undefined });
+            }}
+            variant="secondary"
+          >
+            <Select.Trigger className={adminSelectTriggerClass}>
+              <Select.Value className={adminSelectValueClass} />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover placement="bottom start">
+              <ListBox className="max-h-60 min-w-(--trigger-width) overflow-y-auto outline-none">
+                {sourceOptions.map((o) => (
+                  <ListBox.Item key={o.id} id={o.id} textValue={o.label} className="rounded-lg text-sm">
+                    {o.label}
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
+          </Select>
+        </div>
+
+        {/* Trạng thái — col 2 */}
+        <div className={`lg:col-span-2 ${adminFieldStack}`}>
+          <Label className={adminLabelClassFilter}>Trạng thái</Label>
           <Select
             className="w-full"
             value={value.status === "" ? STATUS_ALL : value.status}
             onChange={(key) => {
               const k = key == null ? STATUS_ALL : String(key);
-              onChange({
-                ...value,
-                status: k === STATUS_ALL ? "" : (k as AdminOrderStatus),
-              });
+              onChange({ ...value, status: k === STATUS_ALL ? "" : (k as AdminOrderStatus) });
             }}
             variant="secondary"
           >
@@ -193,12 +229,7 @@ export function OrderFilters({ value, onChange, onApply, onQuickApply }: Props) 
             <Select.Popover placement="bottom start">
               <ListBox className="max-h-60 min-w-(--trigger-width) overflow-y-auto outline-none">
                 {statusOptions.map((o) => (
-                  <ListBox.Item
-                    key={o.id}
-                    id={o.id}
-                    textValue={o.label}
-                    className="rounded-lg text-sm"
-                  >
+                  <ListBox.Item key={o.id} id={o.id} textValue={o.label} className="rounded-lg text-sm">
                     {o.label}
                   </ListBox.Item>
                 ))}
@@ -207,18 +238,28 @@ export function OrderFilters({ value, onChange, onApply, onQuickApply }: Props) 
           </Select>
         </div>
 
-        <div className="min-w-0 lg:col-span-4">
+        {/* Date range — col 3 */}
+        <div className="min-w-0 sm:col-span-2 lg:col-span-3">
           <OrderDateRangePicker
-            label="Khoảng ngày (createdAt)"
+            label="Khoảng ngày"
             from={value.from}
             to={value.to}
             onRangeChange={(from, to) => onChange({ ...value, from, to })}
             className="w-full"
           />
         </div>
+
       </div>
 
-      <div className="mt-5 flex justify-end border-t border-black/5 pt-4">
+      <div className="mt-4 flex items-center justify-between border-t border-black/5 pt-3">
+        <Button
+          variant="ghost"
+          className="rounded-full text-xs text-foreground/50 hover:text-foreground/80"
+          onPress={onReset}
+        >
+          <RotateCcw className="mr-1.5 size-3.5" />
+          Xóa bộ lọc
+        </Button>
         <Button
           className="rounded-xl bg-[#1a3c34] px-6 font-semibold text-white"
           onPress={onApply}

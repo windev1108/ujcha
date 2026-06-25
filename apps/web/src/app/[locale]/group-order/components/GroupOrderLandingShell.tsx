@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, useInView } from "motion/react";
 import {
   ArrowRight, ChevronRight, Loader2,
-  Share2, ShoppingBag, Sparkles, Timer, Truck, Users, Zap,
+  PauseCircle, Share2, ShoppingBag, Sparkles, Timer, Truck, Users, Zap,
 } from "lucide-react";
 import { Button } from "@heroui/react";
 import { ROUTES } from "@/lib/routes";
@@ -112,6 +112,7 @@ export function GroupOrderLandingShell() {
   }, [accessToken]);
 
   const handleCreatePress = () => {
+    if (!isEnabled) return;
     if (!accessToken) {
       router.push(`${ROUTES.LOGIN}?redirect=/group-order`);
       return;
@@ -121,11 +122,13 @@ export function GroupOrderLandingShell() {
   const [tiers, setTiers] = useState<GroupDiscountTier[]>([]);
   const [expiryMinutes, setExpiryMinutes] = useState(120);
   const [configLoaded, setConfigLoaded] = useState(false);
+  const [isEnabled, setIsEnabled] = useState(true);
 
   useEffect(() => {
     fetchGroupOrderConfig()
       .then((cfg) => {
         setTiers(cfg.discountTiers);
+        setIsEnabled(cfg.isEnabled);
         if (cfg.expiryMinutes) setExpiryMinutes(cfg.expiryMinutes);
       })
       .catch(() => { })
@@ -135,11 +138,17 @@ export function GroupOrderLandingShell() {
   const sorted = [...tiers].sort((a, b) => a.minParticipants - b.minParticipants);
   const maxDiscount = tiers.length > 0 ? Math.max(...tiers.map((t) => t.discountPercent)) : null;
 
+  const hasDiscount = configLoaded && sorted.length > 0;
+
   const HOW_IT_WORKS = [
     { Icon: Sparkles, step: "01", title: t("step_create_title"), desc: t("step_create_desc") },
     { Icon: Share2, step: "02", title: t("step_invite_title"), desc: t("step_invite_desc") },
     { Icon: ShoppingBag, step: "03", title: t("step_order_title"), desc: t("step_order_desc") },
-    { Icon: Zap, step: "04", title: t("step_lock_title"), desc: t("step_lock_desc") },
+    {
+      Icon: Zap, step: "04",
+      title: hasDiscount ? t("step_lock_title") : t("step_lock_title_no_discount"),
+      desc: hasDiscount ? t("step_lock_desc") : t("step_lock_desc_no_discount"),
+    },
   ];
 
   const FEATURES = [
@@ -171,16 +180,18 @@ export function GroupOrderLandingShell() {
               transition={{ delay: 0.08, duration: 0.5 }}
               className="text-4xl font-bold tracking-tight text-white sm:text-5xl"
             >
-              {t("group_order_headline_1")}
+              {hasDiscount ? t("group_order_headline_1") : t("group_order_headline_1_no_discount")}
               <br />
-              <span className="text-[#99d6b3]">{t("group_order_headline_2")}</span>
+              <span className="text-[#99d6b3]">
+                {hasDiscount ? t("group_order_headline_2") : t("group_order_headline_2_no_discount")}
+              </span>
             </motion.h1>
 
             <motion.p initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.15 }}
               className="mx-auto mt-4 max-w-md text-base leading-relaxed text-white/60"
             >
-              {t("group_order_subline")}
+              {hasDiscount ? t("group_order_subline") : t("group_order_subline_no_discount")}
             </motion.p>
 
             {maxDiscount !== null && (
@@ -204,17 +215,27 @@ export function GroupOrderLandingShell() {
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }} className="mt-8 flex flex-col items-center gap-3"
             >
-              <Button
-                className="inline-flex h-14 items-center gap-2.5 rounded-full bg-white px-8 text-base font-bold text-[#1a3c34] shadow-[0_8px_32px_-8px_rgba(0,0,0,0.3)] hover:opacity-95"
-                onPress={handleCreatePress}
-              >
-                <Users className="size-5" />
-                {accessToken ? t("create_group_order_now") : t("login_to_create_group_order")}
-                <ArrowRight className="size-4.5" />
-              </Button>
-              <p className="text-xs text-white/35">
-                {accessToken ? t("group_order_cta_note") : t("login_to_create_group_order_note")}
-              </p>
+              {configLoaded && !isEnabled ? (
+                <div className="flex items-center gap-2.5 rounded-full border border-white/20 bg-white/10 px-6 py-3 text-sm font-semibold text-white/70">
+                  <PauseCircle className="size-4.5 shrink-0" />
+                  Tính năng đặt nhóm đang tạm ngừng
+                </div>
+              ) : (
+                <>
+                  <Button
+                    isDisabled={!isEnabled}
+                    className="inline-flex h-14 items-center gap-2.5 rounded-full bg-white px-8 text-base font-bold text-[#1a3c34] shadow-[0_8px_32px_-8px_rgba(0,0,0,0.3)] hover:opacity-95 disabled:opacity-50"
+                    onPress={handleCreatePress}
+                  >
+                    <Users className="size-5" />
+                    {accessToken ? t("create_group_order_now") : t("login_to_create_group_order")}
+                    <ArrowRight className="size-4.5" />
+                  </Button>
+                  <p className="text-xs text-white/35">
+                    {accessToken ? t("group_order_cta_note") : t("login_to_create_group_order_note")}
+                  </p>
+                </>
+              )}
             </motion.div>
           </div>
         </div>
@@ -243,7 +264,7 @@ export function GroupOrderLandingShell() {
                 className="relative flex flex-col gap-4 rounded-3xl border border-black/6 bg-white p-5 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.06)]"
               >
                 {i < HOW_IT_WORKS.length - 1 && (
-                  <div className="absolute -right-2.5 top-8 z-10 hidden size-5 items-center justify-center lg:flex">
+                  <div className="absolute -right-2.5 top-1/2 z-10 hidden size-5 -translate-y-1/2 items-center justify-center lg:flex">
                     <ChevronRight className="size-4 text-foreground/20" />
                   </div>
                 )}
@@ -263,38 +284,42 @@ export function GroupOrderLandingShell() {
         </div>
       </section>
 
-      {/* ── Discount tiers ── */}
-      <section className="bg-[#f7f7f7] px-5 py-14 sm:py-16">
-        <div className="mx-auto max-w-[72rem]">
-          <div className="mx-auto max-w-xl">
-            <motion.div initial={{ opacity: 0, y: 14 }} whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-48px" }} className="mb-3 text-center"
-            >
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-foreground/40">{t("group_discount_eyebrow")}</p>
-              <h2 className="mt-2 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{t("more_members_more_discount")}</h2>
-              <p className="mt-2 text-sm text-foreground/50">{t("auto_discount_desc")}</p>
-            </motion.div>
-
-            {maxDiscount !== null && (
-              <motion.div initial={{ opacity: 0, scale: 0.92 }} whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true, margin: "-32px" }}
-                className="mb-5 overflow-hidden rounded-3xl bg-[#1a3c34] px-8 py-10 text-center"
+      {/* ── Discount tiers — hidden when config loaded but empty ── */}
+      {(!configLoaded || sorted.length > 0) && (
+        <section className="bg-[#f7f7f7] px-5 py-14 sm:py-16">
+          <div className="mx-auto max-w-[72rem]">
+            <div className="mx-auto max-w-xl">
+              <motion.div initial={{ opacity: 0, y: 14 }} whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-48px" }} className="mb-3 text-center"
               >
-                <Zap className="mx-auto mb-2 size-7 text-[#99d6b3]" />
-                <p className="text-5xl font-bold text-white sm:text-6xl"><CountUp to={maxDiscount} suffix="%" /></p>
-                <p className="mt-2 text-sm text-white/60">{t("max_discount_when_big")}</p>
-                <div className="mt-5 flex justify-center gap-4 text-center text-xs text-white/40">
-                  <span>{t("auto_applied")}</span>
-                  <span>·</span>
-                  <span>{t("no_code_needed")}</span>
-                  <span>·</span>
-                  <span>{t("applied_to_total")}</span>
-                </div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-foreground/40">{t("group_discount_eyebrow")}</p>
+                <h2 className="mt-2 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{t("more_members_more_discount")}</h2>
+                <p className="mt-2 text-sm text-foreground/50">{t("auto_discount_desc")}</p>
               </motion.div>
-            )}
 
-            {configLoaded ? (
-              sorted.length > 0 ? (
+              {maxDiscount !== null && (
+                <motion.div initial={{ opacity: 0, scale: 0.92 }} whileInView={{ opacity: 1, scale: 1 }}
+                  viewport={{ once: true, margin: "-32px" }}
+                  className="mb-5 overflow-hidden rounded-3xl bg-[#1a3c34] px-8 py-10 text-center"
+                >
+                  <Zap className="mx-auto mb-2 size-7 text-[#99d6b3]" />
+                  <p className="text-5xl font-bold text-white sm:text-6xl"><CountUp to={maxDiscount} suffix="%" /></p>
+                  <p className="mt-2 text-sm text-white/60">{t("max_discount_when_big")}</p>
+                  <div className="mt-5 flex justify-center gap-4 text-center text-xs text-white/40">
+                    <span>{t("auto_applied")}</span>
+                    <span>·</span>
+                    <span>{t("no_code_needed")}</span>
+                    <span>·</span>
+                    <span>{t("applied_to_total")}</span>
+                  </div>
+                </motion.div>
+              )}
+
+              {!configLoaded ? (
+                <div className="flex h-32 items-center justify-center">
+                  <Loader2 className="size-6 animate-spin text-foreground/25" />
+                </div>
+              ) : (
                 <div className="flex flex-col gap-2.5">
                   {sorted.map((tier, i) => (
                     <DiscountTierCard key={tier.minParticipants} tier={tier} index={i}
@@ -306,19 +331,11 @@ export function GroupOrderLandingShell() {
                     <p className="text-[11px] text-foreground/45">{t("discount_note")}</p>
                   </div>
                 </div>
-              ) : (
-                <div className="flex h-24 items-center justify-center rounded-2xl border border-dashed border-black/10">
-                  <p className="text-sm text-foreground/40">{t("no_discount_tiers")}</p>
-                </div>
-              )
-            ) : (
-              <div className="flex h-32 items-center justify-center">
-                <Loader2 className="size-6 animate-spin text-foreground/25" />
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* ── Features ── */}
       <section className="px-5 py-14 sm:py-16">
@@ -364,15 +381,25 @@ export function GroupOrderLandingShell() {
               </div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/35">{t("ready_yet")}</p>
               <h2 className="mt-2 text-2xl font-bold text-white sm:text-3xl">{t("order_as_group")}</h2>
-              <p className="mx-auto mt-3 max-w-sm text-sm text-white/55">{t("group_order_final_desc")}</p>
-              <Button
-                className="mt-7 inline-flex h-13 items-center gap-2.5 rounded-full bg-white px-8 text-sm font-bold text-[#1a3c34] hover:opacity-95"
-                onPress={handleCreatePress}
-              >
-                <Users className="size-4.5" />
-                {accessToken ? t("create_group_order_free") : t("login_to_create_group_order")}
-                <ArrowRight className="size-4" />
-              </Button>
+              <p className="mx-auto mt-3 max-w-sm text-sm text-white/55">
+                {hasDiscount ? t("group_order_final_desc") : t("group_order_final_desc_no_discount")}
+              </p>
+              {configLoaded && !isEnabled ? (
+                <div className="mt-7 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-6 py-3 text-sm font-semibold text-white/60">
+                  <PauseCircle className="size-4 shrink-0" />
+                  Tạm ngừng nhận đơn nhóm
+                </div>
+              ) : (
+                <Button
+                  isDisabled={!isEnabled}
+                  className="mt-7 inline-flex h-13 items-center gap-2.5 rounded-full bg-white px-8 text-sm font-bold text-[#1a3c34] hover:opacity-95 disabled:opacity-50"
+                  onPress={handleCreatePress}
+                >
+                  <Users className="size-4.5" />
+                  {accessToken ? t("create_group_order_free") : t("login_to_create_group_order")}
+                  <ArrowRight className="size-4" />
+                </Button>
+              )}
             </div>
           </motion.div>
         </div>

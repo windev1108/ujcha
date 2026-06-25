@@ -18,7 +18,8 @@ type Props = {
   total: number;
   selectedCount: number;
   selectedIds: Set<string>;
-  onGroupOrder?: () => void;
+  /** undefined → show link to landing page; null → hide entirely; function → show clickable button */
+  onGroupOrder?: (() => void) | null;
 };
 
 export function OrderSummary({ subtotal, total, selectedCount, selectedIds, onGroupOrder }: Props) {
@@ -82,7 +83,7 @@ export function OrderSummary({ subtotal, total, selectedCount, selectedIds, onGr
           {t("voucher_and_points_info")}
         </div>
 
-        {onGroupOrder ? (
+        {onGroupOrder === null ? null : onGroupOrder ? (
           <button
             type="button"
             onClick={onGroupOrder}

@@ -1,6 +1,6 @@
 "use client";
 
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -21,24 +21,35 @@ interface Props {
 }
 
 export default function LeafletMapInner({ lat, lng, address }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const map = L.map(containerRef.current, {
+      center: [lat, lng],
+      zoom: 16,
+      scrollWheelZoom: false,
+    });
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    }).addTo(map);
+
+    const marker = L.marker([lat, lng], { icon }).addTo(map);
+    if (address) {
+      marker.bindPopup(`<span style="font-size:12px;font-weight:500">${address}</span>`);
+    }
+
+    return () => {
+      map.remove();
+    };
+  }, [lat, lng, address]);
+
   return (
-    <MapContainer
-      center={[lat, lng]}
-      zoom={16}
-      scrollWheelZoom={false}
+    <div
+      ref={containerRef}
       style={{ height: "100%", width: "100%", borderRadius: "16px" }}
-    >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
-      <Marker position={[lat, lng]} icon={icon}>
-        {address && (
-          <Popup>
-            <span className="text-xs font-medium">{address}</span>
-          </Popup>
-        )}
-      </Marker>
-    </MapContainer>
+    />
   );
 }

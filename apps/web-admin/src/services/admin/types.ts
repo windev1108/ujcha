@@ -364,6 +364,30 @@ export type AdminOrder = {
   table: { id: string; name: string; qrCode: string } | null;
   address: { id: string; fullAddress: string; lat: number | null; lng: number | null } | null;
   items: AdminOrderItem[];
+  groupOrder: {
+    id: string;
+    token: string;
+    paymentMode: "host_pays" | "split";
+    shippingFeeMode: "split" | "host_pays" | null;
+    participants: Array<{
+      id: string;
+      userId: string | null;
+      guestName: string | null;
+      isHost: boolean;
+      paymentStatus: string;
+      user: { id: string; name: string } | null;
+      items: Array<{
+        id: string;
+        productId: string;
+        quantity: number;
+        unitPrice: string;
+        selectedOptions: Record<string, string> | null;
+        toppingsJson: unknown;
+        note: string | null;
+        product: { id: string; name: string; imageUrls: string[] } | null;
+      }>;
+    }>;
+  } | null;
   typeDisplay: {
     kind: "delivery" | "table" | "pickup";
     delivery?: {

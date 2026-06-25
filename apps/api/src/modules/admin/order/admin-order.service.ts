@@ -19,6 +19,8 @@ import { ReferralRewardProcessingService } from '../../referral/referral-reward-
 import { OrderService } from '../../order/order.service';
 import { OrdersGateway } from '../../events/orders.gateway';
 import { NotificationService } from '../../notification/notification.service';
+import { GroupOrderGateway } from '../../group-order/group-order.gateway';
+import { GroupOrderService } from '../../group-order/group-order.service';
 import type { UpdateOrderStatusDto } from '../../order/dto/update-order-status.dto';
 import type { AdminCreateOrderDto } from './dto/admin-create-order.dto';
 import type { AdminOrderMetricsQueryDto } from './dto/admin-order-metrics-query.dto';
@@ -67,6 +69,7 @@ const adminOrderInclude = {
       id: true,
       token: true,
       paymentMode: true,
+      shippingFeeMode: true,
       participants: {
         orderBy: { joinedAt: 'asc' as const },
         select: {
@@ -143,6 +146,8 @@ export class AdminOrderService {
     private readonly referralRewardProcessing: ReferralRewardProcessingService,
     private readonly ordersGateway: OrdersGateway,
     private readonly notificationService: NotificationService,
+    private readonly groupOrderGateway: GroupOrderGateway,
+    private readonly groupOrderService: GroupOrderService,
   ) { }
 
   async findAll(query: AdminOrderListQueryDto) {
@@ -175,6 +180,9 @@ export class AdminOrderService {
         ],
       });
     }
+
+    if (query.isGroupOrder === true) and.push({ groupOrder: { isNot: null } });
+    if (query.isGroupOrder === false) and.push({ groupOrder: { is: null } });
 
     if (query.unassignedShipper === true) {
       and.push({ type: OrderType.delivery });
@@ -301,25 +309,17 @@ export class AdminOrderService {
   }
 
   async remove(orderId: string) {
-    const o = await this.prisma.order.findUnique({
-      where: { id: orderId },
-      include: {
-        payments: { select: { id: true }, take: 1 },
-      },
-    });
+    const o = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!o) {
       throw new NotFoundException({
         message: 'Không tìm thấy đơn.',
         code: 'ORDER_NOT_FOUND',
       });
     }
-    if (o.payments.length > 0) {
-      throw new BadRequestException({
-        message: 'Đơn đã có giao dịch thanh toán, không xóa được.',
-        code: 'ORDER_HAS_PAYMENTS',
-      });
-    }
-    await this.prisma.order.delete({ where: { id: orderId } });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.payment.deleteMany({ where: { orderId } });
+      await tx.order.delete({ where: { id: orderId } });
+    });
   }
 
   async findById(orderId: string) {
@@ -666,6 +666,61 @@ export class AdminOrderService {
       returningPhones: byPhone.map((o) => o.guestDeliveryPhone!),
       returningUserIds: byUser.map((o) => o.userId!),
     };
+  }
+
+  async markParticipantPaid(orderId: string, participantId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        groupOrder: {
+          include: {
+            participants: { include: { items: true } },
+          },
+        },
+      },
+    });
+    if (!order?.groupOrder) throw new NotFoundException('Không tìm thấy đơn nhóm.');
+
+    const participant = order.groupOrder.participants.find((p) => p.id === participantId);
+    if (!participant) throw new NotFoundException('Không tìm thấy thành viên.');
+
+    await this.prisma.groupOrderParticipant.update({
+      where: { id: participantId },
+      data: { paymentStatus: PaymentStatus.paid, paidAt: new Date() },
+    });
+
+    const withItems = order.groupOrder.participants.filter((p) => p.items.length > 0);
+    // In split mode: all participants with items must now be paid (including the one just marked)
+    const allOthersPaid = withItems
+      .filter((p) => p.id !== participantId)
+      .every((p) => p.paymentStatus === 'paid');
+    // In host_pays mode: only the host's payment settles the order
+    const isMarkingHost = participant.isHost;
+
+    const shouldMarkOrderPaid =
+      (order.groupOrder.paymentMode === 'split' && allOthersPaid) ||
+      (order.groupOrder.paymentMode === 'host_pays' && isMarkingHost);
+
+    if (shouldMarkOrderPaid) {
+      await this.prisma.order.update({
+        where: { id: orderId },
+        data: { paymentStatus: PaymentStatus.paid, paidAt: new Date() },
+      });
+      this.ordersGateway.emitOrderPaid({
+        orderId,
+        paymentCode: order.paymentCode,
+        transferAmount: Number(order.finalAmount),
+        transactionId: `admin-${Date.now()}`,
+      });
+    }
+
+    const token = order.groupOrder.token;
+    const state = await this.groupOrderService.fetchSerializedState(token);
+    if (state) {
+      this.groupOrderGateway.broadcast(token, state);
+    }
+
+    return this.findById(orderId);
   }
 
   private withTypeDisplay(order: AdminOrderPayload) {

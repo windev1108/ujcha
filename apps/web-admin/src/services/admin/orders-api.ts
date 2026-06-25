@@ -20,6 +20,8 @@ export async function fetchAdminOrders(params?: {
   pageSize?: number;
   /** Chỉ đơn giao hàng chưa gán shipper (backend). */
   unassignedShipper?: boolean;
+  /** true = đơn nhóm; false = đơn thường; undefined = tất cả */
+  isGroupOrder?: boolean;
 }): Promise<AdminOrderListResponse> {
   const { data } = await api.get<AdminOrderListResponse>("/admin/orders", {
     params: {
@@ -28,9 +30,8 @@ export async function fetchAdminOrders(params?: {
       ...(params?.q?.trim() ? { q: params.q.trim() } : {}),
       ...(params?.from ? { from: params.from } : {}),
       ...(params?.to ? { to: params.to } : {}),
-      ...(params?.unassignedShipper === true
-        ? { unassignedShipper: true }
-        : {}),
+      ...(params?.unassignedShipper === true ? { unassignedShipper: true } : {}),
+      ...(params?.isGroupOrder !== undefined ? { isGroupOrder: params.isGroupOrder } : {}),
       page: params?.page ?? 1,
       pageSize: params?.pageSize ?? 10,
     },
@@ -117,6 +118,16 @@ export async function createAdminOrder(
 
 export async function deleteAdminOrder(id: string): Promise<void> {
   await api.delete(`/admin/orders/${id}`);
+}
+
+export async function markGroupParticipantPaid(
+  orderId: string,
+  participantId: string,
+): Promise<AdminOrder> {
+  const { data } = await api.patch<AdminOrder>(
+    `/admin/orders/${orderId}/group-participants/${participantId}/payment`,
+  );
+  return data;
 }
 
 export async function bulkUpdateAdminOrderStatus(

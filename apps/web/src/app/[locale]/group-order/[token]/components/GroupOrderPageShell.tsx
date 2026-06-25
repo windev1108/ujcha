@@ -1273,6 +1273,7 @@ export function GroupOrderPageShell() {
   const [joinNotif, setJoinNotif] = useState<string | null>(null);
   const [leaveNotif, setLeaveNotif] = useState<string | null>(null);
   const [isLeaving, setIsLeaving] = useState(false);
+  const isLeavingRef = useRef(false);
   const [showLockConfirm, setShowLockConfirm] = useState(false);
   const [joining, setJoining] = useState(false);
   useEffect(() => { myParticipantIdRef.current = myParticipantId; }, [myParticipantId]);
@@ -1411,7 +1412,13 @@ export function GroupOrderPageShell() {
       if (existing) {
         setMyParticipantId(existing.id);
         localStorage.setItem(PARTICIPANT_KEY(token), existing.id);
-        getDeviceId().then((deviceId) => joinGroupOrder(token, { deviceId }).catch(() => { }));
+        getDeviceId().then(async (deviceId) => {
+          try {
+            const res = await joinGroupOrder(token, { deviceId });
+            setSessionToken(res.sessionToken);
+            localStorage.setItem(SESSION_KEY(token), res.sessionToken);
+          } catch { }
+        });
         return;
       }
     }
@@ -1818,13 +1825,11 @@ export function GroupOrderPageShell() {
 
   const handleLeave = useCallback(async () => {
     if (!sessionToken) return;
+    isLeavingRef.current = true;
     setIsLeaving(true);
     try {
       await leaveGroupOrder(token, sessionToken);
-      localStorage.removeItem(SESSION_KEY(token));
-      localStorage.removeItem(PARTICIPANT_KEY(token));
       clearGroupOrderSession(token);
-      router.push(ROUTES.HOME);
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string | string[] } } };
       const msg = err?.response?.data?.message ?? "Có lỗi xảy ra.";
@@ -2574,11 +2579,15 @@ export function GroupOrderPageShell() {
       {isKicked && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-3xl border border-black/6 bg-white p-8 text-center shadow-[0_4px_20px_-8px_rgba(0,0,0,0.18)]">
-            <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-red-50 ring-1 ring-red-200">
-              <UserX className="size-8 text-red-500" />
+            <div className={`mx-auto mb-4 flex size-16 items-center justify-center rounded-full ring-1 ${isLeavingRef.current ? "bg-[#f0faf6] ring-[#1a3c34]/20" : "bg-red-50 ring-red-200"}`}>
+              <UserX className={`size-8 ${isLeavingRef.current ? "text-[#1a3c34]" : "text-red-500"}`} />
             </div>
-            <h3 className="text-lg font-bold text-foreground">{t("group_kicked_title")}</h3>
-            <p className="mt-2 text-sm text-muted">{t("group_kicked_desc")}</p>
+            <h3 className="text-lg font-bold text-foreground">
+              {isLeavingRef.current ? t("group_left_title") : t("group_kicked_title")}
+            </h3>
+            <p className="mt-2 text-sm text-muted">
+              {isLeavingRef.current ? t("group_left_desc") : t("group_kicked_desc")}
+            </p>
             <button
               type="button"
               onClick={() => router.push(ROUTES.HOME)}

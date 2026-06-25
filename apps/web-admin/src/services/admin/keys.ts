@@ -13,6 +13,7 @@ export const adminKeys = {
     to?: string;
     page?: number;
     pageSize?: number;
+    isGroupOrder?: boolean;
   }) =>
     [
       "admin",
@@ -24,6 +25,7 @@ export const adminKeys = {
       filters?.to ?? "",
       String(filters?.page ?? 1),
       String(filters?.pageSize ?? 20),
+      filters?.isGroupOrder === true ? "group" : filters?.isGroupOrder === false ? "normal" : "all",
     ] as const,
   order: (id: string) => ["admin", "orders", id] as const,
   orderStats: (from?: string, to?: string) =>

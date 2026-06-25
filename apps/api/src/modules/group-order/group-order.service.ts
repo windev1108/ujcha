@@ -1075,6 +1075,15 @@ export class GroupOrderService {
     throw new InternalServerErrorException('Could not generate unique payment code.');
   }
 
+  async fetchSerializedState(token: string) {
+    const go = await this.prisma.groupOrder.findUnique({
+      where: { token },
+      include: this.fullInclude(),
+    });
+    if (!go) return null;
+    return this.serialize(go);
+  }
+
   private async resolveParticipant(token: string, sessionToken: string) {
     const go = await this.prisma.groupOrder.findUnique({
       where: { token },

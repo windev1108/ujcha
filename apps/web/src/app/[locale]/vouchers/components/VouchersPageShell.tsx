@@ -133,7 +133,7 @@ function VoucherCard({ item, index }: { item: MyVoucherItem; index: number }) {
 
             {!isInactive ? (
               <div className="flex items-center gap-2">
-                <button
+                {/* <button
                   type="button"
                   onClick={handleCopy}
                   className="flex items-center gap-1.5 rounded-full bg-[#1a3c34] px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-85"
@@ -149,11 +149,11 @@ function VoucherCard({ item, index }: { item: MyVoucherItem; index: number }) {
                       {t("copy")}
                     </>
                   )}
-                </button>
+                </button> */}
                 <button
                   type="button"
                   onClick={() => router.push(ROUTES.MENU)}
-                  className="flex items-center gap-1.5 rounded-full border border-black/10 bg-white px-4 py-2 text-xs font-semibold text-foreground/70 transition-colors hover:border-[#1a3c34]/30 hover:text-[#1a3c34]"
+                  className="flex items-center gap-1.5 rounded-full bg-[#1a3c34] px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-85"
                 >
                   <ShoppingBag className="size-3.5" />
                   {t("order")}
@@ -189,7 +189,7 @@ function VoucherCard({ item, index }: { item: MyVoucherItem; index: number }) {
           </div>
         </div>
       </div>
-    </motion.div>
+    </motion.div >
   );
 }
 

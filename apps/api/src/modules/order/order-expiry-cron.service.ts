@@ -92,6 +92,12 @@ export class OrderExpiryCronService {
           status: OrderStatus.pending,
           createdAt: { lt: cutoff },
         },
+        // For split mode: do not cancel if at least one participant has already paid
+        NOT: {
+          participants: {
+            some: { paymentStatus: PaymentStatus.paid },
+          },
+        },
       },
       select: { id: true, orderId: true, token: true },
     });

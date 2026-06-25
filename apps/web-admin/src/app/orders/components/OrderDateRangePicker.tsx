@@ -6,7 +6,7 @@ import {
   Label,
   RangeCalendar,
 } from "@heroui/react";
-import { parseDate } from "@internationalized/date";
+import { parseDate, today, getLocalTimeZone } from "@internationalized/date";
 import { useMemo } from "react";
 
 import { adminLabelClassFilter } from "@/lib/admin-form-classes";
@@ -77,7 +77,7 @@ export function OrderDateRangePicker({
         </DateField.Suffix>
       </DateField.Group>
       <DateRangePicker.Popover className="rounded-2xl p-2 shadow-lg">
-        <RangeCalendar aria-label={label}>
+        <RangeCalendar aria-label={label} maxValue={today(getLocalTimeZone())}>
           <RangeCalendar.Header>
             <RangeCalendar.YearPickerTrigger>
               <RangeCalendar.YearPickerTriggerHeading />
