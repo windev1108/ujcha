@@ -20,3 +20,8 @@ export async function fetchProductBySlug(slug: string, locale?: string): Promise
   })
   return data
 }
+
+export async function fetchProductById(id: string): Promise<ApiProduct> {
+  const { data } = await api.get<ApiProduct>(`/products/${id}`)
+  return data
+}

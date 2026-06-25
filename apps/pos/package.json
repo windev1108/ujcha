@@ -1,6 +1,6 @@
 {
   "name": "ujcha-pos",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "UjCha POS — Hệ thống bán hàng tại quầy",
   "main": "out/main/index.js",
   "scripts": {

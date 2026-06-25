@@ -43,16 +43,25 @@ type ModalProduct = {
   isSoldOut?: boolean;
 };
 
+export type GroupOrderDraftValue = {
+  quantity: number;
+  selectedOptions: Record<string, string>;
+  toppings: Array<{ toppingId: string; name: string; price: number; nameTranslation?: Record<string, string> }>;
+  note?: string;
+};
+
 type Props = {
   product?: ModalProduct | null;
   productIndex?: number;
   open: boolean;
   onClose: () => void;
-  // When provided the modal is in edit mode
   editItem?: ApiCartItem | null;
+  onGroupConfirm?: (value: GroupOrderDraftValue) => void;
+  groupInitial?: GroupOrderDraftValue;
 };
 
-export function ProductQuickAddModal({ product, productIndex = 0, open, onClose, editItem }: Props) {
+export function ProductQuickAddModal({ product, productIndex = 0, open, onClose, editItem, onGroupConfirm, groupInitial }: Props) {
+  const isGroupOrderMode = !!onGroupConfirm;
   const isEditMode = !!editItem;
   const t = useTranslations();
   const locale = useLocale();
@@ -91,6 +100,15 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
       }
       setSelectedOptions(opts);
       setNote(editItem.note ?? "");
+    } else if (groupInitial) {
+      setQuantity(groupInitial.quantity ?? 1);
+      setSelectedToppings(new Set(groupInitial.toppings?.map((t) => t.toppingId) ?? []));
+      const opts: Record<string, string> = {};
+      for (const grp of optionGroups) {
+        opts[grp.name] = groupInitial.selectedOptions?.[grp.name] ?? grp.values[0]?.label ?? "";
+      }
+      setSelectedOptions(opts);
+      setNote(groupInitial.note ?? "");
     } else {
       const init: Record<string, string> = {};
       for (const g of optionGroups) {
@@ -148,6 +166,19 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
 
   function handleSubmit() {
     if (!resolvedProduct) return;
+
+    if (isGroupOrderMode && onGroupConfirm) {
+      onGroupConfirm({
+        quantity,
+        selectedOptions,
+        toppings: toppings
+          .filter((top) => selectedToppings.has(top.id))
+          .map((top) => ({ toppingId: top.id, name: top.name, price: top.price, nameTranslation: top.nameTranslation ?? undefined })),
+        note: note.trim() || undefined,
+      });
+      onClose();
+      return;
+    }
 
     if (isEditMode && editItem) {
       updateItem(
@@ -251,7 +282,7 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
                   style={{ backgroundColor: activeImage ? undefined : bgColor }}
                 >
                   {activeImage ? (
-                    <Image src={activeImage} alt={displayName} fill className="object-cover" sizes="320px" priority />
+                    <Image src={activeImage} alt={displayName} fill className="object-cover" sizes="(min-width: 768px) 350px" quality={88} priority />
                   ) : (
                     <div className="absolute inset-0 flex items-center justify-center">
                       <span className="select-none text-7xl font-black text-white/15">
@@ -293,7 +324,7 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
                   style={{ backgroundColor: activeImage ? undefined : bgColor }}
                 >
                   {activeImage ? (
-                    <Image src={activeImage} alt={displayName} fill className="object-cover" sizes="100vw" priority />
+                    <Image src={activeImage} alt={displayName} fill className="object-cover" sizes="100vw" quality={85} priority />
                   ) : (
                     <div className="absolute inset-0 flex items-center justify-center">
                       <span className="select-none text-6xl font-black text-white/15">
@@ -338,7 +369,7 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
                     <h2 className="text-base font-semibold leading-snug text-foreground sm:text-xl">
                       {displayName}
                     </h2>
-                    {isEditMode && (
+                    {(isEditMode || (isGroupOrderMode && groupInitial)) && (
                       <p className="text-xs font-medium text-muted">{t("edit")}</p>
                     )}
                     <div className="flex items-baseline gap-2.5">
@@ -514,6 +545,11 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
                   >
                     {isPending ? (
                       <Loader2 className="size-4 animate-spin" />
+                    ) : isGroupOrderMode ? (
+                      <>
+                        <Check className="size-4" />
+                        {groupInitial ? t("group_update_item_btn") : t("group_add_item_btn")}
+                      </>
                     ) : addedFeedback ? (
                       <>
                         <Check className="size-4" />
@@ -532,8 +568,8 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
                     )}
                   </button>
 
-                  {/* View detail link — only in add mode */}
-                  {!isEditMode && (
+                  {/* View detail link — only in regular add mode */}
+                  {!isEditMode && !isGroupOrderMode && (
                     <Link
                       href={`${ROUTES.MENU}/${resolvedProduct.slug}`}
                       onClick={onClose}

@@ -43,9 +43,10 @@ import {
 import { Button, Card, CardContent } from "@heroui/react";
 import { env } from "@/config/env";
 import { useAuthStore } from "@/store/auth-store";
-import { useProductsQuery } from "@/services/product/hooks";
+import { useProductsQuery, useProductByIdQuery } from "@/services/product/hooks";
 import type { ApiProduct } from "@/services/product/types";
 import { useCategoriesQuery } from "@/services/category/hooks";
+import { ProductQuickAddModal, type GroupOrderDraftValue } from "@/components/product/ProductQuickAddModal";
 import { normalizeOptionGroups, computeOptionSurcharge, formatVnd, formatOptionLabel } from "@/lib/product-options";
 
 import { useAddressesQuery } from "@/services/order/hooks";
@@ -144,8 +145,6 @@ type ToppingDraft = { toppingId: string; name: string; price: number; nameTransl
 type DraftValue = { quantity: number; selectedOptions: Record<string, string>; toppings: ToppingDraft[]; note?: string };
 type DraftItem = DraftValue & { productId: string };
 
-// ── ProductCustomizeSheet ─────────────────────────────────────────────────────
-
 function ProductCustomizeSheet({
   product,
   initial,
@@ -197,160 +196,232 @@ function ProductCustomizeSheet({
     });
   };
 
+  const imageUrl = product.imageUrls[0] ?? null;
+  const hasDiscount = product.discountPercent > 0;
+  const displayName = getDisplayName(product, locale);
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="absolute inset-0 z-10 flex flex-col overflow-hidden rounded-t-3xl bg-white sm:rounded-3xl"
+      className="absolute inset-0 z-10 flex flex-col overflow-hidden rounded-t-3xl bg-white sm:flex-row sm:rounded-3xl"
     >
-      <div className="flex shrink-0 items-center gap-3 border-b border-black/6 px-5 py-4">
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex size-8 shrink-0 items-center justify-center rounded-full bg-black/6 text-foreground/60 hover:bg-black/10"
-        >
-          <X className="size-4" />
-        </button>
-        <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-foreground/40">{t("group_options_eyebrow")}</p>
-          <h3 className="truncate text-sm font-bold text-foreground">{getDisplayName(product, locale)}</h3>
+      {/* Desktop image panel */}
+      <div
+        className="hidden sm:block sm:w-[42%] sm:shrink-0 sm:rounded-l-3xl sm:overflow-hidden"
+        style={{ backgroundColor: imageUrl ? undefined : "#1a3c34" }}
+      >
+        <div className="relative h-full">
+          {imageUrl ? (
+            <Image src={imageUrl} alt={displayName} fill className="object-cover" sizes="320px" />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="select-none text-7xl font-black text-white/15">
+                {displayName.charAt(0).toUpperCase()}
+              </span>
+            </div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/10" />
+          {hasDiscount && (
+            <span className="absolute left-4 top-4 rounded-full bg-red-500 px-2.5 py-1 text-[11px] font-bold text-white shadow">
+              -{product.discountPercent}%
+            </span>
+          )}
         </div>
       </div>
 
-      <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
-        {optionGroups.length > 0 && (
-          <div className="space-y-3 rounded-2xl border border-black/6 bg-[#f9fafb] p-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/40">{t("group_selection_eyebrow")}</p>
-            {optionGroups.map((grp) => (
-              <div key={grp.id} className="space-y-1.5">
-                <p className="text-xs font-semibold text-foreground">
-                  {grp.nameTranslation?.[locale] ?? grp.name}
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {grp.values.map((v) => {
-                    const active = selectedOptions[grp.name] === v.label;
-                    const displayLabel = v.nameTranslation?.[locale] ?? v.label;
-                    return (
-                      <button
-                        key={v.label}
-                        type="button"
-                        onClick={() => setSelectedOptions((prev) => ({ ...prev, [grp.name]: v.label }))}
-                        className={`rounded-full px-3 py-1 text-xs font-semibold transition ${active
-                          ? "bg-[#1a3c34] text-white"
-                          : "bg-white text-foreground/70 ring-1 ring-black/10 hover:ring-[#1a3c34]/30"
-                          }`}
-                      >
-                        {displayLabel}
-                        {v.priceDelta > 0 && (
-                          <span className={`ml-1 ${active ? "text-white/70" : "text-foreground/40"}`}>
-                            +{formatVnd(v.priceDelta)}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {toppings.length > 0 && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/40">{t("group_toppings_eyebrow")}</p>
-              {selectedToppings.size > 0 && (
-                <p className="text-[10px] font-semibold text-foreground/40">
-                  {t("group_selected_count", { count: selectedToppings.size })}
-                </p>
-              )}
+      {/* Content panel */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {/* Mobile image strip */}
+        <div
+          className="relative h-44 w-full shrink-0 overflow-hidden sm:hidden"
+          style={{ backgroundColor: imageUrl ? undefined : "#1a3c34" }}
+        >
+          {imageUrl ? (
+            <Image src={imageUrl} alt={displayName} fill className="object-cover" sizes="100vw" />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="select-none text-6xl font-black text-white/15">
+                {displayName.charAt(0).toUpperCase()}
+              </span>
             </div>
-            <div className="max-h-44 overflow-y-auto rounded-2xl border border-black/6 bg-[#f9fafb] p-2">
-              {toppings.map((top) => {
-                const active = selectedToppings.has(top.id);
-                return (
-                  <button
-                    key={top.id}
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => toggleTopping(top.id, !active)}
-                    className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${active
-                      ? "border-[#1a3c34]/30 bg-[#f0faf6]"
-                      : "border-transparent bg-white hover:border-black/8"
-                      }`}
-                  >
-                    <div className={`flex size-[18px] shrink-0 items-center justify-center rounded-[5px] border-2 transition-colors ${active ? "border-[#1a3c34] bg-[#1a3c34]" : "border-black/20 bg-white"}`}>
-                      {active && <Check className="size-2.5 text-white" />}
-                    </div>
-                    <span className={`flex-1 text-sm font-medium ${active ? "text-[#1a3c34]" : "text-foreground"}`}>
-                      {top.nameTranslation?.[locale] ?? top.name}
-                    </span>
-                    <span className={`text-sm tabular-nums ${active ? "font-semibold text-[#1a3c34]" : "text-foreground/50"}`}>
-                      +{formatVnd(top.price)}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        <div className="space-y-1.5">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/40">{t("group_quantity_label")}</p>
-          <div className="inline-flex items-center rounded-full border border-black/8 bg-[#f7f7f7]">
-            <button
-              type="button"
-              onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-              disabled={quantity <= 1}
-              className="flex size-10 items-center justify-center rounded-full text-foreground transition hover:bg-black/6 disabled:opacity-40"
-            >
-              <Minus className="size-4" />
-            </button>
-            <span className="w-10 text-center text-sm font-bold tabular-nums">{quantity}</span>
-            <button
-              type="button"
-              onClick={() => setQuantity((q) => q + 1)}
-              className="flex size-10 items-center justify-center rounded-full text-foreground transition hover:bg-black/6"
-            >
-              <Plus className="size-4" />
-            </button>
-          </div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" />
+          {hasDiscount && (
+            <span className="absolute left-4 top-4 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white shadow">
+              -{product.discountPercent}%
+            </span>
+          )}
         </div>
 
-        <div className="space-y-1.5">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/40">{t("group_note_label")}</p>
-          <div className="flex items-start gap-2 rounded-2xl border border-black/8 bg-[#f9fafb] px-3 py-2.5 focus-within:border-[#1a3c34]/30">
-            <StickyNote className="mt-0.5 size-3.5 shrink-0 text-foreground/35" />
-            <textarea
-              rows={2}
+        {/* Close button */}
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-4 top-4 z-10 flex size-8 items-center justify-center rounded-full bg-black/20 text-white backdrop-blur-sm transition-colors hover:bg-black/35 sm:bg-white/90 sm:text-foreground sm:shadow-sm"
+        >
+          <X className="size-4" />
+        </button>
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-4 pt-5">
+          {/* Product header */}
+          <div className="space-y-1">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted">
+              {getDisplayName(product.category, locale)}
+            </p>
+            <h3 className="text-base font-semibold leading-snug text-foreground sm:text-lg">
+              {displayName}
+            </h3>
+            <div className="flex items-baseline gap-2">
+              <span className="text-lg font-black tabular-nums text-kun-products-forest">
+                {fmtVnd(unitPrice)}
+              </span>
+              {hasDiscount && (
+                <span className="text-xs tabular-nums text-muted line-through">
+                  {fmtVnd(parseFloat(product.price))}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="my-4 h-px bg-black/[0.06]" />
+
+          {/* Options */}
+          {optionGroups.length > 0 && (
+            <div className="space-y-4">
+              {optionGroups.map((grp) => (
+                <div key={grp.id} className="space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted">
+                    {grp.nameTranslation?.[locale] ?? grp.name}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {grp.values.map((v) => {
+                      const active = selectedOptions[grp.name] === v.label;
+                      const displayLabel = v.nameTranslation?.[locale] ?? v.label;
+                      return (
+                        <button
+                          key={v.label}
+                          type="button"
+                          onClick={() => setSelectedOptions((prev) => ({ ...prev, [grp.name]: v.label }))}
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition-all ${active
+                            ? "border-[#26634d]/40 bg-[#26634d]/10 text-[#26634d]"
+                            : "border-black/10 bg-white text-foreground hover:border-black/20"
+                            }`}
+                        >
+                          {displayLabel}
+                          {v.priceDelta > 0 && (
+                            <span className={`text-xs tabular-nums ${active ? "text-[#26634d]/70" : "text-muted"}`}>
+                              +{formatVnd(v.priceDelta)}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+              <div className="my-3 h-px bg-black/[0.06]" />
+            </div>
+          )}
+
+          {/* Toppings */}
+          {toppings.length > 0 && (
+            <div className="space-y-2.5">
+              <div className="flex items-baseline justify-between">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted">
+                  {t("extra_toppings")}
+                </p>
+                {selectedToppings.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedToppings(new Set())}
+                    className="text-[11px] font-medium text-muted transition-colors hover:text-foreground"
+                  >
+                    {t("remove")}
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-1 gap-1.5 overflow-y-auto overscroll-contain rounded-xl" style={{ maxHeight: "172px" }}>
+                {toppings.map((top) => {
+                  const active = selectedToppings.has(top.id);
+                  return (
+                    <button
+                      key={top.id}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => toggleTopping(top.id, !active)}
+                      className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left transition-all ${active
+                        ? "border-[#26634d]/40 bg-[#26634d]/8 text-[#26634d]"
+                        : "border-black/[0.07] bg-surface-card/40 text-foreground hover:border-black/15"
+                        }`}
+                    >
+                      <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
+                        {top.nameTranslation?.[locale] ?? top.name}
+                      </span>
+                      <span className={`shrink-0 text-[12px] tabular-nums font-semibold ${active ? "text-[#26634d]" : "text-muted"}`}>
+                        +{formatVnd(top.price)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Note */}
+          <div className="mt-4 space-y-1.5">
+            <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-muted">
+              <StickyNote className="size-3" />
+              {t("group_note_label")}
+            </label>
+            <input
+              type="text"
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder={t("group_note_placeholder")}
-              className="flex-1 resize-none bg-transparent text-sm text-foreground placeholder:text-foreground/35 focus:outline-none"
+              className="h-10 w-full rounded-xl border border-black/[0.09] bg-white px-3.5 text-[13px] text-foreground placeholder:text-muted/60 focus:border-[#1a3c34] focus:outline-none focus:ring-2 focus:ring-[#1a3c34]/20"
             />
           </div>
         </div>
 
-        <div className="flex items-center justify-between rounded-2xl bg-[#1a3c34]/8 px-4 py-3">
-          <div className="flex flex-col">
-            <span className="text-sm font-semibold text-[#1a3c34]">{t("group_unit_price_label")}</span>
-            {quantity > 1 && (
-              <span className="text-[11px] text-[#1a3c34]/55">{quantity} × {fmtVnd(unitPrice)}</span>
-            )}
+        {/* Fixed bottom: qty + price + confirm */}
+        <div className="shrink-0 border-t border-black/6 bg-white px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3">
+          <div className="mb-3 flex items-center justify-between gap-4">
+            <div className="flex items-center rounded-full border border-black/[0.09] bg-surface-card/40">
+              <button
+                type="button"
+                onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                disabled={quantity <= 1}
+                className="flex size-9 items-center justify-center rounded-full text-foreground transition-colors hover:bg-black/[0.05] disabled:opacity-35"
+              >
+                <Minus className="size-3.5" />
+              </button>
+              <span className="w-8 text-center text-sm font-bold tabular-nums">{quantity}</span>
+              <button
+                type="button"
+                onClick={() => setQuantity((q) => q + 1)}
+                className="flex size-9 items-center justify-center rounded-full text-foreground transition-colors hover:bg-black/[0.05]"
+              >
+                <Plus className="size-3.5" />
+              </button>
+            </div>
+            <div className="text-right">
+              {quantity > 1 && (
+                <p className="text-[11px] text-muted tabular-nums">{quantity} × {fmtVnd(unitPrice)}</p>
+              )}
+              <p className="text-lg font-black tabular-nums text-[#26634d]">{fmtVnd(unitPrice * quantity)}</p>
+            </div>
           </div>
-          <span className="text-xl font-bold tabular-nums text-[#1a3c34]">{fmtVnd(unitPrice * quantity)}</span>
+          <Button
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#1a3c34] text-[14px] font-semibold text-white shadow-lg shadow-[#1a3c34]/20 hover:opacity-90"
+            onPress={handleConfirm}
+          >
+            <Check className="size-4" />
+            {initial ? t("group_update_item_btn") : t("group_add_item_btn")}
+          </Button>
         </div>
-      </div>
-
-      <div className="shrink-0 border-t border-black/6 px-5 py-4">
-        <Button
-          className="flex h-13 w-full items-center justify-center gap-2 rounded-full bg-[#1a3c34] text-base font-semibold text-white"
-          onPress={handleConfirm}
-        >
-          <Check className="size-5" />
-          {initial ? t("group_update_item_btn") : t("group_add_item_btn")}
-        </Button>
       </div>
     </motion.div>
   );
@@ -440,6 +511,7 @@ function ProductPickerDrawer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+
   return (
     <AnimatePresence>
       {open && (
@@ -457,19 +529,17 @@ function ProductPickerDrawer({
             transition={{ type: "spring", damping: 30, stiffness: 350 }}
             className="relative flex h-[90dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-white sm:h-[88vh] sm:max-w-3xl sm:rounded-3xl lg:max-w-5xl xl:max-w-6xl"
           >
-            <AnimatePresence>
-              {customizeTarget && (
-                <ProductCustomizeSheet
-                  product={customizeTarget}
-                  initial={draft.get(customizeTarget.id)}
-                  onConfirm={(value) => {
-                    setDraft((prev) => new Map(prev).set(customizeTarget.id, value));
-                    setCustomizeTarget(null);
-                  }}
-                  onClose={() => setCustomizeTarget(null)}
-                />
-              )}
-            </AnimatePresence>
+            <ProductQuickAddModal
+              product={customizeTarget}
+              open={!!customizeTarget}
+              onClose={() => setCustomizeTarget(null)}
+              onGroupConfirm={(value) => {
+                if (!customizeTarget) return;
+                setDraft((prev) => new Map(prev).set(customizeTarget.id, value));
+                setCustomizeTarget(null);
+              }}
+              groupInitial={customizeTarget ? draft.get(customizeTarget.id) : undefined}
+            />
 
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-black/6 px-5 py-4">
               <div>
@@ -694,11 +764,14 @@ function ParticipantRow({
   groupStatus,
   paymentMode,
   removingProductId,
+  editSavingProductId,
   isKicking,
+  cardMode,
   onConfirmPaid,
   onKick,
   onOpenPicker,
   onRemoveItem,
+  onEditItem,
 }: {
   participant: GroupOrderState["participants"][0];
   isMe: boolean;
@@ -706,11 +779,14 @@ function ParticipantRow({
   groupStatus: GroupOrderState["status"];
   paymentMode: GroupOrderState["paymentMode"];
   removingProductId?: string | null;
+  editSavingProductId?: string | null;
   isKicking?: boolean;
+  cardMode?: boolean;
   onConfirmPaid?: (participantId: string) => void;
   onKick?: (participantId: string) => void;
   onOpenPicker?: () => void;
   onRemoveItem?: (productId: string) => void;
+  onEditItem?: (productId: string) => void;
 }) {
   const locale = useLocale();
   const t = useTranslations();
@@ -785,7 +861,10 @@ function ParticipantRow({
             </button>
           )}
           {participant.isReady && groupStatus === "collecting" && (
-            <CheckCircle2 className="size-4 text-emerald-500" />
+            <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-200">
+              <CheckCircle2 className="size-3.5" />
+              {t("group_confirmed_badge")}
+            </span>
           )}
           {paymentMode === "split" && groupStatus === "locked" && (
             participant.paymentStatus === "paid" ? (
@@ -816,7 +895,7 @@ function ParticipantRow({
       </div>
 
       {participant.items.length > 0 && (
-        <div className="mt-3 space-y-3 border-t border-black/6 pt-3">
+        <div className={`mt-3 space-y-3 border-t pt-3 ${cardMode ? "border-black/[0.05] -mx-4 bg-[#fafafa] px-4 pb-3" : "border-black/6"}`}>
           {participant.items.map((item) => {
             const imageUrl = item.product?.imageUrls[0] ?? null;
             const displayName = item.product ? getDisplayName(item.product, locale) : "Sản phẩm";
@@ -836,9 +915,10 @@ function ParticipantRow({
             const lineTotal = (item.unitPrice + toppingTotal) * item.quantity;
             const canRemove = isMe && groupStatus === "collecting" && !participant.isReady;
             const isRemoving = removingProductId === item.productId;
+            const isSaving = editSavingProductId === item.productId;
 
             return (
-              <div key={item.id} className="flex items-start gap-3">
+              <div key={item.id} className={`flex items-start gap-3 transition-opacity ${isSaving ? "opacity-60" : ""}`}>
                 {/* Thumbnail + qty badge */}
                 <div className="relative size-14 shrink-0">
                   <div
@@ -852,6 +932,11 @@ function ParticipantRow({
                         <span className="select-none text-lg font-black text-white/20">
                           {displayName.charAt(0).toUpperCase()}
                         </span>
+                      </div>
+                    )}
+                    {isSaving && (
+                      <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/70">
+                        <Loader2 className="size-4 animate-spin text-[#1a3c34]" />
                       </div>
                     )}
                   </div>
@@ -874,15 +959,18 @@ function ParticipantRow({
                   {(resolvedOptions.length > 0 || (item.toppings && item.toppings.length > 0) || item.note) && (
                     <div className="mt-1.5 space-y-1.5">
                       {(resolvedOptions.length > 0 || (item.toppings && item.toppings.length > 0)) && (
-                        <div className="flex flex-col items-start gap-1">
+                        <div className="flex flex-wrap gap-1">
                           {resolvedOptions.map((o, i) => (
                             <span
                               key={i}
-                              className="inline-flex items-center gap-1 rounded-full bg-surface-card px-2.5 py-0.5 text-[11px] font-medium text-foreground/70"
+                              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${o.priceDelta > 0
+                                  ? "bg-kun-mint/20 text-kun-products-forest"
+                                  : "bg-surface-card text-foreground/70"
+                                }`}
                             >
                               {formatOptionLabel(o.groupName, o.label, locale)}
                               {o.priceDelta > 0 && (
-                                <span className="text-[10px] text-muted">+{fmtVnd(o.priceDelta)}</span>
+                                <span className="text-[10px] text-kun-products-forest/60">+{fmtVnd(o.priceDelta)}</span>
                               )}
                             </span>
                           ))}
@@ -909,22 +997,32 @@ function ParticipantRow({
                   )}
                 </div>
 
-                {/* Remove button */}
+                {/* Edit / Remove buttons */}
                 {canRemove && (
-                  <button
-                    type="button"
-                    onClick={() => !isRemoving && onRemoveItem?.(item.productId)}
-                    disabled={!!removingProductId}
-                    className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full transition-colors disabled:pointer-events-none ${isRemoving
-                      ? "bg-red-50 text-red-400"
-                      : "bg-black/6 text-foreground/35 hover:bg-red-50 hover:text-red-500"
-                      }`}
-                  >
-                    {isRemoving
-                      ? <Loader2 className="size-3.5 animate-spin" />
-                      : <Trash2 className="size-3.5" />
-                    }
-                  </button>
+                  <div className="mt-0.5 flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => onEditItem?.(item.productId)}
+                      disabled={!!removingProductId || isSaving}
+                      className="flex size-7 items-center justify-center rounded-full bg-black/6 text-foreground/35 transition-colors hover:bg-[#1a3c34]/10 hover:text-[#1a3c34] disabled:pointer-events-none"
+                    >
+                      {isSaving ? <Loader2 className="size-3.5 animate-spin" /> : <Pencil className="size-3.5" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => !isRemoving && onRemoveItem?.(item.productId)}
+                      disabled={!!removingProductId || isSaving}
+                      className={`flex size-7 items-center justify-center rounded-full transition-colors disabled:pointer-events-none ${isRemoving
+                        ? "bg-red-50 text-red-400"
+                        : "bg-black/6 text-foreground/35 hover:bg-red-50 hover:text-red-500"
+                        }`}
+                    >
+                      {isRemoving
+                        ? <Loader2 className="size-3.5 animate-spin" />
+                        : <Trash2 className="size-3.5" />
+                      }
+                    </button>
+                  </div>
                 )}
               </div>
             );
@@ -1192,9 +1290,14 @@ export function GroupOrderPageShell() {
   const [guestNameInput, setGuestNameInput] = useState("");
   const [duplicateTab, setDuplicateTab] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [lockLoading, setLockLoading] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [pickerSaving, setPickerSaving] = useState(false);
+  const [editTargetProductId, setEditTargetProductId] = useState<string | null>(null);
+  const [editSavingProductId, setEditSavingProductId] = useState<string | null>(null);
   const [removingProductId, setRemovingProductId] = useState<string | null>(null);
+
+  const { data: editTargetProduct } = useProductByIdQuery(editTargetProductId);
 
   // Derived from server state — not localStorage — so all participants see the same value
   const shippingFeeMode = state?.shippingFeeMode ?? "split";
@@ -1358,11 +1461,7 @@ export function GroupOrderPageShell() {
     } catch (err: unknown) {
       localStorage.removeItem(JOIN_LOCK_KEY(token));
       const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code;
-      if (code === "GROUP_ORDER_DEVICE_ALREADY_JOINED") {
-        setDuplicateTab(true);
-      } else {
-        setError(t((code as Parameters<typeof t>[0]) ?? "GROUP_ORDER_NOT_FOUND"));
-      }
+      setError(t((code as Parameters<typeof t>[0]) ?? "GROUP_ORDER_NOT_FOUND"));
     } finally {
       setJoining(false);
     }
@@ -1602,7 +1701,7 @@ export function GroupOrderPageShell() {
   const handleHostCheckout = useCallback(async () => {
     if (!sessionToken || !state) return;
     const paymentType = state.paymentType ?? "cash";
-    setActionLoading(true);
+    setLockLoading(true);
     try {
       if (state.status === "collecting") {
         await lockGroupOrder(token, sessionToken);
@@ -1618,13 +1717,13 @@ export function GroupOrderPageShell() {
       const msg = err?.response?.data?.message ?? "Có lỗi xảy ra.";
       toast.error(typeof msg === "string" ? msg : msg.join(", "));
     } finally {
-      setActionLoading(false);
+      setLockLoading(false);
     }
   }, [sessionToken, state, token, router]);
 
   const handleSplitCashCheckout = useCallback(async () => {
     if (!sessionToken || !state) return;
-    setActionLoading(true);
+    setLockLoading(true);
     try {
       const res = await checkoutSplitCash(token, sessionToken);
       const go = res.groupOrder;
@@ -1637,9 +1736,24 @@ export function GroupOrderPageShell() {
       const msg = err?.response?.data?.message ?? "Có lỗi xảy ra.";
       toast.error(typeof msg === "string" ? msg : msg.join(", "));
     } finally {
-      setActionLoading(false);
+      setLockLoading(false);
     }
   }, [sessionToken, state, token, router]);
+
+  const handleLockOrder = async () => {
+    if (!sessionToken) return;
+    setLockLoading(true);
+    try {
+      const go = await lockGroupOrder(token, sessionToken);
+      setState(go);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string | string[] } } };
+      const msg = err?.response?.data?.message ?? "Có lỗi xảy ra.";
+      toast.error(typeof msg === "string" ? msg : msg.join(", "));
+    } finally {
+      setLockLoading(false);
+    }
+  };
 
   const handleSaveItems = async (items: DraftItem[]) => {
     if (!sessionToken) return;
@@ -1654,6 +1768,27 @@ export function GroupOrderPageShell() {
       toast.error(typeof msg === "string" ? msg : msg.join(", "));
     } finally {
       setPickerSaving(false);
+    }
+  };
+
+  const handleDirectEditConfirm = async (value: GroupOrderDraftValue) => {
+    if (!sessionToken || !me || !editTargetProductId) return;
+    const savedId = editTargetProductId;
+    setEditSavingProductId(savedId);
+    try {
+      const updatedItems = me.items.map((item) =>
+        item.productId === savedId
+          ? { productId: item.productId, ...value }
+          : { productId: item.productId, quantity: item.quantity, selectedOptions: item.selectedOptions, toppings: item.toppings, note: item.note ?? undefined },
+      );
+      const newState = await updateGroupOrderItems(token, sessionToken, updatedItems);
+      setState(newState);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string | string[] } } };
+      const msg = err?.response?.data?.message ?? "Có lỗi xảy ra.";
+      toast.error(typeof msg === "string" ? msg : msg.join(", "));
+    } finally {
+      setEditSavingProductId(null);
     }
   };
 
@@ -1840,6 +1975,24 @@ export function GroupOrderPageShell() {
         />
       )}
 
+      {/* Direct item edit modal — bypasses the picker */}
+      <ProductQuickAddModal
+        product={editTargetProduct ?? null}
+        open={!!editTargetProductId && !!editTargetProduct}
+        onClose={() => setEditTargetProductId(null)}
+        onGroupConfirm={handleDirectEditConfirm}
+        groupInitial={
+          editTargetProductId && me
+            ? (() => {
+              const item = me.items.find((i) => i.productId === editTargetProductId);
+              return item
+                ? { quantity: item.quantity, selectedOptions: item.selectedOptions ?? {}, toppings: item.toppings ?? [], note: item.note ?? undefined }
+                : undefined;
+            })()
+            : undefined
+        }
+      />
+
       <div className="container mx-auto max-w-[72rem] px-4 py-8 sm:px-6 sm:py-12">
         {/* Header */}
         <motion.div
@@ -1911,7 +2064,7 @@ export function GroupOrderPageShell() {
               <Button
                 size="sm"
                 className="gap-1.5 rounded-full bg-[#1a3c34] px-4 font-semibold text-white disabled:opacity-60"
-                isDisabled={actionLoading}
+                isDisabled={lockLoading || actionLoading}
                 onPress={() => {
                   const unconfirmed = state.participants.filter((p) => !p.isReady);
                   if (unconfirmed.length > 0) {
@@ -1921,13 +2074,13 @@ export function GroupOrderPageShell() {
                   } else if (state.paymentMode === "host_pays" && (state.paymentType ?? "cash") !== "bank_transfer") {
                     void handleHostCheckout();
                   } else {
-                    void withAction(() => lockGroupOrder(token, sessionToken!));
+                    void handleLockOrder();
                   }
                 }}
               >
-                <Check className="size-3.5" />
+                {lockLoading ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
                 {t("group_lock")}
-                {!allReady && (
+                {!allReady && !lockLoading && (
                   <span className="ml-0.5 rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] tabular-nums leading-none">
                     {state.participants.filter((p) => p.isReady).length}/{state.participants.length}
                   </span>
@@ -1985,8 +2138,8 @@ export function GroupOrderPageShell() {
             )}
 
             {/* Participants */}
-            <div className="overflow-hidden rounded-3xl border border-black/6 bg-white">
-              <div className="flex items-center justify-between gap-2 border-b border-black/6 px-5 py-4">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{t("group_participants_card_eyebrow")}</p>
                   <p className="text-sm font-semibold text-foreground">{t("group_participants_card_title")}</p>
@@ -1996,41 +2149,55 @@ export function GroupOrderPageShell() {
                   {state.participants.length}
                 </span>
               </div>
-              <div className="divide-y divide-black/6">
-                  {[...state.participants].sort((a, b) => {
-                    const rankA = a.id === me?.id ? 0 : a.isHost ? 1 : 2;
-                    const rankB = b.id === me?.id ? 0 : b.isHost ? 1 : 2;
-                    return rankA - rankB;
-                  }).map((p, i) => (
+              <AnimatePresence mode="popLayout">
+                {[...state.participants].sort((a, b) => {
+                  const rankA = a.id === me?.id ? 0 : a.isHost ? 1 : 2;
+                  const rankB = b.id === me?.id ? 0 : b.isHost ? 1 : 2;
+                  return rankA - rankB;
+                }).map((p, i) => {
+                  const isMe = p.id === me?.id;
+                  return (
                     <motion.div
                       key={p.id}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: 0.07 + i * 0.04 }}
-                      className={`p-4 transition-colors ${p.id === me?.id ? "bg-[#f0faf6]" : ""}`}
+                      initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.97, transition: { duration: 0.15 } }}
+                      transition={{ type: "spring", damping: 28, stiffness: 340, delay: i < 4 ? i * 0.04 : 0 }}
+                      layout
+                      className={`overflow-hidden rounded-3xl border bg-white transition-shadow ${
+                        isMe
+                          ? "border-[#1a3c34]/20 shadow-[0_4px_20px_-8px_rgba(26,60,52,0.14)]"
+                          : "border-black/6"
+                      }`}
                     >
-                      <ParticipantRow
-                        participant={p}
-                        isMe={p.id === me?.id}
-                        isMeHost={isHost}
-                        groupStatus={state.status}
-                        paymentMode={state.paymentMode}
-                        onConfirmPaid={(participantId) =>
-                          void withAction(() => confirmParticipantPaid(token, sessionToken!, participantId))
-                        }
-                        isKicking={kickingId === p.id}
-                        onKick={async (participantId) => {
-                          setKickingId(participantId);
-                          await withAction(() => kickGroupOrderParticipant(token, sessionToken!, participantId));
-                          setKickingId(null);
-                        }}
-                        removingProductId={removingProductId}
-                        onOpenPicker={() => setShowPicker(true)}
-                        onRemoveItem={(productId) => void handleRemoveItem(productId)}
-                      />
+                      <div className={`p-4 ${isMe ? "bg-[#f0faf6]" : ""}`}>
+                        <ParticipantRow
+                          participant={p}
+                          isMe={isMe}
+                          isMeHost={isHost}
+                          groupStatus={state.status}
+                          paymentMode={state.paymentMode}
+                          cardMode
+                          onConfirmPaid={(participantId) =>
+                            void withAction(() => confirmParticipantPaid(token, sessionToken!, participantId))
+                          }
+                          isKicking={kickingId === p.id}
+                          onKick={async (participantId) => {
+                            setKickingId(participantId);
+                            await withAction(() => kickGroupOrderParticipant(token, sessionToken!, participantId));
+                            setKickingId(null);
+                          }}
+                          removingProductId={removingProductId}
+                          editSavingProductId={editSavingProductId}
+                          onOpenPicker={() => setShowPicker(true)}
+                          onRemoveItem={(productId) => void handleRemoveItem(productId)}
+                          onEditItem={(productId) => setEditTargetProductId(productId)}
+                        />
+                      </div>
                     </motion.div>
-                  ))}
-              </div>
+                  );
+                })}
+              </AnimatePresence>
             </div>
           </div>
 
@@ -2304,13 +2471,20 @@ export function GroupOrderPageShell() {
                     {t("group_lock_unconfirmed_title", { count: unconfirmed.length })}
                   </h3>
                   <p className="mt-1.5 text-sm text-muted">{t("group_lock_unconfirmed_desc")}</p>
-                  <div className="mt-4 flex flex-col gap-1.5">
+                  <div className="mt-4 max-h-[220px] overflow-y-auto overscroll-contain flex flex-col gap-1.5">
                     {unconfirmed.map((p) => (
                       <div key={p.id} className="flex items-center gap-2 rounded-xl bg-surface-soft px-3 py-2 text-left">
                         <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-black/8 text-xs font-bold text-foreground/60">
                           {p.name[0]?.toUpperCase()}
                         </div>
-                        <span className="text-sm font-medium text-foreground">{p.name}</span>
+                        <span className="text-sm font-medium text-foreground">
+                          {p.name}
+                          {p.id === me?.id && (
+                            <span className="ml-1.5 text-[10px] font-bold uppercase tracking-wide text-[#1a3c34]">
+                              {t("group_you")}
+                            </span>
+                          )}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -2318,7 +2492,7 @@ export function GroupOrderPageShell() {
                 <div className="flex divide-x divide-black/6 border-t border-black/6">
                   <button
                     type="button"
-                    disabled={actionLoading}
+                    disabled={lockLoading}
                     onClick={() => setShowLockConfirm(false)}
                     className="cursor-pointer flex h-13 flex-1 items-center justify-center rounded-bl-3xl text-sm font-semibold text-foreground/70 transition hover:bg-surface-soft disabled:opacity-50"
                   >
@@ -2326,7 +2500,7 @@ export function GroupOrderPageShell() {
                   </button>
                   <button
                     type="button"
-                    disabled={actionLoading}
+                    disabled={lockLoading}
                     onClick={() => {
                       setShowLockConfirm(false);
                       if (state.paymentMode === "split" && (state.paymentType ?? "cash") === "cash") {
@@ -2334,12 +2508,12 @@ export function GroupOrderPageShell() {
                       } else if (state.paymentMode === "host_pays" && (state.paymentType ?? "cash") !== "bank_transfer") {
                         void handleHostCheckout();
                       } else {
-                        void withAction(() => lockGroupOrder(token, sessionToken!));
+                        void handleLockOrder();
                       }
                     }}
                     className="cursor-pointer flex h-13 flex-1 items-center justify-center gap-1.5 rounded-br-3xl text-sm font-semibold text-[#1a3c34] transition hover:bg-[#f0faf6] disabled:opacity-50"
                   >
-                    {actionLoading && <Loader2 className="size-3.5 animate-spin" />}
+                    {lockLoading && <Loader2 className="size-3.5 animate-spin" />}
                     {t("group_lock_unconfirmed_confirm")}
                   </button>
                 </div>

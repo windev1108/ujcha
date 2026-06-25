@@ -841,16 +841,9 @@ export class OrderService {
     if (order.userId !== userId && !groupOrderLink) {
       throw new NotFoundException({ message: 'Không tìm thấy đơn.', code: 'ORDER_NOT_FOUND' });
     }
-
-    if (order.userId !== userId && groupOrderLink) {
-      const isParticipant = await this.prisma.groupOrderParticipant.findFirst({
-        where: { userId, groupOrder: { orderId: order.id } },
-        select: { id: true },
-      });
-      if (!isParticipant) {
-        throw new NotFoundException({ message: 'Không tìm thấy đơn.', code: 'ORDER_NOT_FOUND' });
-      }
-    }
+    // Group orders: paymentCode knowledge grants view access (same model as guests).
+    // Participant userId check is intentionally dropped — it blocked valid members
+    // whose participant was created before their userId could be linked.
 
     return {
       ...order,

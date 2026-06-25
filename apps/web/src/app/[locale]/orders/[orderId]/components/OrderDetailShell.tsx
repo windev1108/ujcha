@@ -24,7 +24,7 @@ import { printReceipt, type ReceiptOrder } from "@/lib/order-receipt";
 import { fetchGroupOrder, type GroupOrderParticipant, type GroupOrderState } from "@/services/group-order/api";
 import { useTranslations, useLocale } from "next-intl";
 import { getDisplayName } from "@/lib/product-name";
-import { formatOptionLabel } from "@/lib/product-options";
+import { formatOptionLabel, normalizeOptionGroups } from "@/lib/product-options";
 import { usePublicStoreLocationQuery } from "@/services/store/hooks";
 import { usePublicPaymentConfigQuery } from "@/services/payment-config/hooks";
 import { useAuthStore } from "@/store/auth-store";
@@ -246,15 +246,23 @@ function OrderItemBadges({ optionDetails = [], extras, note, locale }: { optionD
   return (
     <div className="mt-1.5 space-y-1.5">
       {hasOptions && (
-        <div className="flex flex-col items-start gap-1">
+        <div className="flex flex-wrap gap-1">
           {optionDetails.map((od, i) => {
             const displayLabel = od.nameTranslation?.[locale] ?? od.label;
+            const hasDelta = od.priceDelta != null && od.priceDelta > 0;
             return (
               <span
                 key={i}
-                className="inline-flex items-center rounded-full bg-surface-secondary px-2.5 py-0.5 text-[11px] font-medium text-foreground/70"
+                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
+                  hasDelta
+                    ? "bg-kun-mint/20 text-kun-products-forest"
+                    : "bg-surface-secondary text-foreground/70"
+                }`}
               >
                 {formatOptionLabel(od.group, displayLabel, locale)}
+                {hasDelta && (
+                  <span className="text-[10px] text-kun-products-forest/60">+{fmtVnd(od.priceDelta!)}</span>
+                )}
               </span>
             );
           })}
@@ -1035,8 +1043,21 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                   );
                 })()}
 
+                {/* Paid confirmation banner — shown when current participant already paid */}
+                {myGroupParticipant?.paymentStatus === "paid" && (groupOrder.paymentMode === "split" || isCurrentUserHost) && (
+                  <div className="mb-5 flex items-center gap-3 rounded-2xl bg-emerald-50 px-4 py-4 ring-1 ring-emerald-200">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-100">
+                      <CheckCircle2 className="size-5 text-emerald-600" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-emerald-800">{t("group_you_paid_title")}</p>
+                      <p className="mt-0.5 text-xs text-emerald-600/80">{t("group_you_paid_desc")}</p>
+                    </div>
+                  </div>
+                )}
+
                 {/* My QR code — shown only to the payer (host in host_pays, self in split) */}
-                {myGroupParticipant?.paymentQrToken && (groupOrder.paymentMode === "split" || isCurrentUserHost) && (
+                {myGroupParticipant?.paymentQrToken && myGroupParticipant?.paymentStatus !== "paid" && (groupOrder.paymentMode === "split" || isCurrentUserHost) && (
                   <div className="mb-5 flex flex-col items-center gap-3">
                     {payConfig?.bankCode && payConfig?.accountNumber ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -1127,7 +1148,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                   </p>
                 )}
 
-                {myGroupParticipant?.paymentQrToken && storeLocation?.phone && (
+                {myGroupParticipant?.paymentQrToken && myGroupParticipant?.paymentStatus !== "paid" && storeLocation?.phone && (
                   <div className="my-4 flex items-start gap-3 rounded-2xl border border-[#1a3c34]/12 bg-[#f0faf6] px-4 py-4">
                     <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#1a3c34]/10">
                       <MessageCircle className="size-4 text-[#1a3c34]" />
@@ -1183,7 +1204,12 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                                   {p.name[0]}
                                 </div>
                               )}
-                              <span className="flex-1 text-sm text-foreground">{p.name}</span>
+                              <span className="flex-1 text-sm text-foreground">
+                                {p.name}
+                                {p.id === myGroupParticipant?.id && (
+                                  <span className="ml-1 text-[11px] font-semibold text-[#1a3c34]">(bạn)</span>
+                                )}
+                              </span>
                               <span className="flex items-center gap-1 text-sm font-medium tabular-nums text-foreground/60">
                                 {(() => {
                                   const { total, discountShare, shippingShare } = calcSplitAmount(p.subtotal, p.isHost);
@@ -1280,7 +1306,12 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                           {participant.items.map((item, iIdx) => {
                             const imageUrl = item.product.imageUrls[0] ?? null;
                             const productName = getDisplayName(item.product, locale);
-                            const optionDetails: OptionDetail[] = Object.entries(item.selectedOptions ?? {}).map(([group, label]) => ({ group, label }));
+                            const itemOptionGroups = normalizeOptionGroups(item.product?.optionGroups);
+                            const optionDetails: OptionDetail[] = Object.entries(item.selectedOptions ?? {}).map(([group, label]) => {
+                              const grp = itemOptionGroups.find((g) => g.name === group);
+                              const val = grp?.values.find((v) => v.label === label);
+                              return { group, label, priceDelta: val?.priceDelta ?? 0, nameTranslation: val?.nameTranslation };
+                            });
                             const extras: ExtraItem[] = (item.toppings ?? []).map((top) => ({
                               name: top.name,
                               toppingId: top.toppingId,

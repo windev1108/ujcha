@@ -224,6 +224,67 @@ export class GroupOrderService {
     }));
   }
 
+  async adminFindByToken(token: string) {
+    const go = await this.prisma.groupOrder.findUnique({
+      where: { token },
+      include: this.fullInclude(),
+    });
+    if (!go) throw new NotFoundException('Không tìm thấy đơn nhóm.');
+    return this.serialize(go);
+  }
+
+  async adminUpdateStatus(token: string, status: string) {
+    const go = await this.prisma.groupOrder.update({
+      where: { token },
+      data: { status: status as GroupOrderStatus },
+      include: this.fullInclude(),
+    });
+    return this.serialize(go);
+  }
+
+  async adminDelete(token: string) {
+    await this.prisma.groupOrder.delete({ where: { token } });
+  }
+
+  async findAllActive() {
+    const rows = await this.prisma.groupOrder.findMany({
+      where: {
+        status: { in: ['collecting', 'locked'] },
+        expiresAt: { gt: new Date() },
+      },
+      select: {
+        id: true,
+        token: true,
+        status: true,
+        paymentMode: true,
+        paymentType: true,
+        type: true,
+        expiresAt: true,
+        createdAt: true,
+        _count: { select: { participants: true } },
+        participants: {
+          where: { isHost: true },
+          take: 1,
+          select: { user: { select: { name: true } }, guestName: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return rows.map((r) => ({
+      id: r.id,
+      token: r.token,
+      status: r.status,
+      paymentMode: r.paymentMode,
+      paymentType: r.paymentType ?? 'cash',
+      type: r.type,
+      expiresAt: r.expiresAt.toISOString(),
+      createdAt: r.createdAt.toISOString(),
+      participantCount: r._count.participants,
+      hostName: r.participants[0]?.user?.name ?? r.participants[0]?.guestName ?? null,
+    }));
+  }
+
   async dissolveGroupOrder(token: string, sessionToken: string) {
     const go = await this.prisma.groupOrder.findUnique({
       where: { token },
@@ -291,11 +352,8 @@ export class GroupOrderService {
     if (go.expiresAt < new Date()) {
       throw new BadRequestException({ message: 'Đơn nhóm đã hết hạn.', code: 'GROUP_ORDER_EXPIRED' });
     }
-    if (go.status !== 'collecting') {
-      throw new BadRequestException({ message: 'Đơn nhóm không còn nhận thành viên mới.', code: 'GROUP_ORDER_NOT_COLLECTING' });
-    }
 
-    // Logged-in user: return existing session if already joined
+    // Logged-in user: return existing session if already joined (works even after collecting)
     if (userId) {
       const existing = go.participants.find((p) => p.userId === userId);
       if (existing) {
@@ -309,15 +367,26 @@ export class GroupOrderService {
       }
     }
 
-    // Anti-cheat: block same device from joining twice
+    // Device match: return existing session (handles cross-browser re-join on same device,
+    // and associates userId when a logged-in user reclaims a guest slot).
+    // Runs before the status check so returning members can always reconnect.
     if (dto.deviceId) {
       const sameDevice = go.participants.find((p) => (p as any).deviceId === dto.deviceId);
       if (sameDevice) {
-        throw new ConflictException({
-          message: 'Thiết bị này đã tham gia đơn nhóm.',
-          code: 'GROUP_ORDER_DEVICE_ALREADY_JOINED',
-        });
+        if (userId && !(sameDevice as any).userId) {
+          // Logged-in user claiming a guest participant slot → link their userId
+          await this.prisma.groupOrderParticipant.update({
+            where: { id: sameDevice.id },
+            data: { userId },
+          }).catch(() => {});
+        }
+        return { sessionToken: (sameDevice as any).sessionToken, participantId: sameDevice.id, alreadyJoined: true };
       }
+    }
+
+    // Below here: new participant — only allowed while collecting
+    if (go.status !== 'collecting') {
+      throw new BadRequestException({ message: 'Đơn nhóm không còn nhận thành viên mới.', code: 'GROUP_ORDER_NOT_COLLECTING' });
     }
 
     const sessionToken = randomUUID();

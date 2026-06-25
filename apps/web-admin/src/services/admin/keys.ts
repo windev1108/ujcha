@@ -153,4 +153,6 @@ export const adminKeys = {
     ] as const,
   shippingConfig: ["admin", "shipping-config"] as const,
   groupOrderConfig: ["admin", "group-order-config"] as const,
+  activeGroupOrders: ["admin", "group-orders", "active"] as const,
+  groupOrderDetail: (token: string) => ["admin", "group-orders", token] as const,
 };

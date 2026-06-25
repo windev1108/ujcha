@@ -78,6 +78,11 @@ export class GroupOrderItemDto {
   note?: string;
 }
 
+export class AdminUpdateStatusDto {
+  @IsEnum(['collecting', 'locked', 'completed', 'cancelled'])
+  status: string;
+}
+
 export class UpdateItemsDto {
   @IsString()
   sessionToken: string;

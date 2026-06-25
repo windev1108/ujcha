@@ -1,18 +1,26 @@
-import { ExecutionContext, Injectable } from '@nestjs/common';
+import { ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import type { JwtValidatedUser } from './jwt.strategy';
 
 /**
- * JWT tuỳ chọn — không throw khi thiếu/hết hạn token.
- * Gắn `req.user = null` cho guest; gắn `req.user = { userId }` khi token hợp lệ.
+ * JWT tuỳ chọn:
+ * - Không có token → guest (userId = null), không throw.
+ * - Có token nhưng hết hạn/không hợp lệ → throw 401 để client tự refresh.
+ * - Token hợp lệ → gắn req.user = { userId }.
  */
 @Injectable()
 export class OptionalJwtAuthGuard extends AuthGuard('jwt') {
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest();
+    const hasToken = !!(request.headers['authorization'] as string | undefined);
     try {
       await super.canActivate(context);
-    } catch {
-      // No token / expired token — continue as guest
+    } catch (err) {
+      if (hasToken) {
+        // Token provided but invalid/expired — force 401 so client refreshes
+        throw new UnauthorizedException('Token invalid or expired');
+      }
+      // No token at all — genuine guest, continue
     }
     return true;
   }

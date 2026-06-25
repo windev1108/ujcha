@@ -1,7 +1,7 @@
 'use client'
 import { useQuery } from '@tanstack/react-query'
 import { useLocale } from 'next-intl'
-import { fetchProducts, fetchProductBySlug } from './api'
+import { fetchProducts, fetchProductBySlug, fetchProductById } from './api'
 import { productKeys } from './keys'
 
 export function useProductsQuery(options?: { categoryId?: string; categorySlug?: string }) {
@@ -21,5 +21,14 @@ export function useProductBySlugQuery(slug: string) {
     queryFn: () => fetchProductBySlug(slug, locale),
     staleTime: 5 * 60_000,
     enabled: !!slug,
+  })
+}
+
+export function useProductByIdQuery(id: string | null) {
+  return useQuery({
+    queryKey: productKeys.detail(id ?? ""),
+    queryFn: () => fetchProductById(id!),
+    staleTime: 5 * 60_000,
+    enabled: !!id,
   })
 }
