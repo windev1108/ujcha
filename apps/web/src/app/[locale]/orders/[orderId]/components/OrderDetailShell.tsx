@@ -1148,7 +1148,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                   </p>
                 )}
 
-                {myGroupParticipant?.paymentQrToken && myGroupParticipant?.paymentStatus !== "paid" && storeLocation?.phone && (
+                {myGroupParticipant?.paymentQrToken && myGroupParticipant?.paymentStatus !== "paid" && (groupOrder.paymentMode === "split" || isCurrentUserHost) && storeLocation?.phone && (
                   <div className="my-4 flex items-start gap-3 rounded-2xl border border-[#1a3c34]/12 bg-[#f0faf6] px-4 py-4">
                     <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#1a3c34]/10">
                       <MessageCircle className="size-4 text-[#1a3c34]" />
