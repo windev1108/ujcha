@@ -8,6 +8,7 @@ import {
   Input,
   Label,
   ListBox,
+  Pagination,
   Select,
   Table,
   Text,
@@ -547,38 +548,45 @@ export function VouchersPageClient() {
       </Card>
 
       {pageCount > 1 ? (
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <Button
-            size="sm"
-            variant="ghost"
-            isDisabled={currentPage <= 1}
-            onPress={() => setPage((p) => Math.max(1, p - 1))}
-          >
-            ‹
-          </Button>
-          {pageWindow.map((n) => (
-            <Button
-              key={n}
-              size="sm"
-              variant={n === currentPage ? "primary" : "ghost"}
-              className={
-                n === currentPage
-                  ? "min-w-9 rounded-full bg-[#1a3c34] text-white"
-                  : "min-w-9 rounded-full"
-              }
-              onPress={() => setPage(n)}
-            >
-              {n}
-            </Button>
-          ))}
-          <Button
-            size="sm"
-            variant="ghost"
-            isDisabled={currentPage >= pageCount}
-            onPress={() => setPage((p) => Math.min(pageCount, p + 1))}
-          >
-            ›
-          </Button>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-foreground/50">
+            {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, total)} / {total} voucher
+          </p>
+          <Pagination.Root className="w-full justify-end sm:w-auto">
+            <Pagination.Content className="flex flex-wrap items-center justify-end gap-1">
+              <Pagination.Item>
+                <Pagination.Previous
+                  isDisabled={currentPage <= 1}
+                  onPress={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  <Pagination.PreviousIcon />
+                </Pagination.Previous>
+              </Pagination.Item>
+              {pageWindow.map((n) => (
+                <Pagination.Item key={n}>
+                  <Pagination.Link
+                    isActive={n === currentPage}
+                    onPress={() => setPage(n)}
+                    className={
+                      n === currentPage
+                        ? "min-w-9 rounded-full bg-[#1a3c34] font-semibold text-white"
+                        : "min-w-9 rounded-full"
+                    }
+                  >
+                    {n}
+                  </Pagination.Link>
+                </Pagination.Item>
+              ))}
+              <Pagination.Item>
+                <Pagination.Next
+                  isDisabled={currentPage >= pageCount}
+                  onPress={() => setPage((p) => Math.min(pageCount, p + 1))}
+                >
+                  <Pagination.NextIcon />
+                </Pagination.Next>
+              </Pagination.Item>
+            </Pagination.Content>
+          </Pagination.Root>
         </div>
       ) : null}
 

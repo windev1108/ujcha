@@ -187,7 +187,7 @@ export class AdminOrderService {
     if (query.unassignedShipper === true) {
       and.push({ type: OrderType.delivery });
       and.push({ shipperId: null });
-      and.push({ status: { not: OrderStatus.cancelled } });
+      and.push({ status: { notIn: [OrderStatus.cancelled, OrderStatus.completed] } });
     }
 
     if (query.isExternal === true) {

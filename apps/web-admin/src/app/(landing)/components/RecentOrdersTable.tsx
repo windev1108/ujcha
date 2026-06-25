@@ -78,7 +78,7 @@ export function RecentOrdersTable({ data, isLoading }: Props) {
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead>
               <tr className="border-b border-black/[0.06] bg-[#fafafa] text-[10px] font-bold uppercase tracking-wider text-foreground/45">
-                <th className="px-5 py-3 sm:px-6">Mã thanh toán</th>
+                <th className="px-5 py-3 sm:px-6">Mã đơn hàng</th>
                 <th className="px-5 py-3 sm:px-6">Khách</th>
                 <th className="px-5 py-3 sm:px-6">Món đầu tiên</th>
                 <th className="px-5 py-3 sm:px-6">Thành tiền</th>

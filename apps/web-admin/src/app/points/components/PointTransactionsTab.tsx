@@ -1,12 +1,12 @@
 "use client";
 
 import {
-  Button,
   Card,
   CardContent,
   Chip,
   Label,
   ListBox,
+  Pagination,
   Select,
   Table,
   Text,
@@ -25,6 +25,17 @@ import { fetchPointTransactionsGlobal } from "@/services/admin/points-api";
 
 const PAGE = 30;
 
+function usePaginationWindow(current: number, totalPages: number, max = 5): number[] {
+  return useMemo(() => {
+    if (totalPages <= 0) return [];
+    const half = Math.floor(max / 2);
+    let start = Math.max(1, current - half);
+    let end = Math.min(totalPages, start + max - 1);
+    start = Math.max(1, end - max + 1);
+    return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+  }, [current, totalPages, max]);
+}
+
 const typeLabel: Record<string, string> = {
   earn: "Tích",
   spend: "Dùng",
@@ -40,7 +51,7 @@ const sourceLabel: Record<string, string> = {
 
 export function PointTransactionsTab() {
   const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [page, setPage] = useState(0);
+  const [page, setPage] = useState(1);
 
   const typeParam =
     typeFilter === "all"
@@ -49,13 +60,13 @@ export function PointTransactionsTab() {
 
   const q = useQuery({
     queryKey: adminKeys.pointTransactions({
-      skip: page * PAGE,
+      skip: (page - 1) * PAGE,
       type: typeParam,
     }),
     queryFn: () =>
       fetchPointTransactionsGlobal({
         limit: PAGE,
-        skip: page * PAGE,
+        skip: (page - 1) * PAGE,
         type: typeParam,
       }),
   });
@@ -65,6 +76,8 @@ export function PointTransactionsTab() {
     return Math.max(1, Math.ceil(t / PAGE));
   }, [q.data?.total]);
 
+  const safePage = Math.min(page, totalPages);
+  const pageWindow = usePaginationWindow(safePage, totalPages, 5);
   const items = q.data?.items ?? [];
 
   return (
@@ -88,7 +101,7 @@ export function PointTransactionsTab() {
               onChange={(k) => {
                 if (k != null) {
                   setTypeFilter(String(k));
-                  setPage(0);
+                  setPage(1);
                 }
               }}
               variant="secondary"
@@ -206,26 +219,45 @@ export function PointTransactionsTab() {
       </Card>
 
       {totalPages > 1 ? (
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <Button
-            size="sm"
-            variant="ghost"
-            isDisabled={page <= 0}
-            onPress={() => setPage((p) => Math.max(0, p - 1))}
-          >
-            Trước
-          </Button>
-          <Text className="text-sm text-foreground/55">
-            Trang {page + 1} / {totalPages}
-          </Text>
-          <Button
-            size="sm"
-            variant="ghost"
-            isDisabled={page >= totalPages - 1}
-            onPress={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-          >
-            Sau
-          </Button>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-foreground/50">
+            {(safePage - 1) * PAGE + 1}–{Math.min(safePage * PAGE, q.data?.total ?? 0)} / {q.data?.total ?? 0} giao dịch
+          </p>
+          <Pagination.Root className="w-full justify-end sm:w-auto">
+            <Pagination.Content className="flex flex-wrap items-center justify-end gap-1">
+              <Pagination.Item>
+                <Pagination.Previous
+                  isDisabled={safePage <= 1}
+                  onPress={() => setPage((n) => Math.max(1, n - 1))}
+                >
+                  <Pagination.PreviousIcon />
+                </Pagination.Previous>
+              </Pagination.Item>
+              {pageWindow.map((n) => (
+                <Pagination.Item key={n}>
+                  <Pagination.Link
+                    isActive={n === safePage}
+                    onPress={() => setPage(n)}
+                    className={
+                      n === safePage
+                        ? "min-w-9 rounded-full bg-[#1a3c34] font-semibold text-white"
+                        : "min-w-9 rounded-full"
+                    }
+                  >
+                    {n}
+                  </Pagination.Link>
+                </Pagination.Item>
+              ))}
+              <Pagination.Item>
+                <Pagination.Next
+                  isDisabled={safePage >= totalPages}
+                  onPress={() => setPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  <Pagination.NextIcon />
+                </Pagination.Next>
+              </Pagination.Item>
+            </Pagination.Content>
+          </Pagination.Root>
         </div>
       ) : null}
     </div>

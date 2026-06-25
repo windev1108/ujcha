@@ -89,7 +89,27 @@ const statusOptions: { id: string; label: string }[] = [
   { id: "cancelled", label: "Đã hủy" },
 ];
 
+function activeQuickFilter(from: string, to: string): "today" | "week" | "month" | "year" | null {
+  if (!from || !to) return null;
+  const iso = toISODate(new Date());
+  if (from === iso && to === iso) return "today";
+  const week = thisWeekRange();
+  if (from === week.from && to === week.to) return "week";
+  const month = thisMonthRange();
+  if (from === month.from && to === month.to) return "month";
+  const year = thisYearRange();
+  if (from === year.from && to === year.to) return "year";
+  return null;
+}
+
 export function OrderFilters({ value, onChange, onApply, onQuickApply, onReset }: Props) {
+  const activeFilter = activeQuickFilter(value.from, value.to);
+
+  const quickBtnClass = (key: "today" | "week" | "month" | "year") =>
+    activeFilter === key
+      ? "rounded-full bg-[#1a3c34] text-white text-xs hover:opacity-90"
+      : "rounded-full text-xs";
+
   return (
     <div className="rounded-2xl border border-black/6 bg-white p-4 shadow-sm sm:p-5">
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -99,8 +119,8 @@ export function OrderFilters({ value, onChange, onApply, onQuickApply, onReset }
         </span>
         <Button
           size="sm"
-          variant="ghost"
-          className="rounded-full text-xs"
+          variant={activeFilter === "today" ? "primary" : "ghost"}
+          className={quickBtnClass("today")}
           onPress={() => {
             const iso = toISODate(new Date());
             onQuickApply({ from: iso, to: iso });
@@ -110,24 +130,24 @@ export function OrderFilters({ value, onChange, onApply, onQuickApply, onReset }
         </Button>
         <Button
           size="sm"
-          variant="ghost"
-          className="rounded-full text-xs"
+          variant={activeFilter === "week" ? "primary" : "ghost"}
+          className={quickBtnClass("week")}
           onPress={() => onQuickApply(thisWeekRange())}
         >
           Tuần này
         </Button>
         <Button
           size="sm"
-          variant="ghost"
-          className="rounded-full text-xs"
+          variant={activeFilter === "month" ? "primary" : "ghost"}
+          className={quickBtnClass("month")}
           onPress={() => onQuickApply(thisMonthRange())}
         >
           Tháng này
         </Button>
         <Button
           size="sm"
-          variant="ghost"
-          className="rounded-full text-xs"
+          variant={activeFilter === "year" ? "primary" : "ghost"}
+          className={quickBtnClass("year")}
           onPress={() => onQuickApply(thisYearRange())}
         >
           Năm nay

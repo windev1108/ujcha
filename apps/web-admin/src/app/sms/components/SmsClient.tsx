@@ -1,9 +1,9 @@
 "use client";
 
-import { Table } from "@heroui/react";
+import { Pagination, Table } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, MessageSquareDot } from "lucide-react";
-import { useState } from "react";
+import { MessageSquareDot } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { adminKeys } from "@/services/admin/keys";
 import { fetchSmsLogs } from "@/services/admin/sms-api";
@@ -17,6 +17,17 @@ const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
 
 const PAGE_LIMIT = 20;
 
+function usePaginationWindow(current: number, totalPages: number, max = 5): number[] {
+  return useMemo(() => {
+    if (totalPages <= 0) return [];
+    const half = Math.floor(max / 2);
+    let start = Math.max(1, current - half);
+    let end = Math.min(totalPages, start + max - 1);
+    start = Math.max(1, end - max + 1);
+    return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+  }, [current, totalPages, max]);
+}
+
 export function SmsClient() {
   const [page, setPage] = useState(1);
   const [phoneFilter, setPhoneFilter] = useState("");
@@ -28,7 +39,8 @@ export function SmsClient() {
     placeholderData: (prev) => prev,
   });
 
-  const totalPages = data ? Math.ceil(data.total / PAGE_LIMIT) : 1;
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_LIMIT)) : 1;
+  const pageWindow = usePaginationWindow(page, totalPages, 5);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -147,31 +159,46 @@ export function SmsClient() {
         )}
       </div>
 
-      {data && data.total > PAGE_LIMIT && (
-        <div className="flex items-center justify-between">
+      {totalPages > 1 && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-foreground/50">
-            {data.total} bản ghi · trang {page}/{totalPages}
+            {(page - 1) * PAGE_LIMIT + 1}–{Math.min(page * PAGE_LIMIT, data?.total ?? 0)} / {data?.total ?? 0} bản ghi
           </p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setPage((p) => p - 1)}
-              disabled={page <= 1}
-              className="flex items-center gap-1 rounded-xl border border-black/10 px-3 py-1.5 text-sm text-foreground/70 hover:bg-black/4 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <ChevronLeft className="size-4" />
-              Trước
-            </button>
-            <button
-              type="button"
-              onClick={() => setPage((p) => p + 1)}
-              disabled={page >= totalPages}
-              className="flex items-center gap-1 rounded-xl border border-black/10 px-3 py-1.5 text-sm text-foreground/70 hover:bg-black/4 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Sau
-              <ChevronRight className="size-4" />
-            </button>
-          </div>
+          <Pagination.Root className="w-full justify-end sm:w-auto">
+            <Pagination.Content className="flex flex-wrap items-center justify-end gap-1">
+              <Pagination.Item>
+                <Pagination.Previous
+                  isDisabled={page <= 1}
+                  onPress={() => setPage((n) => Math.max(1, n - 1))}
+                >
+                  <Pagination.PreviousIcon />
+                </Pagination.Previous>
+              </Pagination.Item>
+              {pageWindow.map((n) => (
+                <Pagination.Item key={n}>
+                  <Pagination.Link
+                    isActive={n === page}
+                    onPress={() => setPage(n)}
+                    className={
+                      n === page
+                        ? "min-w-9 rounded-full bg-[#1a3c34] font-semibold text-white"
+                        : "min-w-9 rounded-full"
+                    }
+                  >
+                    {n}
+                  </Pagination.Link>
+                </Pagination.Item>
+              ))}
+              <Pagination.Item>
+                <Pagination.Next
+                  isDisabled={page >= totalPages}
+                  onPress={() => setPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  <Pagination.NextIcon />
+                </Pagination.Next>
+              </Pagination.Item>
+            </Pagination.Content>
+          </Pagination.Root>
         </div>
       )}
     </div>

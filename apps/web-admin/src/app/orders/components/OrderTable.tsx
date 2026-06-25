@@ -7,6 +7,7 @@ import {
   Table,
 } from "@heroui/react";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Bike,
   CheckSquare2,
@@ -114,46 +115,66 @@ function OrderRowDropdown({
   onDelete: (o: AdminOrder) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const openMenu = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    setMenuStyle({
+      position: "fixed",
+      top: rect.bottom + 4,
+      right: window.innerWidth - rect.right,
+      zIndex: 9999,
+    });
+    setOpen((v) => !v);
+  };
 
   useEffect(() => {
     if (!open) return;
     const onPointer = (e: PointerEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+      if (triggerRef.current?.contains(e.target as Node)) return;
+      if (menuRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    const onScroll = () => setOpen(false);
     document.addEventListener("pointerdown", onPointer, true);
     document.addEventListener("keydown", onKey, true);
+    document.addEventListener("scroll", onScroll, true);
     return () => {
       document.removeEventListener("pointerdown", onPointer, true);
       document.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("scroll", onScroll, true);
     };
   }, [open]);
 
   const pick = (action: () => void) => {
     setOpen(false);
-    // defer so the popup unmounts before a modal mounts
     requestAnimationFrame(action);
   };
 
   return (
-    <div ref={rootRef} className="relative">
+    <>
       <button
+        ref={triggerRef}
         type="button"
         aria-label="Thêm thao tác"
         aria-expanded={open}
-        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        onClick={openMenu}
         className="inline-flex size-8 items-center justify-center rounded-lg text-foreground/60 outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-black/20"
       >
         <MoreVertical className="size-4" />
       </button>
 
-      {open && (
+      {open && createPortal(
         <div
+          ref={menuRef}
           role="menu"
-          className="absolute right-0 top-full z-50 mt-1 min-w-[176px] overflow-hidden rounded-xl border border-black/8 bg-white py-1 shadow-[0_8px_32px_-8px_rgba(0,0,0,0.18)]"
+          style={menuStyle}
+          className="min-w-[176px] overflow-hidden rounded-xl border border-black/8 bg-white py-1 shadow-[0_8px_32px_-8px_rgba(0,0,0,0.18)]"
         >
           {onViewInvoice && (
             <button
@@ -185,9 +206,10 @@ function OrderRowDropdown({
             <Trash2 className="size-3.5 shrink-0 text-foreground/45" aria-hidden />
             Xóa đơn
           </button>
-        </div>
+        </div>,
+        document.body,
       )}
-    </div>
+    </>
   );
 }
 
