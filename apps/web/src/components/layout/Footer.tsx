@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { MapPin, Clock, Phone } from "lucide-react";
 import { ROUTES } from "@/lib/routes";
-import { usePublicStoreLocationQuery } from "@/services/store/hooks";
+import { usePublicStoreLocationQuery, usePublicDeliveryPlatformsQuery } from "@/services/store/hooks";
 import { Logo } from "../common/Logo";
 import { useTranslations } from "next-intl";
 
@@ -25,6 +25,7 @@ function minutesToTime(minutes: number) {
 
 export default function Footer() {
   const { data: location } = usePublicStoreLocationQuery();
+  const { data: platforms = [] } = usePublicDeliveryPlatformsQuery();
   const hasCoords = location && location.lat !== 0 && location.lng !== 0;
   const t = useTranslations();
   const phone = location?.phone ?? null;
@@ -41,7 +42,7 @@ export default function Footer() {
   return (
     <footer className="mt-auto border-t border-border bg-surface-soft">
       <div className="container mx-auto px-4 py-12 sm:px-6 sm:py-16">
-        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-5">
           {/* Brand */}
           <div className="flex flex-col gap-4">
             <Logo horizontal={false} size="md" className="self-start" />
@@ -109,7 +110,38 @@ export default function Footer() {
             )}
           </div>
 
-          {/* Map */}
+          {/* Delivery platforms — only rendered when configured, sits between store info and map */}
+          {platforms.length > 0 && (
+            <div className="flex flex-col gap-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
+                {t('order_on')}
+              </p>
+              <ul className="flex flex-col gap-3">
+                {platforms.map((p) => (
+                  <li key={p.id}>
+                    <a
+                      href={p.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2.5 text-sm text-foreground/65 transition-colors hover:text-kun-primary"
+                    >
+                      <img
+                        src={p.thumbnailUrl}
+                        alt={p.name}
+                        width={p.logoWidth}
+                        height={p.logoHeight}
+                        style={{ width: p.logoWidth, height: p.logoHeight }}
+                        className="shrink-0 object-contain"
+                      />
+                      {p.displayMode === 'logo_and_text' && p.name}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Map — always last */}
           <div className="flex flex-col gap-3">
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
               {t('location')}

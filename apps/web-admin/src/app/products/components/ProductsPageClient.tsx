@@ -23,12 +23,16 @@ import {
   Plus,
   Search,
   Settings2,
+  Tag,
   Trash2,
   UtensilsCrossed,
+  X,
 } from "lucide-react";
 import NextLink from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+
+import { CategoriesTab } from "./CategoriesTab";
 
 import { useAppDialog } from "@/components/common/app-dialog-provider";
 import {
@@ -94,7 +98,15 @@ function usePaginationWindow(current: number, total: number, max = 5): number[] 
 export function ProductsPageClient() {
   const queryClient = useQueryClient();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { confirm } = useAppDialog();
+
+  const activeTab = (searchParams.get("tab") === "categories" ? "categories" : "products") as "products" | "categories";
+
+  const setTab = (tab: "products" | "categories") => {
+    const url = tab === "categories" ? "/products?tab=categories" : "/products";
+    router.replace(url);
+  };
 
   const [categoryFilter, setCategoryFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -207,6 +219,7 @@ export function ProductsPageClient() {
   };
 
   const globalPct = shopSettings?.globalDiscountPercent ?? 0;
+  const [discountBannerDismissed, setDiscountBannerDismissed] = useState(false);
   const hasActiveFilters = categoryFilter !== "" || statusFilter !== "all" || debouncedSearch !== "";
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -224,36 +237,59 @@ export function ProductsPageClient() {
             Sản phẩm
           </h1>
           <p className="mt-1.5 text-sm text-foreground/50">
-            Quản lý giá, biến thể, ảnh sản phẩm.{" "}
-            <NextLink
-              href={ROUTES.CATEGORIES}
-              className="font-semibold text-[#1a3c34] underline-offset-2 hover:underline"
-            >
-              Danh mục →
-            </NextLink>
+            Quản lý giá, biến thể, ảnh và danh mục sản phẩm.
           </p>
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            onPress={() => setGrabImportOpen(true)}
-            className="h-9 rounded-full border border-black/10 bg-white px-4 text-sm font-semibold text-foreground/70 transition hover:border-[#1a3c34]/25 hover:bg-[#f7faf9] hover:text-[#1a3c34]"
-          >
-            <UtensilsCrossed className="mr-1.5 size-3.5 text-[#5a8f7a]" />
-            Import từ GrabFood
-          </Button>
-          <Button
-            type="button"
-            onPress={() => router.push(ROUTES.PRODUCT_NEW)}
-            className="h-9 rounded-full bg-[#1a3c34] px-5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
-          >
-            <Plus className="mr-1.5 size-3.5" />
-            Tạo sản phẩm
-          </Button>
-        </div>
+        {activeTab === "products" && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onPress={() => setGrabImportOpen(true)}
+              className="h-9 rounded-full border border-black/10 bg-white px-4 text-sm font-semibold text-foreground/70 transition hover:border-[#1a3c34]/25 hover:bg-[#f7faf9] hover:text-[#1a3c34]"
+            >
+              <UtensilsCrossed className="mr-1.5 size-3.5 text-[#5a8f7a]" />
+              Import từ GrabFood
+            </Button>
+            <Button
+              type="button"
+              onPress={() => router.push(ROUTES.PRODUCT_NEW)}
+              className="h-9 rounded-full bg-[#1a3c34] px-5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
+            >
+              <Plus className="mr-1.5 size-3.5" />
+              Tạo sản phẩm
+            </Button>
+          </div>
+        )}
       </header>
+
+      {/* ── Tab bar ── */}
+      <div className="flex gap-1 border-b border-black/6 pb-px">
+        {(
+          [
+            ["products", "Sản phẩm"],
+            ["categories", "Danh mục"],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setTab(id)}
+            className={`relative rounded-t-lg px-5 py-2.5 text-sm font-semibold transition-colors ${
+              activeTab === id
+                ? "text-[#1a3c34] after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:rounded-full after:bg-[#1a3c34]"
+                : "text-foreground/50 hover:text-foreground/80"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "categories" && <CategoriesTab />}
+
+      {activeTab === "products" && <>
 
       {/* ── Stats strip ── */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -321,6 +357,42 @@ export function ProductsPageClient() {
           </button>
         ))}
       </div>
+
+      {/* ── Global discount banner ── */}
+      {globalPct > 0 && !discountBannerDismissed && (
+        <div className="flex items-center gap-3 rounded-2xl border border-amber-200/70 bg-amber-50 px-4 py-3">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+            <Tag className="size-4" aria-hidden />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-amber-800">
+              Đang áp dụng giảm giá{" "}
+              <span className="rounded-full bg-amber-200/70 px-1.5 py-0.5 text-amber-900">
+                {globalPct}%
+              </span>{" "}
+              toàn bộ sản phẩm
+            </p>
+            <p className="mt-0.5 text-xs text-amber-700/70">
+              Giá hiển thị với khách hàng đã được giảm tự động.{" "}
+              <button
+                type="button"
+                onClick={() => setShowSettings(true)}
+                className="font-semibold underline-offset-2 hover:underline"
+              >
+                Chỉnh sửa
+              </button>
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="Ẩn thông báo"
+            onClick={() => setDiscountBannerDismissed(true)}
+            className="shrink-0 rounded-full p-1 text-amber-600/60 transition hover:bg-amber-100 hover:text-amber-700"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* ── Category chips ── */}
       <div className="relative">
@@ -935,6 +1007,8 @@ export function ProductsPageClient() {
         categories={categories}
         onImported={() => void queryClient.invalidateQueries({ queryKey: ["admin", "products"] })}
       />
+
+      </>}
     </div>
   );
 }

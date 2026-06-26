@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   View,
   Text,
@@ -11,11 +11,14 @@ import {
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
+import * as SecureStore from 'expo-secure-store'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { postLogin } from '@/services/auth/api'
 import { getOrCreateDeviceId } from '@/lib/device-id'
 import { useAuthStore } from '@/store/auth-store'
+
+const SAVED_CREDS_KEY = 'ujcha_saved_credentials'
 
 export default function LoginScreen() {
   const router = useRouter()
@@ -25,8 +28,23 @@ export default function LoginScreen() {
 
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
+  const [rememberMe, setRememberMe] = useState(false)
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<{ phone?: string; password?: string; general?: string }>({})
+
+  useEffect(() => {
+    SecureStore.getItemAsync(SAVED_CREDS_KEY).then((raw) => {
+      if (!raw) return
+      try {
+        const { phone: savedPhone, password: savedPassword } = JSON.parse(raw)
+        setPhone(savedPhone ?? '')
+        setPassword(savedPassword ?? '')
+        setRememberMe(true)
+      } catch {
+        // corrupted entry — ignore
+      }
+    })
+  }, [])
 
   async function handleLogin() {
     const e: typeof errors = {}
@@ -40,6 +58,13 @@ export default function LoginScreen() {
       const deviceId = await getOrCreateDeviceId()
       const result = await postLogin({ phone: phone.trim(), password, deviceId })
       setSession(result.user, result.accessToken, result.refreshToken)
+
+      if (rememberMe) {
+        await SecureStore.setItemAsync(SAVED_CREDS_KEY, JSON.stringify({ phone: phone.trim(), password }))
+      } else {
+        await SecureStore.deleteItemAsync(SAVED_CREDS_KEY)
+      }
+
       router.replace('/(tabs)')
     } catch (err: any) {
       const msg = err?.response?.data?.message ?? t('generic_error')
@@ -89,12 +114,28 @@ export default function LoginScreen() {
             error={errors.password}
           />
 
-          <TouchableOpacity
-            onPress={() => router.push('/(auth)/forgot-password')}
-            className="mb-6 self-end"
-          >
-            <Text className="text-sm text-primary font-medium">{t('forgot_password')}</Text>
-          </TouchableOpacity>
+          <View className="flex-row items-center justify-between mb-6">
+            <TouchableOpacity
+              onPress={() => setRememberMe((v) => !v)}
+              activeOpacity={0.7}
+              className="flex-row items-center gap-2"
+            >
+              <View
+                className={`w-5 h-5 rounded border-2 items-center justify-center ${
+                  rememberMe ? 'bg-primary border-primary' : 'bg-white border-hairline-strong'
+                }`}
+              >
+                {rememberMe && (
+                  <Text className="text-white text-xs font-bold leading-none">✓</Text>
+                )}
+              </View>
+              <Text className="text-sm text-ink">{t('remember_me')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')}>
+              <Text className="text-sm text-primary font-medium">{t('forgot_password')}</Text>
+            </TouchableOpacity>
+          </View>
 
           <Button onPress={handleLogin} loading={loading} size="lg" className="w-full mb-4">
             {t('login')}

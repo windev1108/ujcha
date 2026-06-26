@@ -8,7 +8,7 @@ import { Fragment, useState, useEffect, useRef } from 'react'
 import { DEFAULT_BILL_CONFIG, DEFAULT_LABEL_CONFIG, type AdminOrder, type OrderStatus } from '../types/common'
 import { fetchShippers, assignShipper, updateOrderStatus, fetchShippingEstimate, fetchGroupOrderLive, type GroupOrderLive, API_URL } from '../api'
 import { io, type Socket } from 'socket.io-client'
-import { buildOrderLabels, buildReceiptDocumentHtml, buildKunLoyaltyQrUrl } from '@/lib/receipt-shared'
+import { buildOrderLabels, buildReceiptDocumentHtml, buildKunLoyaltyQrUrl, formatOptionDisplay } from '@/lib/receipt-shared'
 import { KEYS, loadLocal } from '@/lib/local-storage'
 import { formatDate } from '@/lib/utils'
 import { BillConfig, LabelConfig } from '../../../preload'
@@ -33,7 +33,7 @@ function parseOptionsStr(raw: unknown): string {
     const obj = raw as Record<string, unknown>
     return Object.entries(obj)
         .filter(([, v]) => v !== null && v !== undefined && String(v).trim())
-        .map(([k, v]) => `${k}: ${v}`)
+        .map(([k, v]) => formatOptionDisplay(k, String(v)))
         .join(' · ')
 }
 
@@ -225,7 +225,7 @@ export function OrderDetailModal({
         const token = order.groupOrder?.token
         if (!token || order.groupOrder?.paymentMode !== 'split') return
 
-        void fetchGroupOrderLive(token).then(setGroupLive).catch(() => {})
+        void fetchGroupOrderLive(token).then(setGroupLive).catch(() => { })
 
         const socket = io(`${API_URL}/group`, { transports: ['websocket', 'polling'] })
         groupSocketRef.current = socket
@@ -576,9 +576,8 @@ export function OrderDetailModal({
                                             ? groupLive.participants.filter((lp) => activeP.some((p) => p.id === lp.id) && lp.paymentStatus === 'paid').length
                                             : activeP.filter((p) => p.paymentStatus === 'paid').length
                                         return (
-                                            <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ${
-                                                paidC === activeP.length ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-600'
-                                            }`}>
+                                            <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ${paidC === activeP.length ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-600'
+                                                }`}>
                                                 {paidC === activeP.length && <CheckCircle2 className="size-3" />}
                                                 {paidC}/{activeP.length} đã TT
                                             </span>
@@ -741,11 +740,10 @@ function GroupOrderItemsSection({
                 </p>
                 <div className="ml-auto flex items-center gap-2">
                     {isSplit && (
-                        <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ${
-                            paidCount === withItems.length
-                                ? 'bg-emerald-100 text-emerald-700'
-                                : 'bg-violet-100 text-violet-700'
-                        }`}>
+                        <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ${paidCount === withItems.length
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-violet-100 text-violet-700'
+                            }`}>
                             {paidCount === withItems.length && <CheckCircle2 className="size-3" />}
                             {paidCount}/{withItems.length} TT
                         </span>
@@ -791,7 +789,7 @@ function GroupOrderItemsSection({
                                     const opts = item.selectedOptions && typeof item.selectedOptions === 'object'
                                         ? Object.entries(item.selectedOptions as Record<string, string>)
                                             .filter(([, v]) => v)
-                                            .map(([k, v]) => `${k}: ${v}`)
+                                            .map(([k, v]) => formatOptionDisplay(k, v))
                                             .join(' · ')
                                         : ''
                                     const toppings = Array.isArray(item.toppingsJson)
@@ -852,12 +850,12 @@ function GroupOrderItemsSection({
 type ActionBtnColor = 'blue' | 'violet' | 'teal' | 'emerald' | 'sky' | 'red'
 
 const ACTION_BTN_CLS: Record<ActionBtnColor, string> = {
-    blue:    'bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200',
-    violet:  'bg-violet-50 text-violet-700 hover:bg-violet-100 border-violet-200',
-    teal:    'bg-teal-50 text-teal-700 hover:bg-teal-100 border-teal-200',
+    blue: 'bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200',
+    violet: 'bg-violet-50 text-violet-700 hover:bg-violet-100 border-violet-200',
+    teal: 'bg-teal-50 text-teal-700 hover:bg-teal-100 border-teal-200',
     emerald: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200',
-    sky:     'bg-sky-50 text-sky-700 hover:bg-sky-100 border-sky-200',
-    red:     'bg-red-50 text-red-600 hover:bg-red-100 border-red-200',
+    sky: 'bg-sky-50 text-sky-700 hover:bg-sky-100 border-sky-200',
+    red: 'bg-red-50 text-red-600 hover:bg-red-100 border-red-200',
 }
 
 function ActionBtn({ color, icon, label, busy, onClick }: {

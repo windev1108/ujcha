@@ -365,40 +365,60 @@ export function ProductEditorClient({ mode, productId }: Props) {
     );
 
   if (mode === "edit" && loadingProduct) {
-    return <p className="text-sm text-foreground/50">Đang tải sản phẩm…</p>;
+    return (
+      <div className="flex flex-col gap-6 pb-16">
+        <div className="h-9 w-40 animate-pulse rounded-full bg-black/5" />
+        <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
+          <div className="flex flex-col gap-6">
+            <div className="h-72 animate-pulse rounded-2xl bg-black/5" />
+            <div className="h-48 animate-pulse rounded-2xl bg-black/5" />
+            <div className="h-36 animate-pulse rounded-2xl bg-black/5" />
+          </div>
+          <div className="flex flex-col gap-6">
+            <div className="h-64 animate-pulse rounded-2xl bg-black/5" />
+            <div className="h-40 animate-pulse rounded-2xl bg-black/5" />
+            <div className="h-48 animate-pulse rounded-2xl bg-black/5" />
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="flex flex-col gap-6 pb-16">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mt-0.5 shrink-0 rounded-xl"
-            onPress={() => router.push(ROUTES.PRODUCTS)}
+        <div className="flex flex-col gap-1">
+          <button
+            type="button"
+            onClick={() => router.push(ROUTES.PRODUCTS)}
+            className="group -ml-1.5 inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-sm text-foreground/55 transition-colors hover:bg-black/[0.04] hover:text-foreground"
           >
-            <ArrowLeft className="size-4" />
-          </Button>
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#5a8f7a]">
-              Sản phẩm
-            </p>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-[#1a3c34]">
-              {title}
-            </h1>
-          </div>
+            <ArrowLeft className="size-4 transition-transform group-hover:-translate-x-0.5" aria-hidden />
+            Sản phẩm
+          </button>
+          <h1 className="text-2xl font-bold tracking-tight text-[#1a3c34]">
+            {title}
+          </h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {isDirty && !pending && (
+            <span className="hidden rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 ring-1 ring-amber-200/80 sm:inline-flex">
+              Chưa lưu
+            </span>
+          )}
           <Button
             variant="ghost"
-            className="rounded-xl"
+            className="rounded-full"
             onPress={() => router.push(ROUTES.PRODUCTS)}
           >
             Hủy
           </Button>
           <Button
-            className="rounded-xl bg-[#1a3c34] font-semibold text-white"
+            className={`rounded-full font-semibold text-white transition-all ${
+              isDirty && !pending
+                ? "bg-[#1a3c34] shadow-[0_0_0_3px_rgba(26,60,52,0.15)]"
+                : "bg-[#1a3c34]"
+            }`}
             onPress={() => {
               setError(null);
               saveMut.mutate();
@@ -406,7 +426,7 @@ export function ProductEditorClient({ mode, productId }: Props) {
             isDisabled={pending || !isDirty}
           >
             <Save className="mr-2 size-4" />
-            {pending ? "Đang lưu…" : "Lưu"}
+            {pending ? "Đang lưu…" : isDirty ? "Lưu thay đổi" : "Lưu"}
           </Button>
         </div>
       </header>
@@ -820,20 +840,29 @@ export function ProductEditorClient({ mode, productId }: Props) {
                 </Button>
               </div>
               {previews.length > 0 ? (
-                <div className="flex flex-wrap gap-2 border-t border-black/6 pt-4">
-                  {previews.map((src) => (
-                    <div
-                      key={src}
-                      className="relative size-16 overflow-hidden rounded-full bg-[#f3f4f6] ring-1 ring-black/8"
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={src}
-                        alt=""
-                        className="size-full object-cover"
-                      />
+                <div className="flex flex-col gap-2 border-t border-black/6 pt-4">
+                  <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-[#f3f4f6] ring-1 ring-black/8">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={previews[0]} alt="" className="size-full object-cover" />
+                    {previews.length > 1 && (
+                      <span className="absolute bottom-2 left-2 rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm">
+                        1 / {previews.length}
+                      </span>
+                    )}
+                    <span className="absolute bottom-2 right-2 rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm">
+                      Ảnh đại diện
+                    </span>
+                  </div>
+                  {previews.length > 1 && (
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {previews.slice(1).map((src) => (
+                        <div key={src} className="relative aspect-square overflow-hidden rounded-lg bg-[#f3f4f6] ring-1 ring-black/8">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={src} alt="" className="size-full object-cover" />
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
               ) : null}
             </CardContent>
@@ -870,11 +899,17 @@ export function ProductEditorClient({ mode, productId }: Props) {
               <h2 className="text-sm font-bold uppercase tracking-wide text-[#1a3c34]">
                 Trạng thái bán hàng
               </h2>
-              <div className="flex flex-col gap-1">
-                <p className="text-xs text-foreground/55">
-                  Hiển thị món trên ứng dụng khách.
-                </p>
-                <div className="flex items-center gap-3">
+              <div className="flex items-center justify-between rounded-xl border border-black/6 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">Hiển thị trên app</p>
+                  <p className="text-xs text-foreground/50">Khách hàng có thể xem và đặt món</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2.5">
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                    isAvailable ? "bg-emerald-50 text-emerald-700" : "bg-zinc-100 text-zinc-500"
+                  }`}>
+                    {isAvailable ? "Đang hiển thị" : "Đang ẩn"}
+                  </span>
                   <Switch
                     isSelected={isAvailable}
                     onChange={setIsAvailable}
@@ -885,17 +920,19 @@ export function ProductEditorClient({ mode, productId }: Props) {
                       <Switch.Thumb />
                     </Switch.Control>
                   </Switch>
-                  <span className="text-sm font-medium">
-                    {isAvailable ? "Đang hiển thị" : "Đang ẩn"}
-                  </span>
                 </div>
               </div>
-              <div className="border-t border-black/6 pt-4">
-                <p className="text-xs text-foreground/55">
-                  Đánh dấu hết hàng — khách vẫn thấy món (nếu đang hiển thị)
-                  và biết tạm thời không đặt được.
-                </p>
-                <div className="mt-2 flex items-center gap-3">
+              <div className="flex items-center justify-between rounded-xl border border-black/6 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">Hết hàng</p>
+                  <p className="text-xs text-foreground/50">Khách thấy nhưng không đặt được</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2.5">
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                    isSoldOut ? "bg-amber-50 text-amber-700" : "bg-zinc-100 text-zinc-500"
+                  }`}>
+                    {isSoldOut ? "Hết hàng" : "Còn hàng"}
+                  </span>
                   <Switch
                     isSelected={isSoldOut}
                     onChange={setIsSoldOut}
@@ -906,16 +943,19 @@ export function ProductEditorClient({ mode, productId }: Props) {
                       <Switch.Thumb />
                     </Switch.Control>
                   </Switch>
-                  <span className="text-sm font-medium">
-                    {isSoldOut ? "Hết hàng" : "Còn hàng"}
-                  </span>
                 </div>
               </div>
-              <div className="border-t border-black/6 pt-4">
-                <p className="text-xs text-foreground/55">
-                  Gắn nhãn <span className="font-semibold text-amber-600">Best Seller</span> — sản phẩm sẽ hiển thị badge nổi bật và được ưu tiên trong danh sách đề xuất trên trang chủ.
-                </p>
-                <div className="mt-2 flex items-center gap-3">
+              <div className="flex items-center justify-between rounded-xl border border-black/6 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">Best Seller</p>
+                  <p className="text-xs text-foreground/50">Badge nổi bật, ưu tiên đề xuất trang chủ</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2.5">
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                    isBestSeller ? "bg-amber-50 text-amber-700 ring-1 ring-amber-200/80" : "bg-zinc-100 text-zinc-500"
+                  }`}>
+                    {isBestSeller ? "Best Seller" : "Thường"}
+                  </span>
                   <Switch
                     isSelected={isBestSeller}
                     onChange={setIsBestSeller}
@@ -926,15 +966,6 @@ export function ProductEditorClient({ mode, productId }: Props) {
                       <Switch.Thumb />
                     </Switch.Control>
                   </Switch>
-                  <span className="text-sm font-medium">
-                    {isBestSeller ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-bold text-amber-700 ring-1 ring-amber-200">
-                        Best Seller
-                      </span>
-                    ) : (
-                      "Chưa gắn nhãn"
-                    )}
-                  </span>
                 </div>
               </div>
             </CardContent>

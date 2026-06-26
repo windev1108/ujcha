@@ -9,6 +9,7 @@ import { adminKeys } from "@/services/admin/keys";
 import { fetchTaxOverview } from "@/services/admin/taxes-api";
 import { formatVnd } from "@/lib/product-display";
 import { OrderDateRangePicker } from "@/app/orders/components/OrderDateRangePicker";
+import { DatePresetPills, SourceFilterPills } from "./TaxQuickFilters";
 
 function todayStr() {
   const d = new Date(Date.now() + 7 * 3600_000);
@@ -52,31 +53,48 @@ export function TaxOverviewTab() {
   const today = todayStr();
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
+  const [type, setType] = useState("");
 
   const { data, isLoading } = useQuery({
-    queryKey: adminKeys.taxOverview(from, to),
-    queryFn: () => fetchTaxOverview({ from, to }),
+    queryKey: adminKeys.taxOverview(from, to, type),
+    queryFn: () => fetchTaxOverview({ from, to, type: type || undefined }),
   });
 
   const reconcileOk = data ? Math.abs(data.reconciliationDiff) < 1 : true;
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Date range */}
+      {/* Filters */}
       <Card className="rounded-2xl border border-black/6 shadow-sm">
-        <CardContent className="flex flex-wrap items-end gap-4 p-4 sm:p-5">
-          <div className="w-96">
-            <OrderDateRangePicker
-              label="Khoảng thời gian"
-              from={from}
-              to={to}
-              onRangeChange={(f, t) => { setFrom(f); setTo(t); }}
-              className="w-full"
-            />
+        <CardContent className="flex flex-col gap-3 p-4 sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/45">
+                Khoảng thời gian
+              </span>
+              <DatePresetPills from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/45">
+                Nguồn đơn
+              </span>
+              <SourceFilterPills value={type} onChange={(v) => setType(v)} />
+            </div>
           </div>
-          {isLoading && (
-            <Text className="text-xs italic text-foreground/40">Đang tải…</Text>
-          )}
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="w-80">
+              <OrderDateRangePicker
+                label="Tuỳ chỉnh khoảng ngày"
+                from={from}
+                to={to}
+                onRangeChange={(f, t) => { setFrom(f); setTo(t); }}
+                className="w-full"
+              />
+            </div>
+            {isLoading && (
+              <Text className="text-xs italic text-foreground/40">Đang tải…</Text>
+            )}
+          </div>
         </CardContent>
       </Card>
 

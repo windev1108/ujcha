@@ -1,12 +1,5 @@
-import type { Metadata } from "next";
-
-import { CategoriesPageClient } from "./components/CategoriesPageClient";
-
-export const metadata: Metadata = {
-  title: "Danh mục — UjCha Admin",
-  description: "Quản lý danh mục sản phẩm",
-};
+import { redirect } from "next/navigation";
 
 export default function CategoriesPage() {
-  return <CategoriesPageClient />;
+  redirect("/products?tab=categories");
 }

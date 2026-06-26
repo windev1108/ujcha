@@ -1,40 +1,32 @@
 "use client";
 
 import { useState } from "react";
-import { ClipboardList, Clock, LucideIcon, Users2 } from "lucide-react";
+import { ExternalLink, MapPin, type LucideIcon } from "lucide-react";
+import { StoreLocationTab } from "@/app/hrm/components/StoreLocationTab";
+import { DeliveryPlatformsTab } from "./DeliveryPlatformsTab";
 
-import { AttendanceTab } from "./AttendanceTab";
-import { ShiftConfigTab } from "./ShiftConfigTab";
-import { StaffTab } from "./StaffTab";
-
-type Tab = "staff" | "attendance" | "shift";
-
-type TabItem = {
-  id: Tab;
-  label: string;
-  icon: LucideIcon;
-};
+type Tab = "location" | "platforms";
+type TabItem = { id: Tab; label: string; icon: LucideIcon };
 
 const TABS: TabItem[] = [
-  { id: "staff", label: "Nhân viên", icon: Users2 },
-  { id: "attendance", label: "Chấm công", icon: ClipboardList },
-  { id: "shift", label: "Ca làm việc", icon: Clock },
+  { id: "location", label: "Vị trí & địa chỉ", icon: MapPin },
+  { id: "platforms", label: "Nền tảng đối tác", icon: ExternalLink },
 ];
 
-export function HrmPageClient() {
-  const [tab, setTab] = useState<Tab>("staff");
+export function StorePageClient() {
+  const [tab, setTab] = useState<Tab>("location");
 
   return (
     <div className="flex flex-col gap-6 pb-16">
       <header>
         <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#5a8f7a]">
-          Vận hành
+          Quản lý
         </p>
         <h1 className="mt-1 text-2xl font-bold tracking-tight text-[#1a3c34] sm:text-3xl">
-          Quản lý nhân sự (HRM)
+          Cửa hàng
         </h1>
         <p className="mt-2 text-sm text-foreground/55">
-          Quản lý tài khoản nhân viên, nhận diện khuôn mặt và chấm công.
+          Cấu hình địa chỉ, vị trí và các nền tảng giao đồ ăn đối tác.
         </p>
       </header>
 
@@ -54,9 +46,8 @@ export function HrmPageClient() {
         ))}
       </div>
 
-      {tab === "staff" && <StaffTab />}
-      {tab === "attendance" && <AttendanceTab />}
-      {tab === "shift" && <ShiftConfigTab />}
+      {tab === "location" && <StoreLocationTab />}
+      {tab === "platforms" && <DeliveryPlatformsTab />}
     </div>
   );
 }

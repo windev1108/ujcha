@@ -109,8 +109,8 @@ export const adminKeys = {
     ] as const,
   variantGroups: ["admin", "variant-groups"] as const,
   paymentConfig: ["admin", "payment-config"] as const,
-  taxOverview: (from?: string, to?: string) =>
-    ["admin", "tax", "overview", from ?? "", to ?? ""] as const,
+  taxOverview: (from?: string, to?: string, type?: string) =>
+    ["admin", "tax", "overview", from ?? "", to ?? "", type ?? ""] as const,
   taxTransactions: (filters?: {
     from?: string;
     to?: string;
@@ -132,8 +132,8 @@ export const adminKeys = {
       filters?.type ?? "",
       filters?.q ?? "",
     ] as const,
-  taxReports: (from?: string, to?: string, groupBy?: string) =>
-    ["admin", "tax", "reports", from ?? "", to ?? "", groupBy ?? "day"] as const,
+  taxReports: (from?: string, to?: string, groupBy?: string, type?: string) =>
+    ["admin", "tax", "reports", from ?? "", to ?? "", groupBy ?? "day", type ?? ""] as const,
   vatConfigs: ["admin", "tax", "vat-configs"] as const,
   posRelease: ["admin", "pos-release"] as const,
   feedbacks: (filters?: { page?: number; pageSize?: number; rating?: number }) =>
@@ -155,6 +155,7 @@ export const adminKeys = {
     ] as const,
   shippingConfig: ["admin", "shipping-config"] as const,
   groupOrderConfig: ["admin", "group-order-config"] as const,
+  deliveryPlatforms: ["admin", "store", "platforms"] as const,
   activeGroupOrders: ["admin", "group-orders", "active"] as const,
   groupOrderDetail: (token: string) => ["admin", "group-orders", token] as const,
 };

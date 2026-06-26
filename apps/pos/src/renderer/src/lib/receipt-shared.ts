@@ -70,10 +70,10 @@ function buildGroupParticipantMap(
         : '{}'
       const extras = Array.isArray(item.toppingsJson)
         ? JSON.stringify(
-            [...(item.toppingsJson as Array<{ name: string }>)]
-              .sort((a, b) => a.name.localeCompare(b.name))
-              .map((e) => e.name),
-          )
+          [...(item.toppingsJson as Array<{ name: string }>)]
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map((e) => e.name),
+        )
         : '[]'
       const key = [item.productId, opts, extras, item.note ?? ''].join('\0')
       const existing = map.get(key) ?? []
@@ -103,6 +103,13 @@ export function parseOptions(raw: unknown): Record<string, string> {
     if (typeof v === 'string') out[k] = v
   }
   return out
+}
+
+export function formatOptionDisplay(key: string, value: string): string {
+  if (key.trim() === 'Mức độ ngọt' && value.trim() === 'Bình thường') {
+    return 'Ngọt bình thường'
+  }
+  return value
 }
 
 export function serviceLabel(t: AdminOrder['type']): string {
@@ -212,7 +219,7 @@ function renderItems(order: AdminOrder, el: ReceiptElement, paperWidth: number):
     )
 
     for (const [k, v] of Object.entries(opts)) {
-      lines.push(`<div style="margin-left:26px;font-size:${subFs}px;font-weight:bold;margin-bottom:1px;color:#000;">+ ${esc(k)}: ${esc(v)}</div>`)
+      lines.push(`<div style="margin-left:26px;font-size:${subFs}px;font-weight:bold;margin-bottom:1px;color:#000;">+ ${esc(formatOptionDisplay(k, v))}</div>`)
     }
 
     for (const ex of extras) {
@@ -258,18 +265,18 @@ function renderElement(
       return `<div style="${aln}font-family:Georgia,'Times New Roman',serif;font-size:${paperWidth <= 58 ? 22 : 26}px;font-weight:bold;letter-spacing:3px;color:#000;margin-bottom:4px;">Ujcha</div>`
 
     case 'order-ref':
-    {
-      const totalQty = order.items.reduce((s, i) => s + i.quantity, 0)
-      const customerName = order.guestDeliveryName
-      const qtyLabel = customerName
-        ? `${totalQty} sản phẩm cho ${customerName}`
-        : `${totalQty} sản phẩm`
-      const qtyFs = paperWidth <= 58 ? 10 : 12
-      return (
-        `<div style="${aln}font-size:${paperWidth <= 58 ? 18 : 22}px;font-weight:bold;letter-spacing:1px;color:#000;margin-bottom:2px;">${esc(order.paymentCode ?? formatOrderRef(order))}</div>` +
-        `<div style="text-align:center;font-size:${qtyFs}px;color:#000;margin-bottom:4px;">${esc(qtyLabel)}</div>`
-      )
-    }
+      {
+        const totalQty = order.items.reduce((s, i) => s + i.quantity, 0)
+        const customerName = order.guestDeliveryName
+        const qtyLabel = customerName
+          ? `${totalQty} sản phẩm cho ${customerName}`
+          : `${totalQty} sản phẩm`
+        const qtyFs = paperWidth <= 58 ? 10 : 12
+        return (
+          `<div style="${aln}font-size:${paperWidth <= 58 ? 18 : 22}px;font-weight:bold;letter-spacing:1px;color:#000;margin-bottom:2px;">${esc(order.paymentCode ?? formatOrderRef(order))}</div>` +
+          `<div style="text-align:center;font-size:${qtyFs}px;color:#000;margin-bottom:4px;">${esc(qtyLabel)}</div>`
+        )
+      }
 
     case 'date':
       return `<div style="${base}margin-bottom:2px;">${esc(new Date(order.createdAt).toLocaleString('vi-VN'))}</div>`
@@ -465,23 +472,7 @@ export function buildSingleLabelHtml(
   }
 
   for (const [k, v] of optEntries) {
-    const kLower = k.toLowerCase()
-    const vLower = v.toLowerCase()
-    const isNgot = kLower.includes('ngọt')
-    const hasSweetener = vLower.includes('sữa') || vLower.includes('đường')
-    const isSweetenerAdd = hasSweetener && !vLower.includes('không')
-    const isSweetenerNone = hasSweetener && vLower.includes('không')
-    let displayVal: string
-    if (isSweetenerNone) {
-      displayVal = 'Ít Ngọt'
-    } else if (isSweetenerAdd) {
-      displayVal = 'Ngọt vừa'
-    } else if (isNgot) {
-      displayVal = vLower.includes('ngọt') ? v : `Ngọt ${v.charAt(0).toLowerCase()}${v.slice(1)}`
-    } else {
-      displayVal = v
-    }
-    contentLines.push(`<div style="font-size:9px;line-height:1.1;color:#000;font-weight:400;">+ ${esc(displayVal)}</div>`)
+    contentLines.push(`<div style="font-size:9px;line-height:1.1;color:#000;font-weight:400;">+ ${esc(formatOptionDisplay(k, v))}</div>`)
   }
 
   for (const ex of extras) {
@@ -561,10 +552,10 @@ export function buildOrderLabels(
         : '{}'
       const extras = Array.isArray(item.extrasJson)
         ? JSON.stringify(
-            [...(item.extrasJson as Array<{ name: string }>)]
-              .sort((a, b) => a.name.localeCompare(b.name))
-              .map((e) => e.name),
-          )
+          [...(item.extrasJson as Array<{ name: string }>)]
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map((e) => e.name),
+        )
         : '[]'
       const key = [item.productId, opts, extras, item.note ?? ''].join('\0')
       const names = participantMap.get(key)

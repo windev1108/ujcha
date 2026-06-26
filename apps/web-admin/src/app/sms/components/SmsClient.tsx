@@ -159,9 +159,10 @@ export function SmsClient() {
         )}
       </div>
 
-      {totalPages > 1 && (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-foreground/50">
+      {(data?.total ?? 0) > 0 ? (
+        <div className="flex flex-col items-center justify-between gap-3 border-t border-black/6 pt-4 sm:flex-row">
+          <p className="text-xs text-foreground/50">
+            Hiển thị{" "}
             {(page - 1) * PAGE_LIMIT + 1}–{Math.min(page * PAGE_LIMIT, data?.total ?? 0)} / {data?.total ?? 0} bản ghi
           </p>
           <Pagination.Root className="w-full justify-end sm:w-auto">
@@ -181,7 +182,7 @@ export function SmsClient() {
                     onPress={() => setPage(n)}
                     className={
                       n === page
-                        ? "min-w-9 rounded-full bg-[#1a3c34] font-semibold text-white"
+                        ? "min-w-9 rounded-full bg-[#1a3c34] text-white data-[active=true]:bg-[#1a3c34]"
                         : "min-w-9 rounded-full"
                     }
                   >
@@ -200,7 +201,7 @@ export function SmsClient() {
             </Pagination.Content>
           </Pagination.Root>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

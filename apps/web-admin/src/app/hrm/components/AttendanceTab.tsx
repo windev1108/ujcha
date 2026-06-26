@@ -1,9 +1,9 @@
 "use client";
 
-import { Button, Label, ListBox, Select } from "@heroui/react";
+import { Button, Label, ListBox, Pagination, Select } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import { Clock, Filter, LogIn, LogOut, MapPin, RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { OrderDateRangePicker } from "@/app/orders/components/OrderDateRangePicker";
 import {
@@ -63,6 +63,17 @@ function mapsUrl(lat: number | null, lng: number | null) {
 function fmtDate(ymd: string) {
   const [y, mo, d] = ymd.split("-");
   return `${d}/${mo}/${y}`;
+}
+
+function usePaginationWindow(current: number, totalPages: number, max = 5): number[] {
+  return useMemo(() => {
+    if (totalPages <= 0) return [];
+    const half = Math.floor(max / 2);
+    let start = Math.max(1, current - half);
+    let end = Math.min(totalPages, start + max - 1);
+    start = Math.max(1, end - max + 1);
+    return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+  }, [current, totalPages, max]);
 }
 
 function GpsLink({ lat, lng, dist }: { lat: number | null; lng: number | null; dist: number | null }) {
@@ -233,6 +244,7 @@ export function AttendanceTab() {
   const items = summaryQ.data?.items ?? [];
   const total = summaryQ.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / 20));
+  const pageWindow = usePaginationWindow(page, totalPages, 5);
 
   return (
     <div className="flex flex-col gap-4">
@@ -374,16 +386,48 @@ export function AttendanceTab() {
           </tbody>
         </table>
 
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-black/6 px-5 py-3">
-            <p className="text-xs text-foreground/50">Tổng {total} nhóm</p>
-            <div className="flex gap-1">
-              <Button size="sm" variant="ghost" isDisabled={page <= 1} onPress={() => setPage((n) => n - 1)}>←</Button>
-              <span className="px-3 py-1 text-sm">{page}/{totalPages}</span>
-              <Button size="sm" variant="ghost" isDisabled={page >= totalPages} onPress={() => setPage((n) => n + 1)}>→</Button>
-            </div>
+        {total > 0 ? (
+          <div className="flex flex-col items-center justify-between gap-3 border-t border-black/6 px-5 py-3 sm:flex-row">
+            <p className="text-xs text-foreground/50">
+              Hiển thị {(page - 1) * 20 + 1}–{Math.min(page * 20, total)} / {total} bản ghi
+            </p>
+            <Pagination.Root className="w-full justify-end sm:w-auto">
+              <Pagination.Content className="flex flex-wrap items-center justify-end gap-1">
+                <Pagination.Item>
+                  <Pagination.Previous
+                    isDisabled={page <= 1}
+                    onPress={() => setPage((n) => Math.max(1, n - 1))}
+                  >
+                    <Pagination.PreviousIcon />
+                  </Pagination.Previous>
+                </Pagination.Item>
+                {pageWindow.map((n) => (
+                  <Pagination.Item key={n}>
+                    <Pagination.Link
+                      isActive={n === page}
+                      onPress={() => setPage(n)}
+                      className={
+                        n === page
+                          ? "min-w-9 rounded-full bg-[#1a3c34] text-white data-[active=true]:bg-[#1a3c34]"
+                          : "min-w-9 rounded-full"
+                      }
+                    >
+                      {n}
+                    </Pagination.Link>
+                  </Pagination.Item>
+                ))}
+                <Pagination.Item>
+                  <Pagination.Next
+                    isDisabled={page >= totalPages}
+                    onPress={() => setPage((n) => Math.min(totalPages, n + 1))}
+                  >
+                    <Pagination.NextIcon />
+                  </Pagination.Next>
+                </Pagination.Item>
+              </Pagination.Content>
+            </Pagination.Root>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

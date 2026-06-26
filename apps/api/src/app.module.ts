@@ -33,6 +33,7 @@ import { ShipperModule } from './modules/shipper/shipper.module';
 import { TrackingModule } from './modules/tracking/tracking.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { MailModule } from './modules/mail/mail.module';
+import { PublicStoreModule } from './modules/public-store/public-store.module';
 
 @Module({
   imports: [
@@ -74,6 +75,7 @@ import { MailModule } from './modules/mail/mail.module';
     TrackingModule,
     NotificationModule,
     MailModule,
+    PublicStoreModule,
   ],
   controllers: [AppController],
   providers: [AppService],

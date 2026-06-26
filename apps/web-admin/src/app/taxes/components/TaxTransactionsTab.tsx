@@ -27,6 +27,7 @@ import { fetchTaxTransactions } from "@/services/admin/taxes-api";
 import { formatVnd } from "@/lib/product-display";
 import { OrderDateRangePicker } from "@/app/orders/components/OrderDateRangePicker";
 import type { AdminOrderStatus, AdminOrderType } from "@/services/admin/types";
+import { DatePresetPills } from "./TaxQuickFilters";
 
 const TYPE_ALL = "__all__";
 const STATUS_ALL = "__all__";
@@ -109,7 +110,18 @@ export function TaxTransactionsTab() {
     <div className="flex flex-col gap-5">
       {/* Filter card */}
       <Card className="rounded-2xl border border-black/6 shadow-sm">
-        <CardContent className="grid grid-cols-1 gap-4 p-4 sm:p-5 lg:grid-cols-12 lg:items-end">
+        <CardContent className="flex flex-col gap-4 p-4 sm:p-5">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/45">
+              Nhanh:
+            </span>
+            <DatePresetPills
+              from={from}
+              to={to}
+              onChange={(f, t) => { setFrom(f); setTo(t); setPage(1); }}
+            />
+          </div>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-end">
           {/* Search */}
           <div className={`lg:col-span-4 ${adminFieldStack}`}>
             <Label className={adminLabelClassFilter}>Mã đơn / khách</Label>
@@ -207,6 +219,7 @@ export function TaxTransactionsTab() {
               Tìm
             </Button>
           </div>
+        </div>
         </CardContent>
       </Card>
 

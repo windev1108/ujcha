@@ -1,5 +1,6 @@
 export const ROUTES = {
     DASHBOARD: "/",
+    STORE: "/store",
     PRODUCTS: "/products",
     TOPPINGS: "/toppings",
     PRODUCT_NEW: "/products/new",

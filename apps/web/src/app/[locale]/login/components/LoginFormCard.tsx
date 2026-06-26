@@ -1,8 +1,8 @@
 "use client";
 
 import { Link } from "@heroui/react";
-import { Eye, EyeOff, Lock, Phone } from "lucide-react";
-import { useState } from "react";
+import { Check, Eye, EyeOff, Lock, Phone } from "lucide-react";
+import { useState, useEffect } from "react";
 import { Logo } from "@/components/common/Logo";
 import { AuthSplitLayout } from "@/components/auth/AuthSplitLayout";
 import { useLocalizedHref } from "@/i18n/use-localized-href";
@@ -25,9 +25,23 @@ export function LoginFormCard() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [phoneTouched, setPhoneTouched] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const login = useLoginMutation();
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("ujcha_saved_credentials");
+      if (!raw) return;
+      const { phone: savedPhone, password: savedPassword } = JSON.parse(raw);
+      setPhone(savedPhone ?? "");
+      setPassword(savedPassword ?? "");
+      setRememberMe(true);
+    } catch {
+      // corrupted entry — ignore
+    }
+  }, []);
 
   const phoneEmpty = !phone.trim();
   const phoneInvalid = !phoneEmpty && !isValidPhone(phone);
@@ -45,7 +59,15 @@ export function LoginFormCard() {
     e.preventDefault();
     setSubmitted(true);
     if (!canSubmit) return;
-    login.mutate({ phone: phone.trim(), password });
+    login.mutate({ phone: phone.trim(), password }, {
+      onSuccess: () => {
+        if (rememberMe) {
+          localStorage.setItem("ujcha_saved_credentials", JSON.stringify({ phone: phone.trim(), password }));
+        } else {
+          localStorage.removeItem("ujcha_saved_credentials");
+        }
+      },
+    });
   };
 
   return (
@@ -139,6 +161,26 @@ export function LoginFormCard() {
             </p>
           )}
         </div>
+
+        {/* Remember me */}
+        <label className="flex cursor-pointer select-none items-center gap-2.5">
+          <div
+            onClick={() => setRememberMe((v) => !v)}
+            className={`flex size-4.5 items-center justify-center rounded border transition ${
+              rememberMe
+                ? "border-[#1a3c34] bg-[#1a3c34]"
+                : "border-black/20 bg-white"
+            }`}
+          >
+            {rememberMe && <Check className="size-3 stroke-[3] text-white" />}
+          </div>
+          <span
+            onClick={() => setRememberMe((v) => !v)}
+            className="text-sm text-foreground/60"
+          >
+            {t("remember_me")}
+          </span>
+        </label>
 
         {/* API error */}
         {login.isError && (

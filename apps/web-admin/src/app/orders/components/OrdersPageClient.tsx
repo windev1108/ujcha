@@ -10,6 +10,7 @@ import {
   RefreshCw,
   X,
 } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import NextLink from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -300,29 +301,37 @@ export function OrdersPageClient() {
         onReset={handleReset}
       />
 
-      {selectedIds.size > 0 && (
-        <div className="flex items-center gap-3 rounded-2xl border border-[#1a3c34]/20 bg-[#1a3c34]/[0.04] px-5 py-3">
-          <ListChecks className="size-4 shrink-0 text-[#1a3c34]" />
-          <span className="flex-1 text-sm font-medium text-[#1a3c34]">
-            Đã chọn <strong>{selectedIds.size}</strong> đơn
-          </span>
-          <Button
-            size="sm"
-            className="rounded-lg bg-[#1a3c34] px-3 font-semibold text-white"
-            onPress={() => setBulkModalOpen(true)}
-            isDisabled={bulkMut.isPending}
+      <AnimatePresence>
+        {selectedIds.size > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -6, scale: 0.99 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.99 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+            className="flex items-center gap-3 rounded-2xl border border-[#1a3c34]/20 bg-[#1a3c34]/[0.04] px-5 py-3"
           >
-            Cập nhật trạng thái
-          </Button>
-          <button
-            aria-label="Bỏ chọn tất cả"
-            onClick={() => setSelectedIds(new Set())}
-            className="rounded-full p-1 text-foreground/50 hover:bg-black/5 hover:text-foreground/80"
-          >
-            <X className="size-4" />
-          </button>
-        </div>
-      )}
+            <ListChecks className="size-4 shrink-0 text-[#1a3c34]" />
+            <span className="flex-1 text-sm font-medium text-[#1a3c34]">
+              Đã chọn <strong>{selectedIds.size}</strong> đơn
+            </span>
+            <Button
+              size="sm"
+              className="rounded-full bg-[#1a3c34] px-4 font-semibold text-white"
+              onPress={() => setBulkModalOpen(true)}
+              isDisabled={bulkMut.isPending}
+            >
+              Cập nhật trạng thái
+            </Button>
+            <button
+              aria-label="Bỏ chọn tất cả"
+              onClick={() => setSelectedIds(new Set())}
+              className="rounded-full p-1 text-foreground/50 hover:bg-black/5 hover:text-foreground/80"
+            >
+              <X className="size-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <OrderTable
         items={items}

@@ -12,11 +12,13 @@ import type {
 export async function fetchTaxOverview(params?: {
   from?: string;
   to?: string;
+  type?: string;
 }): Promise<TaxOverview> {
   const { data } = await api.get<TaxOverview>("/admin/tax/overview", {
     params: {
       ...(params?.from ? { from: params.from } : {}),
       ...(params?.to ? { to: params.to } : {}),
+      ...(params?.type ? { type: params.type } : {}),
     },
   });
   return data;
@@ -52,12 +54,14 @@ export async function fetchTaxReports(params?: {
   from?: string;
   to?: string;
   groupBy?: "day" | "month";
+  type?: string;
 }): Promise<TaxReportRow[]> {
   const { data } = await api.get<TaxReportRow[]>("/admin/tax/reports", {
     params: {
       ...(params?.from ? { from: params.from } : {}),
       ...(params?.to ? { to: params.to } : {}),
       groupBy: params?.groupBy ?? "day",
+      ...(params?.type ? { type: params.type } : {}),
     },
   });
   return data;

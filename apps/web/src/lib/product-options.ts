@@ -106,18 +106,9 @@ export function computeOptionSurcharge(
  * - Otherwise → value as-is
  */
 export function formatOptionLabel(key: string, value: string, locale = 'vi'): string {
-  if (locale !== 'vi') return `${key}: ${value}`
-
-  const kLower = key.toLowerCase()
-  const vLower = value.toLowerCase()
-  const isNgot = kLower.includes('ngọt')
-  const hasSweetener = vLower.includes('sữa') || vLower.includes('đường')
-  const isSweetenerAdd = hasSweetener && !vLower.includes('không')
-  const isSweetenerNone = hasSweetener && vLower.includes('không')
-
-  if (isSweetenerNone) return 'Ít Ngọt'
-  if (isSweetenerAdd) return 'Ngọt vừa'
-  if (isNgot) return vLower.includes('ngọt') ? value : `Ngọt ${value.charAt(0).toLowerCase()}${value.slice(1)}`
+  if (key.trim().toLowerCase() === 'mức độ ngọt' && value.trim().toLowerCase() === 'bình thường') {
+    return locale === 'en' ? 'Normal sweetness' : 'Ngọt bình thường'
+  }
   return value
 }
 

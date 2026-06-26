@@ -26,6 +26,7 @@ import { ExternalOrderModule } from './external/external-order.module';
 import { AdminShippingModule } from './shipping/admin-shipping.module';
 import { AdminPointRewardModule } from './point-reward/admin-point-reward.module';
 import { AdminGroupOrderModule } from './group-order/admin-group-order.module';
+import { AdminStoreModule } from './store/admin-store.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { AdminGroupOrderModule } from './group-order/admin-group-order.module';
     AdminShippingModule,
     AdminPointRewardModule,
     AdminGroupOrderModule,
+    AdminStoreModule,
   ],
   exports: [
     AdminAuthModule,

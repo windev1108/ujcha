@@ -59,7 +59,7 @@ export function ProductCard({ product, index = 0, eager = false }: Props) {
             type="button"
             onClick={() => !product.isSoldOut && setModalOpen(true)}
             disabled={product.isSoldOut}
-            className="relative aspect-[4/3] w-full overflow-hidden text-left disabled:cursor-not-allowed"
+            className="cursor-pointer relative aspect-[4/3] w-full overflow-hidden text-left disabled:cursor-not-allowed"
             style={{ backgroundColor: imageUrl ? undefined : bgColor }}
             aria-label={`${t("add_to_cart")} ${displayName}`}
           >

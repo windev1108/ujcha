@@ -685,6 +685,22 @@ model StoreLocation {
   updatedAt    DateTime @updatedAt
 }
 
+/// Nền tảng giao đồ ăn đối tác (ShopeeFood, GrabFood, …).
+model DeliveryPlatform {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String
+  link         String
+  thumbnailUrl String
+  sortOrder    Int      @default(0)
+  isActive     Boolean  @default(true)
+  /// "logo_and_text" | "logo_only"
+  displayMode  String   @default("logo_and_text")
+  logoWidth    Int      @default(28)
+  logoHeight   Int      @default(28)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
 /// Hồ sơ nhận diện khuôn mặt nhân viên — descriptor 128 chiều từ face-api.js.
 model StaffFaceProfile {
   id             String   @id @default(uuid()) @db.Uuid

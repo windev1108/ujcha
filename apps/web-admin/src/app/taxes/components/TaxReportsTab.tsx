@@ -18,6 +18,7 @@ import { adminKeys } from "@/services/admin/keys";
 import { fetchTaxReports, fetchTaxOverview } from "@/services/admin/taxes-api";
 import { formatVnd } from "@/lib/product-display";
 import { OrderDateRangePicker } from "@/app/orders/components/OrderDateRangePicker";
+import { DatePresetPills, SourceFilterPills } from "./TaxQuickFilters";
 
 function monthsAgoStr(n: number) {
   const d = new Date(Date.now() + 7 * 3600_000);
@@ -34,15 +35,16 @@ export function TaxReportsTab() {
   const [from, setFrom] = useState(() => monthsAgoStr(1));
   const [to, setTo] = useState(todayStr);
   const [groupBy, setGroupBy] = useState<"day" | "month">("day");
+  const [type, setType] = useState("");
 
   const { data: rows, isLoading: rowsLoading } = useQuery({
-    queryKey: adminKeys.taxReports(from, to, groupBy),
-    queryFn: () => fetchTaxReports({ from, to, groupBy }),
+    queryKey: adminKeys.taxReports(from, to, groupBy, type),
+    queryFn: () => fetchTaxReports({ from, to, groupBy, type: type || undefined }),
   });
 
   const { data: overview } = useQuery({
-    queryKey: adminKeys.taxOverview(from, to),
-    queryFn: () => fetchTaxOverview({ from, to }),
+    queryKey: adminKeys.taxOverview(from, to, type),
+    queryFn: () => fetchTaxOverview({ from, to, type: type || undefined }),
   });
 
   const totalRevenue = rows?.reduce((s, r) => s + r.revenue, 0) ?? 0;
@@ -59,37 +61,53 @@ export function TaxReportsTab() {
     <div className="flex flex-col gap-6">
       {/* Filters */}
       <Card className="rounded-2xl border border-black/6 shadow-sm">
-        <CardContent className="flex flex-wrap items-end gap-4 p-4 sm:p-5">
-          <div className="w-96">
-            <OrderDateRangePicker
-              label="Khoảng thời gian"
-              from={from}
-              to={to}
-              onRangeChange={(f, t) => { setFrom(f); setTo(t); }}
-              className="w-full"
-            />
+        <CardContent className="flex flex-col gap-3 p-4 sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/45">
+                Khoảng thời gian
+              </span>
+              <DatePresetPills from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/45">
+                Nguồn đơn
+              </span>
+              <SourceFilterPills value={type} onChange={setType} />
+            </div>
           </div>
-          <div className="flex overflow-hidden rounded-full border border-black/10 bg-white text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
-            <Button
-              size="sm"
-              variant={groupBy === "day" ? "primary" : "ghost"}
-              className={groupBy === "day" ? "rounded-full bg-[#1a3c34] font-semibold text-white" : "rounded-full text-foreground/60"}
-              onPress={() => setGroupBy("day")}
-            >
-              Theo ngày
-            </Button>
-            <Button
-              size="sm"
-              variant={groupBy === "month" ? "primary" : "ghost"}
-              className={groupBy === "month" ? "rounded-full bg-[#1a3c34] font-semibold text-white" : "rounded-full text-foreground/60"}
-              onPress={() => setGroupBy("month")}
-            >
-              Theo tháng
-            </Button>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="w-80">
+              <OrderDateRangePicker
+                label="Tuỳ chỉnh khoảng ngày"
+                from={from}
+                to={to}
+                onRangeChange={(f, t) => { setFrom(f); setTo(t); }}
+                className="w-full"
+              />
+            </div>
+            <div className="flex overflow-hidden rounded-full border border-black/10 bg-white text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+              <Button
+                size="sm"
+                variant={groupBy === "day" ? "primary" : "ghost"}
+                className={groupBy === "day" ? "rounded-full bg-[#1a3c34] font-semibold text-white" : "rounded-full text-foreground/60"}
+                onPress={() => setGroupBy("day")}
+              >
+                Theo ngày
+              </Button>
+              <Button
+                size="sm"
+                variant={groupBy === "month" ? "primary" : "ghost"}
+                className={groupBy === "month" ? "rounded-full bg-[#1a3c34] font-semibold text-white" : "rounded-full text-foreground/60"}
+                onPress={() => setGroupBy("month")}
+              >
+                Theo tháng
+              </Button>
+            </div>
+            {rowsLoading && (
+              <Text className="text-xs italic text-foreground/40">Đang tải…</Text>
+            )}
           </div>
-          {rowsLoading && (
-            <Text className="text-xs italic text-foreground/40">Đang tải…</Text>
-          )}
         </CardContent>
       </Card>
 

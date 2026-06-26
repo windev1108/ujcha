@@ -57,7 +57,6 @@ import {
   formatOrderRef,
   orderStatusChipClass,
   orderStatusLabel,
-  serviceTypeLabel,
 } from "./order-display";
 import { groupOrderItems } from "./receipt-shared";
 import {
@@ -146,24 +145,29 @@ function StatusTimeline({ order }: { order: AdminOrder }) {
               <Fragment key={step}>
                 <div className="flex gap-4 sm:flex-1 sm:flex-col sm:items-center sm:gap-1.5">
                   <div className="flex shrink-0 flex-col items-center">
-                    <div
-                      className={`flex size-9 items-center justify-center rounded-full transition-all ${
-                        active
-                          ? "bg-[#1a3c34] text-white shadow-[0_0_0_4px_rgba(26,60,52,0.12)]"
-                          : done
-                            ? "bg-[#1a3c34]/10 text-[#1a3c34]"
-                            : "bg-black/5 text-foreground/25"
-                      }`}
-                    >
-                      {done ? (
-                        active ? (
-                          <StepIcon className="size-4" />
-                        ) : (
-                          <CheckCircle2 className="size-4" />
-                        )
-                      ) : (
-                        <Circle className="size-3.5 opacity-40" />
+                    <div className="relative">
+                      {active && (
+                        <span className="absolute -inset-[5px] animate-ping rounded-full bg-[#1a3c34]/15" aria-hidden />
                       )}
+                      <div
+                        className={`relative flex size-9 items-center justify-center rounded-full transition-all ${
+                          active
+                            ? "bg-[#1a3c34] text-white shadow-[0_0_0_4px_rgba(26,60,52,0.12)]"
+                            : done
+                              ? "bg-[#1a3c34]/10 text-[#1a3c34]"
+                              : "bg-black/5 text-foreground/25"
+                        }`}
+                      >
+                        {done ? (
+                          active ? (
+                            <StepIcon className="size-4" />
+                          ) : (
+                            <CheckCircle2 className="size-4" />
+                          )
+                        ) : (
+                          <Circle className="size-3.5 opacity-40" />
+                        )}
+                      </div>
                     </div>
                     {!isLast && (
                       <div
@@ -352,16 +356,15 @@ export function OrderDetailClient({ orderId }: Props) {
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-6 pb-16">
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          variant="ghost"
-          className="rounded-full"
-          onPress={() => router.push(ROUTES.ORDERS)}
-        >
-          <ArrowLeft className="mr-2 size-4" />
-          Danh sách đơn
-        </Button>
-      </div>
+      {/* Back nav */}
+      <button
+        type="button"
+        onClick={() => router.push(ROUTES.ORDERS)}
+        className="group -ml-1.5 inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-sm text-foreground/55 transition-colors hover:bg-black/[0.04] hover:text-foreground"
+      >
+        <ArrowLeft className="size-4 transition-transform group-hover:-translate-x-0.5" aria-hidden />
+        Danh sách đơn
+      </button>
 
       {/* Payment received banner */}
       {paidInfo && (
@@ -383,134 +386,128 @@ export function OrderDetailClient({ orderId }: Props) {
         </div>
       )}
 
-      {/* Header */}
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex flex-col gap-2">
-          <p className="font-mono text-xl font-bold text-[#1a3c34]">
-            {formatOrderRef(o)}
-          </p>
-          <p className="text-sm text-foreground/55">
-            {customerDisplayName(o)} · {serviceTypeLabel(o.type)}
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <Chip
-              size="sm"
-              variant="soft"
-              className={`border-0 font-semibold uppercase text-xs ${orderStatusChipClass(o.status)}`}
-            >
-              <Chip.Label>{orderStatusLabel(o.status)}</Chip.Label>
-            </Chip>
-            {isPaid ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">
-                <CheckCircle2 className="size-3.5" />
-                Đã thanh toán
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
-                <Clock className="size-3.5" />
-                Chưa thanh toán
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            className="rounded-full border-black/15"
-            onPress={() => router.push(ROUTES.orderInvoice(o.id))}
-          >
-            <FileText className="mr-2 size-4" />
-            Hóa đơn
-          </Button>
-          <Button
-            variant="outline"
-            className="rounded-full border-black/15"
-            onPress={() => setEditOpen(o)}
-          >
-            Sửa trạng thái
-          </Button>
-          {canAssignShipper(o) ? (
-            <Button
-              className="rounded-full bg-[#1a3c34] font-semibold text-white"
-              onPress={() => setAssignOpen(o)}
-            >
-              <UserPlus className="mr-2 size-4" />
-              Gán shipper
-            </Button>
-          ) : null}
-          <Button
-            variant="ghost"
-            className="rounded-full text-red-700 hover:bg-red-50"
-            onPress={async () => {
-              const ok = await confirm({
-                title: "Xóa đơn hàng?",
-                description: "Xóa đơn này? Nếu đã có thanh toán, giao dịch đó sẽ bị xóa theo. Không thể hoàn tác.",
-                tone: "danger",
-                confirmLabel: "Xóa đơn",
-              });
-              if (ok) deleteMut.mutate();
-            }}
-            isDisabled={deleteMut.isPending}
-          >
-            <Trash2 className="mr-2 size-4" />
-            Xóa
-          </Button>
-        </div>
-      </header>
-
-      {/* Summary cards */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Card className={`rounded-2xl border ${isPaid ? "border-emerald-200 bg-emerald-50/40" : "border-black/6"}`}>
-          <CardContent className="space-y-2 p-5">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/45">
-              Tổng cộng
-            </p>
-            <p className="text-3xl font-bold tabular-nums text-[#1a3c34]">
-              {formatVnd(orderTotal)}
-            </p>
-            {Number(o.discountAmount) > 0 && (
-              <p className="text-xs text-foreground/50">
-                Giảm giá: <span className="font-medium text-red-600">-{formatVnd(o.discountAmount)}</span>
+      {/* ─── Hero Order Card ─── */}
+      <Card className="rounded-3xl border border-black/6 shadow-[0_4px_24px_-8px_rgba(0,0,0,0.10)]">
+        <CardContent className="p-0">
+          <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:gap-6 sm:p-6">
+            {/* Left: ref + service + status */}
+            <div className="flex min-w-0 flex-1 flex-col gap-2.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-mono text-xl font-bold tracking-tight text-[#1a3c34]">
+                  {formatOrderRef(o)}
+                </span>
+                {o.type === "delivery" && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-200/80">
+                    <Bike className="size-3" aria-hidden />
+                    Giao hàng
+                  </span>
+                )}
+                {o.type === "table" && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700 ring-1 ring-amber-200/80">
+                    <UtensilsCrossed className="size-3" aria-hidden />
+                    {o.table?.name ? `Bàn ${o.table.name}` : "Tại bàn"}
+                  </span>
+                )}
+                {o.type === "pickup" && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-700 ring-1 ring-violet-200/80">
+                    <ShoppingBag className="size-3" aria-hidden />
+                    Mang đi
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-foreground/55">
+                {customerDisplayName(o)} · {new Date(o.createdAt).toLocaleString("vi-VN")}
               </p>
-            )}
-            <p className="text-xs text-foreground/50">
-              Mã TT:{" "}
-              <span className="font-mono font-semibold tracking-wide">{o.paymentCode}</span>
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl border border-black/6">
-          <CardContent className="space-y-3 p-5">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/45">
-              Trạng thái đơn
-            </p>
-            <Chip
-              size="md"
-              variant="soft"
-              className={`border-0 font-bold uppercase ${orderStatusChipClass(o.status)}`}
-            >
-              <Chip.Label>{orderStatusLabel(o.status)}</Chip.Label>
-            </Chip>
-            <div className="flex items-center gap-2 pt-1">
-              {isPaid ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1.5 text-sm font-semibold text-emerald-800">
-                  <CheckCircle2 className="size-4" />
-                  Đã thanh toán
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1.5 text-sm font-semibold text-amber-800">
-                  <Clock className="size-4" />
-                  Chưa thanh toán
-                </span>
-              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <Chip
+                  size="sm"
+                  variant="soft"
+                  className={`border-0 font-semibold uppercase text-xs ${orderStatusChipClass(o.status)}`}
+                >
+                  <Chip.Label>{orderStatusLabel(o.status)}</Chip.Label>
+                </Chip>
+                {isPaid ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">
+                    <CheckCircle2 className="size-3.5" />
+                    Đã thanh toán
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
+                    <Clock className="size-3.5" />
+                    Chưa thanh toán
+                  </span>
+                )}
+              </div>
             </div>
-            <p className="text-[11px] text-foreground/40">
-              {new Date(o.createdAt).toLocaleString("vi-VN")}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+
+            {/* Right: amount */}
+            <div className="shrink-0 rounded-2xl bg-[#1a3c34]/[0.04] px-4 py-3 text-right sm:min-w-[172px]">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/40">Tổng cộng</p>
+              <p className="mt-0.5 text-2xl font-bold tabular-nums text-[#1a3c34]">
+                {formatVnd(orderTotal)}
+              </p>
+              {Number(o.discountAmount) > 0 && (
+                <p className="mt-0.5 text-xs text-foreground/50">
+                  Giảm <span className="font-medium text-red-500">-{formatVnd(o.discountAmount)}</span>
+                </p>
+              )}
+              <p className="mt-1.5 text-[11px] text-foreground/40">
+                Mã: <span className="font-mono font-medium text-foreground/60">{o.paymentCode}</span>
+              </p>
+            </div>
+          </div>
+
+          {/* Action toolbar */}
+          <div className="flex flex-wrap items-center gap-1.5 border-t border-black/6 px-5 py-3 sm:px-6">
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-full border-black/12 text-sm"
+              onPress={() => router.push(ROUTES.orderInvoice(o.id))}
+            >
+              <FileText className="mr-1.5 size-3.5" />
+              Hóa đơn
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-full border-black/12 text-sm"
+              onPress={() => setEditOpen(o)}
+            >
+              Sửa trạng thái
+            </Button>
+            {canAssignShipper(o) ? (
+              <Button
+                size="sm"
+                className="rounded-full bg-[#1a3c34] font-semibold text-white"
+                onPress={() => setAssignOpen(o)}
+              >
+                <UserPlus className="mr-1.5 size-3.5" />
+                Gán shipper
+              </Button>
+            ) : null}
+            <div className="flex-1" />
+            <Button
+              size="sm"
+              variant="ghost"
+              className="rounded-full text-red-700 hover:bg-red-50"
+              onPress={async () => {
+                const ok = await confirm({
+                  title: "Xóa đơn hàng?",
+                  description: "Xóa đơn này? Nếu đã có thanh toán, giao dịch đó sẽ bị xóa theo. Không thể hoàn tác.",
+                  tone: "danger",
+                  confirmLabel: "Xóa đơn",
+                });
+                if (ok) deleteMut.mutate();
+              }}
+              isDisabled={deleteMut.isPending}
+            >
+              <Trash2 className="mr-1.5 size-3.5" />
+              Xóa
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Status timeline */}
       <StatusTimeline order={o} />
@@ -520,66 +517,68 @@ export function OrderDetailClient({ orderId }: Props) {
       <Card className="rounded-2xl border border-black/6">
         <CardContent className="p-5">
           <p className="mb-4 text-[10px] font-bold uppercase tracking-wider text-foreground/45">
-            Dịch vụ &amp; Người nhận
+            Thông tin giao nhận
           </p>
-          <div className="flex flex-col gap-3">
-            {/* Service type */}
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             {o.type === "delivery" && (
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2.5 rounded-xl border border-black/6 px-3 py-2.5">
                 <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-emerald-50">
                   <Bike className="size-4 text-emerald-700" />
                 </span>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-foreground">Giao hàng</p>
-                  {o.shipper && (
-                    <p className="text-xs text-foreground/50">Shipper: {o.shipper.name}</p>
-                  )}
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-foreground/40">Dịch vụ</p>
+                  <p className="truncate text-sm font-medium">Giao hàng</p>
+                  {o.shipper && <p className="truncate text-xs text-foreground/50">{o.shipper.name}</p>}
                 </div>
               </div>
             )}
             {o.type === "table" && (
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2.5 rounded-xl border border-black/6 px-3 py-2.5">
                 <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-amber-50">
                   <UtensilsCrossed className="size-4 text-amber-700" />
                 </span>
-                <p className="text-sm font-semibold text-foreground">
-                  {o.table?.name ? `Bàn ${o.table.name}` : "Bàn"}
-                </p>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-foreground/40">Dịch vụ</p>
+                  <p className="truncate text-sm font-medium">{o.table?.name ? `Bàn ${o.table.name}` : "Tại bàn"}</p>
+                </div>
               </div>
             )}
             {o.type === "pickup" && (
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2.5 rounded-xl border border-black/6 px-3 py-2.5">
                 <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-violet-50">
                   <ShoppingBag className="size-4 text-violet-700" />
                 </span>
-                <p className="text-sm font-semibold text-foreground">Mang đi</p>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-foreground/40">Dịch vụ</p>
+                  <p className="truncate text-sm font-medium">Mang đi</p>
+                </div>
               </div>
             )}
-
-            {/* Recipient name */}
             {(o.guestDeliveryName ?? o.user?.name) && (
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2.5 rounded-xl border border-black/6 px-3 py-2.5">
                 <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-sky-50">
                   <User className="size-4 text-sky-600" />
                 </span>
-                <p className="text-sm font-semibold text-foreground">
-                  {o.guestDeliveryName ?? o.user?.name}
-                </p>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-foreground/40">Khách hàng</p>
+                  <p className="truncate text-sm font-medium">{o.guestDeliveryName ?? o.user?.name}</p>
+                </div>
               </div>
             )}
-
-            {/* Recipient phone */}
             {(o.guestDeliveryPhone ?? o.user?.phone) && (
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2.5 rounded-xl border border-black/6 px-3 py-2.5">
                 <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-sky-50">
                   <Phone className="size-4 text-sky-600" />
                 </span>
-                <a
-                  href={`tel:${o.guestDeliveryPhone ?? o.user?.phone}`}
-                  className="font-mono text-sm text-[#1a3c34] hover:underline"
-                >
-                  {o.guestDeliveryPhone ?? o.user?.phone}
-                </a>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-foreground/40">Điện thoại</p>
+                  <a
+                    href={`tel:${o.guestDeliveryPhone ?? o.user?.phone}`}
+                    className="truncate font-mono text-sm text-[#1a3c34] hover:underline"
+                  >
+                    {o.guestDeliveryPhone ?? o.user?.phone}
+                  </a>
+                </div>
               </div>
             )}
           </div>
