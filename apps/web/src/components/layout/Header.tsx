@@ -37,6 +37,30 @@ export function AppHeader() {
   const clearSession = useAuthStore((s) => s.clearSession);
   const router = useRouter();
 
+  // ── Scroll-based logo variant ──
+  // Threshold = actual height of HeroSection (id="hero-section"), not just
+  // window.innerHeight, so it stays correct even if Hero's height changes
+  // (100dvh, safe-area padding, etc). Falls back to innerHeight if the
+  // hero section isn't present on the current page.
+  const [isPastHero, setIsPastHero] = useState(true);
+
+  useEffect(() => {
+    function handleScroll() {
+      const heroEl = document.getElementById("hero-section");
+      const threshold = heroEl ? heroEl.offsetHeight : window.innerHeight;
+      setIsPastHero(window.scrollY > threshold);
+    }
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleScroll);
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleScroll);
+    };
+  }, []);
+
+  const logoVariant = isPastHero ? "dark" : "light";
+
   const NAV: ReadonlyArray<{ href: string; label: string; Icon: React.ElementType }> = [
     { href: ROUTES.PRODUCTS, label: t("menu"), Icon: UtensilsCrossed },
     { href: ROUTES.PROMOTIONS, label: t("promotions"), Icon: Tag },
@@ -54,7 +78,6 @@ export function AppHeader() {
 
   const savedTitleRef = useRef<string | null>(null);
 
-  // Update tab title + favicon whenever background notification count changes
   useEffect(() => {
     if (bgCount > 0) {
       if (!savedTitleRef.current) savedTitleRef.current = document.title;
@@ -69,7 +92,6 @@ export function AppHeader() {
     }
   }, [bgCount, bgTitle]);
 
-  // Reset count + title when user returns to this tab
   useEffect(() => {
     function handleVisibility() {
       if (document.visibilityState === "visible") resetBg();
@@ -94,13 +116,13 @@ export function AppHeader() {
 
   return (
     <>
-      {/* ── Top bar ──────────────────────────────────────────── */}
-      <Header className="sticky top-0 z-50 w-full border-b border-black/[0.06] bg-background/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/80">
+      {/* ── Top bar — đổi sticky → fixed ──────────────────── */}
+      <Header className={`${pathname === '/' ? 'fixed' : 'sticky'} top-0 left-0 right-0 z-50 w-full border-b border-black/[0.06] ${Boolean(isPastHero || pathname !== '/') ? 'bg-background/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/80' : ''}`}>
         <div className="container flex h-12 items-center justify-between gap-2 sm:h-14 sm:gap-3">
 
           {/* Logo */}
           <Link href={ROUTES.HOME} className="flex shrink-0 items-center outline-offset-4">
-            <Logo size="sm" className="h-10 w-auto" />
+            <Logo size="md" theme={pathname === '/' ? logoVariant : 'dark'} className="h-12 w-auto" />
           </Link>
 
           {/* Desktop nav */}
@@ -113,7 +135,7 @@ export function AppHeader() {
                   href={href}
                   className={`relative flex items-center rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${isActive
                     ? "bg-kun-primary/[0.07] text-kun-primary"
-                    : "text-foreground/60 hover:bg-black/[0.04] hover:text-foreground"
+                    : Boolean(!isPastHero && pathname === '/') ? "text-white hover:bg-white hover:text-foreground" : "text-foreground/60 hover:bg-black/[0.04] hover:text-foreground"
                     }`}
                 >
                   {label}
@@ -124,7 +146,7 @@ export function AppHeader() {
 
           {/* Right actions */}
           <div className="flex items-center gap-1 sm:gap-2">
-            <SearchSection />
+            <SearchSection isPastHero={pathname === '/' ? isPastHero : true} />
 
             {/* Desktop only: lang */}
             <div className="hidden items-center gap-1.5 md:flex">
@@ -133,26 +155,26 @@ export function AppHeader() {
               </Suspense>
             </div>
 
-            {/* Bell — desktop, next to cart */}
+            {/* Bell — desktop */}
             {isLoggedIn &&
               <div className="hidden md:block">
-                <NotificationBell />
+                <NotificationBell isPastHero={pathname === '/' ? isPastHero : true} />
               </div>
             }
 
             {/* Cart */}
-            <CartSection />
+            <CartSection isPastHero={pathname === '/' ? isPastHero : true} />
 
-            {/* Mobile: guest orders icon → opens drawer */}
+            {/* Mobile: guest orders icon */}
             {!isLoggedIn && guestOrders.length > 0 && (
               <div className="relative md:hidden">
                 <button
                   type="button"
                   onClick={() => setOrdersOpen(true)}
                   aria-label="Đơn hàng gần đây"
-                  className="flex size-8 shrink-0 items-center justify-center rounded-full text-foreground/70 transition-colors hover:bg-black/6"
+                  className={`flex size-8 shrink-0 items-center justify-center rounded-full transition-colors ${isPastHero ? "text-foreground/70 hover:bg-black/6" : "text-white hover:bg-black/6"}`}
                 >
-                  <ClipboardList className="size-[18px]" />
+                  <ClipboardList className={isPastHero ? "text-foreground" : "text-white"} />
                 </button>
                 <span className="pointer-events-none absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-[#1a3c34] text-[9px] font-bold text-white">
                   {guestOrders.length > 9 ? "9+" : guestOrders.length}
@@ -162,16 +184,15 @@ export function AppHeader() {
 
             {/* Desktop: guest orders dropdown */}
             <div className="hidden md:block">
-              <GuestOrdersDropdown />
+              <GuestOrdersDropdown isPastHero={pathname === '/' ? isPastHero : true} />
             </div>
 
             {/* Desktop: full dropdown profile */}
             <div className="hidden md:block">
-              <UserProfile />
+              <UserProfile isPastHero={pathname === '/' ? isPastHero : true} />
             </div>
 
-            {/* ── Mobile trigger ──────────────────────────────── */}
-            {/* Always show hamburger; when logged-in + hydrated, also show avatar badge */}
+            {/* Mobile hamburger */}
             <div className="relative md:hidden">
               {isLoggedIn && unreadCount > 0 && (
                 <span className="pointer-events-none absolute -right-0.5 -top-0.5 z-10 flex size-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold leading-none text-white ring-2 ring-white">
@@ -209,7 +230,6 @@ export function AppHeader() {
       <AnimatePresence>
         {menuOpen && (
           <>
-            {/* Backdrop */}
             <motion.div
               key="overlay"
               initial={{ opacity: 0 }}
@@ -220,7 +240,6 @@ export function AppHeader() {
               onClick={closeMenu}
             />
 
-            {/* Sheet */}
             <motion.div
               key="sheet"
               initial={{ y: "100%" }}
@@ -234,12 +253,10 @@ export function AppHeader() {
                 <div className="h-1 w-10 rounded-full bg-black/10" />
               </div>
 
-              {/* ── Sheet header ── */}
+              {/* Sheet header */}
               {isLoggedIn ? (
-                /* User card */
                 <div className="shrink-0 px-5 pb-4 pt-2">
                   <div className="flex items-center gap-3">
-                    {/* Avatar */}
                     <div className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-kun-primary ring-2 ring-kun-primary/20">
                       {user?.avatar ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -248,8 +265,6 @@ export function AppHeader() {
                         <span className="text-sm font-bold text-white">{initial}</span>
                       )}
                     </div>
-
-                    {/* Name + points */}
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-foreground">{name}</p>
                       {points > 0 ? (
@@ -267,8 +282,6 @@ export function AppHeader() {
                         </p>
                       )}
                     </div>
-
-                    {/* Close */}
                     <button
                       type="button"
                       onClick={closeMenu}
@@ -280,7 +293,6 @@ export function AppHeader() {
                   </div>
                 </div>
               ) : (
-                /* Guest header */
                 <div className="shrink-0 flex items-center justify-between px-5 py-3">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">Điều hướng</p>
                   <button
@@ -296,10 +308,8 @@ export function AppHeader() {
 
               <div className="mx-5 h-px shrink-0 bg-black/[0.06]" />
 
-              {/* ── Scrollable body ── */}
+              {/* Scrollable body */}
               <div className="flex-1 overflow-y-auto overscroll-contain">
-
-                {/* Main nav */}
                 <nav className="px-3 py-2" aria-label="Điều hướng chính">
                   {NAV.map(({ href, label, Icon }, i) => {
                     const isActive = pathname.includes(href);
@@ -327,9 +337,7 @@ export function AppHeader() {
                   })}
                 </nav>
 
-
-
-                {/* Quick account links — logged-in only */}
+                {/* Quick account links */}
                 {isLoggedIn && (
                   <div className="px-4 pb-4">
                     <div className="mb-3 h-px bg-black/[0.05]" />
@@ -358,13 +366,12 @@ export function AppHeader() {
                 )}
               </div>
 
-              {/* ── Footer ── */}
+              {/* Footer */}
               <div className="shrink-0 border-t border-black/[0.06] px-5 py-3">
                 <div className="flex items-center justify-between gap-3">
                   <Suspense fallback={<div className="h-7 w-[58px] shrink-0" aria-hidden />}>
                     <HeaderLanguageSelect />
                   </Suspense>
-
                   {isLoggedIn ? (
                     <button
                       type="button"
@@ -417,12 +424,10 @@ export function AppHeader() {
               transition={{ type: "spring", damping: 30, stiffness: 320 }}
               className="fixed bottom-0 left-0 right-0 z-50 flex max-h-[88dvh] flex-col overflow-hidden rounded-t-[28px] bg-white shadow-2xl md:hidden"
             >
-              {/* Drag handle */}
               <div className="flex shrink-0 justify-center pt-3 pb-1">
                 <div className="h-1 w-10 rounded-full bg-black/10" />
               </div>
 
-              {/* Header */}
               <div className="flex shrink-0 items-center justify-between px-5 pb-4 pt-2">
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
@@ -455,7 +460,6 @@ export function AppHeader() {
 
               <div className="mx-5 h-px shrink-0 bg-black/[0.06]" />
 
-              {/* Scrollable order list */}
               <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-2">
                 {guestOrders.map((o, i) => {
                   const diffMs = Date.now() - new Date(o.createdAt).getTime();

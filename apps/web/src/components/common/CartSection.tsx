@@ -9,7 +9,7 @@ import { ROUTES } from "@/lib/routes";
 import { useAuth } from "@/hooks";
 import { useCartStore } from "@/store/cart-store";
 
-export const CartSection = () => {
+export const CartSection = ({ isPastHero }: { isPastHero: boolean }) => {
   const t = useTranslations();
   const { isLoggedIn } = useAuth();
   const { data: cart } = useCartQuery();
@@ -23,8 +23,7 @@ export const CartSection = () => {
           <Button
             isIconOnly
             variant="ghost"
-            className="relative text-foreground"
-          >
+            className={`flex size-9 items-center justify-center rounded-full transition ${isPastHero ? "text-foreground hover:bg-black/6" : "text-white hover:bg-black/6"}`}>
             <ShoppingCartIcon className="size-5" />
             {count > 0 && (
               <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-kun-primary text-[10px] font-bold leading-none text-white">

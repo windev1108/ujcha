@@ -21,7 +21,7 @@ function fmtPrice(p: string) {
   return Number(p).toLocaleString("vi-VN") + "đ";
 }
 
-export default function SearchSection() {
+export default function SearchSection({ isPastHero }: { isPastHero: boolean }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -182,7 +182,7 @@ export default function SearchSection() {
         aria-label="Tìm kiếm"
         className="flex size-8 items-center justify-center rounded-full text-foreground/65 hover:text-foreground transition-colors sm:hidden"
       >
-        <Search className="size-[18px]" />
+        <Search className={`size-5 ${isPastHero ? "text-foreground" : "text-white"}`} />
       </button>
 
       {/* ── Mobile fullscreen overlay ───────────────────────── */}
@@ -190,7 +190,7 @@ export default function SearchSection() {
         <div className="fixed inset-0 z-[100] flex flex-col bg-white sm:hidden">
           {/* Top bar */}
           <div className="flex items-center gap-2 border-b border-black/[0.07] px-4 py-3">
-            <Search className="size-4 shrink-0 text-foreground/40" />
+            <Search className={`size-5 ${isPastHero ? "text-foreground" : "text-white"}`} />
             <input
               ref={mobileInputRef}
               type="search"

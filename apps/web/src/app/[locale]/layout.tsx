@@ -94,6 +94,19 @@ export default async function RootLayout({
   const { locale } = await params
   return (
     <html lang={locale}>
+      <head>
+        {/* Anton display font */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Anton&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body
         suppressHydrationWarning
         className={`${fontSans.variable} ${fontSerif.variable} h-full antialiased`}

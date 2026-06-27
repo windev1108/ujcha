@@ -203,7 +203,7 @@ export function NotificationToast() {
   );
 }
 
-export function NotificationBell() {
+export function NotificationBell({ isPastHero }: { isPastHero: boolean }) {
   const t = useTranslations();
   const { isLoggedIn, isHydrated } = useAuth();
   const accessToken = useAuthStore((s) => s.accessToken);
@@ -260,7 +260,7 @@ export function NotificationBell() {
         aria-label={t("notif_login_prompt")}
         className="relative flex size-8 items-center justify-center rounded-full text-foreground/75 transition-colors hover:bg-black/[0.05] hover:text-foreground"
       >
-        <Bell className="size-[18px]" />
+        <Bell className="size-5" />
       </Link>
     );
   }
@@ -285,9 +285,9 @@ export function NotificationBell() {
         type="button"
         onClick={handleOpen}
         aria-label={t("notifications")}
-        className="cursor-pointer relative flex size-8 items-center justify-center rounded-full text-foreground/75 transition-colors hover:bg-black/[0.05] hover:text-foreground"
+        className={`cursor-pointer flex size-9 items-center justify-center rounded-full transition ${isPastHero ? "text-foreground hover:bg-black/6" : "text-white hover:bg-black/6"}`}
       >
-        <Bell className="size-[18px]" />
+        <Bell className="size-5" />
         {displayCount > 0 && (
           <span className="absolute -right-0.5 -top-0.5 flex min-w-[16px] items-center justify-center rounded-full bg-kun-primary px-1 py-px text-[10px] font-bold leading-none text-white">
             {displayCount}

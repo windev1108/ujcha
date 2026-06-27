@@ -1,316 +1,366 @@
 "use client";
 
-import { easeOutSmooth, revealTransition } from "./RevealSection";
-import { MEDIA } from "@/lib/media";
-import { Button } from "@heroui/react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { ArrowUpRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { ROUTES } from "@/lib/routes";
-import { useRouter } from "../../../../i18n/navigation";
-import { Link } from "@/i18n/navigation";
-import { ChevronRight, Star, Clock, Leaf, ArrowRight, ArrowUpRight } from "lucide-react";
-import { useCategoriesQuery } from "@/services/category/hooks";
-import { useTranslations } from "next-intl";
+import { useLocale } from "next-intl";
 
-const CAROUSEL_INTERVAL_MS = 5000;
-const stagger = 0.1;
+export interface FigurineSlide {
+  src: string;
+  bg: string;
+  name: string;
+  series: string;
+  ghostText: string;
+  description: string | { vi: string; en: string };
+}
 
-// Cubic bezier cho clip-path wipe — cảm giác cinematic snap
-const WIPE_EASE = [0.77, 0, 0.18, 1] as const;
+const IMAGES: FigurineSlide[] = [
+  {
+    src: "/images/cacao.png",
+    bg: "#382f2a",
+    name: "Ca cao latte",
+    series: "cacao",
+    ghostText: "Cacao",
+    description: {
+      vi: "Cacao nguyên chất rang mộc, hoà tan trong sữa tươi béo ngậy — đắng nhẹ, ngọt hậu, ấm từng ngụm.",
+      en: "Pure roasted cacao, blended with creamy fresh milk — lightly bitter, sweet aftertaste, warming every sip.",
+    },
+  },
+  {
+    src: "/images/matcha.png",
+    bg: "#485a20",
+    name: "Matcha latte",
+    series: "matcha",
+    ghostText: "Matcha",
+    description: {
+      vi: "Bột matcha Nhật Bản thượng hạng kết hợp sữa tươi thanh trùng. Thơm mịn nồng nàn, ngọt dịu khó quên.",
+      en: "Premium Japanese matcha powder blended with creamy fresh milk. Aromatic, smooth, and unforgettable.",
+    },
+  },
+  {
+    src: "/images/cf-muoi.png",
+    bg: "#a6997f",
+    name: "Cà phê muối",
+    series: "cafe",
+    ghostText: "Coffee",
+    description: {
+      vi: "Espresso đậm đà gặp lớp kem muối béo mịn — tương phản mặn ngọt tạo nên tầng hương vị độc đáo.",
+      en: "Bold espresso meets creamy salted cream — a perfect balance of salty and sweet, creating a unique flavor profile.",
+    },
+  },
+];
 
-const FALLBACK_SLIDE = { src: MEDIA.hero, alt: "UjCha" };
+const INTERVAL_MS = 5200;
+const N = IMAGES.length;
 
-export function Hero() {
-  const router = useRouter();
-  const t = useTranslations();
-  const [active, setActive] = useState(0);
-  const reduceMotion = useReducedMotion();
-  const { data: categories, isLoading: categoriesLoading } = useCategoriesQuery();
+const GRAIN_SVG_URI = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E")`;
 
-  const trustPills = [
-    { icon: <Star className="size-3 fill-[#c9a227] text-[#c9a227]" />, text: t("trust_rating") },
-    { icon: <Clock className="size-3 text-[#99d6b3]" />, text: t("trust_delivery") },
-    { icon: <Leaf className="size-3 text-[#99d6b3]" />, text: t("trust_natural") },
-  ];
+// ── Slot styles: carousel shifted right via translateX offset ──────────────────
+// Carousel anchor is centered, but we nudge every slot to the right so the
+// cluster visually sits right-of-center, leaving room for text on the left.
+// Side-slot offsets were tightened (52%/62% → 30%/32%) so the three cups sit
+// closer together, matching the reference design.
+const CAROUSEL_SHIFT = "20%"; // how far right the whole cluster moves
 
-  const slides = useMemo(() => {
-    const catSlides = (categories ?? [])
-      .filter((c) => c.thumbnail)
-      .map((c) => ({ src: c.thumbnail!, alt: c.name }));
-    return catSlides.length > 0 ? catSlides : [FALLBACK_SLIDE];
-  }, [categories]);
+function getSlotStyle(pos: number, isMobile: boolean): React.CSSProperties {
+  const shift = isMobile ? "10%" : CAROUSEL_SHIFT;
 
-  useEffect(() => { setActive(0); }, [slides]);
+  if (pos === 0) return {
+    transform: `translateX(${shift}) scale(1) rotate(0deg)`,
+    opacity: 1,
+    zIndex: 10,
+    filter: "drop-shadow(0 40px 80px rgba(0,0,0,0.55))",
+  };
+  if (pos === -1 || pos === N - 1) return {
+    transform: isMobile
+      ? `translateX(calc(-34% + ${shift})) scale(0.62) rotate(-12deg)`
+      : `translateX(calc(-30% + ${shift})) scale(0.66) rotate(-12deg)`,
+    opacity: 0.5,
+    zIndex: 5,
+    filter: "drop-shadow(0 20px 40px rgba(0,0,0,0.3))",
+  };
+  if (pos === 1 || pos === -(N - 1)) return {
+    transform: isMobile
+      ? `translateX(calc(34% + ${shift})) scale(0.62) rotate(12deg)`
+      : `translateX(calc(30% + ${shift})) scale(0.66) rotate(12deg)`,
+    opacity: 0.5,
+    zIndex: 5,
+    filter: "drop-shadow(0 20px 40px rgba(0,0,0,0.3))",
+  };
+  return { transform: `translateX(${shift}) scale(0.4)`, opacity: 0, zIndex: 0 };
+}
+
+export default function HeroSection() {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [ghostVisible, setGhostVisible] = useState(true);
+  const [textKey, setTextKey] = useState(0);
+  const locale = useLocale()
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const slide = IMAGES[activeIndex];
 
   useEffect(() => {
-    if (reduceMotion || slides.length <= 1) return;
-    const timer = window.setInterval(() => {
-      setActive((i) => (i + 1) % slides.length);
-    }, CAROUSEL_INTERVAL_MS);
-    return () => window.clearInterval(timer);
-  }, [reduceMotion, slides]);
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  useEffect(() => {
+    IMAGES.forEach((s) => { const img = new window.Image(); img.src = s.src; });
+  }, []);
+
+  const goTo = useCallback((idx: number) => {
+    if (isAnimating || idx === activeIndex) return;
+    setIsAnimating(true);
+    setGhostVisible(false);
+    setTimeout(() => {
+      setActiveIndex(idx);
+      setTextKey((k) => k + 1);
+      setTimeout(() => { setGhostVisible(true); setIsAnimating(false); }, 80);
+    }, 420);
+  }, [isAnimating, activeIndex]);
+
+  const next = useCallback(() => goTo((activeIndex + 1) % N), [goTo, activeIndex]);
+  const prev = useCallback(() => goTo((activeIndex - 1 + N) % N), [goTo, activeIndex]);
+
+  const resetTimer = useCallback(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(next, INTERVAL_MS);
+  }, [next]);
+
+  useEffect(() => {
+    timerRef.current = setInterval(next, INTERVAL_MS);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [next]);
+
+  const handlePrev = () => { prev(); resetTimer(); };
+  const handleNext = () => { next(); resetTimer(); };
+  const handleDot = (i: number) => { goTo(i); resetTimer(); };
+
+  const imgMaxH = isMobile ? "46vh" : "64vh";
+  const imgMaxW = isMobile ? "56vw" : "30vw";
+
+  // bottom-bar heights
+  const barPb = isMobile ? 20 : 28;
+  const btnSize = isMobile ? 38 : 44;
 
   return (
-    <motion.section
-      className="px-4 pb-6 pt-4 sm:px-6 sm:pb-8 sm:pt-6"
-      initial={{ opacity: 0, y: 28 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={revealTransition}
+    <section
+      id="hero-section"
+      style={{
+        backgroundColor: slide.bg,
+        transition: "background-color 650ms cubic-bezier(0.4,0,0.2,1)",
+        fontFamily: "'Inter', sans-serif",
+      }}
+      className="relative w-full overflow-hidden"
     >
-      <div className="container relative mx-auto min-h-[220px] overflow-hidden rounded-[var(--radius-kun-2xl)] border border-black/[0.06] shadow-[0_32px_80px_-20px_rgba(0,0,0,0.4)] sm:min-h-[440px] md:min-h-[560px] lg:min-h-[720px]">
+      <div className="relative w-full" style={{ height: "100vh", overflow: "hidden" }}>
 
-        {/* Skeleton */}
-        {categoriesLoading && (
-          <div className="absolute inset-0 animate-pulse bg-surface-card" />
-        )}
+        {/* Grain */}
+        <div aria-hidden className="absolute inset-0 pointer-events-none" style={{
+          zIndex: 50, backgroundImage: GRAIN_SVG_URI,
+          backgroundSize: "200px 200px", backgroundRepeat: "repeat", opacity: 0.4,
+        }} />
 
-        {/* ─── Carousel — AnimatePresence + clipPath wipe ─── */}
-        {!categoriesLoading && (
-          <AnimatePresence initial={false} mode="sync">
-            <motion.div
-              key={active}
-              className="absolute inset-0"
-              initial={reduceMotion ? { opacity: 0 } : { clipPath: "inset(0 0 0 100%)" }}
-              animate={reduceMotion ? { opacity: 1 } : { clipPath: "inset(0 0 0 0%)" }}
-              exit={{ opacity: 0 }}
-              transition={{
-                clipPath: { duration: 0.88, ease: WIPE_EASE },
-                opacity: { duration: 0.3 },
-              }}
-            >
-              {/* Ken Burns inner */}
-              <motion.div
-                className="absolute inset-0"
-                initial={{ scale: 1 }}
-                animate={{ scale: 1.07 }}
-                transition={{ duration: (CAROUSEL_INTERVAL_MS + 1500) / 1000, ease: "linear" }}
-              >
-                <Image
-                  src={slides[active]?.src ?? FALLBACK_SLIDE.src}
-                  alt={slides[active]?.alt ?? "UjCha"}
-                  fill
-                  quality={90}
-                  className="object-cover object-center"
-                  sizes="(min-width: 1024px) 72rem, 100vw"
-                  priority
-                  unoptimized
-                />
-              </motion.div>
-            </motion.div>
-          </AnimatePresence>
-        )}
-
-        {/* ─── Gradient layers ─── */}
-        <div
-          className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/82 via-black/52 to-black/12 md:from-black/74 md:via-black/40 md:to-transparent"
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-[65%] bg-gradient-to-t from-black/72 to-transparent"
-          aria-hidden
-        />
-        {/* Radial forest spotlight */}
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{ background: "radial-gradient(ellipse 58% 72% at 16% 52%, rgba(26,60,52,0.45) 0%, transparent 66%)" }}
-          aria-hidden
-        />
-
-        {/* ─── Large editorial number ─── */}
-        {slides.length > 1 && (
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={`num-${active}`}
-              className="pointer-events-none absolute bottom-0 right-4 select-none font-black leading-none tabular-nums text-white sm:right-8"
-              style={{ fontSize: "clamp(80px, 18vw, 220px)", opacity: 0.045 }}
-              initial={{ y: 16, opacity: 0 }}
-              animate={{ y: 0, opacity: 0.045 }}
-              exit={{ y: -12, opacity: 0 }}
-              transition={{ duration: 0.4, ease: easeOutSmooth }}
-            >
-              {String(active + 1).padStart(2, "0")}
-            </motion.div>
-          </AnimatePresence>
-        )}
-
-        {/* ─── Vertical brand label (desktop) ─── */}
-        <div
-          className="pointer-events-none absolute right-5 top-1/2 z-10 hidden -translate-y-1/2 translate-x-1/2 rotate-90 select-none text-[9px] font-bold uppercase tracking-[0.4em] text-white/22 lg:block"
-          aria-hidden
-        >
-          UjCha · Café
+        {/* Ghost text */}
+        <div aria-hidden className="absolute inset-x-0 flex items-center justify-center pointer-events-none select-none"
+          style={{ zIndex: 2, top: isMobile ? "10%" : "16%" }}>
+          <span style={{
+            fontFamily: "'Anton', sans-serif",
+            fontSize: "clamp(90px, 28vw, 380px)",
+            fontWeight: 900, color: "white",
+            opacity: ghostVisible ? 0.3 : 0,
+            lineHeight: 1, textTransform: "uppercase",
+            letterSpacing: "-0.02em", whiteSpace: "nowrap",
+            mixBlendMode: "overlay", transition: "opacity 0.38s ease",
+          }}>
+            {slide.ghostText}
+          </span>
         </div>
 
-        {/* ─── Content ─── */}
-        <div className="relative z-10 flex min-h-[220px] flex-col justify-center px-5 py-8 sm:min-h-[440px] sm:px-10 sm:py-14 md:min-h-[560px] md:px-14 lg:min-h-[720px] lg:px-16">
-          <div className="max-w-[540px]">
-
-            {/* Eyebrow */}
-            <motion.div
-              className="mb-4 inline-flex sm:mb-6"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6, ease: easeOutSmooth }}
-            >
-              <span className="inline-flex items-center gap-2 rounded-full border border-white/18 bg-white/8 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white backdrop-blur-sm sm:px-3.5 sm:py-1.5 sm:text-[11px]">
-                <span className="relative flex size-1.5 shrink-0">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#99d6b3] opacity-70" />
-                  <span className="relative inline-flex size-1.5 rounded-full bg-[#99d6b3]" />
-                </span>
-                {t("hero_eyebrow")}
-                <span className="hidden h-3 w-px bg-white/20 sm:block" />
-                <span className="hidden text-white/40 sm:inline">{t("trust_natural")}</span>
-              </span>
-            </motion.div>
-
-            {/* Headline — blur+lift reveal */}
-            <motion.h1
-              className="text-[1.75rem] font-black leading-[1.05] tracking-[-0.02em] text-white sm:text-[3.2rem] lg:text-[3.8rem] xl:text-[4.4rem]"
-              initial={{ opacity: 0, y: 36, filter: "blur(16px)" }}
-              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-              transition={{ duration: 1, ease: easeOutSmooth, delay: stagger }}
-            >
-              {t("hero_headline")}
-              <br />
-              <span className="relative inline-block text-[#99d6b3]">
-                Matcha.
-                <motion.span
-                  className="absolute -bottom-1 left-0 h-[2px] rounded-full bg-[#99d6b3]/55 sm:h-[3px]"
-                  style={{ width: "100%" }}
-                  initial={{ scaleX: 0, originX: "left" }}
-                  animate={{ scaleX: 1 }}
-                  transition={{ duration: 0.8, ease: easeOutSmooth, delay: stagger * 5 }}
-                />
-              </span>
-            </motion.h1>
-
-            {/* Subline */}
-            <motion.p
-              className="mt-5 hidden max-w-xs text-[15px] leading-relaxed text-white/70 sm:block sm:text-base"
-              initial={{ opacity: 0, y: 20, filter: "blur(8px)" }}
-              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-              transition={{ duration: 0.8, ease: easeOutSmooth, delay: stagger * 2 }}
-            >
-              {t("hero_subline")}
-            </motion.p>
-
-            {/* Trust pills */}
-            <motion.div
-              className="mt-3 flex flex-wrap gap-1.5 sm:mt-5 sm:gap-2"
-              initial={{ opacity: 0, y: 14, filter: "blur(6px)" }}
-              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-              transition={{ duration: 0.7, ease: easeOutSmooth, delay: stagger * 2.8 }}
-            >
-              {trustPills.map(({ icon, text }) => (
-                <span
-                  key={text}
-                  className="inline-flex items-center gap-1 rounded-full bg-white/8 px-2 py-0.5 text-[9px] font-medium text-white/75 ring-1 ring-white/10 backdrop-blur-sm sm:gap-1.5 sm:px-3 sm:py-1 sm:text-[11px]"
-                >
-                  {icon}
-                  {text}
-                </span>
-              ))}
-            </motion.div>
-
-            {/* CTAs */}
-            <motion.div
-              className="mt-5 flex flex-wrap items-center gap-2.5 sm:mt-8 sm:gap-3"
-              initial={{ opacity: 0, y: 22, filter: "blur(8px)" }}
-              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-              transition={{ duration: 0.85, ease: easeOutSmooth, delay: stagger * 3.6 }}
-            >
-              {/* Primary — shimmer CTA */}
-              <Button
-                onClick={() => router.push(ROUTES.PRODUCTS)}
-                className="relative h-10 overflow-hidden rounded-full bg-[#3d7568] px-5 text-sm font-bold text-white shadow-xl shadow-black/30 transition-all hover:bg-[#4a8a7d] hover:shadow-2xl hover:shadow-[#3d7568]/40 sm:h-12 sm:px-7 sm:text-[15px]"
+        {/* ── 3-up Carousel (anchor at center, shifted right) ── */}
+        <div className="absolute inset-0 flex items-center justify-center" style={{ zIndex: 3 }}>
+          {IMAGES.map((s, i) => {
+            let pos = i - activeIndex;
+            if (pos > Math.floor(N / 2)) pos -= N;
+            if (pos < -Math.floor(N / 2)) pos += N;
+            const slotStyle = getSlotStyle(pos, isMobile);
+            return (
+              <div
+                key={s.src}
+                onClick={() => pos !== 0 && handleDot(i)}
+                style={{
+                  position: "absolute",
+                  display: "flex", alignItems: "flex-end", justifyContent: "center",
+                  maxHeight: imgMaxH, maxWidth: imgMaxW,
+                  width: "100%", height: "100%",
+                  cursor: pos !== 0 ? "pointer" : "default",
+                  transition: "transform 0.62s cubic-bezier(0.34,1.18,0.64,1), opacity 0.5s ease, filter 0.5s ease",
+                  transformOrigin: "center center",
+                  ...slotStyle,
+                }}
               >
-                {!reduceMotion && (
-                  <motion.span
-                    className="pointer-events-none absolute inset-0 -skew-x-[22deg] bg-gradient-to-r from-transparent via-white/30 to-transparent"
-                    initial={{ x: "-120%" }}
-                    animate={{ x: "220%" }}
-                    transition={{ duration: 1.1, repeat: Infinity, repeatDelay: 5.5, ease: "linear", delay: 3 }}
-                  />
-                )}
-                {t("explore_menu")}
-                <ArrowRight className="ml-1.5 size-4" />
-              </Button>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={s.src} alt={s.name} style={{
+                  maxHeight: imgMaxH, maxWidth: "100%",
+                  objectFit: "contain", display: "block",
+                  userSelect: "none", pointerEvents: "none",
+                }} />
+              </div>
+            );
+          })}
+        </div>
 
-              {/* Secondary */}
-              <Link
-                href={ROUTES.PROMOTIONS}
-                className="group inline-flex h-10 items-center gap-2 rounded-full border border-white/20 bg-transparent px-4 text-xs font-semibold text-white backdrop-blur-sm transition-all hover:border-white/32 hover:bg-white/10 sm:h-12 sm:px-5 sm:text-sm"
+        {/* ── Left content block ── */}
+        <div
+          key={textKey}
+          className="absolute"
+          style={{
+            zIndex: 20,
+            left: isMobile ? 16 : 48,
+            bottom: isMobile ? barPb + 24 : barPb + 50,
+            maxWidth: isMobile ? "calc(55% - 8px)" : 280,
+            animation: "fadeSlideUp 0.48s cubic-bezier(0.22,1,0.36,1) both",
+          }}
+        >
+          {/* Series eyebrow */}
+          <p className="text-white/40 font-semibold uppercase mb-1.5"
+            style={{ fontSize: 10, letterSpacing: "0.22em" }}>
+            {slide.series}
+          </p>
+
+          {/* Product name — scaled down */}
+          <h2 className="uppercase text-white"
+            style={{
+              fontFamily: "'Anton', sans-serif",
+              fontSize: isMobile ? "clamp(28px, 8vw, 40px)" : "clamp(32px, 3.6vw, 52px)",
+              fontWeight: 900, lineHeight: 1.02,
+              letterSpacing: "-0.01em", marginBottom: 10,
+            }}>
+            {slide.name}
+          </h2>
+
+          {/* Description */}
+          <p style={{
+            fontSize: isMobile ? 12 : 13,
+            lineHeight: 1.6,
+            color: "rgba(255,255,255,0.58)",
+            marginBottom: 20,
+            fontWeight: 400,
+          }}>
+            {typeof slide.description === "string"
+              ? slide.description
+              : slide.description[locale as 'vi' | 'en'] || slide.description.en}
+          </p>
+
+          {/* CTA */}
+          <button
+            onClick={() => { location.href = `${ROUTES.MENU}?category=${slide.series}` }}
+            className="inline-flex items-center gap-1.5 rounded-full font-bold uppercase hover:scale-105 transition-transform ease-in-out duration-700 active:scale-95"
+            style={{
+              padding: "10px 20px",
+              background: "white", color: slide.bg,
+              fontSize: 11, letterSpacing: "0.08em",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.28)",
+              border: "none", cursor: "pointer",
+              transition: "transform 0.2s ease, box-shadow 0.2s ease, color 0.65s cubic-bezier(0.4,0,0.2,1)",
+              marginBottom: 16,
+            }}>
+            Explore now
+            <ArrowUpRight size={13} />
+          </button>
+
+          {/* ── Prev / Next — moved here, right under "Explore now" ── */}
+          <div className="flex flex-col items-start gap-2">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handlePrev}
+                aria-label="Previous slide"
+                className="cursor-pointer flex items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-md transition-all hover:bg-white/22 hover:border-white/35 active:scale-95"
+                style={{ width: btnSize, height: btnSize }}
               >
-                {t("view_promotions")}
-                <ArrowUpRight className="size-3.5 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
-              </Link>
-            </motion.div>
+                <ChevronLeft size={isMobile ? 15 : 18} />
+              </button>
+              <button
+                onClick={handleNext}
+                aria-label="Next slide"
+                className="cursor-pointer flex items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-md transition-all hover:bg-white/22 hover:border-white/35 active:scale-95"
+                style={{ width: btnSize, height: btnSize }}
+              >
+                <ChevronRight size={isMobile ? 15 : 18} />
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* ─── Bottom bar ─── */}
-        {slides.length > 1 && (
-          <div className="absolute inset-x-0 bottom-0 z-20 flex items-end justify-between px-5 pb-4 sm:px-10 sm:pb-5 md:px-14 lg:px-16">
-
-            {/* Left: animated category chip */}
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={`cat-${active}`}
-                className="hidden sm:block"
-                initial={{ opacity: 0, y: 6, x: -6 }}
-                animate={{ opacity: 1, y: 0, x: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                transition={{ duration: 0.32, ease: easeOutSmooth }}
-              >
-                <span className="inline-flex items-center gap-2 rounded-full bg-black/30 px-3.5 py-1.5 text-[11px] font-semibold text-white/72 backdrop-blur-md ring-1 ring-white/8">
-                  <span className="size-[5px] rounded-full bg-[#99d6b3]" />
-                  {slides[active]?.alt ?? ""}
-                </span>
-              </motion.div>
-            </AnimatePresence>
-
-            {/* Center: progress bars */}
-            <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-[7px] sm:bottom-5">
-              {slides.map((_, i) => (
+        {/* ── Bottom bar ── */}
+        {/* Now only dots + counter — Prev/Next live in the left content block above. */}
+        <div
+          className="absolute bottom-0 left-0 right-0 flex items-end justify-start"
+          style={{
+            zIndex: 20,
+            padding: isMobile ? `0 16px ${barPb}px` : `0 48px ${barPb}px`,
+            background: "linear-gradient(to top, rgba(0,0,0,0.38) 0%, transparent 100%)",
+          }}
+        >
+          <div className="flex flex-col items-start gap-2">
+            <div className="flex items-center gap-1.5">
+              {IMAGES.map((_, i) => (
                 <button
                   key={i}
-                  type="button"
-                  aria-label={`Slide ${i + 1}`}
-                  aria-current={active === i ? "true" : undefined}
-                  onClick={() => setActive(i)}
-                  className="group relative h-[3px] overflow-hidden rounded-full bg-white/20 transition-[width,background] duration-500 hover:bg-white/35"
-                  style={{ width: active === i ? 48 : 8 }}
-                >
-                  {active === i && !reduceMotion && (
-                    <motion.div
-                      key={active}
-                      className="absolute inset-0 origin-left rounded-full bg-white"
-                      initial={{ scaleX: 0 }}
-                      animate={{ scaleX: 1 }}
-                      transition={{ duration: CAROUSEL_INTERVAL_MS / 1000, ease: "linear" }}
-                    />
-                  )}
-                  {active === i && reduceMotion && (
-                    <div className="absolute inset-0 rounded-full bg-white" />
-                  )}
-                </button>
+                  aria-label={`Go to slide ${i + 1}`}
+                  aria-current={i === activeIndex ? "true" : undefined}
+                  onClick={() => handleDot(i)}
+                  className="rounded-full border-none cursor-pointer p-0"
+                  style={{
+                    height: 3,
+                    width: i === activeIndex ? 32 : 8,
+                    background: i === activeIndex ? "white" : "rgba(255,255,255,0.28)",
+                    transition: "width 0.42s cubic-bezier(0.4,0,0.2,1), background 0.3s ease",
+                  }}
+                />
               ))}
             </div>
-
-            {/* Right: zero-padded Gen Z counter */}
-            <div className="hidden items-center gap-1.5 sm:flex">
-              <span className="font-mono text-xs font-bold tabular-nums text-white/70">
-                {String(active + 1).padStart(2, "0")}
+            <div className="flex items-center gap-1.5">
+              <span className="tabular-nums" style={{
+                fontFamily: "'Anton', sans-serif",
+                fontSize: isMobile ? 12 : 13, color: "rgba(255,255,255,0.7)",
+              }}>
+                {String(activeIndex + 1).padStart(2, "0")}
               </span>
-              <span className="h-px w-4 bg-white/25" />
-              <span className="font-mono text-xs tabular-nums text-white/30">
-                {String(slides.length).padStart(2, "0")}
+              <span style={{ width: 16, height: 1, background: "rgba(255,255,255,0.22)", display: "inline-block" }} />
+              <span className="tabular-nums" style={{
+                fontFamily: "'Anton', sans-serif",
+                fontSize: isMobile ? 12 : 13, color: "rgba(255,255,255,0.28)",
+              }}>
+                {String(N).padStart(2, "0")}
               </span>
             </div>
+          </div>
+        </div>
+
+        {/* Vertical brand stamp */}
+        {!isMobile && (
+          <div aria-hidden className="absolute pointer-events-none select-none" style={{
+            zIndex: 20, right: -18, top: "50%",
+            transform: "translateY(-50%) rotate(90deg)",
+            fontFamily: "'Inter', sans-serif", fontSize: 9, fontWeight: 600,
+            textTransform: "uppercase", letterSpacing: "0.35em",
+            color: "rgba(255,255,255,0.18)", whiteSpace: "nowrap",
+          }}>
+            UJCHA · COLLECTIBLES
           </div>
         )}
       </div>
-    </motion.section>
+
+      <style>{`
+        @keyframes fadeSlideUp {
+          from { opacity: 0; transform: translateY(14px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </section>
   );
 }

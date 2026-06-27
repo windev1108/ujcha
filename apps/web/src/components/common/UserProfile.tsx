@@ -18,7 +18,7 @@ const Av = Avatar as unknown as React.FC<{ className?: string; children?: React.
 const AvImg = Avatar.Image as unknown as React.FC<{ src?: string; className?: string }>;
 const AvFb = Avatar.Fallback as unknown as React.FC<{ children?: React.ReactNode; className?: string }>;
 
-export const UserProfile = ({ onNavigate }: { onNavigate?: () => void } = {}) => {
+export const UserProfile = ({ onNavigate, isPastHero }: { onNavigate?: () => void; isPastHero: boolean }) => {
   const t = useTranslations();
   const { isLoggedIn, user } = useAuth();
   const clearSession = useAuthStore((s) => s.clearSession);
@@ -35,7 +35,7 @@ export const UserProfile = ({ onNavigate }: { onNavigate?: () => void } = {}) =>
           setMinMinsLeft(Math.max(0, Math.ceil(minMs / 60_000)));
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [isLoggedIn]);
 
   if (!isLoggedIn) {
@@ -45,7 +45,7 @@ export const UserProfile = ({ onNavigate }: { onNavigate?: () => void } = {}) =>
           aria-label={t("account")}
           className="flex size-9 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[#1a3c34]/40"
         >
-          <div className="flex size-9 items-center justify-center rounded-full text-foreground/60 transition hover:bg-black/6">
+          <div className={`flex size-9 items-center justify-center rounded-full transition ${isPastHero ? "text-foreground hover:bg-black/6" : "text-white hover:bg-black/6"}`}>
             <UserIcon className="size-5" />
           </div>
         </Dropdown.Trigger>

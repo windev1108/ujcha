@@ -32,7 +32,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const staticEntries: MetadataRoute.Sitemap = staticPages.flatMap(
     ({ path, priority, changeFrequency }) =>
-      locales.map((locale) => ({
+      locales.map(() => ({
         url: `${SITE_URL}/${path}`,
         lastModified: now,
         changeFrequency,

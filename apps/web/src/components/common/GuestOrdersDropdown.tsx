@@ -17,7 +17,7 @@ function fmtTime(iso: string): string {
   return new Date(iso).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
 }
 
-export function GuestOrdersDropdown({ onNavigate }: { onNavigate?: () => void } = {}) {
+export function GuestOrdersDropdown({ onNavigate, isPastHero }: { onNavigate?: () => void; isPastHero: boolean }) {
   const t = useTranslations();
   const typeLabel: Record<string, string> = {
     delivery: t("type_delivery"),
@@ -36,8 +36,8 @@ export function GuestOrdersDropdown({ onNavigate }: { onNavigate?: () => void } 
         aria-label={t("guest_orders_eyebrow")}
         className="relative flex size-9 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[#1a3c34]/40"
       >
-        <div className="flex size-9 items-center justify-center rounded-full text-foreground/60 transition hover:bg-black/8">
-          <ClipboardList className="size-4.5" />
+        <div className={`flex size-5 items-center justify-center rounded-full transition ${isPastHero ? "text-foreground hover:bg-black/6" : "text-white hover:bg-black/6"}`}>
+          <ClipboardList className={isPastHero ? "text-foreground" : "text-white"} />
         </div>
         <span className="pointer-events-none absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-[#1a3c34] text-[9px] font-bold text-white">
           {guestOrders.length > 9 ? "9+" : guestOrders.length}

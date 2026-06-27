@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { Categories } from "@/app/[locale]/(landing)/components/Categories";
-import { Hero } from "@/app/[locale]/(landing)/components/Hero";
+import HeroSection from "@/app/[locale]/(landing)/components/Hero";
 import { ProductGallery } from "@/app/[locale]/(landing)/components/ProductGallery";
 import { PromoBanner } from "@/app/[locale]/(landing)/components/PromoBanner";
 import { ReviewShowcaseSection } from "@/app/[locale]/(landing)/components/ReviewShowcaseSection";
@@ -103,7 +103,7 @@ export default function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
       />
       <div className="flex flex-col">
-        <Hero />
+        <HeroSection />
         <Categories />
         <ProductGallery />
         <ReviewShowcaseSection />
