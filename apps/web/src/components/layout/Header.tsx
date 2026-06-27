@@ -42,7 +42,7 @@ export function AppHeader() {
   // window.innerHeight, so it stays correct even if Hero's height changes
   // (100dvh, safe-area padding, etc). Falls back to innerHeight if the
   // hero section isn't present on the current page.
-  const [isPastHero, setIsPastHero] = useState(true);
+  const [isPastHero, setIsPastHero] = useState(false);
 
   useEffect(() => {
     function handleScroll() {
