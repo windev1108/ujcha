@@ -11,6 +11,7 @@ export interface FigurineSlide {
   name: string;
   series: string;
   ghostText: string;
+  slug: string;
   description: string | { vi: string; en: string };
 }
 
@@ -21,6 +22,7 @@ const IMAGES: FigurineSlide[] = [
     name: "Ca cao latte",
     series: "cacao",
     ghostText: "Cacao",
+    slug: '/cacao-latte',
     description: {
       vi: "Cacao nguyên chất rang mộc, hoà tan trong sữa tươi béo ngậy — đắng nhẹ, ngọt hậu, ấm từng ngụm.",
       en: "Pure roasted cacao, blended with creamy fresh milk — lightly bitter, sweet aftertaste, warming every sip.",
@@ -32,6 +34,7 @@ const IMAGES: FigurineSlide[] = [
     name: "Matcha latte",
     series: "matcha",
     ghostText: "Matcha",
+    slug: '/matcha-latte',
     description: {
       vi: "Bột matcha Nhật Bản thượng hạng kết hợp sữa tươi thanh trùng. Thơm mịn nồng nàn, ngọt dịu khó quên.",
       en: "Premium Japanese matcha powder blended with creamy fresh milk. Aromatic, smooth, and unforgettable.",
@@ -43,6 +46,7 @@ const IMAGES: FigurineSlide[] = [
     name: "Cà phê muối",
     series: "cafe",
     ghostText: "Coffee",
+    slug: '/ca-phe-muoi',
     description: {
       vi: "Espresso đậm đà gặp lớp kem muối béo mịn — tương phản mặn ngọt tạo nên tầng hương vị độc đáo.",
       en: "Bold espresso meets creamy salted cream — a perfect balance of salty and sweet, creating a unique flavor profile.",
@@ -257,7 +261,7 @@ export default function HeroSection() {
 
           {/* CTA */}
           <button
-            onClick={() => { location.href = `${ROUTES.MENU}?category=${slide.series}` }}
+            onClick={() => { location.href = `${ROUTES.MENU}/${slide.slug}` }}
             className="inline-flex items-center gap-1.5 rounded-full font-bold uppercase hover:scale-105 transition-transform ease-in-out duration-700 active:scale-95"
             style={{
               padding: "10px 20px",
