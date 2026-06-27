@@ -276,33 +276,12 @@ export default function HeroSection() {
             <ArrowUpRight size={13} />
           </button>
 
-          {/* ── Prev / Next — moved here, right under "Explore now" ── */}
-          <div className="flex flex-col items-start gap-2">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handlePrev}
-                aria-label="Previous slide"
-                className="cursor-pointer flex items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-md transition-all hover:bg-white/22 hover:border-white/35 active:scale-95"
-                style={{ width: btnSize, height: btnSize }}
-              >
-                <ChevronLeft size={isMobile ? 15 : 18} />
-              </button>
-              <button
-                onClick={handleNext}
-                aria-label="Next slide"
-                className="cursor-pointer flex items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-md transition-all hover:bg-white/22 hover:border-white/35 active:scale-95"
-                style={{ width: btnSize, height: btnSize }}
-              >
-                <ChevronRight size={isMobile ? 15 : 18} />
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* ── Bottom bar ── */}
         {/* Now only dots + counter — Prev/Next live in the left content block above. */}
         <div
-          className="absolute bottom-0 left-0 right-0 flex items-end justify-start"
+          className="absolute bottom-0 left-0 right-0 flex items-end justify-between"
           style={{
             zIndex: 20,
             padding: isMobile ? `0 16px ${barPb}px` : `0 48px ${barPb}px`,
@@ -343,7 +322,29 @@ export default function HeroSection() {
               </span>
             </div>
           </div>
+
+          {/* Prev / Next — bên phải */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handlePrev}
+              aria-label="Previous slide"
+              className="cursor-pointer flex items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-md transition-all hover:bg-white/22 hover:border-white/35 active:scale-95"
+              style={{ width: btnSize, height: btnSize }}
+            >
+              <ChevronLeft size={isMobile ? 15 : 18} />
+            </button>
+            <button
+              onClick={handleNext}
+              aria-label="Next slide"
+              className="cursor-pointer flex items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-md transition-all hover:bg-white/22 hover:border-white/35 active:scale-95"
+              style={{ width: btnSize, height: btnSize }}
+            >
+              <ChevronRight size={isMobile ? 15 : 18} />
+            </button>
+          </div>
         </div>
+
+
 
         {/* Vertical brand stamp */}
         {!isMobile && (
