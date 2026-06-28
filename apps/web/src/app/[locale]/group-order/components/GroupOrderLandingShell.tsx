@@ -14,6 +14,9 @@ import { fetchGroupOrderConfig, type GroupDiscountTier } from "@/services/group-
 import { fetchMyGroupOrderSessions } from "@/services/group-order/api";
 import { useTranslations } from "next-intl";
 import { CreateGroupOrderModal } from "@/components/group-order/CreateGroupOrderModal";
+import { usePublicStoreLocationQuery } from "@/services/store/hooks";
+import { minutesToTime } from "@/components/layout/Footer";
+import { toast } from "sonner";
 
 // ─── Animated counter ──────────────────────────────────────────────────────────
 
@@ -103,6 +106,7 @@ export function GroupOrderLandingShell() {
   const accessToken = useAuthStore((s) => s.accessToken);
   const [hasActiveSession, setHasActiveSession] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const { data: storeLocation } = usePublicStoreLocationQuery();
 
   useEffect(() => {
     if (!accessToken) return;
@@ -116,6 +120,26 @@ export function GroupOrderLandingShell() {
     if (!accessToken) {
       router.push(`${ROUTES.LOGIN}?redirect=/group-order`);
       return;
+    }
+    const dateNow = Date.now();
+    const endTime = minutesToTime(storeLocation?.shiftConfig?.endMinutes ?? 0);
+    const startTime = minutesToTime(storeLocation?.shiftConfig?.startMinutes ?? 0);
+    if (storeLocation?.shiftConfig) {
+      const [endH, endM] = endTime.split(":").map((s) => parseInt(s, 10));
+      const endDate = new Date(dateNow);
+      endDate.setHours(endH, endM, 0, 0);
+      if (dateNow > endDate.getTime()) {
+        toast.error(t("error_store_closed"));
+        return;
+      }
+
+      const [startH, startM] = startTime.split(":").map((s) => parseInt(s, 10));
+      const startDate = new Date(dateNow);
+      startDate.setHours(startH, startM, 0, 0);
+      if (dateNow < startDate.getTime()) {
+        toast.error(t("error_store_not_open"));
+        return;
+      }
     }
     setShowModal(true);
   };

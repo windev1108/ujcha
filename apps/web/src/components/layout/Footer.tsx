@@ -17,7 +17,7 @@ const LeafletMap = dynamic(() => import("../common/LeafletMapInner"), {
 
 
 
-function minutesToTime(minutes: number) {
+export function minutesToTime(minutes: number) {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
   return `${h}:${m.toString().padStart(2, "0")}`;

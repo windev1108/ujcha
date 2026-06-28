@@ -20,6 +20,10 @@ import type { ApiCartItem } from "@/services/cart/types";
 import { normalizeOptionGroups, computeOptionSurcharge } from "@/lib/product-options";
 import { fetchGroupOrderConfig, fetchMyGroupOrderSessions, updateGroupOrderItems } from "@/services/group-order/api";
 import { ROUTES } from "@/lib/routes";
+import { usePublicStoreLocationQuery } from "@/services/store/hooks";
+import { minutesToTime } from "@/components/layout/Footer";
+import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 
 function CartSkeleton() {
   return (
@@ -52,11 +56,13 @@ export function CartPageShell() {
   const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
   const isGuest = !accessToken;
+  const t = useTranslations();
 
   // Server cart (members only)
   const { data: serverCart, isLoading: serverCartLoading } = useCartQuery();
   const updateServerItem = useUpdateCartItemMutation();
   const removeServerItem = useRemoveCartItemMutation();
+  const { data: storeLocation } = usePublicStoreLocationQuery();
 
   // Local cart (guests) — always available from Zustand persist
   const localItems = useCartStore((s) => s.items);
@@ -82,6 +88,26 @@ export function CartPageShell() {
     if (!accessToken) {
       router.push(`${ROUTES.LOGIN}?redirect=/cart`);
       return;
+    }
+    const dateNow = Date.now();
+    const endTime = minutesToTime(storeLocation?.shiftConfig?.endMinutes ?? 0);
+    const startTime = minutesToTime(storeLocation?.shiftConfig?.startMinutes ?? 0);
+    if (storeLocation?.shiftConfig) {
+      const [endH, endM] = endTime.split(":").map((s) => parseInt(s, 10));
+      const endDate = new Date(dateNow);
+      endDate.setHours(endH, endM, 0, 0);
+      if (dateNow > endDate.getTime()) {
+        toast.error(t("error_store_closed"));
+        return;
+      }
+
+      const [startH, startM] = startTime.split(":").map((s) => parseInt(s, 10));
+      const startDate = new Date(dateNow);
+      startDate.setHours(startH, startM, 0, 0);
+      if (dateNow < startDate.getTime()) {
+        toast.error(t("error_store_not_open"));
+        return;
+      }
     }
     fetchMyGroupOrderSessions()
       .then((list) => setHasActiveSession(list.length > 0))

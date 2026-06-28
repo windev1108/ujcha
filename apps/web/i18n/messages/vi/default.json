@@ -1188,5 +1188,7 @@
   "review_showcase_title": "Đánh giá thực tế",
   "review_showcase_count": "{count} đánh giá nổi bật",
   "review_card_ordered_item": "Món đã đặt",
-  "review_card_anonymous": "Khách hàng"
+  "review_card_anonymous": "Khách hàng",
+  "error_store_not_open":"Quán chưa mở cửa. Vui lòng đặt lại sau",
+  "error_store_closed":"Cửa hàng đã đóng cửa. Vui lòng đặt hàng vào ngày mai"
 }

@@ -1189,5 +1189,7 @@
   "review_showcase_title": "Real reviews",
   "review_showcase_count": "{count} featured reviews",
   "review_card_ordered_item": "Ordered item",
-  "review_card_anonymous": "Customer"
+  "review_card_anonymous": "Customer",
+  "error_store_not_open":"The shop is not open yet. Please place your order during opening hours.",
+  "error_store_closed":"The store is closed. Please place your order tomorrow."
 }

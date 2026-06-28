@@ -22,7 +22,7 @@ export class TableController {
     private readonly prisma: PrismaService,
     private readonly orderService: OrderService,
     private readonly ordersGateway: OrdersGateway,
-  ) {}
+  ) { }
 
   @Get('store-location')
   @ApiOperation({ summary: 'Cấu hình cửa hàng công khai (vị trí, SĐT, giờ mở cửa)' })

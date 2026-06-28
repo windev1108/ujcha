@@ -26,6 +26,7 @@ import { useAuthStore } from "@/store/auth-store";
 import { VoucherSection } from "./VoucherSection";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
+import { minutesToTime } from "@/components/layout/Footer";
 
 function formatVnd(amount: number) {
   return new Intl.NumberFormat("vi-VN").format(Math.round(amount)) + "đ";
@@ -217,6 +218,27 @@ export function CheckoutPageShell() {
 
   async function handleSubmitOrder() {
     setOrderError(null);
+    const dateNow = Date.now();
+    const endTime = minutesToTime(storeLocation?.shiftConfig?.endMinutes ?? 0);
+    const startTime = minutesToTime(storeLocation?.shiftConfig?.startMinutes ?? 0);
+
+    if (storeLocation?.shiftConfig) {
+      const [endH, endM] = endTime.split(":").map((s) => parseInt(s, 10));
+      const endDate = new Date(dateNow);
+      endDate.setHours(endH, endM, 0, 0);
+      if (dateNow > endDate.getTime()) {
+        setOrderError(t("error_store_closed"));
+        return;
+      }
+
+      const [startH, startM] = startTime.split(":").map((s) => parseInt(s, 10));
+      const startDate = new Date(dateNow);
+      startDate.setHours(startH, startM, 0, 0);
+      if (dateNow < startDate.getTime()) {
+        setOrderError(t("error_store_not_open"));
+        return;
+      }
+    }
 
     if (items.length === 0) {
       setOrderError(t("error_cart_empty"));

@@ -311,11 +311,10 @@ export function CreateGroupOrderModal({
                             key={value}
                             type="button"
                             onClick={() => setShippingFeeMode(value)}
-                            className={`flex flex-1 items-center gap-2 rounded-xl border-2 px-3 py-2.5 text-left text-xs font-semibold transition-all ${
-                              shippingFeeMode === value
-                                ? "border-[#1a3c34] bg-[#f0faf6] text-[#1a3c34]"
-                                : "border-black/8 bg-white text-foreground/55 hover:border-black/16"
-                            }`}
+                            className={`flex flex-1 items-center gap-2 rounded-xl border-2 px-3 py-2.5 text-left text-xs font-semibold transition-all ${shippingFeeMode === value
+                              ? "border-[#1a3c34] bg-[#f0faf6] text-[#1a3c34]"
+                              : "border-black/8 bg-white text-foreground/55 hover:border-black/16"
+                              }`}
                           >
                             <Icon className="size-3.5 shrink-0" />
                             {label}
