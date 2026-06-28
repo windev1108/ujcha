@@ -17,22 +17,22 @@ export interface FigurineSlide {
 
 const IMAGES: FigurineSlide[] = [
   {
-    src: "/images/cacao.png",
-    bg: "#382f2a",
-    name: "Ca cao latte",
-    series: "cacao",
-    ghostText: "Cacao",
-    slug: '/cacao-latte',
+    src: "/images/matcha-oreo.png",
+    bg: "#443224",
+    name: "Matcha OREO",
+    series: "Mix OREO",
+    ghostText: "Mix OREO",
+    slug: '/matcha-oreo-kem-cheese',
     description: {
-      vi: "Cacao nguyên chất rang mộc, hoà tan trong sữa tươi béo ngậy — đắng nhẹ, ngọt hậu, ấm từng ngụm.",
-      en: "Pure roasted cacao, blended with creamy fresh milk — lightly bitter, sweet aftertaste, warming every sip.",
+      vi: "Bột matcha Nhật Bản thượng hạng kết hợp sữa tươi thanh trùng, hoà quyện cùng lớp kem phô mai béo mịn và bánh OREO giòn tan. Thơm nồng, ngọt dịu khó quên.",
+      en: "Premium Japanese matcha powder blended with creamy fresh milk, combined with smooth cheese cream and crunchy OREO cookies. Aromatic, smooth, and unforgettable.",
     },
   },
   {
     src: "/images/matcha.png",
     bg: "#485a20",
     name: "Matcha latte",
-    series: "matcha",
+    series: "Matcha",
     ghostText: "Matcha",
     slug: '/matcha-latte',
     description: {
@@ -41,15 +41,15 @@ const IMAGES: FigurineSlide[] = [
     },
   },
   {
-    src: "/images/cf-muoi.png",
-    bg: "#a6997f",
-    name: "Cà phê muối",
-    series: "cafe",
-    ghostText: "Coffee",
-    slug: '/ca-phe-muoi',
+    src: "/images/suachua-vietquoc.png",
+    bg: "#3d1a6b",
+    name: "Sữa Chua Sấy Việt Quất",
+    series: "Sữa chua Mix",
+    ghostText: "Yaourt Mix",
+    slug: '/sua-chua-say-viet-quat-kem-cheese',
     description: {
-      vi: "Espresso đậm đà gặp lớp kem muối béo mịn — tương phản mặn ngọt tạo nên tầng hương vị độc đáo.",
-      en: "Bold espresso meets creamy salted cream — a perfect balance of salty and sweet, creating a unique flavor profile.",
+      vi: "Sữa chua sấy giòn rụm, hoà quyện cùng vị chua thanh của việt quất tươi — ngọt dịu, thơm nồng, khó quên.",
+      en: "Crispy dried yogurt blended with the fresh tartness of blueberries — sweet, aromatic, and unforgettable.",
     },
   },
 ];
