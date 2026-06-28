@@ -45,7 +45,7 @@ const IMAGES: FigurineSlide[] = [
     bg: "#3d1a6b",
     name: "Sữa Chua Sấy Việt Quất",
     series: "Sữa chua Mix",
-    ghostText: "Yaourt Mix",
+    ghostText: "Yogurt Mix",
     slug: '/sua-chua-say-viet-quat-kem-cheese',
     description: {
       vi: "Sữa chua sấy giòn rụm, hoà quyện cùng vị chua thanh của việt quất tươi — ngọt dịu, thơm nồng, khó quên.",
