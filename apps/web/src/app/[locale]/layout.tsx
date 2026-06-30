@@ -12,7 +12,7 @@ const SITE_URL = _rawSiteUrl.startsWith("http") ? _rawSiteUrl : `https://${_rawS
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "UjCha — Enjoy matcha your way.",
+    default: "UjCha — Matcha & More",
     template: "%s | UjCha",
   },
   description: "Khám phá matcha ceremonial grade, cà phê, trà thủ công và đồ uống theo mùa tại UjCha. Nguồn gốc bền vững, chất lượng cao.",
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
     alternateLocale: "en_US",
     url: SITE_URL,
     siteName: "UjCha",
-    title: "UjCha — Enjoy matcha your way.",
+    title: "UjCha — Matcha & More",
     description: "Matcha ceremonial grade, cà phê và đồ uống thủ công tại UjCha. Nguồn gốc bền vững, chất lượng cao.",
     images: [
       {
@@ -52,7 +52,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "UjCha — Enjoy matcha your way.",
+    title: "UjCha — Matcha & More",
     description: "Matcha ceremonial grade, cà phê và đồ uống thủ công tại UjCha.",
     images: ["/api/og"],
   },

@@ -36,7 +36,7 @@ function buildHtml(data: PromotionEmailData, siteUrl: string): string {
           <td style="background:#1a3c34;padding:28px 40px;text-align:center;">
             <span style="color:#ffffff;font-size:22px;font-weight:700;letter-spacing:-0.3px;">UjCha</span>
             <span style="color:#99d6b3;font-size:13px;font-weight:400;display:block;margin-top:4px;">
-              Enjoy matcha your way.
+              Matcha & More
             </span>
           </td>
         </tr>

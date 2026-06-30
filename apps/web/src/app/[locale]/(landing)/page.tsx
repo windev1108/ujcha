@@ -17,7 +17,7 @@ export async function generateMetadata(): Promise<Metadata> {
     description:
       "Khám phá matcha ceremonial grade, cà phê, trà thủ công và đồ uống theo mùa. Nguồn gốc bền vững — giao hàng tận nơi - khu vực thành phố Đà Nẵng.",
     openGraph: {
-      title: "UjCha — Enjoy matcha your way",
+      title: "UjCha — Matcha & More",
       description:
         "Matcha ceremonial grade, cà phê và đồ uống thủ công tại UjCha. Nguồn gốc bền vững, chất lượng cao.",
       url: SITE_URL,

@@ -4,7 +4,7 @@ export const runtime = "edge";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const title = searchParams.get("title") ?? "UjCha — Enjoy matcha your way.";
+  const title = searchParams.get("title") ?? "UjCha — Matcha & More";
   const description =
     searchParams.get("description") ??
     "Matcha ceremonial grade, cà phê và đồ uống thủ công tại Đà Nẵng";
