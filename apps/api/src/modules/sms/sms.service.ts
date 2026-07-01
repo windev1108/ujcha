@@ -16,13 +16,19 @@ export class SmsService {
   async sendOtp(phone: string, code: string): Promise<void> {
     // ASCII-only to stay in 1 segment (160 chars)
     const message = `[UjCha] OTP code: ${code}.`;
-    await this.sendRaw(phone, message);
+    const normalizedPhone = phone.startsWith('+')
+      ? phone.replace('+', '')
+      : phone;
+    await this.sendRaw(normalizedPhone, message);
   }
 
   async sendCredentials(phone: string, password: string): Promise<void> {
     // ASCII-only → 160 chars/segment, keeps cost at 1 segment
     const message = `[UjCha] Phone: ${phone} | Password: ${password}`;
-    await this.sendRaw(phone, message);
+    const normalizedPhone = phone.startsWith('+')
+      ? phone.replace('+', '')
+      : phone;
+    await this.sendRaw(normalizedPhone, message);
   }
 
   private async sendRaw(phone: string, message: string): Promise<void> {

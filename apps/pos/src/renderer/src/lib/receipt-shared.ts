@@ -106,10 +106,17 @@ export function parseOptions(raw: unknown): Record<string, string> {
 }
 
 export function formatOptionDisplay(key: string, value: string): string {
-  if (key.trim() === 'Mức độ ngọt' && value.trim() === 'Bình thường') {
+  if (key.trim().toLowerCase() === 'mức độ ngọt' && value.trim().toLowerCase() === 'bình thường') {
     return 'Ngọt bình thường'
   }
   return value
+}
+
+export function stripEmbeddedPrice(text: string): string {
+  return text
+    .replace(/\+?\s*[\d.,]+\s*(đ|vnđ|vnd)(?![a-zA-Z0-9])/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
 }
 
 export function serviceLabel(t: AdminOrder['type']): string {
@@ -219,14 +226,14 @@ function renderItems(order: AdminOrder, el: ReceiptElement, paperWidth: number):
     )
 
     for (const [k, v] of Object.entries(opts)) {
-      lines.push(`<div style="margin-left:26px;font-size:${subFs}px;font-weight:bold;margin-bottom:1px;color:#000;">+ ${esc(formatOptionDisplay(k, v))}</div>`)
+      lines.push(`<div style="margin-left:26px;font-size:${subFs}px;font-weight:bold;margin-bottom:1px;color:#000;">+ ${esc(formatOptionDisplay(k, stripEmbeddedPrice(v)))}</div>`)
     }
 
     for (const ex of extras) {
       const exPrice = Number(ex.price ?? 0)
       lines.push(
         `<div style="display:flex;justify-content:space-between;margin-left:26px;font-size:${subFs}px;margin-bottom:1px;color:#000;">` +
-        `<span>+ ${esc(ex.name)}</span>` +
+        `<span>+ ${esc(stripEmbeddedPrice(ex.name))}</span>` +
         `${exPrice > 0 ? `<span style="white-space:nowrap;padding-left:4px;">${esc(formatVnd(exPrice))}</span>` : ''}` +
         `</div>`,
       )
@@ -472,11 +479,11 @@ export function buildSingleLabelHtml(
   }
 
   for (const [k, v] of optEntries) {
-    contentLines.push(`<div style="font-size:9px;line-height:1.1;color:#000;font-weight:400;">+ ${esc(formatOptionDisplay(k, v))}</div>`)
+    contentLines.push(`<div style="font-size:9px;line-height:1.1;color:#000;font-weight:400;">+ ${esc(formatOptionDisplay(k, stripEmbeddedPrice(v)))}</div>`)
   }
 
   for (const ex of extras) {
-    contentLines.push(`<div style="font-size:9px;line-height:1.1;color:#000;font-weight:400;">+ ${esc(ex.name)}</div>`)
+    contentLines.push(`<div style="font-size:9px;line-height:1.1;color:#000;font-weight:400;">+ ${esc(stripEmbeddedPrice(ex.name))}</div>`)
   }
 
   if (cfg.showNote && item.note) {
