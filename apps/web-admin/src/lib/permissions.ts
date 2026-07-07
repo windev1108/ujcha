@@ -17,6 +17,11 @@ export const PERMISSIONS = {
   TAXES: "taxes",
   VOICER: "voicer",
   FEEDBACK: "feedback",
+  STORE: "store",
+  POS_RELEASE: "pos-release",
+  SMS: "sms",
+  SHIPPING: "shipping",
+  GROUP_ORDERS: "group-orders"
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -41,12 +46,18 @@ export const ALL_PERMISSIONS: Permission[] = [
   "hrm",
   "voicer",
   "feedback",
+  "store",
+  "pos-release",
+  "sms",
+  "shipping",
+  "group-orders"
 ];
 
 export const PERMISSION_LABELS: Record<Permission, string> = {
   attendance: "Chấm công",
   dashboard: "Tổng quan",
   orders: "Đơn hàng",
+  store: "Cửa hàng",
   tables: "Bàn",
   shippers: "Shippers",
   products: "Sản phẩm",
@@ -62,6 +73,10 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   hrm: "Nhân sự (HRM)",
   voicer: "Giọng đọc TTS",
   feedback: "Phản hồi KH",
+  "pos-release": "Cập nhật POS",
+  "shipping": "Phí vận chuyển",
+  sms: "Nhật ký SMS",
+  "group-orders": "Đơn nhóm"
 };
 
 /**
@@ -87,4 +102,9 @@ export const ROUTE_PERMISSION_MAP: Record<string, Permission> = {
   "/payments": "payment",
   "/voicer": "voicer",
   "/feedback": "feedback",
+  "/store": "store",
+  "/pos-release": "pos-release",
+  "/sms": "sms",
+  "/shipping": "shipping",
+  "/group-orders": "group-orders"
 };

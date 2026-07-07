@@ -53,7 +53,7 @@ type NavItem = {
 
 const ALL_NAV_ITEMS: NavItem[] = [
   { href: ROUTES.DASHBOARD, label: "Tổng quan", icon: LayoutDashboard, permission: "dashboard" },
-  { href: ROUTES.STORE, label: "Cửa hàng", icon: Store },
+  { href: ROUTES.STORE, label: "Cửa hàng", icon: Store, permission: "store" },
   { href: ROUTES.HRM, label: "Nhân sự (HRM)", icon: Users2, permission: "hrm" },
   { href: ROUTES.USERS, label: "Khách hàng", icon: UserCog, permission: "users" },
   { href: ROUTES.ATTENDANCE, label: "Chấm công", icon: ClipboardCheck },
@@ -67,13 +67,13 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { href: ROUTES.POINTS, label: "Điểm UjCha", icon: Coins, permission: "points" },
   { href: ROUTES.TAXES, label: "Quản lý thuế", icon: Receipt, permission: "taxes" },
   { href: ROUTES.REFERRALS, label: "Giới thiệu", icon: Users2, permission: "referrals" },
-  { href: ROUTES.GROUP_ORDERS, label: "Đơn nhóm", icon: UsersRound, permission: "orders" },
+  { href: ROUTES.GROUP_ORDERS, label: "Đơn nhóm", icon: UsersRound, permission: "group-orders" },
   { href: ROUTES.POSTS, label: "Bài viết", icon: BookOpen, permission: "posts" },
   { href: ROUTES.VOICER, label: "Giọng đọc TTS", icon: Volume2, permission: "voicer" },
   { href: ROUTES.FEEDBACK, label: "Phản hồi KH", icon: MessageSquare, permission: "feedback" },
-  { href: ROUTES.POS_RELEASE, label: "Cập nhật POS", icon: Monitor },
-  { href: ROUTES.SMS, label: "Nhật ký SMS", icon: MessageSquareDot, permission: "dashboard" },
-  { href: ROUTES.SHIPPING, label: "Phí vận chuyển", icon: MapPin, permission: "payment" },
+  { href: ROUTES.POS_RELEASE, label: "Cập nhật POS", icon: Monitor, permission: "pos-release" },
+  { href: ROUTES.SMS, label: "Nhật ký SMS", icon: MessageSquareDot, permission: "sms" },
+  { href: ROUTES.SHIPPING, label: "Phí vận chuyển", icon: MapPin, permission: "shipping" },
 ];
 
 function initialsFromName(nameOrPhone: string | null | undefined) {
