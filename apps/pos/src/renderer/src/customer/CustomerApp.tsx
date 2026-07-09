@@ -219,7 +219,7 @@ function IdleScreen({ time }: { time: Date }) {
           <div className="relative h-40 w-96 overflow-hidden rounded-full bg-white p-1.5">
             <img src={logoUrl} alt="UjCha" className="h-full w-full object-contain" />
           </div>
-          <h1 className="text-3xl font-black tracking-tight text-[#1a3c2e]">Matcha & Drinks</h1>
+          <h1 className="text-3xl font-black tracking-tight text-[#1a3c2e]">Matcha & More</h1>
         </motion.div>
 
         {/* Clock */}
