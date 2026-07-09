@@ -7,7 +7,7 @@ export async function generateMetadata(): Promise<Metadata> {
     return {
         title: t("menu"),
         description:
-            "Khám phá matcha, cà phê, trà và phụ kiện — nguồn gốc bền vững, chất lượng ceremonial.",
+            "Khám phá Matcha, cà phê, trà sữa, nước ép và đồ uống tại cửa hàng của chúng tôi. Thưởng thức hương vị tuyệt vời và trải nghiệm đồ uống chất lượng cao.",
     };
 }
 
