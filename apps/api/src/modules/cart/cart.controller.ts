@@ -28,7 +28,7 @@ import { RemoveCartItemsDto } from './dto/remove-cart-items.dto';
 @UseGuards(JwtAuthGuard)
 @Controller('cart')
 export class CartController {
-  constructor(private readonly cartService: CartService) {}
+  constructor(private readonly cartService: CartService) { }
 
   @Get()
   @ApiOperation({ summary: 'Lấy giỏ hàng (null nếu chưa từng thêm)' })

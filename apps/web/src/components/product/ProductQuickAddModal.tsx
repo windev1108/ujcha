@@ -141,6 +141,8 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
   const { mutate: addToCart, isPending: isAdding } = useAddToCartMutation();
   const { mutate: updateItem, isPending: isUpdating } = useUpdateCartItemMutation();
   const addLocalItem = useCartStore((s) => s.addItem);
+  const updateLocalItem = useCartStore((s) => s.updateItem);
+
   const isPending = isAdding || isUpdating;
 
   const basePrice = resolvedProduct ? parseFloat(resolvedProduct.price) : 0;
@@ -181,18 +183,33 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
     }
 
     if (isEditMode && editItem) {
+      const toppingSnapshots = toppings
+        .filter((top) => selectedToppings.has(top.id))
+        .map((top) => ({
+          toppingId: top.id,
+          topping: { id: top.id, name: top.name, price: String(top.price), nameTranslation: top.nameTranslation ?? {} },
+        }));
+      const toppingIds = Array.from(selectedToppings);
+
+      if (!accessToken) {
+        updateLocalItem({
+          itemId: editItem.id,
+          quantity,
+          selectedOptions,
+          toppingSnapshots,
+          note,
+        });
+        onClose();
+        return;
+      }
+
       updateItem(
         {
           itemId: editItem.id,
           quantity,
           selectedOptions,
-          toppingIds: Array.from(selectedToppings),
-          toppingSnapshots: toppings
-            .filter((top) => selectedToppings.has(top.id))
-            .map((top) => ({
-              toppingId: top.id,
-              topping: { id: top.id, name: top.name, price: String(top.price), nameTranslation: top.nameTranslation ?? {} },
-            })),
+          toppingIds,
+          toppingSnapshots,
           note: note || undefined,
         },
         { onSuccess: onClose },
