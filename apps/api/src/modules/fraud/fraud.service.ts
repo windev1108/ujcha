@@ -31,7 +31,7 @@ export class FraudService {
 
     if (this.redis.isAvailable) {
       const phoneCount = await this.redis.incrementWindow(
-        `kun:otp:phone:${phone}`,
+        `ujcha:otp:phone:${phone}`,
         windowSeconds,
       );
       if (phoneCount > maxPhone) {
@@ -40,7 +40,7 @@ export class FraudService {
 
       if (requestIp && requestIp !== 'unknown') {
         const ipCount = await this.redis.incrementWindow(
-          `kun:otp:ip:${requestIp}`,
+          `ujcha:otp:ip:${requestIp}`,
           windowSeconds,
         );
         if (ipCount > maxIp) {

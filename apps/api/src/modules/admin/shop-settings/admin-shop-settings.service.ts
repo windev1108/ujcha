@@ -29,7 +29,7 @@ export class AdminShopSettingsService {
       create: { id: SETTINGS_ID, globalDiscountPercent: v },
       update: { globalDiscountPercent: v },
     });
-    void this.redis.del('kun:shop:globalDiscount');
+    void this.redis.del('ujcha:shop:globalDiscount');
 
     // Gửi email cho user subscribe khi admin bật/tăng global discount
     if (v > 0 && v !== prev.globalDiscountPercent) {

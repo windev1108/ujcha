@@ -38,7 +38,7 @@ import { normalizeOptionGroups, computeOptionSurcharge, formatVnd } from "@/lib/
 import { ROUTES } from "@/lib/routes";
 import { getDisplayName, getValueLabel } from "@/lib/product-name";
 
-const TABLE_STORAGE_KEY = "kun_table_id";
+const TABLE_STORAGE_KEY = "ujcha_table_id";
 const PAGE_SIZE = 12;
 
 interface StoreLocationConfig {
@@ -471,11 +471,10 @@ function ProductPickModal({
                           key={v.label}
                           type="button"
                           onClick={() => setSelectedOptions((o) => ({ ...o, [grp.name]: v.label }))}
-                          className={`rounded-full px-3 py-1 text-xs font-semibold transition-all ${
-                            active
+                          className={`rounded-full px-3 py-1 text-xs font-semibold transition-all ${active
                               ? "bg-[#1a3c34] text-white"
                               : "bg-white text-foreground/70 ring-1 ring-black/10 hover:ring-[#1a3c34]/30"
-                          }`}
+                            }`}
                         >
                           {getValueLabel(v, locale)}
                           {v.priceDelta > 0 && (
@@ -517,15 +516,13 @@ function ProductPickModal({
                       key={tp.id}
                       type="button"
                       onClick={() => toggleTopping(tp.id)}
-                      className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${
-                        active
+                      className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${active
                           ? "border-[#1a3c34]/30 bg-[#f0faf6]"
                           : "border-transparent bg-white hover:border-black/[0.08]"
-                      }`}
+                        }`}
                     >
-                      <div className={`flex size-[18px] shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
-                        active ? "border-[#1a3c34] bg-[#1a3c34]" : "border-black/20 bg-white"
-                      }`}>
+                      <div className={`flex size-[18px] shrink-0 items-center justify-center rounded-full border-2 transition-colors ${active ? "border-[#1a3c34] bg-[#1a3c34]" : "border-black/20 bg-white"
+                        }`}>
                         {active && <div className="size-[7px] rounded-full bg-white" />}
                       </div>
                       <span className={`flex-1 text-sm font-medium ${active ? "text-[#1a3c34]" : "text-foreground"}`}>

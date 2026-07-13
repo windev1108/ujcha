@@ -1,4 +1,4 @@
-const KEY = "kun_device_id";
+const KEY = "ujcha_device_id";
 
 function randomId(): string {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {

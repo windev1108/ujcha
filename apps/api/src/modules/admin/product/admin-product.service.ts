@@ -13,7 +13,7 @@ import type { UpdateProductDto } from './dto/update-product.dto';
 import { clampDiscountPercent, computeFinalPrice, normalizeImageUrls, normalizeInlineOptionGroups, normalizeInlineToppings, normalizeTranslation } from '../../../helper/utils';
 import { RedisService } from '../../redis/redis.service';
 
-const GLOBAL_DISCOUNT_KEY = 'kun:shop:globalDiscount';
+const GLOBAL_DISCOUNT_KEY = 'ujcha:shop:globalDiscount';
 const GLOBAL_DISCOUNT_TTL = 60;
 
 @Injectable()
@@ -108,7 +108,7 @@ export class AdminProductService {
       },
       include: { category: { select: { id: true, name: true, slug: true } } },
     });
-    await this.redis.delByPattern('kun:products:list:*');
+    await this.redis.delByPattern('ujcha:products:list:*');
     return normalizeProductRow(created, await this.getGlobalDiscount());
   }
 
@@ -189,7 +189,7 @@ export class AdminProductService {
       },
       include: { category: { select: { id: true, name: true, slug: true } } },
     });
-    await this.redis.delByPattern('kun:products:list:*');
+    await this.redis.delByPattern('ujcha:products:list:*');
     return normalizeProductRow(updated, await this.getGlobalDiscount());
   }
 
@@ -203,7 +203,7 @@ export class AdminProductService {
       }),
       this.getGlobalDiscount(),
     ]);
-    await this.redis.delByPattern('kun:products:list:*');
+    await this.redis.delByPattern('ujcha:products:list:*');
     return normalizeProductRow(row, globalDiscount);
   }
 
@@ -211,7 +211,7 @@ export class AdminProductService {
     await this.getById(id);
     try {
       await this.prisma.product.delete({ where: { id } });
-      await this.redis.delByPattern('kun:products:list:*');
+      await this.redis.delByPattern('ujcha:products:list:*');
     } catch (e: any) {
       if (
         e instanceof Prisma.PrismaClientKnownRequestError &&

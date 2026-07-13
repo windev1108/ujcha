@@ -23,7 +23,7 @@ const CART_ITEM_INCLUDE = {
   },
 } as const;
 
-const GLOBAL_DISCOUNT_KEY = 'kun:shop:globalDiscount';
+const GLOBAL_DISCOUNT_KEY = 'ujcha:shop:globalDiscount';
 const GLOBAL_DISCOUNT_TTL = 60;
 
 /** Build toppingsJson from product.toppings filtered by the selected IDs. */

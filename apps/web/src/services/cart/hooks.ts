@@ -6,9 +6,11 @@ import {
   updateCartItem,
   removeCartItem,
   removeCartItems,
+  fetchProductsByIds,
 } from "./api";
 import { useAuthStore } from "@/store/auth-store";
 import type { ApiCartProduct, ApiCartTopping } from "./types";
+import { useLocale } from "next-intl";
 
 export const cartKeys = {
   cart: ["cart"] as const,
@@ -84,5 +86,18 @@ export function useRemoveCartItemsMutation() {
   return useMutation({
     mutationFn: (itemIds: string[]) => removeCartItems(itemIds),
     onSuccess: () => qc.invalidateQueries({ queryKey: cartKeys.cart }),
+  });
+}
+
+export function useProductsByIdsQuery(productIds: string[]) {
+  const locale = useLocale();
+  const sortedIds = [...new Set(productIds)].sort();
+
+  return useQuery({
+    queryKey: ["products", "batch", locale, sortedIds],
+    queryFn: () => fetchProductsByIds(sortedIds, locale),
+    enabled: sortedIds.length > 0,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 }

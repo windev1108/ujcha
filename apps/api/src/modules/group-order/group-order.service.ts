@@ -21,7 +21,7 @@ import type {
   JoinGroupOrderDto,
 } from './dto/group-order.dto';
 
-const GROUP_ORDER_CONFIG_KEY = 'kun:group-order:config';
+const GROUP_ORDER_CONFIG_KEY = 'ujcha:group-order:config';
 const GROUP_ORDER_CONFIG_TTL = 60; // 60 seconds
 
 function generateShortToken(): string {
@@ -127,7 +127,7 @@ export class GroupOrderService {
         await this.prisma.groupOrderParticipant.update({
           where: { id: hostParticipant.id },
           data: { deviceId: dto.deviceId },
-        }).catch(() => {});
+        }).catch(() => { });
       }
       return {
         ...this.serialize(existing),
@@ -361,7 +361,7 @@ export class GroupOrderService {
           await this.prisma.groupOrderParticipant.update({
             where: { id: existing.id },
             data: { deviceId: dto.deviceId },
-          }).catch(() => {});
+          }).catch(() => { });
         }
         return { sessionToken: existing.sessionToken, participantId: existing.id, alreadyJoined: true };
       }
@@ -378,7 +378,7 @@ export class GroupOrderService {
           await this.prisma.groupOrderParticipant.update({
             where: { id: sameDevice.id },
             data: { userId },
-          }).catch(() => {});
+          }).catch(() => { });
         }
         return { sessionToken: (sameDevice as any).sessionToken, participantId: sameDevice.id, alreadyJoined: true };
       }
@@ -764,7 +764,7 @@ export class GroupOrderService {
 
   private async getGlobalDiscount(): Promise<number> {
     try {
-      const cached = await this.redis.get<number>('kun:shop:globalDiscount');
+      const cached = await this.redis.get<number>('ujcha:shop:globalDiscount');
       if (cached !== null) return cached;
       const settings = await this.prisma.shopSettings.findFirst();
       return settings?.globalDiscountPercent ?? 0;

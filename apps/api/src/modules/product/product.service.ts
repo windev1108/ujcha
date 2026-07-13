@@ -9,8 +9,8 @@ import { RedisService } from '../redis/redis.service';
 
 const PRODUCT_LIST_TTL = 300;
 const PRODUCT_LIST_KEY = (categoryId?: string, categorySlug?: string, q?: string) =>
-    `kun:products:list:${categoryId ?? ''}:${categorySlug ?? ''}:${q ?? ''}`;
-const GLOBAL_DISCOUNT_KEY = 'kun:shop:globalDiscount';
+    `ujcha:products:list:${categoryId ?? ''}:${categorySlug ?? ''}:${q ?? ''}`;
+const GLOBAL_DISCOUNT_KEY = 'ujcha:shop:globalDiscount';
 const GLOBAL_DISCOUNT_TTL = 60;
 
 @Injectable()
@@ -57,7 +57,7 @@ export class ProductService {
     }
 
     async invalidateListCache() {
-        await this.redis.delByPattern('kun:products:list:*');
+        await this.redis.delByPattern('ujcha:products:list:*');
     }
 
     async getById(id: string, locale?: string) {

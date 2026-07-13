@@ -29,7 +29,7 @@ export const useAuthStore = create<AuthState>()(
       hydrated: false,
       setSession: ({ user, accessToken, refreshToken }) => {
         if (typeof document !== "undefined") {
-          document.cookie = "kun-auth-state=1; path=/; SameSite=Lax";
+          document.cookie = "ujcha-auth-state=1; path=/; SameSite=Lax";
         }
         set({ user, accessToken, refreshToken });
       },
@@ -39,13 +39,13 @@ export const useAuthStore = create<AuthState>()(
       setHydrated: (hydrated) => set({ hydrated }),
       clearSession: () => {
         if (typeof document !== "undefined") {
-          document.cookie = "kun-auth-state=; path=/; max-age=0; SameSite=Lax";
+          document.cookie = "ujcha-auth-state=; path=/; max-age=0; SameSite=Lax";
         }
         set({ user: null, accessToken: null, refreshToken: null });
       },
     }),
     {
-      name: "kun-auth",
+      name: "ujcha-auth",
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
         user: s.user,
@@ -54,7 +54,7 @@ export const useAuthStore = create<AuthState>()(
       }),
       onRehydrateStorage: () => (state) => {
         if (state?.accessToken && typeof document !== "undefined") {
-          document.cookie = "kun-auth-state=1; path=/; SameSite=Lax";
+          document.cookie = "ujcha-auth-state=1; path=/; SameSite=Lax";
         }
       },
     },

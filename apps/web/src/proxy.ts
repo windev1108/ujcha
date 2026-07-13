@@ -17,7 +17,7 @@ const ORDER_DETAIL_RE = /(?:^|\/[a-z]{2})\/orders\/UJCHA-[0-9A-F]{8}(?:\/|$)/i;
 
 export default function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const isAuth = request.cookies.get('kun-auth-state')?.value === '1';
+  const isAuth = request.cookies.get('ujcha-auth-state')?.value === '1';
 
   const isAuthPage = AUTH_PAGES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
   if (isAuthPage && isAuth) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "motion/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CartLineList } from "./CartLineList";
 import { CartEditModal } from "./CartEditModal";
@@ -13,6 +13,7 @@ import {
   useCartQuery,
   useUpdateCartItemMutation,
   useRemoveCartItemMutation,
+  useProductsByIdsQuery,
 } from "@/services/cart/hooks";
 import { useAuthStore } from "@/store/auth-store";
 import { useCartStore } from "@/store/cart-store";
@@ -68,6 +69,7 @@ export function CartPageShell() {
   const localItems = useCartStore((s) => s.items);
   const updateLocalItem = useCartStore((s) => s.updateItem);
   const removeLocalItem = useCartStore((s) => s.removeItem);
+  const syncLocalProducts = useCartStore((s) => s.syncProducts);
 
   const [editingItem, setEditingItem] = useState<ApiCartItem | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -80,6 +82,34 @@ export function CartPageShell() {
       .then((cfg) => setGroupOrderEnabled(cfg.isEnabled))
       .catch(() => { });
   }, []);
+
+  // --- Guest cart price/discount re-sync -----------------------------
+  // Guest cart items keep a persisted `product` snapshot in localStorage
+  // taken at "add to cart" time. If an admin later changes the product's
+  // price or discount, that snapshot goes stale and the guest keeps
+  // checking out against the old price. Refetch the latest product data
+  // on every cart page load and merge it back into the persisted items.
+  const guestProductIds = useMemo(
+    () => (isGuest ? Array.from(new Set(localItems.map((i) => i.productId))) : []),
+    [isGuest, localItems],
+  );
+  const { data: freshProducts } = useProductsByIdsQuery(guestProductIds);
+  const lastSyncedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!isGuest || !freshProducts) return;
+    const syncKey = JSON.stringify(freshProducts);
+    if (lastSyncedRef.current === syncKey) return;
+    lastSyncedRef.current = syncKey;
+
+    const removedNames = syncLocalProducts(freshProducts);
+    if (removedNames.length > 0) {
+      toast.error(
+        `Một số sản phẩm trong giỏ hàng không còn khả dụng và đã được gỡ bỏ: ${removedNames.join(", ")}`,
+      );
+    }
+  }, [isGuest, freshProducts, syncLocalProducts]);
+  // ---------------------------------------------------------------------
 
   const items = isGuest ? localItems : (serverCart?.items ?? []);
   const isLoading = isGuest ? false : serverCartLoading;
