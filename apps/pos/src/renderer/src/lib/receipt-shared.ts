@@ -57,6 +57,14 @@ function userIcon(size: number): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block;flex-shrink:0;"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>`
 }
 
+/**
+ * Builds a map from item-signature -> queue of participant names, one entry
+ * PER PHYSICAL UNIT ordered (not deduped per participant). This lets callers
+ * `shift()` exactly one name per printed label, so that when two different
+ * participants order the same product/options/extras/note combo, each of
+ * their individual units gets only their own name — not everyone's names
+ * joined together.
+ */
 function buildGroupParticipantMap(
   groupOrder: AdminOrder['groupOrder'],
 ): Map<string, string[]> {
@@ -77,7 +85,13 @@ function buildGroupParticipantMap(
         : '[]'
       const key = [item.productId, opts, extras, item.note ?? ''].join('\0')
       const existing = map.get(key) ?? []
-      if (!existing.includes(name)) existing.push(name)
+      const qty = item.quantity ?? 1
+      // Push the participant's name once per unit they ordered, so the
+      // queue length always matches the number of physical units for
+      // this signature across all participants.
+      for (let n = 0; n < qty; n++) {
+        existing.push(name)
+      }
       map.set(key, existing)
     }
   }
@@ -552,7 +566,9 @@ export function buildOrderLabels(
   const participantMap = buildGroupParticipantMap(order.groupOrder)
   let labelIndex = 1
   for (const item of order.items) {
-    let participantName: string | undefined
+    // Compute the signature key once per item group (product + options +
+    // extras + note) and grab the shared queue of participant names for it.
+    let names: string[] | undefined
     if (participantMap.size > 0) {
       const opts = item.optionsJson
         ? JSON.stringify(Object.fromEntries(Object.entries(item.optionsJson).sort()))
@@ -565,10 +581,14 @@ export function buildOrderLabels(
         )
         : '[]'
       const key = [item.productId, opts, extras, item.note ?? ''].join('\0')
-      const names = participantMap.get(key)
-      if (names?.length) participantName = names.join(', ')
+      names = participantMap.get(key)
     }
     for (let i = 0; i < item.quantity; i++) {
+      // Pull exactly ONE name per physical label from the front of the
+      // queue, instead of joining every name that shares this signature.
+      // This is what makes "Phúc" and "Ly" each get their own cup's label
+      // instead of both cups showing "Phúc, Ly".
+      const participantName = names && names.length > 0 ? names.shift() : undefined
       labels.push(
         buildSingleLabelHtml(
           item,

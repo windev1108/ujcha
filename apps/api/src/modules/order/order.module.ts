@@ -11,11 +11,12 @@ import { OrderService } from './order.service';
 import { NotificationModule } from '../notification/notification.module';
 import { OrderValidationService } from './order-validation.service';
 import { GroupOrderModule } from '../group-order/group-order.module';
+import { MailService } from '../mail/mail.service';
 
 @Module({
   imports: [PrismaModule, AuthModule, EventsModule, PointModule, ReferralModule, NotificationModule, GroupOrderModule],
   controllers: [OrderController],
-  providers: [OrderService, OrderValidationService, OrderPointApplyService, OrderExpiryCronService],
-  exports: [OrderService, OrderPointApplyService],
+  providers: [OrderService, OrderValidationService, OrderPointApplyService, OrderExpiryCronService, MailService],
+  exports: [OrderService, OrderPointApplyService, MailService],
 })
-export class OrderModule {}
+export class OrderModule { }

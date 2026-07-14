@@ -25,6 +25,7 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { VoucherPreviewDto } from './dto/voucher-preview.dto';
 import { OrderService } from './order.service';
+import { MailService } from '../mail/mail.service';
 
 @ApiTags('orders')
 @Controller('orders')
@@ -32,7 +33,8 @@ export class OrderController {
   constructor(
     private readonly orderService: OrderService,
     private readonly ordersGateway: OrdersGateway,
-  ) {}
+    private readonly mailService: MailService,
+  ) { }
 
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
@@ -70,6 +72,26 @@ export class OrderController {
   ) {
     const order = await this.orderService.createOrder(userId, dto);
     this.ordersGateway.emitOrderCreated({ orderId: order.id, type: order.type });
+    this.mailService
+      .sendNewOrderNotification({
+        orderId: order.id,
+        paymentCode: order.paymentCode,
+        type: order.type,
+        customerName: order.user?.name ?? order.guestDeliveryName,
+        customerPhone: order.user?.phone ?? order.guestDeliveryPhone,
+        address: order?.address?.fullAddress ?? order.guestDeliveryAddress,
+        coordinate:
+          order?.address?.lng && order?.address?.lat
+            ? { lng: order?.address?.lng, lat: order?.address?.lat }
+            : null,
+        totalAmount: order.finalAmount,
+        items: order.items.map((x) => ({
+          name: x.product?.name,
+          quantity: x.quantity,
+          price: x.price,
+        })),
+      })
+      .catch(() => { });
     return order;
   }
 

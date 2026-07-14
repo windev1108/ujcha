@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import { PrismaService } from '../prisma/prisma.service';
+import { Decimal } from '@prisma/client/runtime/library';
 
 export interface PromotionEmailData {
   subject: string;
@@ -9,6 +10,102 @@ export interface PromotionEmailData {
   body: string;
   ctaText?: string;
   ctaUrl?: string;
+}
+
+export interface NewOrderEmailData {
+  orderId: string;
+  paymentCode: string;
+  type: string; // delivery | table | pickup
+  customerName?: string | null;
+  customerPhone?: string | null;
+  coordinate: { lng: number; lat: number } | null;
+  address?: string | null;
+  totalAmount: Decimal;
+  items: Array<{ name: string; quantity: number; price: Decimal }>;
+}
+
+function buildNewOrderHtml(data: NewOrderEmailData, siteUrl: string): string {
+  const itemsRows = data.items
+    .map(
+      (item) => `
+        <tr>
+          <td style="padding:8px 0;border-bottom:1px solid #ededed;font-size:14px;color:#1a1a1a;">
+            ${item.name} × ${item.quantity}
+          </td>
+          <td style="padding:8px 0;border-bottom:1px solid #ededed;font-size:14px;color:#1a1a1a;text-align:right;">
+            ${(Number(item.price) * item.quantity).toLocaleString('vi-VN')}đ
+          </td>
+        </tr>`,
+    )
+    .join('');
+
+  // Ưu tiên tọa độ chính xác nếu có, fallback sang search theo địa chỉ text
+  const mapsUrl = data.coordinate
+    ? `https://www.google.com/maps/search/?api=1&query=${data.coordinate.lat},${data.coordinate.lng}`
+    : data.address
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.address)}`
+      : null;
+
+  const addressBlock = data.address
+    ? `<p style="margin:0 0 8px;font-size:14px;color:#1a1a1a;">📍 ${data.address}</p>`
+    : '';
+
+  const mapsLink = mapsUrl
+    ? `<p style="margin:0 0 20px;">
+         <a href="${mapsUrl}" target="_blank"
+            style="font-size:13px;color:#1a3c34;text-decoration:underline;font-weight:600;">
+           🗺️ Xem vị trí trên Google Maps
+         </a>
+       </p>`
+    : '';
+
+  return `<!DOCTYPE html>
+<html lang="vi">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f7f7f7;font-family:ui-sans-serif,system-ui,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f7f7f7;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0"
+             style="background:#ffffff;border-radius:16px;overflow:hidden;max-width:600px;width:100%;">
+        <tr>
+          <td style="background:#1a3c34;padding:28px 40px;text-align:center;">
+            <span style="color:#ffffff;font-size:22px;font-weight:700;">UjCha</span>
+            <span style="color:#99d6b3;font-size:13px;display:block;margin-top:4px;">Đơn hàng mới</span>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px 40px 8px;">
+            <h1 style="margin:0 0 4px;font-size:20px;font-weight:700;color:#1a1a1a;">
+              Đơn #${data.paymentCode}
+            </h1>
+            <p style="margin:0 0 20px;font-size:13px;color:#717171;">
+              Loại: ${data.type === 'delivery' ? 'Giao hàng' : data.type === 'table' ? 'Đặt bàn' : 'Mang đi'}${data.customerName ? ` · ${data.customerName}` : ''}${data.customerPhone ? ` · ${data.customerPhone}` : ''}
+            </p>
+            ${addressBlock}
+            ${mapsLink}
+            <table width="100%" cellpadding="0" cellspacing="0">
+              ${itemsRows}
+              <tr>
+                <td style="padding:12px 0 0;font-size:15px;font-weight:700;color:#1a1a1a;">Tổng cộng</td>
+                <td style="padding:12px 0 0;font-size:15px;font-weight:700;color:#1a1a1a;text-align:right;">
+                  ${Number(data.totalAmount).toLocaleString('vi-VN')}đ
+                </td>
+              </tr>
+            </table>
+            <div style="text-align:center;margin:32px 0 8px;">
+              <a href="${siteUrl}/orders/${data.orderId}"
+                 style="display:inline-block;background:#1a3c34;color:#ffffff;text-decoration:none;
+                        padding:14px 32px;border-radius:9999px;font-size:15px;font-weight:600;">
+                Xem đơn hàng
+              </a>
+            </div>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
 }
 
 function buildHtml(data: PromotionEmailData, siteUrl: string): string {
@@ -95,6 +192,38 @@ export class MailService {
       });
     }
     return this.transporter;
+  }
+  async sendNewOrderNotification(data: NewOrderEmailData): Promise<void> {
+    const from =
+      this.config.get<string>('SMTP_FROM') ?? 'UjCha <noreply@ujcha.vn>';
+    const adminUrl =
+      this.config.get<string>('ADMIN_SITE_URL') ?? 'https://ujcha.vn';
+    const adminEmails = (
+      this.config.get<string>('ADMIN_NOTIFICATION_EMAILS') ?? ''
+    )
+      .split(',')
+      .map((e) => e.trim())
+      .filter(Boolean);
+
+    if (adminEmails.length === 0) {
+      this.logger.warn(
+        'ADMIN_NOTIFICATION_EMAILS chưa được cấu hình — bỏ qua gửi mail đơn mới',
+      );
+      return;
+    }
+
+    try {
+      await this.getTransporter().sendMail({
+        from,
+        to: adminEmails.join(','),
+        subject: `🔔 Đơn hàng mới #${data.paymentCode}`,
+        html: buildNewOrderHtml(data, adminUrl),
+      });
+    } catch (err) {
+      this.logger.error(
+        `Failed to send new-order notification: ${(err as Error).message}`,
+      );
+    }
   }
 
   async sendPromotionEmail(to: string, data: PromotionEmailData): Promise<void> {
