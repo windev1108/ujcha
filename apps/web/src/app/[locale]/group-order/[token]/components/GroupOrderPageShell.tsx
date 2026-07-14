@@ -50,7 +50,6 @@ import { ProductQuickAddModal, type GroupOrderDraftValue } from "@/components/pr
 import { normalizeOptionGroups, computeOptionSurcharge, formatVnd, formatOptionLabel } from "@/lib/product-options";
 
 import { useAddressesQuery } from "@/services/order/hooks";
-import { createAddress } from "@/services/order/api";
 import { useShippingEstimateQuery, usePublicShippingConfigQuery } from "@/services/shipping/hooks";
 import { usePublicPaymentConfigQuery } from "@/services/payment-config/hooks";
 import { useProfileQuery } from "@/services/profile/hooks";
@@ -964,8 +963,8 @@ function ParticipantRow({
                             <span
                               key={i}
                               className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${o.priceDelta > 0
-                                  ? "bg-kun-mint/20 text-kun-products-forest"
-                                  : "bg-surface-card text-foreground/70"
+                                ? "bg-kun-mint/20 text-kun-products-forest"
+                                : "bg-surface-card text-foreground/70"
                                 }`}
                             >
                               {formatOptionLabel(o.groupName, o.label, locale)}
@@ -1654,14 +1653,15 @@ export function GroupOrderPageShell() {
     void (async () => {
       try {
         let addressId: string | undefined;
+        let inlineAddress: { fullAddress: string; lat: number; lng: number } | undefined;
+
         if (localType === "delivery") {
           if (localShowNewForm) {
-            const created = await createAddress({
+            inlineAddress = {
               fullAddress: localDeliveryForm.fullAddress.trim(),
               lat: localDeliveryForm.lat ?? 0,
               lng: localDeliveryForm.lng ?? 0,
-            });
-            addressId = created.id;
+            };
           } else {
             addressId = localSelectedAddressId ?? undefined;
           }
@@ -1672,6 +1672,7 @@ export function GroupOrderPageShell() {
         const newState = await setGroupOrderFulfillment(token, sessionToken, {
           type: localType,
           addressId,
+          inlineAddress,
           shippingFee: localType === "delivery" ? localShippingFee : 0,
           pickupTime,
           shippingFeeMode: state?.shippingFeeMode,
@@ -2169,11 +2170,10 @@ export function GroupOrderPageShell() {
                       exit={{ opacity: 0, scale: 0.97, transition: { duration: 0.15 } }}
                       transition={{ type: "spring", damping: 28, stiffness: 340, delay: i < 4 ? i * 0.04 : 0 }}
                       layout
-                      className={`overflow-hidden rounded-3xl border bg-white transition-shadow ${
-                        isMe
-                          ? "border-[#1a3c34]/20 shadow-[0_4px_20px_-8px_rgba(26,60,52,0.14)]"
-                          : "border-black/6"
-                      }`}
+                      className={`overflow-hidden rounded-3xl border bg-white transition-shadow ${isMe
+                        ? "border-[#1a3c34]/20 shadow-[0_4px_20px_-8px_rgba(26,60,52,0.14)]"
+                        : "border-black/6"
+                        }`}
                     >
                       <div className={`p-4 ${isMe ? "bg-[#f0faf6]" : ""}`}>
                         <ParticipantRow

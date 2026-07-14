@@ -82,6 +82,14 @@ export class CreateOrderDto {
   @MaxLength(120)
   guestDeliveryName?: string;
 
+  @IsOptional()
+  @IsNumber()
+  guestDeliveryLat?: number;
+
+  @IsOptional()
+  @IsNumber()
+  guestDeliveryLng?: number;
+
   @ApiPropertyOptional({ format: 'uuid' })
   @ValidateIf((o: CreateOrderDto) => o.type === OrderType.table)
   @IsNotEmpty()

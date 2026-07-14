@@ -43,6 +43,8 @@ export interface CreateOrderPayload {
   guestDeliveryAddress?: string
   guestDeliveryName?: string
   guestDeliveryPhone?: string
+  guestDeliveryLat?: number
+  guestDeliveryLng?: number
 }
 
 export interface PublicTableInfo {

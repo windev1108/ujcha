@@ -11,6 +11,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { Prisma } from '@prisma/client';
 
 export class CreateGroupOrderDto {
   @IsEnum(['delivery', 'pickup', 'table'])
@@ -114,6 +115,12 @@ export class ConfirmPaidDto {
   participantId: string;
 }
 
+export class InlineAddressDto {
+  @IsString() fullAddress: string;
+  @IsNumber() lat: number;
+  @IsNumber() lng: number;
+}
+
 export class SetFulfillmentDto {
   @IsString()
   sessionToken: string;
@@ -145,6 +152,11 @@ export class SetFulfillmentDto {
   @IsOptional()
   @IsEnum(['split', 'host_pays'])
   shippingFeeMode?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => InlineAddressDto)
+  inlineAddress?: InlineAddressDto;
 }
 
 export class DiscountTierDto {
@@ -180,3 +192,31 @@ export class UpdateGroupOrderConfigDto {
   @Type(() => DiscountTierDto)
   discountTiers?: DiscountTierDto[];
 }
+
+
+export type GroupOrderFull = Prisma.GroupOrderGetPayload<{
+  include: {
+    participants: {
+      include: {
+        user: { select: { id: true; name: true; avatar: true } };
+        items: {
+          include: {
+            product: {
+              select: {
+                id: true;
+                name: true;
+                nameTranslation: true;
+                imageUrls: true;
+                price: true;
+                optionGroups: true;
+              };
+            };
+          };
+        };
+      };
+    };
+    address: { select: { id: true; fullAddress: true } };
+    table: { select: { id: true; name: true; area: true } };
+    order: { select: { id: true; paymentCode: true; status: true } };
+  };
+}>;

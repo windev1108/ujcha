@@ -72,7 +72,6 @@ export class OrderController {
   ) {
     const order = await this.orderService.createOrder(userId, dto);
     this.ordersGateway.emitOrderCreated({ orderId: order.id, type: order.type });
-    console.log({ order, dto })
     this.mailService
       .sendNewOrderNotification({
         orderId: order.id,

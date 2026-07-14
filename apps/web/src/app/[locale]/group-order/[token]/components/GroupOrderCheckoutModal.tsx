@@ -39,6 +39,7 @@ interface Props {
   storeLocation?: StoreLocationInfo | null;
   onSave: (payload: {
     type: TabType;
+    inlineAddress?: { fullAddress: string; lat: number; lng: number };
     addressId?: string;
     shippingFee?: number;
     paymentType: "cash" | "bank_transfer";
@@ -150,33 +151,25 @@ export function GroupOrderCheckoutModal({
 
   async function handleConfirm() {
     setError(null);
-
     if (type === "delivery") {
-      if (shippingIsOutOfRange) {
-        setError(t("error_delivery_out_of_range"));
-        return;
-      }
-      if (showNewForm && !deliveryForm.fullAddress.trim()) {
-        setError(t("error_enter_delivery_address"));
-        return;
-      }
-      if (!showNewForm && !selectedAddressId) {
-        setError(t("error_select_address"));
-        return;
-      }
+      if (shippingIsOutOfRange) { setError(t("error_delivery_out_of_range")); return; }
+      if (showNewForm && !deliveryForm.fullAddress.trim()) { setError(t("error_enter_delivery_address")); return; }
+      if (!showNewForm && !selectedAddressId) { setError(t("error_select_address")); return; }
     }
 
     setSubmitting(true);
     try {
       let addressId: string | undefined;
+      let inlineAddress: { fullAddress: string; lat: number; lng: number } | undefined;
+
       if (type === "delivery") {
         if (showNewForm) {
-          const created = await createAddress({
+          // Chỉ gửi dữ liệu, KHÔNG tạo address ở đây
+          inlineAddress = {
             fullAddress: deliveryForm.fullAddress.trim(),
             lat: deliveryForm.lat ?? 0,
             lng: deliveryForm.lng ?? 0,
-          });
-          addressId = created.id;
+          };
         } else {
           addressId = selectedAddressId ?? undefined;
         }
@@ -195,6 +188,7 @@ export function GroupOrderCheckoutModal({
       await onSave({
         type,
         addressId,
+        inlineAddress,
         shippingFee: type === "delivery" ? shippingFee : 0,
         paymentType,
         pickupTime,
@@ -242,11 +236,10 @@ export function GroupOrderCheckoutModal({
               key={id}
               type="button"
               onClick={() => { setType(id); setError(null); }}
-              className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                type === id
-                  ? "bg-kun-primary text-white shadow-sm"
-                  : "bg-surface-card text-foreground/60 hover:bg-black/6"
-              }`}
+              className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${type === id
+                ? "bg-kun-primary text-white shadow-sm"
+                : "bg-surface-card text-foreground/60 hover:bg-black/6"
+                }`}
             >
               <Icon className="size-4" />
               {label}
@@ -286,15 +279,14 @@ export function GroupOrderCheckoutModal({
                   transition={{ duration: 0.2 }}
                   className="overflow-hidden"
                 >
-                  <div className={`flex items-center justify-between rounded-2xl px-4 py-3 text-sm ${
-                    shippingFetching
-                      ? "bg-surface-card text-foreground/50"
-                      : shippingIsOutOfRange
-                        ? "bg-red-50 text-red-700"
-                        : shippingIsFree
-                          ? "bg-emerald-50 text-emerald-700"
-                          : "bg-kun-mint/20 text-kun-products-forest"
-                  }`}>
+                  <div className={`flex items-center justify-between rounded-2xl px-4 py-3 text-sm ${shippingFetching
+                    ? "bg-surface-card text-foreground/50"
+                    : shippingIsOutOfRange
+                      ? "bg-red-50 text-red-700"
+                      : shippingIsFree
+                        ? "bg-emerald-50 text-emerald-700"
+                        : "bg-kun-mint/20 text-kun-products-forest"
+                    }`}>
                     <div className="flex items-center gap-1.5">
                       {shippingFetching ? (
                         <Loader2 className="size-4 animate-spin" />

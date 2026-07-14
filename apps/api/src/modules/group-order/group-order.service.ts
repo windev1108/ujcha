@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   ForbiddenException,
   Injectable,
   InternalServerErrorException,
@@ -9,7 +8,13 @@ import {
 } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { GroupOrderStatus, OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
+import {
+  GroupOrderStatus,
+  OrderStatus,
+  OrderType,
+  PaymentStatus,
+  Prisma,
+} from '@prisma/client';
 import { computeFinalPrice } from '../../helper/utils';
 import { OrdersGateway } from '../events/orders.gateway';
 import { NotificationService } from '../notification/notification.service';
@@ -20,6 +25,7 @@ import type {
   GroupOrderItemDto,
   JoinGroupOrderDto,
 } from './dto/group-order.dto';
+import { MailService } from '../mail/mail.service';
 
 const GROUP_ORDER_CONFIG_KEY = 'ujcha:group-order:config';
 const GROUP_ORDER_CONFIG_TTL = 60; // 60 seconds
@@ -28,6 +34,20 @@ function generateShortToken(): string {
   return randomBytes(9).toString('base64url').slice(0, 12);
 }
 
+interface SetFulfillmentInput {
+  type: string;
+  addressId?: string;
+  inlineAddress?: { fullAddress: string; lat: number; lng: number };
+  tableId?: string;
+  pickupTime?: string;
+  shippingFee?: number;
+  paymentType?: string;
+  shippingFeeMode?: string;
+}
+
+type GroupOrderFull = Prisma.GroupOrderGetPayload<{
+  include: ReturnType<GroupOrderService['fullInclude']>;
+}>;
 @Injectable()
 export class GroupOrderService {
   private readonly logger = new Logger(GroupOrderService.name);
@@ -37,6 +57,7 @@ export class GroupOrderService {
     private readonly redis: RedisService,
     private readonly ordersGateway: OrdersGateway,
     private readonly notificationService: NotificationService,
+    private readonly mailService: MailService,
   ) { }
 
   private fullInclude() {
@@ -46,7 +67,16 @@ export class GroupOrderService {
           user: { select: { id: true, name: true, avatar: true } },
           items: {
             include: {
-              product: { select: { id: true, name: true, nameTranslation: true, imageUrls: true, price: true, optionGroups: true } },
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  nameTranslation: true,
+                  imageUrls: true,
+                  price: true,
+                  optionGroups: true,
+                },
+              },
             },
           },
         },
@@ -55,10 +85,10 @@ export class GroupOrderService {
       address: { select: { id: true, fullAddress: true } },
       table: { select: { id: true, name: true, area: true } },
       order: { select: { id: true, paymentCode: true, status: true } },
-    };
+    } satisfies Prisma.GroupOrderInclude;
   }
 
-  private serialize(go: any) {
+  private serialize(go: GroupOrderFull) {
     return {
       id: go.id,
       token: go.token,
@@ -118,16 +148,26 @@ export class GroupOrderService {
   async create(hostUserId: string, dto: CreateGroupOrderDto) {
     // One active group order per host — return the existing one instead of creating a duplicate.
     const existing = await this.prisma.groupOrder.findFirst({
-      where: { hostUserId, status: 'collecting', expiresAt: { gt: new Date() } },
+      where: {
+        hostUserId,
+        status: 'collecting',
+        expiresAt: { gt: new Date() },
+      },
       include: this.fullInclude(),
     });
     if (existing) {
       const hostParticipant = existing.participants.find((p) => p.isHost);
-      if (dto.deviceId && hostParticipant && !(hostParticipant as any).deviceId) {
-        await this.prisma.groupOrderParticipant.update({
-          where: { id: hostParticipant.id },
-          data: { deviceId: dto.deviceId },
-        }).catch(() => { });
+      if (
+        dto.deviceId &&
+        hostParticipant &&
+        !(hostParticipant as any).deviceId
+      ) {
+        await this.prisma.groupOrderParticipant
+          .update({
+            where: { id: hostParticipant.id },
+            data: { deviceId: dto.deviceId },
+          })
+          .catch(() => { });
       }
       return {
         ...this.serialize(existing),
@@ -139,7 +179,9 @@ export class GroupOrderService {
     const token = generateShortToken();
     const sessionToken = randomUUID();
     const cfg = await this.getConfig();
-    const expiresAt = new Date(Date.now() + (cfg.expiryMinutes ?? 120) * 60 * 1000);
+    const expiresAt = new Date(
+      Date.now() + (cfg.expiryMinutes ?? 120) * 60 * 1000,
+    );
 
     const go = await this.prisma.groupOrder.create({
       data: {
@@ -150,7 +192,9 @@ export class GroupOrderService {
         addressId: dto.addressId ?? null,
         tableId: dto.tableId ?? null,
         pickupTime: dto.pickupTime ? new Date(dto.pickupTime) : null,
-        shippingFee: dto.shippingFee ? new Prisma.Decimal(dto.shippingFee) : new Prisma.Decimal(0),
+        shippingFee: dto.shippingFee
+          ? new Prisma.Decimal(dto.shippingFee)
+          : new Prisma.Decimal(0),
         note: dto.note ?? null,
         expiresAt,
         participants: {
@@ -182,7 +226,8 @@ export class GroupOrderService {
 
     const isExpired =
       go.expiresAt < new Date() &&
-      (go.status === GroupOrderStatus.collecting || go.status === GroupOrderStatus.locked);
+      (go.status === GroupOrderStatus.collecting ||
+        go.status === GroupOrderStatus.locked);
 
     if (isExpired) {
       const cancelled = await this.prisma.groupOrder.update({
@@ -281,7 +326,8 @@ export class GroupOrderService {
       expiresAt: r.expiresAt.toISOString(),
       createdAt: r.createdAt.toISOString(),
       participantCount: r._count.participants,
-      hostName: r.participants[0]?.user?.name ?? r.participants[0]?.guestName ?? null,
+      hostName:
+        r.participants[0]?.user?.name ?? r.participants[0]?.guestName ?? null,
     }));
   }
 
@@ -292,10 +338,16 @@ export class GroupOrderService {
     });
     if (!go) throw new NotFoundException('Không tìm thấy đơn nhóm.');
     if (go.status !== 'collecting') {
-      throw new BadRequestException({ message: 'Chỉ có thể giải tán khi đơn nhóm đang thu thập.', code: 'GROUP_ORDER_NOT_COLLECTING' });
+      throw new BadRequestException({
+        message: 'Chỉ có thể giải tán khi đơn nhóm đang thu thập.',
+        code: 'GROUP_ORDER_NOT_COLLECTING',
+      });
     }
-    const host = go.participants.find((p) => p.isHost && p.sessionToken === sessionToken);
-    if (!host) throw new ForbiddenException('Chỉ chủ nhóm mới có thể giải tán nhóm.');
+    const host = go.participants.find(
+      (p) => p.isHost && p.sessionToken === sessionToken,
+    );
+    if (!host)
+      throw new ForbiddenException('Chỉ chủ nhóm mới có thể giải tán nhóm.');
     const updated = await this.prisma.groupOrder.update({
       where: { id: go.id },
       data: { status: GroupOrderStatus.cancelled },
@@ -311,32 +363,52 @@ export class GroupOrderService {
     });
     if (!go) throw new NotFoundException('Không tìm thấy đơn nhóm.');
     if (go.status !== 'collecting') {
-      throw new BadRequestException({ message: 'Không thể rời nhóm khi đơn đã khóa.', code: 'GROUP_ORDER_NOT_COLLECTING' });
+      throw new BadRequestException({
+        message: 'Không thể rời nhóm khi đơn đã khóa.',
+        code: 'GROUP_ORDER_NOT_COLLECTING',
+      });
     }
-    const participant = go.participants.find((p) => p.sessionToken === sessionToken);
+    const participant = go.participants.find(
+      (p) => p.sessionToken === sessionToken,
+    );
     if (!participant) throw new NotFoundException('Không tìm thấy thành viên.');
-    if (participant.isHost) throw new ForbiddenException('Chủ nhóm không thể rời nhóm.');
+    if (participant.isHost)
+      throw new ForbiddenException('Chủ nhóm không thể rời nhóm.');
     const leaverName = participant.user?.name ?? participant.guestName ?? '?';
-    await this.prisma.groupOrderParticipant.delete({ where: { id: participant.id } });
+    await this.prisma.groupOrderParticipant.delete({
+      where: { id: participant.id },
+    });
     const updated = await this.findByToken(token);
     return { leaverName, groupOrder: updated };
   }
 
-  async kickParticipant(token: string, sessionToken: string, participantId: string) {
+  async kickParticipant(
+    token: string,
+    sessionToken: string,
+    participantId: string,
+  ) {
     const go = await this.prisma.groupOrder.findUnique({
       where: { token },
       include: { participants: true },
     });
     if (!go) throw new NotFoundException('Không tìm thấy đơn nhóm.');
     if (go.status !== 'collecting') {
-      throw new BadRequestException({ message: 'Chỉ có thể xóa thành viên khi đơn nhóm đang thu thập.', code: 'GROUP_ORDER_NOT_COLLECTING' });
+      throw new BadRequestException({
+        message: 'Chỉ có thể xóa thành viên khi đơn nhóm đang thu thập.',
+        code: 'GROUP_ORDER_NOT_COLLECTING',
+      });
     }
-    const host = go.participants.find((p) => p.isHost && p.sessionToken === sessionToken);
-    if (!host) throw new ForbiddenException('Chỉ chủ nhóm mới có thể xóa thành viên.');
+    const host = go.participants.find(
+      (p) => p.isHost && p.sessionToken === sessionToken,
+    );
+    if (!host)
+      throw new ForbiddenException('Chỉ chủ nhóm mới có thể xóa thành viên.');
     const target = go.participants.find((p) => p.id === participantId);
     if (!target) throw new NotFoundException('Không tìm thấy thành viên.');
     if (target.isHost) throw new ForbiddenException('Không thể xóa chủ nhóm.');
-    await this.prisma.groupOrderParticipant.delete({ where: { id: participantId } });
+    await this.prisma.groupOrderParticipant.delete({
+      where: { id: participantId },
+    });
     const updated = await this.findByToken(token);
     return { kicked: participantId, groupOrder: updated };
   }
@@ -347,10 +419,16 @@ export class GroupOrderService {
       include: { participants: true },
     });
     if (!go) {
-      throw new NotFoundException({ message: 'Không tìm thấy đơn nhóm.', code: 'GROUP_ORDER_NOT_FOUND' });
+      throw new NotFoundException({
+        message: 'Không tìm thấy đơn nhóm.',
+        code: 'GROUP_ORDER_NOT_FOUND',
+      });
     }
     if (go.expiresAt < new Date()) {
-      throw new BadRequestException({ message: 'Đơn nhóm đã hết hạn.', code: 'GROUP_ORDER_EXPIRED' });
+      throw new BadRequestException({
+        message: 'Đơn nhóm đã hết hạn.',
+        code: 'GROUP_ORDER_EXPIRED',
+      });
     }
 
     // Logged-in user: return existing session if already joined (works even after collecting)
@@ -358,12 +436,18 @@ export class GroupOrderService {
       const existing = go.participants.find((p) => p.userId === userId);
       if (existing) {
         if (dto.deviceId && !(existing as any).deviceId) {
-          await this.prisma.groupOrderParticipant.update({
-            where: { id: existing.id },
-            data: { deviceId: dto.deviceId },
-          }).catch(() => { });
+          await this.prisma.groupOrderParticipant
+            .update({
+              where: { id: existing.id },
+              data: { deviceId: dto.deviceId },
+            })
+            .catch(() => { });
         }
-        return { sessionToken: existing.sessionToken, participantId: existing.id, alreadyJoined: true };
+        return {
+          sessionToken: existing.sessionToken,
+          participantId: existing.id,
+          alreadyJoined: true,
+        };
       }
     }
 
@@ -371,22 +455,33 @@ export class GroupOrderService {
     // and associates userId when a logged-in user reclaims a guest slot).
     // Runs before the status check so returning members can always reconnect.
     if (dto.deviceId) {
-      const sameDevice = go.participants.find((p) => (p as any).deviceId === dto.deviceId);
+      const sameDevice = go.participants.find(
+        (p) => (p as any).deviceId === dto.deviceId,
+      );
       if (sameDevice) {
         if (userId && !(sameDevice as any).userId) {
           // Logged-in user claiming a guest participant slot → link their userId
-          await this.prisma.groupOrderParticipant.update({
-            where: { id: sameDevice.id },
-            data: { userId },
-          }).catch(() => { });
+          await this.prisma.groupOrderParticipant
+            .update({
+              where: { id: sameDevice.id },
+              data: { userId },
+            })
+            .catch(() => { });
         }
-        return { sessionToken: (sameDevice as any).sessionToken, participantId: sameDevice.id, alreadyJoined: true };
+        return {
+          sessionToken: (sameDevice as any).sessionToken,
+          participantId: sameDevice.id,
+          alreadyJoined: true,
+        };
       }
     }
 
     // Below here: new participant — only allowed while collecting
     if (go.status !== 'collecting') {
-      throw new BadRequestException({ message: 'Đơn nhóm không còn nhận thành viên mới.', code: 'GROUP_ORDER_NOT_COLLECTING' });
+      throw new BadRequestException({
+        message: 'Đơn nhóm không còn nhận thành viên mới.',
+        code: 'GROUP_ORDER_NOT_COLLECTING',
+      });
     }
 
     const sessionToken = randomUUID();
@@ -394,18 +489,29 @@ export class GroupOrderService {
       data: {
         groupOrderId: go.id,
         userId: userId ?? null,
-        guestName: !userId ? (dto.guestName?.trim() || 'Khách') : null,
+        guestName: !userId ? dto.guestName?.trim() || 'Khách' : null,
         sessionToken,
         isHost: false,
         deviceId: dto.deviceId ?? null,
       },
     });
 
-    return { sessionToken, participantId: newParticipant.id, alreadyJoined: false };
+    return {
+      sessionToken,
+      participantId: newParticipant.id,
+      alreadyJoined: false,
+    };
   }
 
-  async updateItems(token: string, sessionToken: string, items: GroupOrderItemDto[]) {
-    const { go, participant } = await this.resolveParticipant(token, sessionToken);
+  async updateItems(
+    token: string,
+    sessionToken: string,
+    items: GroupOrderItemDto[],
+  ) {
+    const { go, participant } = await this.resolveParticipant(
+      token,
+      sessionToken,
+    );
 
     if (go.status !== 'collecting') {
       throw new BadRequestException('Khong the cap nhat mon khi don da khoa.');
@@ -413,12 +519,18 @@ export class GroupOrderService {
 
     for (const item of items) {
       if (item.quantity < 0) continue;
-      const product = await this.prisma.product.findUnique({ where: { id: item.productId } });
+      const product = await this.prisma.product.findUnique({
+        where: { id: item.productId },
+      });
       if (!product) {
-        throw new BadRequestException(`San pham khong ton tai: ${item.productId}`);
+        throw new BadRequestException(
+          `San pham khong ton tai: ${item.productId}`,
+        );
       }
       if (!product.isAvailable || product.isSoldOut) {
-        throw new BadRequestException(`San pham khong con phuc vu: ${product.name}`);
+        throw new BadRequestException(
+          `San pham khong con phuc vu: ${product.name}`,
+        );
       }
     }
 
@@ -432,19 +544,29 @@ export class GroupOrderService {
       const validItems = items.filter((i) => i.quantity > 0);
       if (validItems.length > 0) {
         for (const item of validItems) {
-          const product = await tx.product.findUnique({ where: { id: item.productId } });
+          const product = await tx.product.findUnique({
+            where: { id: item.productId },
+          });
           if (!product) continue;
-          const effectiveDiscount = globalDiscount > 0 ? globalDiscount : (product.discountPercent ?? 0);
+          const effectiveDiscount =
+            globalDiscount > 0
+              ? globalDiscount
+              : (product.discountPercent ?? 0);
           const basePrice = computeFinalPrice(product.price, effectiveDiscount);
 
-          const productOptionGroups = Array.isArray(product.optionGroups) ? product.optionGroups as any[] : [];
+          const productOptionGroups = Array.isArray(product.optionGroups)
+            ? (product.optionGroups as any[])
+            : [];
           let optionSurcharge = 0;
           for (const grp of productOptionGroups) {
             const sel = item.selectedOptions?.[grp.name];
             if (!sel) continue;
             const vals = Array.isArray(grp.values) ? grp.values : [];
-            const matched = vals.find((v: any) => String(v.label ?? v).trim() === String(sel).trim());
-            if (matched?.priceDelta) optionSurcharge += Number(matched.priceDelta);
+            const matched = vals.find(
+              (v: any) => String(v.label ?? v).trim() === String(sel).trim(),
+            );
+            if (matched?.priceDelta)
+              optionSurcharge += Number(matched.priceDelta);
           }
 
           await tx.groupOrderParticipantItem.create({
@@ -490,7 +612,10 @@ export class GroupOrderService {
   }
 
   async lock(token: string, sessionToken: string) {
-    const { go, participant } = await this.resolveParticipant(token, sessionToken);
+    const { go, participant } = await this.resolveParticipant(
+      token,
+      sessionToken,
+    );
 
     if (!participant.isHost) {
       throw new ForbiddenException('Chi chu nhom moi co the khoa don.');
@@ -505,21 +630,33 @@ export class GroupOrderService {
         include: { participants: { include: { items: true } } },
       });
 
-      const order = await this.createFinalOrder(goFull!, 'bank_transfer', false);
+      const order = await this.createFinalOrder(
+        goFull!,
+        'bank_transfer',
+        false,
+      );
 
       if (go.paymentMode === 'host_pays') {
         const host = goFull!.participants.find((p) => p.isHost);
         if (host) {
           await this.prisma.groupOrderParticipant.update({
             where: { id: host.id },
-            data: { paymentQrToken: randomUUID(), paymentType: 'bank_transfer' } as any,
+            data: {
+              paymentQrToken: randomUUID(),
+              paymentType: 'bank_transfer',
+            } as any,
           });
         }
       } else {
-        for (const p of goFull!.participants.filter((p) => p.items.length > 0)) {
+        for (const p of goFull!.participants.filter(
+          (p) => p.items.length > 0,
+        )) {
           await this.prisma.groupOrderParticipant.update({
             where: { id: p.id },
-            data: { paymentQrToken: randomUUID(), paymentType: 'bank_transfer' } as any,
+            data: {
+              paymentQrToken: randomUUID(),
+              paymentType: 'bank_transfer',
+            } as any,
           });
         }
       }
@@ -542,14 +679,23 @@ export class GroupOrderService {
     return this.serialize(updated!);
   }
 
-  async checkoutHostPays(token: string, sessionToken: string, paymentType: string) {
-    const { go, participant } = await this.resolveParticipant(token, sessionToken);
+  async checkoutHostPays(
+    token: string,
+    sessionToken: string,
+    paymentType: string,
+  ) {
+    const { go, participant } = await this.resolveParticipant(
+      token,
+      sessionToken,
+    );
 
     if (!participant.isHost) {
       throw new ForbiddenException('Chi chu nhom moi co the thanh toan.');
     }
     if (go.status !== 'locked') {
-      throw new BadRequestException('Don nhom phai duoc khoa truoc khi thanh toan.');
+      throw new BadRequestException(
+        'Don nhom phai duoc khoa truoc khi thanh toan.',
+      );
     }
     if (go.paymentMode !== 'host_pays') {
       throw new BadRequestException('Don nhom nay khong phai che do host tra.');
@@ -579,12 +725,23 @@ export class GroupOrderService {
   }
 
   async initHostBankTransfer(token: string, sessionToken: string) {
-    const { go, participant } = await this.resolveParticipant(token, sessionToken);
+    const { go, participant } = await this.resolveParticipant(
+      token,
+      sessionToken,
+    );
 
-    if (!participant.isHost) throw new ForbiddenException('Chi chu nhom moi co the khoi tao thanh toan.');
-    if (go.status !== GroupOrderStatus.locked) throw new BadRequestException('Don nhom phai duoc khoa truoc khi thanh toan.');
-    if (go.paymentMode !== 'host_pays') throw new BadRequestException('Chi ap dung cho don nhom chu tra.');
-    if ((go as any).paymentType !== 'bank_transfer') throw new BadRequestException('Chi ap dung cho thanh toan chuyen khoan.');
+    if (!participant.isHost)
+      throw new ForbiddenException(
+        'Chi chu nhom moi co the khoi tao thanh toan.',
+      );
+    if (go.status !== GroupOrderStatus.locked)
+      throw new BadRequestException(
+        'Don nhom phai duoc khoa truoc khi thanh toan.',
+      );
+    if (go.paymentMode !== 'host_pays')
+      throw new BadRequestException('Chi ap dung cho don nhom chu tra.');
+    if ((go as any).paymentType !== 'bank_transfer')
+      throw new BadRequestException('Chi ap dung cho thanh toan chuyen khoan.');
 
     if (!(participant as any).paymentQrToken) {
       await this.prisma.groupOrderParticipant.update({
@@ -600,14 +757,25 @@ export class GroupOrderService {
     return this.serialize(updated!);
   }
 
-  async initSplitPayment(token: string, sessionToken: string, paymentType: string) {
-    const { go, participant } = await this.resolveParticipant(token, sessionToken);
+  async initSplitPayment(
+    token: string,
+    sessionToken: string,
+    paymentType: string,
+  ) {
+    const { go, participant } = await this.resolveParticipant(
+      token,
+      sessionToken,
+    );
 
     if (go.status !== 'locked') {
-      throw new BadRequestException('Don nhom phai duoc khoa de xac nhan thanh toan.');
+      throw new BadRequestException(
+        'Don nhom phai duoc khoa de xac nhan thanh toan.',
+      );
     }
     if (go.paymentMode !== 'split') {
-      throw new BadRequestException('Don nhom nay khong phai che do chia tien.');
+      throw new BadRequestException(
+        'Don nhom nay khong phai che do chia tien.',
+      );
     }
 
     const updateData: any = {
@@ -630,18 +798,29 @@ export class GroupOrderService {
     return this.serialize(updated!);
   }
 
-  async confirmParticipantPaid(token: string, participantId: string, sessionToken: string) {
-    const { go, participant: actor } = await this.resolveParticipant(token, sessionToken);
+  async confirmParticipantPaid(
+    token: string,
+    participantId: string,
+    sessionToken: string,
+  ) {
+    const { go, participant: actor } = await this.resolveParticipant(
+      token,
+      sessionToken,
+    );
 
     if (go.status !== 'locked') {
-      throw new BadRequestException('Don nhom phai duoc khoa de xac nhan thanh toan.');
+      throw new BadRequestException(
+        'Don nhom phai duoc khoa de xac nhan thanh toan.',
+      );
     }
 
     const isConfirmingSelf = actor.id === participantId;
     const isHostConfirming = actor.isHost;
 
     if (!isConfirmingSelf && !isHostConfirming) {
-      throw new ForbiddenException('Ban khong co quyen xac nhan thanh toan cua nguoi khac.');
+      throw new ForbiddenException(
+        'Ban khong co quyen xac nhan thanh toan cua nguoi khac.',
+      );
     }
 
     const target = await this.prisma.groupOrderParticipant.findUnique({
@@ -653,7 +832,9 @@ export class GroupOrderService {
 
     // Bank transfer confirmations must come through the payment webhook, not manually
     if (target.paymentType === 'bank_transfer') {
-      throw new BadRequestException('Chuyen khoan duoc xac nhan tu dong khi nhan tien.');
+      throw new BadRequestException(
+        'Chuyen khoan duoc xac nhan tu dong khi nhan tien.',
+      );
     }
 
     await this.prisma.groupOrderParticipant.update({
@@ -675,10 +856,16 @@ export class GroupOrderService {
     const allPaid = withItems.every((p) => p.paymentStatus === 'paid');
 
     if (allPaid) {
-      const firstParticipant = goCheck!.participants.find((p) => p.paymentType != null);
+      const firstParticipant = goCheck!.participants.find(
+        (p) => p.paymentType != null,
+      );
       const paymentType = firstParticipant?.paymentType ?? 'cash';
       // Cash is collected by the shipper on delivery — order stays unpaid until then
-      const order = await this.createFinalOrder(goCheck!, paymentType as any, false);
+      const order = await this.createFinalOrder(
+        goCheck!,
+        paymentType as any,
+        false,
+      );
       await this.prisma.groupOrder.update({
         where: { token },
         data: { status: GroupOrderStatus.completed, orderId: order.id },
@@ -693,7 +880,10 @@ export class GroupOrderService {
   }
 
   async unlock(token: string, sessionToken: string) {
-    const { go, participant } = await this.resolveParticipant(token, sessionToken);
+    const { go, participant } = await this.resolveParticipant(
+      token,
+      sessionToken,
+    );
 
     if (!participant.isHost) {
       throw new ForbiddenException('Chi chu nhom moi co the mo khoa.');
@@ -717,7 +907,7 @@ export class GroupOrderService {
   async setFulfillment(
     token: string,
     sessionToken: string,
-    dto: { type: string; addressId?: string; tableId?: string; pickupTime?: string; shippingFee?: number; paymentType?: string; shippingFeeMode?: string },
+    dto: SetFulfillmentInput,
   ) {
     const { go, participant } = await this.resolveParticipant(token, sessionToken);
 
@@ -728,20 +918,29 @@ export class GroupOrderService {
       throw new BadRequestException('Chi co the thiet lap khi don nhom dang o trang thai thu thap.');
     }
 
-    const data: any = {
-      type: dto.type,
+    const data: Prisma.GroupOrderUncheckedUpdateInput = {
+      type: dto.type as OrderType,
       shippingFee: new Prisma.Decimal(dto.shippingFee ?? 0),
       ...(dto.shippingFeeMode !== undefined ? { shippingFeeMode: dto.shippingFeeMode } : {}),
       addressId: null,
       tableId: null,
       pickupTime: null,
-      ...(dto.paymentType ? { paymentType: dto.paymentType } : {}),
+      inlineFullAddress: null,
+      inlineLat: null,
+      inlineLng: null,
+      ...(dto.paymentType ? { paymentType: dto.paymentType as any } : {}),
     };
 
-    if (dto.type === 'delivery' && dto.addressId) {
-      const addr = await this.prisma.address.findUnique({ where: { id: dto.addressId } });
-      if (!addr) throw new BadRequestException('Dia chi khong ton tai.');
-      data.addressId = dto.addressId;
+    if (dto.type === 'delivery') {
+      if (dto.addressId) {
+        const addr = await this.prisma.address.findUnique({ where: { id: dto.addressId } });
+        if (!addr) throw new BadRequestException('Dia chi khong ton tai.');
+        data.addressId = dto.addressId;
+      } else if (dto.inlineAddress?.fullAddress?.trim()) {
+        data.inlineFullAddress = dto.inlineAddress.fullAddress.trim();
+        data.inlineLat = dto.inlineAddress.lat;
+        data.inlineLng = dto.inlineAddress.lng;
+      }
     }
     if (dto.type === 'table' && dto.tableId) {
       data.tableId = dto.tableId;
@@ -750,10 +949,7 @@ export class GroupOrderService {
       data.pickupTime = new Date(dto.pickupTime);
     }
 
-    await this.prisma.groupOrder.update({
-      where: { token },
-      data,
-    });
+    await this.prisma.groupOrder.update({ where: { token }, data });
 
     const updated = await this.prisma.groupOrder.findUnique({
       where: { token },
@@ -774,15 +970,28 @@ export class GroupOrderService {
   }
 
   async getConfig() {
-    const cached = await this.redis.get<ReturnType<typeof this._serializeConfig>>(GROUP_ORDER_CONFIG_KEY);
+    const cached = await this.redis.get<
+      ReturnType<typeof this._serializeConfig>
+    >(GROUP_ORDER_CONFIG_KEY);
     if (cached) return cached;
 
-    const cfg = await this.prisma.groupOrderConfig.findUnique({ where: { id: 'default' } });
+    const cfg = await this.prisma.groupOrderConfig.findUnique({
+      where: { id: 'default' },
+    });
     const result = cfg
       ? this._serializeConfig(cfg)
-      : { id: 'default', isEnabled: true, expiryMinutes: 120, discountTiers: [] as unknown[] };
+      : {
+        id: 'default',
+        isEnabled: true,
+        expiryMinutes: 120,
+        discountTiers: [] as unknown[],
+      };
 
-    await this.redis.set(GROUP_ORDER_CONFIG_KEY, result, GROUP_ORDER_CONFIG_TTL);
+    await this.redis.set(
+      GROUP_ORDER_CONFIG_KEY,
+      result,
+      GROUP_ORDER_CONFIG_TTL,
+    );
     return result;
   }
 
@@ -793,7 +1002,8 @@ export class GroupOrderService {
   }) {
     const updateData: any = { updatedAt: new Date() };
     if (data.isEnabled !== undefined) updateData.isEnabled = data.isEnabled;
-    if (data.expiryMinutes !== undefined) updateData.expiryMinutes = Math.max(5, data.expiryMinutes);
+    if (data.expiryMinutes !== undefined)
+      updateData.expiryMinutes = Math.max(5, data.expiryMinutes);
     if (data.discountTiers !== undefined) {
       updateData.discountTiersJson = [...data.discountTiers].sort(
         (a, b) => b.minParticipants - a.minParticipants,
@@ -815,12 +1025,19 @@ export class GroupOrderService {
     return this._serializeConfig(cfg);
   }
 
-  private _serializeConfig(cfg: { id: string; isEnabled: boolean; expiryMinutes: number; discountTiersJson: unknown }) {
+  private _serializeConfig(cfg: {
+    id: string;
+    isEnabled: boolean;
+    expiryMinutes: number;
+    discountTiersJson: unknown;
+  }) {
     return {
       id: cfg.id,
       isEnabled: cfg.isEnabled,
       expiryMinutes: cfg.expiryMinutes,
-      discountTiers: Array.isArray(cfg.discountTiersJson) ? cfg.discountTiersJson : [],
+      discountTiers: Array.isArray(cfg.discountTiersJson)
+        ? cfg.discountTiersJson
+        : [],
     };
   }
 
@@ -837,23 +1054,39 @@ export class GroupOrderService {
     }
   }
 
-  private async resolveGroupDiscount(participantCount: number): Promise<number> {
-    const cfg = await this.prisma.groupOrderConfig.findUnique({ where: { id: 'default' } });
+  private async resolveGroupDiscount(
+    participantCount: number,
+  ): Promise<number> {
+    const cfg = await this.prisma.groupOrderConfig.findUnique({
+      where: { id: 'default' },
+    });
     if (!cfg || !cfg.isEnabled) return 0;
     const tiers = Array.isArray(cfg.discountTiersJson)
-      ? (cfg.discountTiersJson as Array<{ minParticipants: number; discountPercent: number }>)
+      ? (cfg.discountTiersJson as Array<{
+        minParticipants: number;
+        discountPercent: number;
+      }>)
       : [];
-    const sorted = [...tiers].sort((a, b) => b.minParticipants - a.minParticipants);
+    const sorted = [...tiers].sort(
+      (a, b) => b.minParticipants - a.minParticipants,
+    );
     const match = sorted.find((t) => participantCount >= t.minParticipants);
     return match?.discountPercent ?? 0;
   }
 
-  async autoConfirmParticipantPaid(participantId: string): Promise<{ token: string; state: ReturnType<typeof this.serialize>; orderId: string | null } | null> {
+  async autoConfirmParticipantPaid(
+    participantId: string,
+  ): Promise<{
+    token: string;
+    state: ReturnType<typeof this.serialize>;
+    orderId: string | null;
+  } | null> {
     const participant = await this.prisma.groupOrderParticipant.findUnique({
       where: { id: participantId },
       select: { id: true, paymentStatus: true, groupOrderId: true },
     });
-    if (!participant || (participant.paymentStatus as string) === 'paid') return null;
+    if (!participant || (participant.paymentStatus as string) === 'paid')
+      return null;
 
     const groupOrder = await this.prisma.groupOrder.findUnique({
       where: { id: participant.groupOrderId },
@@ -876,7 +1109,9 @@ export class GroupOrderService {
     const allPaid = (() => {
       if (goCheck.status !== GroupOrderStatus.locked) return false;
       if ((goCheck as any).paymentMode === 'host_pays') {
-        return goCheck.participants.some((p) => p.isHost && (p.paymentStatus as string) === 'paid');
+        return goCheck.participants.some(
+          (p) => p.isHost && (p.paymentStatus as string) === 'paid',
+        );
       }
       const withItems = goCheck.participants.filter((p) => p.items.length > 0);
       return withItems.every((p) => (p.paymentStatus as string) === 'paid');
@@ -898,7 +1133,9 @@ export class GroupOrderService {
         });
       } else {
         // Legacy/cash flow: create order now
-        const pt = goCheck.participants.find((p: any) => p.paymentType != null)?.paymentType ?? 'cash';
+        const pt =
+          goCheck.participants.find((p: any) => p.paymentType != null)
+            ?.paymentType ?? 'cash';
         const order = await this.createFinalOrder(goCheck, pt as any, true);
         finalOrderId = order.id;
         await this.prisma.groupOrder.update({
@@ -926,9 +1163,16 @@ export class GroupOrderService {
 
     for (const participant of go.participants) {
       for (const item of participant.items) {
-        const toppings = Array.isArray(item.toppingsJson) ? item.toppingsJson : [];
-        const toppingSum = toppings.reduce((s: number, t: any) => s + Number(t.price ?? 0), 0);
-        const unitPrice = new Prisma.Decimal(item.unitPrice).add(new Prisma.Decimal(toppingSum));
+        const toppings = Array.isArray(item.toppingsJson)
+          ? item.toppingsJson
+          : [];
+        const toppingSum = toppings.reduce(
+          (s: number, t: any) => s + Number(t.price ?? 0),
+          0,
+        );
+        const unitPrice = new Prisma.Decimal(item.unitPrice).add(
+          new Prisma.Decimal(toppingSum),
+        );
         const lineTotal = unitPrice.mul(item.quantity);
         totalAmount = totalAmount.add(lineTotal);
 
@@ -944,8 +1188,12 @@ export class GroupOrderService {
       }
     }
 
-    const activeParticipants = go.participants.filter((p: any) => p.items.length > 0);
-    const discountPercent = await this.resolveGroupDiscount(activeParticipants.length);
+    const activeParticipants = go.participants.filter(
+      (p: any) => p.items.length > 0,
+    );
+    const discountPercent = await this.resolveGroupDiscount(
+      activeParticipants.length,
+    );
     const discountAmount =
       discountPercent > 0
         ? totalAmount
@@ -954,9 +1202,34 @@ export class GroupOrderService {
           .toDecimalPlaces(0)
         : new Prisma.Decimal(0);
 
+    // ── Resolve toạ độ giao hàng: ưu tiên addressId đã lưu, fallback inline ──
+    let resolvedLat: number | null = null;
+    let resolvedLng: number | null = null;
+    let resolvedFullAddress: string | null = null;
+
+    if (go.addressId) {
+      const addr = await this.prisma.address.findUnique({
+        where: { id: go.addressId },
+        select: { fullAddress: true, lat: true, lng: true },
+      });
+      if (addr) {
+        resolvedFullAddress = addr.fullAddress;
+        resolvedLat = addr.lat;
+        resolvedLng = addr.lng;
+      }
+    } else if (go.inlineFullAddress) {
+      resolvedFullAddress = go.inlineFullAddress;
+      resolvedLat = go.inlineLat ?? null;
+      resolvedLng = go.inlineLng ?? null;
+    }
+
     const shippingFee = new Prisma.Decimal(go.shippingFee ?? 0);
     const finalAmount = totalAmount.sub(discountAmount).add(shippingFee);
     const paymentCode = await this.generateOrderPaymentCode();
+    const host = await this.prisma.user.findUnique({
+      where: { id: go.hostUserId ?? undefined },
+      select: { name: true, phone: true },
+    });
 
     const order = await this.prisma.order.create({
       data: {
@@ -975,13 +1248,49 @@ export class GroupOrderService {
         paidAt: alreadyPaid ? new Date() : null,
         paymentType: paymentType as any,
         paymentCode,
+        guestDeliveryName: host?.name ?? null,
+        guestDeliveryPhone: host?.phone ?? null,
+        guestDeliveryAddress: !go.addressId ? (go.inlineFullAddress ?? null) : null,
+        guestDeliveryLat: !go.addressId ? (go.inlineLat ?? null) : null,
+        guestDeliveryLng: !go.addressId ? (go.inlineLng ?? null) : null,
         items: { createMany: { data: orderItemsData } },
+      },
+      include: {
+        items: { include: { product: { select: { name: true } } } },
       },
     });
 
-    this.ordersGateway.emitOrderCreated({ orderId: order.id, type: order.type });
+    this.ordersGateway.emitOrderCreated({
+      orderId: order.id,
+      type: order.type,
+    });
 
-    void this.notifyGroupOrderCreated(go.participants, order.id, paymentCode).catch((err: unknown) =>
+    this.mailService
+      .sendNewOrderNotification({
+        orderId: order.id,
+        paymentCode: order.paymentCode,
+        type: order.type,
+        customerName: order.guestDeliveryName ?? 'Khách',
+        customerPhone: order?.guestDeliveryPhone ?? 'N/A',
+        address: resolvedFullAddress,
+        coordinate:
+          resolvedLat != null && resolvedLng != null
+            ? { lat: resolvedLat, lng: resolvedLng }
+            : null,
+        totalAmount: order.finalAmount,
+        items: order.items.map((x) => ({
+          name: x.product?.name,
+          quantity: x.quantity,
+          price: x.price,
+        })),
+      })
+      .catch(() => { });
+
+    void this.notifyGroupOrderCreated(
+      go.participants,
+      order.id,
+      paymentCode,
+    ).catch((err: unknown) =>
       this.logger.error(`Group order notification failed: ${err}`),
     );
 
@@ -1011,14 +1320,25 @@ export class GroupOrderService {
   }
 
   async checkoutSplitCash(token: string, sessionToken: string) {
-    const { go, participant } = await this.resolveParticipant(token, sessionToken);
+    const { go, participant } = await this.resolveParticipant(
+      token,
+      sessionToken,
+    );
 
-    if (!participant.isHost) throw new ForbiddenException('Chi chu nhom moi co the dat don.');
-    if (go.status !== GroupOrderStatus.collecting && go.status !== GroupOrderStatus.locked) {
+    if (!participant.isHost)
+      throw new ForbiddenException('Chi chu nhom moi co the dat don.');
+    if (
+      go.status !== GroupOrderStatus.collecting &&
+      go.status !== GroupOrderStatus.locked
+    ) {
       throw new BadRequestException('Don nhom khong o trang thai hop le.');
     }
-    if ((go as any).paymentMode !== 'split') throw new BadRequestException('Chi ap dung cho don nhom chia tien.');
-    if ((go as any).paymentType !== null && (go as any).paymentType !== 'cash') {
+    if ((go as any).paymentMode !== 'split')
+      throw new BadRequestException('Chi ap dung cho don nhom chia tien.');
+    if (
+      (go as any).paymentType !== null &&
+      (go as any).paymentType !== 'cash'
+    ) {
       throw new BadRequestException('Chi ap dung cho phuong thuc tien mat.');
     }
 
@@ -1027,20 +1347,33 @@ export class GroupOrderService {
       include: { participants: { include: { items: true } } },
     });
 
-    const withItems = goFull!.participants.filter((p: any) => p.items.length > 0);
-    if (withItems.length === 0) throw new BadRequestException('Chua co mon nao duoc chon.');
+    const withItems = goFull!.participants.filter(
+      (p: any) => p.items.length > 0,
+    );
+    if (withItems.length === 0)
+      throw new BadRequestException('Chua co mon nao duoc chon.');
 
     // Lock (if still collecting) + mark all participants as cash/paid atomically
-    const lockOp = go.status === GroupOrderStatus.collecting
-      ? [this.prisma.groupOrder.update({ where: { token }, data: { status: GroupOrderStatus.locked } })]
-      : [];
+    const lockOp =
+      go.status === GroupOrderStatus.collecting
+        ? [
+          this.prisma.groupOrder.update({
+            where: { token },
+            data: { status: GroupOrderStatus.locked },
+          }),
+        ]
+        : [];
 
     await this.prisma.$transaction([
       ...lockOp,
       ...withItems.map((p: any) =>
         this.prisma.groupOrderParticipant.update({
           where: { id: p.id },
-          data: { paymentType: 'cash' as any, paymentStatus: 'paid' as any, paidAt: new Date() },
+          data: {
+            paymentType: 'cash' as any,
+            paymentStatus: 'paid' as any,
+            paidAt: new Date(),
+          },
         }),
       ),
     ]);
@@ -1069,10 +1402,14 @@ export class GroupOrderService {
   private async generateOrderPaymentCode(): Promise<string> {
     for (let attempt = 0; attempt < 10; attempt++) {
       const code = `UJCHA-${randomBytes(4).toString('hex').toUpperCase()}`;
-      const clash = await this.prisma.order.findUnique({ where: { paymentCode: code } });
+      const clash = await this.prisma.order.findUnique({
+        where: { paymentCode: code },
+      });
       if (!clash) return code;
     }
-    throw new InternalServerErrorException('Could not generate unique payment code.');
+    throw new InternalServerErrorException(
+      'Could not generate unique payment code.',
+    );
   }
 
   async fetchSerializedState(token: string) {
@@ -1090,12 +1427,20 @@ export class GroupOrderService {
       include: { participants: true },
     });
     if (!go) {
-      throw new NotFoundException({ message: 'Không tìm thấy đơn nhóm.', code: 'GROUP_ORDER_NOT_FOUND' });
+      throw new NotFoundException({
+        message: 'Không tìm thấy đơn nhóm.',
+        code: 'GROUP_ORDER_NOT_FOUND',
+      });
     }
 
-    const participant = go.participants.find((p) => p.sessionToken === sessionToken);
+    const participant = go.participants.find(
+      (p) => p.sessionToken === sessionToken,
+    );
     if (!participant) {
-      throw new ForbiddenException({ message: 'Phiên làm việc không hợp lệ.', code: 'GROUP_ORDER_SESSION_INVALID' });
+      throw new ForbiddenException({
+        message: 'Phiên làm việc không hợp lệ.',
+        code: 'GROUP_ORDER_SESSION_INVALID',
+      });
     }
 
     return { go, participant };

@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { Prisma } from '@prisma/client';
 
 // ─── Inline option group helpers ──────────────────────────────────────────────
 
@@ -26,6 +25,35 @@ export type NormalizedTopping = {
   isActive: boolean;
 };
 
+interface OrderAddressFallbackSource {
+  address?: { lat: number | null; lng: number | null; fullAddress?: string;[key: string]: any } | null;
+  guestDeliveryAddress?: string | null;
+  guestDeliveryLat?: number | null;
+  guestDeliveryLng?: number | null;
+  earnedPoints?: number;
+  isGroupOrder?: boolean;
+  groupOrderToken?: string | null;
+}
+
+export function withGuestAddressFallback<T extends OrderAddressFallbackSource>(
+  order: T,
+): T {
+  if (order.address) return order;
+
+  if (order.guestDeliveryLat == null && order.guestDeliveryLng == null) {
+    return order;
+  }
+
+  return {
+    ...order,
+    address: {
+      fullAddress: order.guestDeliveryAddress ?? null,
+      lat: order.guestDeliveryLat ?? null,
+      lng: order.guestDeliveryLng ?? null,
+      note: null,
+    },
+  } as T;
+}
 export function normalizeOptionGroupValues(raw: unknown): NormalizedOptionValue[] {
   if (!Array.isArray(raw)) return [];
   const byLabel = new Map<string, NormalizedOptionValue>();

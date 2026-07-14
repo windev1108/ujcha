@@ -221,6 +221,7 @@ export async function setGroupOrderFulfillment(
   payload: {
     type: 'delivery' | 'pickup' | 'table'
     addressId?: string
+    inlineAddress?: { fullAddress: string; lat: number; lng: number };
     tableId?: string
     pickupTime?: string
     shippingFee?: number

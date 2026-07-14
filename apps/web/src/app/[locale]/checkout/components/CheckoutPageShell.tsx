@@ -359,6 +359,8 @@ export function CheckoutPageShell() {
             type: "delivery",
             paymentType: paymentMethod,
             guestDeliveryAddress: deliveryForm.fullAddress.trim(),
+            guestDeliveryLat: deliveryForm.lat ?? undefined,
+            guestDeliveryLng: deliveryForm.lng ?? undefined,
             guestDeliveryName: deliveryForm.name.trim() || undefined,
             guestDeliveryPhone: deliveryForm.phone.trim() || undefined,
             items: orderItems,

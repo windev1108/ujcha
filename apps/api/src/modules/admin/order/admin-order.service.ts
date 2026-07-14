@@ -27,10 +27,15 @@ import type { AdminOrderMetricsQueryDto } from './dto/admin-order-metrics-query.
 import type { AssignShipperDto } from './dto/assign-shipper.dto';
 import type { AdminOrderListQueryDto } from './dto/admin-order-list-query.dto';
 import type { BulkUpdateOrderStatusDto } from './dto/bulk-update-order-status.dto';
+import { withGuestAddressFallback } from '../../../helper/utils';
 
 const VN_TZ = '+07:00';
-function vnStartOfDay(d: string): Date { return new Date(`${d}T00:00:00${VN_TZ}`); }
-function vnEndOfDay(d: string): Date { return new Date(`${d}T23:59:59.999${VN_TZ}`); }
+function vnStartOfDay(d: string): Date {
+  return new Date(`${d}T00:00:00${VN_TZ}`);
+}
+function vnEndOfDay(d: string): Date {
+  return new Date(`${d}T23:59:59.999${VN_TZ}`);
+}
 function vnTodayStr(): string {
   const vnNow = new Date(Date.now() + 7 * 3600_000);
   const y = vnNow.getUTCFullYear();
@@ -101,7 +106,12 @@ export type AdminOrderPayload = Prisma.OrderGetPayload<{
   include: typeof adminOrderInclude;
 }>;
 
-const STATUS_NOTIF: Partial<Record<OrderStatus, (code: string) => { title: string; content: string; notifKey: string }>> = {
+const STATUS_NOTIF: Partial<
+  Record<
+    OrderStatus,
+    (code: string) => { title: string; content: string; notifKey: string }
+  >
+> = {
   [OrderStatus.confirmed]: (code) => ({
     title: 'Đơn hàng đã được xác nhận',
     content: `Đơn #${code} đã xác nhận và đang được chuẩn bị.`,
@@ -187,7 +197,9 @@ export class AdminOrderService {
     if (query.unassignedShipper === true) {
       and.push({ type: OrderType.delivery });
       and.push({ shipperId: null });
-      and.push({ status: { notIn: [OrderStatus.cancelled, OrderStatus.completed] } });
+      and.push({
+        status: { notIn: [OrderStatus.cancelled, OrderStatus.completed] },
+      });
     }
 
     if (query.isExternal === true) {
@@ -195,8 +207,7 @@ export class AdminOrderService {
       and.push({ guestDeliveryName: { startsWith: '[' } });
     }
 
-    const where: Prisma.OrderWhereInput =
-      and.length > 0 ? { AND: and } : {};
+    const where: Prisma.OrderWhereInput = and.length > 0 ? { AND: and } : {};
 
     const [total, rows] = await this.prisma.$transaction([
       this.prisma.order.count({ where }),
@@ -295,7 +306,10 @@ export class AdminOrderService {
     return raw;
   }
 
-  async createAsAdmin(dto: AdminCreateOrderDto, opts?: { skipOptionValidation?: boolean }) {
+  async createAsAdmin(
+    dto: AdminCreateOrderDto,
+    opts?: { skipOptionValidation?: boolean },
+  ) {
     const userId = await this.resolveOrderUserId(dto);
     const { userId: _omit, paymentStatus: initialPaymentStatus, ...rest } = dto;
     const created = await this.orderService.createOrder(userId, rest, {
@@ -382,11 +396,15 @@ export class AdminOrderService {
           },
         );
         const spendTs: Prisma.OrderUpdateInput = {};
-        if (dto.status === OrderStatus.confirmed)  spendTs.confirmedAt  = new Date();
-        if (dto.status === OrderStatus.preparing)  spendTs.preparingAt  = new Date();
-        if (dto.status === OrderStatus.ready)      spendTs.readyAt      = new Date();
-        if (dto.status === OrderStatus.completed)  spendTs.completedAt  = new Date();
-        if (dto.status === OrderStatus.cancelled)  spendTs.cancelledAt  = new Date();
+        if (dto.status === OrderStatus.confirmed)
+          spendTs.confirmedAt = new Date();
+        if (dto.status === OrderStatus.preparing)
+          spendTs.preparingAt = new Date();
+        if (dto.status === OrderStatus.ready) spendTs.readyAt = new Date();
+        if (dto.status === OrderStatus.completed)
+          spendTs.completedAt = new Date();
+        if (dto.status === OrderStatus.cancelled)
+          spendTs.cancelledAt = new Date();
 
         return tx.order.update({
           where: { id: orderId },
@@ -404,33 +422,49 @@ export class AdminOrderService {
       });
 
       if (shouldRewardPoints) {
-        this.fireOrderCompletionSideEffects(updated.id, existing.userId, updated.paymentCode);
+        this.fireOrderCompletionSideEffects(
+          updated.id,
+          existing.userId,
+          updated.paymentCode,
+        );
       } else if (dto.status !== undefined) {
         const nFn = STATUS_NOTIF[dto.status];
         if (nFn) {
           const { title, content, notifKey } = nFn(updated.paymentCode);
-          void this.resolveOrderUserIds(updated.id, existing.userId).then((userIds) =>
-            this.notificationService.upsertOrderNotificationForMany(userIds, {
-              type: 'order', title, content,
-              data: { orderId: updated.id, paymentCode: updated.paymentCode, notifKey },
-            }),
-          ).catch(() => null);
+          void this.resolveOrderUserIds(updated.id, existing.userId)
+            .then((userIds) =>
+              this.notificationService.upsertOrderNotificationForMany(userIds, {
+                type: 'order',
+                title,
+                content,
+                data: {
+                  orderId: updated.id,
+                  paymentCode: updated.paymentCode,
+                  notifKey,
+                },
+              }),
+            )
+            .catch(() => null);
         }
       }
 
       if (dto.status !== undefined) {
-        this.ordersGateway.emitOrderStatusUpdated({ orderId, status: dto.status });
+        this.ordersGateway.emitOrderStatusUpdated({
+          orderId,
+          status: dto.status,
+        });
       }
 
       return this.withTypeDisplay(updated);
     }
     const statusTs: Prisma.OrderUpdateInput = {};
-    if (dto.status === OrderStatus.confirmed)  statusTs.confirmedAt  = new Date();
-    if (dto.status === OrderStatus.preparing)  statusTs.preparingAt  = new Date();
-    if (dto.status === OrderStatus.ready)      statusTs.readyAt      = new Date();
-    if (dto.status === OrderStatus.delivering) statusTs.deliveringAt = new Date();
-    if (dto.status === OrderStatus.completed)  statusTs.completedAt  = new Date();
-    if (dto.status === OrderStatus.cancelled)  statusTs.cancelledAt  = new Date();
+    if (dto.status === OrderStatus.confirmed) statusTs.confirmedAt = new Date();
+    if (dto.status === OrderStatus.preparing) statusTs.preparingAt = new Date();
+    if (dto.status === OrderStatus.ready) statusTs.readyAt = new Date();
+    if (dto.status === OrderStatus.delivering)
+      statusTs.deliveringAt = new Date();
+    if (dto.status === OrderStatus.completed) statusTs.completedAt = new Date();
+    if (dto.status === OrderStatus.cancelled) statusTs.cancelledAt = new Date();
 
     const dataUpdate: Prisma.OrderUpdateInput = {
       ...(dto.status !== undefined && { status: dto.status }),
@@ -454,22 +488,37 @@ export class AdminOrderService {
     });
 
     if (shouldRewardPoints) {
-      this.fireOrderCompletionSideEffects(updated.id, existing.userId, updated.paymentCode);
+      this.fireOrderCompletionSideEffects(
+        updated.id,
+        existing.userId,
+        updated.paymentCode,
+      );
     } else if (dto.status !== undefined) {
       const nFn = STATUS_NOTIF[dto.status];
       if (nFn) {
         const { title, content, notifKey } = nFn(updated.paymentCode);
-        void this.resolveOrderUserIds(updated.id, existing.userId).then((userIds) =>
-          this.notificationService.upsertOrderNotificationForMany(userIds, {
-            type: 'order', title, content,
-            data: { orderId: updated.id, paymentCode: updated.paymentCode, notifKey },
-          }),
-        ).catch(() => null);
+        void this.resolveOrderUserIds(updated.id, existing.userId)
+          .then((userIds) =>
+            this.notificationService.upsertOrderNotificationForMany(userIds, {
+              type: 'order',
+              title,
+              content,
+              data: {
+                orderId: updated.id,
+                paymentCode: updated.paymentCode,
+                notifKey,
+              },
+            }),
+          )
+          .catch(() => null);
       }
     }
 
     if (dto.status !== undefined) {
-      this.ordersGateway.emitOrderStatusUpdated({ orderId, status: dto.status });
+      this.ordersGateway.emitOrderStatusUpdated({
+        orderId,
+        status: dto.status,
+      });
 
       if (
         dto.status === OrderStatus.confirmed &&
@@ -479,19 +528,24 @@ export class AdminOrderService {
         this.ordersGateway.emitNewDeliveryOrder({
           orderId: updated.id,
           paymentCode: updated.paymentCode,
-          customerName: updated.user?.name ?? (updated as any).guestDeliveryName ?? 'Khách',
-          customerPhone: updated.user?.phone ?? (updated as any).guestDeliveryPhone ?? '',
+          customerName:
+            updated.user?.name ?? (updated as any).guestDeliveryName ?? 'Khách',
+          customerPhone:
+            updated.user?.phone ?? (updated as any).guestDeliveryPhone ?? '',
           address: updated.address?.fullAddress ?? '',
           addressNote: updated.address?.note ?? null,
-          lat: updated.address ? (updated.address as any).lat ?? null : null,
-          lng: updated.address ? (updated.address as any).lng ?? null : null,
+          lat: updated.address ? ((updated.address as any).lat ?? null) : null,
+          lng: updated.address ? ((updated.address as any).lng ?? null) : null,
           items: updated.items.map((i) => ({
             name: i.product?.name ?? '',
             quantity: i.quantity,
             price: Number(i.price),
             imageUrl: i.product?.imageUrls?.[0] ?? null,
             optionsJson: (i.optionsJson ?? {}) as Record<string, string>,
-            extrasJson: (i.extrasJson ?? []) as Array<{ name: string; price: number }>,
+            extrasJson: (i.extrasJson ?? []) as Array<{
+              name: string;
+              price: number;
+            }>,
             note: i.note ?? null,
           })),
           totalAmount: Number(updated.finalAmount),
@@ -506,16 +560,25 @@ export class AdminOrderService {
           status: dto.status,
           shipperId: updated.shipperId,
         });
-      } else if (updated.type === OrderType.delivery && dto.status !== undefined) {
+      } else if (
+        updated.type === OrderType.delivery &&
+        dto.status !== undefined
+      ) {
         // No shipper yet — broadcast to all shippers so their available-orders list stays current
-        this.ordersGateway.emitAvailableOrderStatus({ orderId, status: dto.status });
+        this.ordersGateway.emitAvailableOrderStatus({
+          orderId,
+          status: dto.status,
+        });
       }
     }
 
     return this.withTypeDisplay(updated);
   }
 
-  private async resolveOrderUserIds(orderId: string, ownerUserId: string | null): Promise<string[]> {
+  private async resolveOrderUserIds(
+    orderId: string,
+    ownerUserId: string | null,
+  ): Promise<string[]> {
     const participants = await this.prisma.groupOrderParticipant.findMany({
       where: { groupOrder: { orderId }, userId: { not: null } },
       select: { userId: true },
@@ -526,15 +589,30 @@ export class AdminOrderService {
     return [...ids];
   }
 
-  private fireOrderCompletionSideEffects(orderId: string, userId?: string | null, paymentCode?: string) {
+  private fireOrderCompletionSideEffects(
+    orderId: string,
+    userId?: string | null,
+    paymentCode?: string,
+  ) {
     void this.referralRewardProcessing
       .tryProcessReferralOnOrderCompleted(orderId)
-      .catch((err: unknown) => { this.logger.error(err); });
-    void this.rewardAndNotifyCompletion(orderId, userId ?? null, paymentCode ?? '')
-      .catch((err: unknown) => { this.logger.error(err); });
+      .catch((err: unknown) => {
+        this.logger.error(err);
+      });
+    void this.rewardAndNotifyCompletion(
+      orderId,
+      userId ?? null,
+      paymentCode ?? '',
+    ).catch((err: unknown) => {
+      this.logger.error(err);
+    });
   }
 
-  private async rewardAndNotifyCompletion(orderId: string, ownerId: string | null, paymentCode: string) {
+  private async rewardAndNotifyCompletion(
+    orderId: string,
+    ownerId: string | null,
+    paymentCode: string,
+  ) {
     try {
       await this.pointOrderReward.tryRewardOrderCompletion(orderId);
     } catch (err) {
@@ -545,10 +623,18 @@ export class AdminOrderService {
     if (allUserIds.length === 0) return;
 
     const points = ownerId
-      ? await this.prisma.pointTransaction.findFirst({
-          where: { userId: ownerId, source: PointSource.order, referenceId: orderId, type: PointTransactionType.earn },
+      ? await this.prisma.pointTransaction
+        .findFirst({
+          where: {
+            userId: ownerId,
+            source: PointSource.order,
+            referenceId: orderId,
+            type: PointTransactionType.earn,
+          },
           select: { amount: true },
-        }).then((t) => (t?.amount ?? 0)).catch(() => 0)
+        })
+        .then((t) => t?.amount ?? 0)
+        .catch(() => 0)
       : 0;
 
     await Promise.allSettled(
@@ -557,10 +643,16 @@ export class AdminOrderService {
           userId,
           type: 'order',
           title: 'Đơn hàng hoàn thành',
-          content: userId === ownerId && points > 0
-            ? `Đơn #${paymentCode} hoàn thành. Bạn tích được ${points} điểm!`
-            : `Đơn #${paymentCode} hoàn thành. Cảm ơn bạn đã sử dụng UjCha!`,
-          data: { orderId, paymentCode, earnedPoints: userId === ownerId ? points : 0, notifKey: 'order_completed' },
+          content:
+            userId === ownerId && points > 0
+              ? `Đơn #${paymentCode} hoàn thành. Bạn tích được ${points} điểm!`
+              : `Đơn #${paymentCode} hoàn thành. Cảm ơn bạn đã sử dụng UjCha!`,
+          data: {
+            orderId,
+            paymentCode,
+            earnedPoints: userId === ownerId ? points : 0,
+            notifKey: 'order_completed',
+          },
         }),
       ),
     );
@@ -568,12 +660,12 @@ export class AdminOrderService {
 
   async bulkUpdateStatus(dto: BulkUpdateOrderStatusDto) {
     const bulkTs: Record<string, Date> = {};
-    if (dto.status === OrderStatus.confirmed)  bulkTs.confirmedAt  = new Date();
-    if (dto.status === OrderStatus.preparing)  bulkTs.preparingAt  = new Date();
-    if (dto.status === OrderStatus.ready)      bulkTs.readyAt      = new Date();
+    if (dto.status === OrderStatus.confirmed) bulkTs.confirmedAt = new Date();
+    if (dto.status === OrderStatus.preparing) bulkTs.preparingAt = new Date();
+    if (dto.status === OrderStatus.ready) bulkTs.readyAt = new Date();
     if (dto.status === OrderStatus.delivering) bulkTs.deliveringAt = new Date();
-    if (dto.status === OrderStatus.completed)  bulkTs.completedAt  = new Date();
-    if (dto.status === OrderStatus.cancelled)  bulkTs.cancelledAt  = new Date();
+    if (dto.status === OrderStatus.completed) bulkTs.completedAt = new Date();
+    if (dto.status === OrderStatus.cancelled) bulkTs.cancelledAt = new Date();
 
     const updated = await this.prisma.order.updateMany({
       where: { id: { in: dto.orderIds } },
@@ -581,7 +673,10 @@ export class AdminOrderService {
     });
 
     for (const id of dto.orderIds) {
-      this.ordersGateway.emitOrderStatusUpdated({ orderId: id, status: dto.status });
+      this.ordersGateway.emitOrderStatusUpdated({
+        orderId: id,
+        status: dto.status,
+      });
     }
 
     const bulkOrders = await this.prisma.order.findMany({
@@ -596,12 +691,16 @@ export class AdminOrderService {
         const nFn = STATUS_NOTIF[dto.status];
         if (nFn) {
           const { title, content, notifKey } = nFn(o.paymentCode);
-          void this.resolveOrderUserIds(o.id, o.userId).then((userIds) =>
-            this.notificationService.upsertOrderNotificationForMany(userIds, {
-              type: 'order', title, content,
-              data: { orderId: o.id, paymentCode: o.paymentCode, notifKey },
-            }),
-          ).catch(() => null);
+          void this.resolveOrderUserIds(o.id, o.userId)
+            .then((userIds) =>
+              this.notificationService.upsertOrderNotificationForMany(userIds, {
+                type: 'order',
+                title,
+                content,
+                data: { orderId: o.id, paymentCode: o.paymentCode, notifKey },
+              }),
+            )
+            .catch(() => null);
         }
       }
     }
@@ -641,7 +740,10 @@ export class AdminOrderService {
       data: { shipperId: dto.shipperId },
       include: adminOrderInclude,
     });
-    this.ordersGateway.emitShipperAssigned({ orderId, shipperId: dto.shipperId });
+    this.ordersGateway.emitShipperAssigned({
+      orderId,
+      shipperId: dto.shipperId,
+    });
     return this.withTypeDisplay(updated);
   }
 
@@ -649,17 +751,20 @@ export class AdminOrderService {
     const [byPhone, byUser] = await Promise.all([
       phones.length
         ? this.prisma.order.findMany({
-            where: { guestDeliveryPhone: { in: phones }, status: OrderStatus.completed },
-            select: { guestDeliveryPhone: true },
-            distinct: ['guestDeliveryPhone'],
-          })
+          where: {
+            guestDeliveryPhone: { in: phones },
+            status: OrderStatus.completed,
+          },
+          select: { guestDeliveryPhone: true },
+          distinct: ['guestDeliveryPhone'],
+        })
         : [],
       userIds.length
         ? this.prisma.order.findMany({
-            where: { userId: { in: userIds }, status: OrderStatus.completed },
-            select: { userId: true },
-            distinct: ['userId'],
-          })
+          where: { userId: { in: userIds }, status: OrderStatus.completed },
+          select: { userId: true },
+          distinct: ['userId'],
+        })
         : [],
     ]);
     return {
@@ -679,9 +784,12 @@ export class AdminOrderService {
         },
       },
     });
-    if (!order?.groupOrder) throw new NotFoundException('Không tìm thấy đơn nhóm.');
+    if (!order?.groupOrder)
+      throw new NotFoundException('Không tìm thấy đơn nhóm.');
 
-    const participant = order.groupOrder.participants.find((p) => p.id === participantId);
+    const participant = order.groupOrder.participants.find(
+      (p) => p.id === participantId,
+    );
     if (!participant) throw new NotFoundException('Không tìm thấy thành viên.');
 
     await this.prisma.groupOrderParticipant.update({
@@ -689,7 +797,9 @@ export class AdminOrderService {
       data: { paymentStatus: PaymentStatus.paid, paidAt: new Date() },
     });
 
-    const withItems = order.groupOrder.participants.filter((p) => p.items.length > 0);
+    const withItems = order.groupOrder.participants.filter(
+      (p) => p.items.length > 0,
+    );
     // In split mode: all participants with items must now be paid (including the one just marked)
     const allOthersPaid = withItems
       .filter((p) => p.id !== participantId)
@@ -724,29 +834,34 @@ export class AdminOrderService {
   }
 
   private withTypeDisplay(order: AdminOrderPayload) {
+    const orderWithAddress = withGuestAddressFallback(order);
+
     const typeDisplay =
-      order.type === OrderType.delivery
+      orderWithAddress.type === OrderType.delivery
         ? {
           kind: 'delivery' as const,
           delivery: {
-            shipperId: order.shipperId,
-            shipper: order.shipper,
-            address: order.address,
-            guestDeliveryAddress: order.guestDeliveryAddress,
-            guestDeliveryPhone: order.guestDeliveryPhone,
-            guestDeliveryName: order.guestDeliveryName,
+            shipperId: orderWithAddress.shipperId,
+            shipper: orderWithAddress.shipper,
+            address: orderWithAddress.address,
+            guestDeliveryAddress: orderWithAddress.guestDeliveryAddress,
+            guestDeliveryPhone: orderWithAddress.guestDeliveryPhone,
+            guestDeliveryName: orderWithAddress.guestDeliveryName,
           },
         }
-        : order.type === OrderType.table
+        : orderWithAddress.type === OrderType.table
           ? {
             kind: 'table' as const,
-            table: { tableId: order.tableId, table: order.table },
+            table: {
+              tableId: orderWithAddress.tableId,
+              table: orderWithAddress.table,
+            },
           }
           : {
             kind: 'pickup' as const,
-            pickup: { pickupTime: order.pickupTime },
+            pickup: { pickupTime: orderWithAddress.pickupTime },
           };
 
-    return { ...order, typeDisplay };
+    return { ...orderWithAddress, typeDisplay };
   }
 }

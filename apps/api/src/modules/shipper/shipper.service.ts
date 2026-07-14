@@ -1,9 +1,20 @@
-import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { OrderStatus, OrderType, PaymentStatus, PaymentType } from '@prisma/client';
+import {
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  OrderStatus,
+  OrderType,
+  PaymentStatus,
+  PaymentType,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrdersGateway } from '../events/orders.gateway';
 import { PointOrderRewardService } from '../point/point-order-reward.service';
 import { NotificationService } from '../notification/notification.service';
+import { withGuestAddressFallback } from '../../helper/utils';
 
 @Injectable()
 export class ShipperService {
@@ -14,48 +25,59 @@ export class ShipperService {
     private readonly ordersGateway: OrdersGateway,
     private readonly pointOrderReward: PointOrderRewardService,
     private readonly notificationService: NotificationService,
-  ) {}
+  ) { }
 
   async getAvailableOrders() {
     const orders = await this.prisma.order.findMany({
       where: {
         type: OrderType.delivery,
         shipperId: null,
-        status: { in: [OrderStatus.confirmed, OrderStatus.preparing, OrderStatus.ready] },
+        status: {
+          in: [OrderStatus.confirmed, OrderStatus.preparing, OrderStatus.ready],
+        },
       },
       include: {
         items: {
           include: { product: { select: { name: true, imageUrls: true } } },
         },
-        address: { select: { fullAddress: true, lat: true, lng: true, note: true } },
+        address: {
+          select: { fullAddress: true, lat: true, lng: true, note: true },
+        },
         user: { select: { name: true, phone: true } },
       },
       orderBy: { createdAt: 'desc' },
       take: 20,
     });
 
-    return orders.map((o) => ({
-      orderId: o.id,
-      paymentCode: o.paymentCode,
-      customerName: o.user?.name ?? o.guestDeliveryName ?? 'Khách',
-      customerPhone: o.user?.phone ?? o.guestDeliveryPhone ?? '',
-      address: o.address?.fullAddress ?? o.guestDeliveryAddress ?? '',
-      addressNote: o.address?.note ?? null,
-      lat: (o.address as any)?.lat ?? null,
-      lng: (o.address as any)?.lng ?? null,
-      items: o.items.map((i) => ({
-        name: i.product?.name ?? '',
-        quantity: i.quantity,
-        price: Number(i.price),
-        imageUrl: i.product?.imageUrls?.[0] ?? null,
-        optionsJson: (i.optionsJson ?? {}) as Record<string, string>,
-        extrasJson: (i.extrasJson ?? []) as Array<{ name: string; price: number }>,
-        note: i.note ?? null,
-      })),
-      totalAmount: Number(o.finalAmount),
-      shippingFee: Number(o.shippingFee),
-      paymentType: o.paymentType,
-    }));
+    return orders.map((o) => {
+      const order = withGuestAddressFallback(o);
+      return {
+        orderId: order.id,
+        paymentCode: order.paymentCode,
+        customerName: order.user?.name ?? order.guestDeliveryName ?? 'Khách',
+        customerPhone: order.user?.phone ?? order.guestDeliveryPhone ?? '',
+        address: order.address?.fullAddress ?? '',
+        addressNote: order.address?.note ?? null,
+        lat: order.address?.lat ?? null,
+        lng: order.address?.lng ?? null,
+        items: order.items.map((i) => ({
+          name: i.product?.name ?? '',
+          quantity: i.quantity,
+          price: Number(i.price),
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          imageUrl: i.product?.imageUrls?.[0] ?? null,
+          optionsJson: (i.optionsJson ?? {}) as Record<string, string>,
+          extrasJson: (i.extrasJson ?? []) as Array<{
+            name: string;
+            price: number;
+          }>,
+          note: i.note ?? null,
+        })),
+        totalAmount: Number(order.finalAmount),
+        shippingFee: Number(order.shippingFee),
+        paymentType: order.paymentType,
+      }
+    });
   }
 
   async getAssignedOrders(shipperId: string) {
@@ -80,7 +102,9 @@ export class ShipperService {
             product: { select: { name: true, imageUrls: true, price: true } },
           },
         },
-        address: { select: { fullAddress: true, lat: true, lng: true, note: true } },
+        address: {
+          select: { fullAddress: true, lat: true, lng: true, note: true },
+        },
         user: { select: { name: true, phone: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -89,18 +113,17 @@ export class ShipperService {
 
   async getOrderDetail(shipperId: string, orderId: string) {
     const order = await this.assertShipperOwnsOrder(shipperId, orderId);
-    return this.prisma.order.findUnique({
+    const full = await this.prisma.order.findUnique({
       where: { id: order.id },
       include: {
         items: {
-          include: {
-            product: { select: { name: true, imageUrls: true } },
-          },
+          include: { product: { select: { name: true, imageUrls: true } } },
         },
         address: true,
         user: { select: { name: true, phone: true } },
       },
     });
+    return full ? withGuestAddressFallback(full) : full;
   }
 
   async getOrderHistory(shipperId: string) {
@@ -131,20 +154,36 @@ export class ShipperService {
     });
 
     if (!order) {
-      throw new ForbiddenException({ message: 'Không tìm thấy đơn hàng.', code: 'ORDER_NOT_FOUND' });
+      throw new ForbiddenException({
+        message: 'Không tìm thấy đơn hàng.',
+        code: 'ORDER_NOT_FOUND',
+      });
     }
 
     if (order.type !== OrderType.delivery) {
-      throw new ForbiddenException({ message: 'Chỉ đơn giao hàng mới nhận được.', code: 'ORDER_NOT_DELIVERY' });
+      throw new ForbiddenException({
+        message: 'Chỉ đơn giao hàng mới nhận được.',
+        code: 'ORDER_NOT_DELIVERY',
+      });
     }
 
-    const acceptableStatuses: OrderStatus[] = [OrderStatus.confirmed, OrderStatus.preparing, OrderStatus.ready];
+    const acceptableStatuses: OrderStatus[] = [
+      OrderStatus.confirmed,
+      OrderStatus.preparing,
+      OrderStatus.ready,
+    ];
     if (!acceptableStatuses.includes(order.status)) {
-      throw new ForbiddenException({ message: 'Đơn chưa thể nhận.', code: 'ORDER_NOT_AVAILABLE' });
+      throw new ForbiddenException({
+        message: 'Đơn chưa thể nhận.',
+        code: 'ORDER_NOT_AVAILABLE',
+      });
     }
 
     if (order.shipperId !== null) {
-      throw new ForbiddenException({ message: 'Đơn hàng đã được nhận bởi shipper khác.', code: 'ORDER_ALREADY_TAKEN' });
+      throw new ForbiddenException({
+        message: 'Đơn hàng đã được nhận bởi shipper khác.',
+        code: 'ORDER_ALREADY_TAKEN',
+      });
     }
 
     // Just assign the shipper — status is controlled by POS (confirmed→preparing→ready)
@@ -155,7 +194,11 @@ export class ShipperService {
     });
 
     this.ordersGateway.emitDeliveryOrderTaken({ orderId });
-    this.ordersGateway.emitShipperOrderStatusUpdated({ orderId, status: updated.status, shipperId });
+    this.ordersGateway.emitShipperOrderStatusUpdated({
+      orderId,
+      status: updated.status,
+      shipperId,
+    });
     return updated;
   }
 
@@ -175,8 +218,15 @@ export class ShipperService {
       select: { userId: true, paymentCode: true },
     });
 
-    this.ordersGateway.emitOrderStatusUpdated({ orderId, status: OrderStatus.delivering });
-    this.ordersGateway.emitShipperOrderStatusUpdated({ orderId, status: OrderStatus.delivering, shipperId });
+    this.ordersGateway.emitOrderStatusUpdated({
+      orderId,
+      status: OrderStatus.delivering,
+    });
+    this.ordersGateway.emitShipperOrderStatusUpdated({
+      orderId,
+      status: OrderStatus.delivering,
+      shipperId,
+    });
     void this.notifyOrderUsers(updated, orderId, {
       title: 'Đơn đang trên đường giao',
       content: `Đơn #${updated.paymentCode} đang trên đường đến bạn.`,
@@ -189,7 +239,10 @@ export class ShipperService {
     const order = await this.assertShipperOwnsOrder(shipperId, orderId);
 
     // Accept both delivering (new flow) and picked_up (legacy in-flight orders)
-    if (order.status !== OrderStatus.delivering && order.status !== OrderStatus.picked_up) {
+    if (
+      order.status !== OrderStatus.delivering &&
+      order.status !== OrderStatus.picked_up
+    ) {
       throw new ForbiddenException({
         message: 'Chưa lấy hàng.',
         code: 'ORDER_NOT_PICKED_UP',
@@ -202,8 +255,15 @@ export class ShipperService {
       select: { userId: true, paymentCode: true },
     });
 
-    this.ordersGateway.emitOrderStatusUpdated({ orderId, status: OrderStatus.arrived });
-    this.ordersGateway.emitShipperOrderStatusUpdated({ orderId, status: OrderStatus.arrived, shipperId });
+    this.ordersGateway.emitOrderStatusUpdated({
+      orderId,
+      status: OrderStatus.arrived,
+    });
+    this.ordersGateway.emitShipperOrderStatusUpdated({
+      orderId,
+      status: OrderStatus.arrived,
+      shipperId,
+    });
     void this.notifyOrderUsers(updated, orderId, {
       title: 'Shipper đã đến nơi',
       content: `Đơn #${updated.paymentCode} đã đến địa chỉ giao hàng.`,
@@ -215,7 +275,10 @@ export class ShipperService {
   async completeDelivery(shipperId: string, orderId: string) {
     const order = await this.assertShipperOwnsOrder(shipperId, orderId);
 
-    const completableStatuses: OrderStatus[] = [OrderStatus.arrived, OrderStatus.delivering];
+    const completableStatuses: OrderStatus[] = [
+      OrderStatus.arrived,
+      OrderStatus.delivering,
+    ];
     if (!completableStatuses.includes(order.status)) {
       throw new ForbiddenException({
         message: 'Chưa đến điểm giao.',
@@ -235,12 +298,23 @@ export class ShipperService {
       select: { userId: true, paymentCode: true },
     });
 
-    this.ordersGateway.emitOrderStatusUpdated({ orderId, status: OrderStatus.completed });
-    this.ordersGateway.emitShipperOrderStatusUpdated({ orderId, status: OrderStatus.completed, shipperId });
-
-    void this.pointOrderReward.tryRewardOrderCompletion(orderId).catch((err: unknown) => {
-      this.logger.error(`Point reward failed for order ${orderId}: ${err instanceof Error ? err.message : err}`);
+    this.ordersGateway.emitOrderStatusUpdated({
+      orderId,
+      status: OrderStatus.completed,
     });
+    this.ordersGateway.emitShipperOrderStatusUpdated({
+      orderId,
+      status: OrderStatus.completed,
+      shipperId,
+    });
+
+    void this.pointOrderReward
+      .tryRewardOrderCompletion(orderId)
+      .catch((err: unknown) => {
+        this.logger.error(
+          `Point reward failed for order ${orderId}: ${err instanceof Error ? err.message : err}`,
+        );
+      });
 
     void this.notifyOrderUsers(updated, orderId, {
       title: 'Đơn hàng đã hoàn thành',
@@ -262,25 +336,43 @@ export class ShipperService {
         type: 'order',
         title: notif.title,
         content: notif.content,
-        data: { orderId, paymentCode: order.paymentCode, notifKey: notif.notifKey },
+        data: {
+          orderId,
+          paymentCode: order.paymentCode,
+          notifKey: notif.notifKey,
+        },
       })
       .catch((err: unknown) => {
-        this.logger.error(`Notification failed for order ${orderId}: ${err instanceof Error ? err.message : err}`);
+        this.logger.error(
+          `Notification failed for order ${orderId}: ${err instanceof Error ? err.message : err}`,
+        );
       });
   }
 
   private async assertShipperOwnsOrder(shipperId: string, orderId: string) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
-      select: { id: true, shipperId: true, status: true, type: true, paymentType: true },
+      select: {
+        id: true,
+        shipperId: true,
+        status: true,
+        type: true,
+        paymentType: true,
+      },
     });
 
     if (!order) {
-      throw new NotFoundException({ message: 'Không tìm thấy đơn hàng.', code: 'ORDER_NOT_FOUND' });
+      throw new NotFoundException({
+        message: 'Không tìm thấy đơn hàng.',
+        code: 'ORDER_NOT_FOUND',
+      });
     }
 
     if (order.shipperId !== shipperId || order.type !== OrderType.delivery) {
-      throw new ForbiddenException({ message: 'Không có quyền truy cập đơn hàng này.', code: 'ORDER_FORBIDDEN' });
+      throw new ForbiddenException({
+        message: 'Không có quyền truy cập đơn hàng này.',
+        code: 'ORDER_FORBIDDEN',
+      });
     }
 
     return order;

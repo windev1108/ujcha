@@ -24,11 +24,25 @@ import type { CreateOrderItemDto } from './dto/create-order-item.dto';
 import type { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { NotificationService } from '../notification/notification.service';
 import { OrderValidationService } from './order-validation.service';
-import { computeFinalPrice } from '../../helper/utils';
+import {
+  computeFinalPrice,
+  withGuestAddressFallback,
+} from '../../helper/utils';
 
 export type OrderDetail = Prisma.OrderGetPayload<{
   include: {
-    items: { include: { product: { select: { id: true; name: true; nameTranslation: true; imageUrls: true } } } };
+    items: {
+      include: {
+        product: {
+          select: {
+            id: true;
+            name: true;
+            nameTranslation: true;
+            imageUrls: true;
+          };
+        };
+      };
+    };
     address: true;
     table: true;
     shipper: { select: { id: true; name: true; phone: true } };
@@ -47,7 +61,11 @@ export interface OrderDiscountContext {
 /** Catalog JSON: giá trị là string (legacy) hoặc { label, priceDelta, nameTranslation? }. */
 function parseOptionCatalogValue(
   v: unknown,
-): { label: string; priceDelta: number; nameTranslation?: Record<string, string> } | null {
+): {
+  label: string;
+  priceDelta: number;
+  nameTranslation?: Record<string, string>;
+} | null {
   if (typeof v === 'string') {
     const label = v.trim();
     return label ? { label, priceDelta: 0 } : null;
@@ -80,10 +98,20 @@ function validateOptionsAndSurcharge(
 ): {
   surcharge: Prisma.Decimal;
   normalized: Record<string, string>;
-  details: Array<{ group: string; label: string; priceDelta: number; nameTranslation?: Record<string, string> }>;
+  details: Array<{
+    group: string;
+    label: string;
+    priceDelta: number;
+    nameTranslation?: Record<string, string>;
+  }>;
 } {
   const normalized: Record<string, string> = {};
-  const details: Array<{ group: string; label: string; priceDelta: number; nameTranslation?: Record<string, string> }> = [];
+  const details: Array<{
+    group: string;
+    label: string;
+    priceDelta: number;
+    nameTranslation?: Record<string, string>;
+  }> = [];
   let surcharge = new Prisma.Decimal(0);
   const groups = Array.isArray(optionGroupsJson) ? optionGroupsJson : [];
   const opts =
@@ -106,7 +134,11 @@ function validateOptionsAndSurcharge(
       });
     }
     const selTrim = String(sel).trim();
-    let matched: { label: string; priceDelta: number; nameTranslation?: Record<string, string> } | null = null;
+    let matched: {
+      label: string;
+      priceDelta: number;
+      nameTranslation?: Record<string, string>;
+    } | null = null;
     for (const rv of rawVals) {
       const parsed = parseOptionCatalogValue(rv);
       if (!parsed) continue;
@@ -130,7 +162,9 @@ function validateOptionsAndSurcharge(
       group: name,
       label: selTrim,
       priceDelta: matched.priceDelta,
-      ...(matched.nameTranslation ? { nameTranslation: matched.nameTranslation } : {}),
+      ...(matched.nameTranslation
+        ? { nameTranslation: matched.nameTranslation }
+        : {}),
     });
   }
 
@@ -166,8 +200,13 @@ export class OrderService {
   /**
    * Chuẩn hoá đơn giá từ DB (sản phẩm + topping + phụ phí tuỳ chọn nhóm), kiểm tra khớp với giá client (POS).
    */
-  private async buildOrderItemRows(items: CreateOrderItemDto[], skipOptionValidation = false) {
-    const shopSettings = await this.prisma.shopSettings.findUnique({ where: { id: 'default' } });
+  private async buildOrderItemRows(
+    items: CreateOrderItemDto[],
+    skipOptionValidation = false,
+  ) {
+    const shopSettings = await this.prisma.shopSettings.findUnique({
+      where: { id: 'default' },
+    });
     const globalDiscount = shopSettings?.globalDiscountPercent ?? 0;
 
     const rows: Array<{
@@ -199,12 +238,22 @@ export class OrderService {
       }
 
       // ── Base price từ DB, áp dụng giảm giá hiệu quả ─────────────────────
-      const effectiveDiscount = globalDiscount > 0 ? globalDiscount : (product.discountPercent ?? 0);
-      let unit = new Prisma.Decimal(computeFinalPrice(product.price, effectiveDiscount));
+      const effectiveDiscount =
+        globalDiscount > 0 ? globalDiscount : (product.discountPercent ?? 0);
+      let unit = new Prisma.Decimal(
+        computeFinalPrice(product.price, effectiveDiscount),
+      );
 
       // ── Extras (toppings) — validated against product's inline toppings ───
-      const extrasSnap: { toppingId: string; name: string; price: number; nameTranslation: Record<string, string> }[] = [];
-      const productToppings = Array.isArray(product.toppings) ? product.toppings as any[] : [];
+      const extrasSnap: {
+        toppingId: string;
+        name: string;
+        price: number;
+        nameTranslation: Record<string, string>;
+      }[] = [];
+      const productToppings = Array.isArray(product.toppings)
+        ? (product.toppings as any[])
+        : [];
 
       for (const ex of item.extras ?? []) {
         const t = productToppings.find(
@@ -217,12 +266,18 @@ export class OrderService {
           });
         }
         unit = unit.add(new Prisma.Decimal(Number(t.price)));
-        extrasSnap.push({ toppingId: t.id, name: t.name, price: Number(t.price), nameTranslation: (t as any).nameTranslation ?? ex.nameTranslation ?? {} });
+        extrasSnap.push({
+          toppingId: t.id,
+          name: t.name,
+          price: Number(t.price),
+          nameTranslation:
+            (t as any).nameTranslation ?? ex.nameTranslation ?? {},
+        });
       }
 
       // optionGroups is now fully inline — no DB lookup needed
       const optionGroupsResolved = Array.isArray(product.optionGroups)
-        ? product.optionGroups as any[]
+        ? (product.optionGroups as any[])
         : [];
 
       // ── Options — BE tự tính priceDelta, lưu snapshot đầy đủ ────────────
@@ -231,7 +286,16 @@ export class OrderService {
         normalized: optionsNormalized,
         details: optionDetails,
       } = skipOptionValidation
-          ? { surcharge: new Prisma.Decimal(0), normalized: {} as Record<string, string>, details: [] as { group: string; label: string; priceDelta: number; nameTranslation?: Record<string, string> }[] }
+          ? {
+            surcharge: new Prisma.Decimal(0),
+            normalized: {} as Record<string, string>,
+            details: [] as {
+              group: string;
+              label: string;
+              priceDelta: number;
+              nameTranslation?: Record<string, string>;
+            }[],
+          }
           : validateOptionsAndSurcharge(optionGroupsResolved, item.options);
       unit = unit.add(optionSurcharge);
 
@@ -339,7 +403,8 @@ export class OrderService {
         }
         if (dto.guestDeliveryAddress?.trim()) {
           throw new BadRequestException({
-            message: 'Không kết hợp addressId/inlineAddress với guestDeliveryAddress.',
+            message:
+              'Không kết hợp addressId/inlineAddress với guestDeliveryAddress.',
             code: 'ORDER_DELIVERY_ADDRESS_CONFLICT',
           });
         }
@@ -383,7 +448,10 @@ export class OrderService {
       }
     }
 
-    const itemRows = await this.buildOrderItemRows(dto.items, options?.skipOptionValidation);
+    const itemRows = await this.buildOrderItemRows(
+      dto.items,
+      options?.skipOptionValidation,
+    );
     const totalAmount = itemRows.reduce(
       (sum, r) => sum.add(r.price.mul(r.quantity)),
       new Prisma.Decimal(0),
@@ -396,9 +464,12 @@ export class OrderService {
         code: 'ORDER_DISCOUNT_EXCEEDS_TOTAL',
       });
     }
-    const shippingFeeRaw = dto.type === OrderType.delivery ? (dto.shippingFee ?? 0) : 0;
+    const shippingFeeRaw =
+      dto.type === OrderType.delivery ? (dto.shippingFee ?? 0) : 0;
     const shippingFee = new Prisma.Decimal(shippingFeeRaw);
-    const finalAmount = this.applyDiscount(totalAmount, discountRaw).add(shippingFee);
+    const finalAmount = this.applyDiscount(totalAmount, discountRaw).add(
+      shippingFee,
+    );
 
     const paymentStatusOnCreate =
       options?.initialPaymentStatus ?? PaymentStatus.pending;
@@ -409,6 +480,8 @@ export class OrderService {
       // Resolve address for logged-in delivery orders using inlineAddress
       let resolvedAddressId: string | null = null;
       let resolvedGuestAddress: string | null = null;
+      let resolvedGuestLat: number | null = null;
+      let resolvedGuestLng: number | null = null;
 
       if (dto.type === OrderType.delivery) {
         if (userId && dto.inlineAddress) {
@@ -416,7 +489,10 @@ export class OrderService {
           if (existingCount < MAX_SAVED_ADDRESSES) {
             const isFirst = existingCount === 0;
             if (isFirst) {
-              await tx.address.updateMany({ where: { userId }, data: { isDefault: false } });
+              await tx.address.updateMany({
+                where: { userId },
+                data: { isDefault: false },
+              });
             }
             const saved = await tx.address.create({
               data: {
@@ -429,12 +505,33 @@ export class OrderService {
             });
             resolvedAddressId = saved.id;
           } else {
-            resolvedGuestAddress = dto.inlineAddress.fullAddress;
+            const replaceable = await tx.address.findFirst({
+              where: { userId, isDefault: false },
+              orderBy: { createdAt: 'desc' },
+            });
+
+            if (replaceable) {
+              const updated = await tx.address.update({
+                where: { id: replaceable.id },
+                data: {
+                  fullAddress: dto.inlineAddress.fullAddress,
+                  lat: dto.inlineAddress.lat,
+                  lng: dto.inlineAddress.lng,
+                },
+              });
+              resolvedAddressId = updated.id;
+            } else {
+              resolvedGuestAddress = dto.inlineAddress.fullAddress;
+              resolvedGuestLat = dto.inlineAddress?.lat ?? null;
+              resolvedGuestLng = dto.inlineAddress?.lng ?? null;
+            }
           }
         } else if (userId && dto.addressId) {
           resolvedAddressId = dto.addressId;
         } else if (!userId) {
           resolvedGuestAddress = dto.guestDeliveryAddress!.trim();
+          resolvedGuestLat = dto.guestDeliveryLat ?? null;
+          resolvedGuestLng = dto.guestDeliveryLng ?? null;
         }
       }
 
@@ -456,6 +553,8 @@ export class OrderService {
           type: dto.type,
           addressId: resolvedAddressId,
           guestDeliveryAddress: resolvedGuestAddress,
+          guestDeliveryLat: resolvedGuestLat,
+          guestDeliveryLng: resolvedGuestLng,
           guestDeliveryPhone: dto.guestDeliveryPhone?.trim() || null,
           guestDeliveryName: dto.guestDeliveryName?.trim() || null,
           tableId: dto.type === OrderType.table ? dto.tableId! : null,
@@ -508,7 +607,16 @@ export class OrderService {
         include: {
           items: {
             orderBy: { id: 'asc' },
-            include: { product: { select: { id: true, name: true, nameTranslation: true, imageUrls: true } } },
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  nameTranslation: true,
+                  imageUrls: true,
+                },
+              },
+            },
           },
           address: true,
           table: true,
@@ -519,13 +627,19 @@ export class OrderService {
     });
 
     if (userId) {
-      void this.notificationService.createAndEmit({
-        userId,
-        type: 'order',
-        title: 'Đặt đơn thành công',
-        content: `Đơn #${order.paymentCode} đã được tạo và đang chờ xác nhận.`,
-        data: { orderId: order.id, paymentCode: order.paymentCode, notifKey: 'order_created' },
-      }).catch(() => null);
+      void this.notificationService
+        .createAndEmit({
+          userId,
+          type: 'order',
+          title: 'Đặt đơn thành công',
+          content: `Đơn #${order.paymentCode} đã được tạo và đang chờ xác nhận.`,
+          data: {
+            orderId: order.id,
+            paymentCode: order.paymentCode,
+            notifKey: 'order_created',
+          },
+        })
+        .catch(() => null);
     }
 
     return order;
@@ -594,7 +708,16 @@ export class OrderService {
           include: {
             items: {
               orderBy: { id: 'asc' },
-              include: { product: { select: { id: true, name: true, nameTranslation: true, imageUrls: true } } },
+              include: {
+                product: {
+                  select: {
+                    id: true,
+                    name: true,
+                    nameTranslation: true,
+                    imageUrls: true,
+                  },
+                },
+              },
             },
             address: true,
             table: true,
@@ -605,7 +728,11 @@ export class OrderService {
       });
 
       if (shouldRewardPoints) {
-        this.fireOrderCompletionSideEffects(updated.id, updated.userId, updated.paymentCode);
+        this.fireOrderCompletionSideEffects(
+          updated.id,
+          updated.userId,
+          updated.paymentCode,
+        );
       }
 
       return updated;
@@ -615,12 +742,23 @@ export class OrderService {
       where: { id: orderId },
       data: {
         ...(dto.status !== undefined && { status: dto.status }),
-        ...(dto.paymentStatus !== undefined && { paymentStatus: dto.paymentStatus }),
+        ...(dto.paymentStatus !== undefined && {
+          paymentStatus: dto.paymentStatus,
+        }),
       },
       include: {
         items: {
           orderBy: { id: 'asc' },
-          include: { product: { select: { id: true, name: true, nameTranslation: true, imageUrls: true } } },
+          include: {
+            product: {
+              select: {
+                id: true,
+                name: true,
+                nameTranslation: true,
+                imageUrls: true,
+              },
+            },
+          },
         },
         address: true,
         table: true,
@@ -636,15 +774,30 @@ export class OrderService {
     return updated;
   }
 
-  private fireOrderCompletionSideEffects(orderId: string, userId?: string | null, paymentCode?: string) {
+  private fireOrderCompletionSideEffects(
+    orderId: string,
+    userId?: string | null,
+    paymentCode?: string,
+  ) {
     void this.referralRewardProcessing
       .tryProcessReferralOnOrderCompleted(orderId)
-      .catch((err: unknown) => { this.logger.error(err); });
-    void this.rewardAndNotifyCompletion(orderId, userId ?? null, paymentCode ?? '')
-      .catch((err: unknown) => { this.logger.error(err); });
+      .catch((err: unknown) => {
+        this.logger.error(err);
+      });
+    void this.rewardAndNotifyCompletion(
+      orderId,
+      userId ?? null,
+      paymentCode ?? '',
+    ).catch((err: unknown) => {
+      this.logger.error(err);
+    });
   }
 
-  private async rewardAndNotifyCompletion(orderId: string, userId: string | null, paymentCode: string) {
+  private async rewardAndNotifyCompletion(
+    orderId: string,
+    userId: string | null,
+    paymentCode: string,
+  ) {
     try {
       await this.pointOrderReward.tryRewardOrderCompletion(orderId);
     } catch (err) {
@@ -652,10 +805,17 @@ export class OrderService {
     }
     if (!userId) return;
 
-    const earnedTxn = await this.prisma.pointTransaction.findFirst({
-      where: { userId, source: PointSource.order, referenceId: orderId, type: PointTransactionType.earn },
-      select: { amount: true },
-    }).catch(() => null);
+    const earnedTxn = await this.prisma.pointTransaction
+      .findFirst({
+        where: {
+          userId,
+          source: PointSource.order,
+          referenceId: orderId,
+          type: PointTransactionType.earn,
+        },
+        select: { amount: true },
+      })
+      .catch(() => null);
 
     const points = earnedTxn?.amount ?? 0;
 
@@ -663,17 +823,29 @@ export class OrderService {
       userId,
       type: 'order',
       title: 'Đơn hàng hoàn thành',
-      content: points > 0
-        ? `Đơn #${paymentCode} hoàn thành. Bạn tích được ${points} điểm!`
-        : `Đơn #${paymentCode} hoàn thành. Cảm ơn bạn đã sử dụng UjCha!`,
-      data: { orderId, paymentCode, earnedPoints: points, notifKey: 'order_completed' },
+      content:
+        points > 0
+          ? `Đơn #${paymentCode} hoàn thành. Bạn tích được ${points} điểm!`
+          : `Đơn #${paymentCode} hoàn thành. Cảm ơn bạn đã sử dụng UjCha!`,
+      data: {
+        orderId,
+        paymentCode,
+        earnedPoints: points,
+        notifKey: 'order_completed',
+      },
     });
   }
 
   async getPaymentStatus(userId: string, orderId: string) {
     const order = await this.prisma.order.findFirst({
       where: { id: orderId, userId },
-      select: { id: true, paymentStatus: true, paymentCode: true, status: true, createdAt: true },
+      select: {
+        id: true,
+        paymentStatus: true,
+        paymentCode: true,
+        status: true,
+        createdAt: true,
+      },
     });
 
     if (!order) {
@@ -707,7 +879,9 @@ export class OrderService {
     const where: Prisma.OrderWhereInput = {
       OR: [
         { userId },
-        ...(groupLinkedOrderIds.length > 0 ? [{ id: { in: groupLinkedOrderIds } }] : []),
+        ...(groupLinkedOrderIds.length > 0
+          ? [{ id: { in: groupLinkedOrderIds } }]
+          : []),
       ],
     };
 
@@ -721,10 +895,19 @@ export class OrderService {
           items: {
             orderBy: { id: 'asc' },
             include: {
-              product: { select: { id: true, name: true, nameTranslation: true, imageUrls: true } },
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  nameTranslation: true,
+                  imageUrls: true,
+                },
+              },
             },
           },
-          address: { select: { id: true, fullAddress: true } },
+          address: {
+            select: { id: true, fullAddress: true, lat: true, lng: true },
+          },
         },
       }),
       this.prisma.order.count({ where }),
@@ -755,18 +938,25 @@ export class OrderService {
 
     for (const t of txns) {
       if (t.referenceId) {
-        earnedMap.set(t.referenceId, (earnedMap.get(t.referenceId) ?? 0) + t.amount);
+        earnedMap.set(
+          t.referenceId,
+          (earnedMap.get(t.referenceId) ?? 0) + t.amount,
+        );
       }
     }
-    const groupOrderByOrderId = new Map(groupLinks.map((g) => [g.orderId, g.token] as [string | null, string]));
+    const groupOrderByOrderId = new Map(
+      groupLinks.map((g) => [g.orderId, g.token] as [string | null, string]),
+    );
 
     return {
-      items: orders.map((o) => ({
-        ...o,
-        earnedPoints: earnedMap.get(o.id) ?? 0,
-        isGroupOrder: groupOrderByOrderId.has(o.id),
-        groupOrderToken: groupOrderByOrderId.get(o.id) ?? null,
-      })),
+      items: orders.map((o) =>
+        withGuestAddressFallback({
+          ...o,
+          earnedPoints: earnedMap.get(o.id) ?? 0,
+          isGroupOrder: groupOrderByOrderId.has(o.id),
+          groupOrderToken: groupOrderByOrderId.get(o.id) ?? null,
+        }),
+      ),
       total,
       page,
       pageSize,
@@ -774,12 +964,30 @@ export class OrderService {
     };
   }
 
-  async getOrderDetail(userId: string | null, paymentCode: string): Promise<OrderDetail & { isGroupOrder: boolean; groupOrderToken: string | null; earnedPoints: number }> {
+  async getOrderDetail(
+    userId: string | null,
+    paymentCode: string,
+  ): Promise<
+    OrderDetail & {
+      isGroupOrder: boolean;
+      groupOrderToken: string | null;
+      earnedPoints: number;
+    }
+  > {
     const order = await this.prisma.order.findFirst({
       where: { paymentCode },
       include: {
         items: {
-          include: { product: { select: { id: true, name: true, nameTranslation: true, imageUrls: true } } },
+          include: {
+            product: {
+              select: {
+                id: true,
+                name: true,
+                nameTranslation: true,
+                imageUrls: true,
+              },
+            },
+          },
           orderBy: { id: 'asc' },
         },
         address: true,
@@ -813,12 +1021,12 @@ export class OrderService {
           select: { amount: true },
         }),
       ]);
-      return {
+      return withGuestAddressFallback({
         ...order,
         isGroupOrder: !!groupOrderLink,
         groupOrderToken: groupOrderLink?.token ?? null,
         earnedPoints: earnedTxn?.amount ?? 0,
-      };
+      });
     }
 
     // Allow host (userId match) or any group order participant
@@ -839,18 +1047,21 @@ export class OrderService {
     ]);
 
     if (order.userId !== userId && !groupOrderLink) {
-      throw new NotFoundException({ message: 'Không tìm thấy đơn.', code: 'ORDER_NOT_FOUND' });
+      throw new NotFoundException({
+        message: 'Không tìm thấy đơn.',
+        code: 'ORDER_NOT_FOUND',
+      });
     }
     // Group orders: paymentCode knowledge grants view access (same model as guests).
     // Participant userId check is intentionally dropped — it blocked valid members
     // whose participant was created before their userId could be linked.
 
-    return {
+    return withGuestAddressFallback({
       ...order,
       isGroupOrder: !!groupOrderLink,
       groupOrderToken: groupOrderLink?.token ?? null,
       earnedPoints: earnedTxn?.amount ?? 0,
-    };
+    });
   }
 
   private async allocPaymentCode(
@@ -910,7 +1121,10 @@ export class OrderService {
     if (voucher.discountType === 'percent') {
       discountAmount = (orderAmount * dv) / 100;
       if (voucher.maxDiscountAmount) {
-        discountAmount = Math.min(discountAmount, Number(voucher.maxDiscountAmount));
+        discountAmount = Math.min(
+          discountAmount,
+          Number(voucher.maxDiscountAmount),
+        );
       }
     } else {
       discountAmount = dv;
@@ -924,7 +1138,9 @@ export class OrderService {
       discountType: voucher.discountType,
       discountValue: dv,
       discountAmount,
-      maxDiscountAmount: voucher.maxDiscountAmount ? Number(voucher.maxDiscountAmount) : null,
+      maxDiscountAmount: voucher.maxDiscountAmount
+        ? Number(voucher.maxDiscountAmount)
+        : null,
       minOrderAmount: minOrder,
     };
   }
