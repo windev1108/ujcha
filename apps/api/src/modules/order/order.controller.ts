@@ -72,6 +72,7 @@ export class OrderController {
   ) {
     const order = await this.orderService.createOrder(userId, dto);
     this.ordersGateway.emitOrderCreated({ orderId: order.id, type: order.type });
+    console.log({ order, dto })
     this.mailService
       .sendNewOrderNotification({
         orderId: order.id,
@@ -81,9 +82,14 @@ export class OrderController {
         customerPhone: order.user?.phone ?? order.guestDeliveryPhone,
         address: order?.address?.fullAddress ?? order.guestDeliveryAddress,
         coordinate:
-          order?.address?.lng && order?.address?.lat
-            ? { lng: order?.address?.lng, lat: order?.address?.lat }
-            : null,
+          order?.address
+            ? { lng: order.address.lng ?? 0, lat: order.address.lat ?? 0 }
+            : dto?.inlineAddress
+              ? {
+                lng: dto?.inlineAddress?.lng ?? 0,
+                lat: dto?.inlineAddress?.lat ?? 0,
+              }
+              : null,
         totalAmount: order.finalAmount,
         items: order.items.map((x) => ({
           name: x.product?.name,

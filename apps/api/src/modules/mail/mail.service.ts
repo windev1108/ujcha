@@ -39,7 +39,7 @@ function buildNewOrderHtml(data: NewOrderEmailData, siteUrl: string): string {
     )
     .join('');
 
-  const mapsUrl = data.coordinate
+  const mapsUrl = data.coordinate?.lng && data.coordinate?.lat
     ? `https://www.google.com/maps/search/?api=1&query=${data.coordinate.lat},${data.coordinate.lng}`
     : data.address
       ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.address)}`
