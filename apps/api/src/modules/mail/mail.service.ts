@@ -39,12 +39,45 @@ function buildNewOrderHtml(data: NewOrderEmailData, siteUrl: string): string {
     )
     .join('');
 
-  // Ưu tiên tọa độ chính xác nếu có, fallback sang search theo địa chỉ text
   const mapsUrl = data.coordinate
     ? `https://www.google.com/maps/search/?api=1&query=${data.coordinate.lat},${data.coordinate.lng}`
     : data.address
       ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.address)}`
       : null;
+
+  const orderTypeLabel =
+    data.type === 'delivery' ? 'Giao hàng' : data.type === 'table' ? 'Đặt bàn' : 'Mang đi';
+
+  // Chuẩn hoá số điện thoại về dạng E.164 cho href="tel:" (giữ nguyên text hiển thị)
+  const telHref = data.customerPhone
+    ? `tel:${data.customerPhone.replace(/[^\d+]/g, '')}`
+    : null;
+
+  const infoBlock = `
+    <table cellpadding="0" cellspacing="0" style="margin:0 0 20px;width:100%;">
+      <tr>
+        <td style="padding:2px 0;font-size:13px;color:#717171;width:90px;">Loại đơn</td>
+        <td style="padding:2px 0;font-size:14px;color:#1a1a1a;font-weight:600;">${orderTypeLabel}</td>
+      </tr>
+      ${data.customerName
+      ? `<tr>
+               <td style="padding:2px 0;font-size:13px;color:#717171;">Khách hàng</td>
+               <td style="padding:2px 0;font-size:14px;color:#1a1a1a;">${data.customerName}</td>
+             </tr>`
+      : ''
+    }
+      ${data.customerPhone
+      ? `<tr>
+               <td style="padding:2px 0;font-size:13px;color:#717171;">Điện thoại</td>
+               <td style="padding:2px 0;font-size:14px;">
+                 <a href="${telHref}" style="color:#1a3c34;text-decoration:underline;font-weight:600;">
+                   📞 ${data.customerPhone}
+                 </a>
+               </td>
+             </tr>`
+      : ''
+    }
+    </table>`;
 
   const addressBlock = data.address
     ? `<p style="margin:0 0 8px;font-size:14px;color:#1a1a1a;">📍 ${data.address}</p>`
@@ -75,12 +108,10 @@ function buildNewOrderHtml(data: NewOrderEmailData, siteUrl: string): string {
         </tr>
         <tr>
           <td style="padding:32px 40px 8px;">
-            <h1 style="margin:0 0 4px;font-size:20px;font-weight:700;color:#1a1a1a;">
+            <h1 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#1a1a1a;">
               Đơn #${data.paymentCode}
             </h1>
-            <p style="margin:0 0 20px;font-size:13px;color:#717171;">
-              Loại: ${data.type === 'delivery' ? 'Giao hàng' : data.type === 'table' ? 'Đặt bàn' : 'Mang đi'}${data.customerName ? ` · ${data.customerName}` : ''}${data.customerPhone ? ` · ${data.customerPhone}` : ''}
-            </p>
+            ${infoBlock}
             ${addressBlock}
             ${mapsLink}
             <table width="100%" cellpadding="0" cellspacing="0">
