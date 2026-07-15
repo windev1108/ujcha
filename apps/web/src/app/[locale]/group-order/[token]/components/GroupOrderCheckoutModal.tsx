@@ -153,7 +153,10 @@ export function GroupOrderCheckoutModal({
     setError(null);
     if (type === "delivery") {
       if (shippingIsOutOfRange) { setError(t("error_delivery_out_of_range")); return; }
-      if (showNewForm && !deliveryForm.fullAddress.trim()) { setError(t("error_enter_delivery_address")); return; }
+      if (showNewForm && (!deliveryForm.fullAddress.trim() || deliveryForm.lat == null || deliveryForm.lng == null)) {
+        setError(t("error_enter_delivery_address"));
+        return;
+      }
       if (!showNewForm && !selectedAddressId) { setError(t("error_select_address")); return; }
     }
 

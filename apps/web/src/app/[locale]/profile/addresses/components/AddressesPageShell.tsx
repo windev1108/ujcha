@@ -345,11 +345,13 @@ function AddressModal({
               value={form.fullAddress}
               onChange={(v) => patch({ fullAddress: v })}
               onSelect={(s) => patch({ fullAddress: s.displayName, lat: s.lat, lng: s.lng })}
+              onInvalidClear={() => patch({ lat: null, lng: null })}
               placeholder={t("address_placeholder")}
               className={inputClass}
               autoComplete="street-address"
               boundingBox={DA_NANG_BOUNDING_BOX}
               querySuffix={DA_NANG_QUERY_SUFFIX}
+              error={errors.fullAddress}
             />
             {errors.fullAddress && <p className="mt-1 text-xs text-red-500">{errors.fullAddress}</p>}
             {geoError && <p className="mt-1 text-xs text-red-500">{geoError}</p>}

@@ -264,6 +264,10 @@ export function CheckoutPageShell() {
           setOrderError(t("error_enter_delivery_address"));
           return;
         }
+        if (deliveryForm.lat == null || deliveryForm.lng == null) {
+          setOrderError(t("error_select_address_from_suggestion"));
+          return;
+        }
         if (!deliveryForm.name.trim()) {
           setOrderError(t("error_enter_recipient_name"));
           return;
@@ -275,6 +279,12 @@ export function CheckoutPageShell() {
       } else if (!selectedAddressId) {
         setOrderError(t("error_select_address"));
         return;
+      } else {
+        const addr = effectiveSavedAddresses.find((a) => a.id === selectedAddressId);
+        if (!addr || !addr.lat || !addr.lng) {
+          setOrderError(t("error_select_address_from_suggestion"));
+          return;
+        }
       }
     }
 

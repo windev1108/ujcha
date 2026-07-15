@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Loader2, MapPin } from "lucide-react";
+import { Loader2, MapPin, AlertCircle } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 export interface AddressSuggestion {
@@ -22,28 +22,24 @@ interface Props {
     value: string;
     onChange: (value: string) => void;
     onSelect: (suggestion: AddressSuggestion) => void;
+    /**
+     * Gọi khi user gõ free-text nhưng blur ra ngoài mà KHÔNG chọn suggestion nào.
+     * Input sẽ tự clear — dùng callback này để parent reset thêm lat/lng (set về null).
+     */
+    onInvalidClear?: () => void;
     placeholder?: string;
     className?: string;
     autoComplete?: string;
     boundingBox?: BoundingBox;
     strictBounds?: boolean;
     querySuffix?: string;
+    /** Hiển thị viền đỏ + thông báo lỗi khi input trống nhưng required */
+    error?: string;
 }
 
 const NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search";
 const MIN_QUERY_LENGTH = 3;
 const DEBOUNCE_MS = 400;
-
-// ── Chuẩn hoá địa chỉ kiểu Việt Nam trước khi gửi cho Nominatim ────────────
-//
-// Nominatim chỉ match tốt với format "<số nhà>, <tên đường>". Người dùng VN
-// thường gõ theo các kiểu viết tắt khác nhau, cần map lại trước khi search:
-//
-//   "K19/14 Huỳnh Bá Chánh"   → "14, Kiệt 19 Huỳnh Bá Chánh"
-//   "H19/14 Huỳnh Bá Chánh"   → "14, Hẻm 19 Huỳnh Bá Chánh"
-//   "19/14 Huỳnh Bá Chánh"    → "14, Kiệt 19 Huỳnh Bá Chánh" (mặc định coi là Kiệt)
-//   "14 Huỳnh Bá Chánh"       → "14, Huỳnh Bá Chánh"
-//   "14, Huỳnh Bá Chánh"      → giữ nguyên (đã có dấu phẩy, coi như user đã chuẩn hoá)
 
 const ALLEY_KEYWORD_MAP: Record<string, string> = {
     k: "Kiệt",
@@ -61,12 +57,8 @@ const ALLEY_KEYWORD_MAP: Record<string, string> = {
 function normalizeVietnameseAddress(raw: string): string {
     const trimmed = raw.trim();
     if (!trimmed) return trimmed;
-
-    // Đã có dấu phẩy → coi như user đã tự chuẩn hoá, không đụng vào
     if (trimmed.includes(",")) return trimmed;
 
-    // Pattern 1: [tiền tố] + <số kiệt>/<số nhà> + <tên đường>
-    // vd: "K19/14 Huỳnh Bá Chánh", "19/14 Huỳnh Bá Chánh"
     const alleySlashMatch = trimmed.match(
         /^(k|kiệt|kiet|h|hẻm|hem|ngõ|ngo|ngách|ngach)?\.?\s*(\d+)\s*\/\s*(\d+)\s+(.+)$/i,
     );
@@ -78,9 +70,6 @@ function normalizeVietnameseAddress(raw: string): string {
         return `${houseNum}, ${alleyLabel} ${alleyNum} ${street.trim()}`;
     }
 
-    // Pattern 2: <tiền tố>+<số> (KHÔNG có slash) + <tên đường>
-    // vd: "K244 Trần Đại Nghĩa" → "Kiệt 244 Trần Đại Nghĩa"
-    //     "H50 Nguyễn Văn Linh" → "Hẻm 50 Nguyễn Văn Linh"
     const alleyOnlyMatch = trimmed.match(
         /^(k|kiệt|kiet|h|hẻm|hem|ngõ|ngo|ngách|ngach)\.?\s*(\d+)\s+(.+)$/i,
     );
@@ -90,8 +79,6 @@ function normalizeVietnameseAddress(raw: string): string {
         return `${alleyLabel} ${alleyNum} ${street.trim()}`;
     }
 
-    // Pattern 3: <số nhà> <tên đường> (chưa có dấu phẩy) → thêm dấu phẩy
-    // vd: "14 Huỳnh Bá Chánh" → "14, Huỳnh Bá Chánh"
     const plainMatch = trimmed.match(/^(\d+[A-Za-z]?)\s+(.+)$/);
     if (plainMatch) {
         const [, houseNum, street] = plainMatch;
@@ -105,12 +92,14 @@ export function AddressAutocompleteInput({
     value,
     onChange,
     onSelect,
+    onInvalidClear,
     placeholder,
     className,
     autoComplete = "off",
     boundingBox,
     strictBounds = true,
     querySuffix,
+    error,
 }: Props) {
     const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
     const [loading, setLoading] = useState(false);
@@ -124,12 +113,26 @@ export function AddressAutocompleteInput({
     const requestIdRef = useRef(0);
     const mountedRef = useRef(true);
 
+    // Giá trị được coi là "hợp lệ" — tức đã đi kèm toạ độ, do người dùng CHỌN
+    // từ dropdown (không phải tự gõ). Khởi tạo bằng giá trị ban đầu, vì có thể
+    // đây là địa chỉ đã lưu sẵn hợp lệ (VD khi mở modal edit).
+    const confirmedValueRef = useRef(value);
+
     useEffect(() => {
         mountedRef.current = true;
         return () => {
             mountedRef.current = false;
         };
     }, []);
+
+    // Nếu parent tự đổi `value` từ bên ngoài theo cách hợp lệ (VD reset form),
+    // đồng bộ lại confirmed value để không bị clear oan.
+    const prevExternalValueRef = useRef(value);
+    useEffect(() => {
+        if (value !== prevExternalValueRef.current) {
+            prevExternalValueRef.current = value;
+        }
+    }, [value]);
 
     const fetchNominatim = useCallback(
         async (queryText: string): Promise<AddressSuggestion[]> => {
@@ -180,14 +183,10 @@ export function AddressAutocompleteInput({
             setLoading(true);
             try {
                 const normalizedQuery = normalizeVietnameseAddress(query);
-
                 let results = await fetchNominatim(normalizedQuery);
 
-                // Bỏ qua nếu đã có request mới hơn hoặc component unmount
                 if (!mountedRef.current || myRequestId !== requestIdRef.current) return;
 
-                // Nếu chuẩn hoá không ra kết quả và query gốc khác query đã chuẩn hoá
-                // → thử lại với query gốc (phòng trường hợp chuẩn hoá sai định dạng)
                 if (results.length === 0 && normalizedQuery !== query.trim()) {
                     results = await fetchNominatim(query.trim());
                     if (!mountedRef.current || myRequestId !== requestIdRef.current) return;
@@ -239,11 +238,32 @@ export function AddressAutocompleteInput({
 
     function handleSelect(s: AddressSuggestion) {
         skipNextSearchRef.current = true;
+        confirmedValueRef.current = s.displayName;
+        prevExternalValueRef.current = s.displayName;
         onChange(s.displayName);
         onSelect(s);
         setSuggestions([]);
         setOpen(false);
         setHighlightIndex(-1);
+    }
+
+    function handleBlur() {
+        // Delay nhẹ để onMouseDown (preventDefault) trên suggestion kịp chạy
+        // trước khi ta kiểm tra và có thể clear input.
+        setTimeout(() => {
+            if (!mountedRef.current) return;
+            const trimmedValue = value.trim();
+            const isConfirmed = trimmedValue === confirmedValueRef.current.trim() && trimmedValue !== "";
+
+            if (!isConfirmed) {
+                // User đã gõ free-text nhưng chưa chọn suggestion nào khớp → clear
+                confirmedValueRef.current = "";
+                prevExternalValueRef.current = "";
+                onChange("");
+                onInvalidClear?.();
+            }
+            setOpen(false);
+        }, 150);
     }
 
     function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -274,10 +294,11 @@ export function AddressAutocompleteInput({
                     setHighlightIndex(-1);
                 }}
                 onFocus={() => suggestions.length > 0 && setOpen(true)}
+                onBlur={handleBlur}
                 onKeyDown={handleKeyDown}
                 placeholder={placeholder}
                 autoComplete={autoComplete}
-                className={className}
+                className={`${className} ${error ? "ring-2 ring-red-400" : ""}`}
             />
 
             {loading && (
@@ -314,6 +335,13 @@ export function AddressAutocompleteInput({
                 <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-50 rounded-xl border border-black/8 bg-white px-3 py-2.5 text-sm text-foreground/40 shadow-lg">
                     {t("not_found_address_label")}
                 </div>
+            )}
+
+            {error && (
+                <p className="mt-1.5 flex items-center gap-1 text-xs text-red-500">
+                    <AlertCircle className="size-3" />
+                    {error}
+                </p>
             )}
         </div>
     );

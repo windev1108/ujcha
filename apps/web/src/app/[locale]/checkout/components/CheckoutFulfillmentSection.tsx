@@ -25,6 +25,7 @@ import { useRouter } from "@/i18n/navigation";
 import { PickupScheduler } from "./PickupScheduler";
 import { AddressAutocompleteInput } from "@/components/common/AddressAutocompleteInput";
 import { DA_NANG_BOUNDING_BOX, DA_NANG_QUERY_SUFFIX } from "@/lib/constants";
+import { canSubmitOrder } from "@/lib/utils";
 
 const MapLocationPicker = dynamic(
   () => import("./MapLocationPicker").then((m) => ({ default: m.MapLocationPicker })),
@@ -237,7 +238,6 @@ function DeliveryFulfillmentCard({
 
   const canUseAccount = !!(profileName && profilePhone);
   const showNewForm = selectedAddressId === NEW_ADDRESS_ID || savedAddresses.length === 0;
-
   // When profile data arrives, switch to account mode and pre-fill (once only)
   const hasInitContact = useRef(false);
   useEffect(() => {
@@ -432,6 +432,7 @@ function DeliveryFulfillmentCard({
                   value={form.fullAddress}
                   onChange={(v) => onChange({ fullAddress: v })}
                   onSelect={(s) => onChange({ fullAddress: s.displayName, lat: s.lat, lng: s.lng })}
+                  onInvalidClear={() => onChange({ lat: null, lng: null })}
                   placeholder={t("address_placeholder")}
                   className={inputCls}
                   autoComplete="street-address"

@@ -1194,5 +1194,6 @@
   "error_store_closed":"The store is closed. Please place your order tomorrow.",
   "search_address_placeholder": "Search for an address or place",
   "exact_address_label": "Approximate location — exact house number not yet determined; you need to add the specific house number to the beginning of the address.",
-  "not_found_address_label": "No matching address found"
+  "not_found_address_label": "No matching address found",
+  "error_select_address_from_suggestion": "Please select an invalid address from the suggestions."
 }

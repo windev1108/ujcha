@@ -2072,6 +2072,10 @@ export function GroupOrderPageShell() {
                 className="gap-1.5 rounded-full bg-[#1a3c34] px-4 font-semibold text-white disabled:opacity-60"
                 isDisabled={lockLoading || actionLoading}
                 onPress={() => {
+                  if (localType === "delivery" && (localShippingLat == null || localShippingLng == null)) {
+                    toast.error(t("error_select_address_from_suggestion"));
+                    return;
+                  }
                   const unconfirmed = state.participants.filter((p) => !p.isReady);
                   if (unconfirmed.length > 0) {
                     setShowLockConfirm(true);
