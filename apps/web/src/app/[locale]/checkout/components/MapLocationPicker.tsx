@@ -6,6 +6,8 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Loader2, MapPin, Navigation, X } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { AddressAutocompleteInput } from "@/components/common/AddressAutocompleteInput";
+import { DA_NANG_BOUNDING_BOX, DA_NANG_QUERY_SUFFIX } from "@/lib/constants";
 
 // Re-use the same fix for webpack-broken default icons
 L.Icon.Default.mergeOptions({
@@ -62,6 +64,7 @@ type Props = {
 export function MapLocationPicker({ initialLat, initialLng, onConfirm, onClose }: Props) {
   const t = useTranslations();
   const hasInitialCoords = initialLat != null && initialLng != null;
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Fall back to HCM only as the MapContainer seed — real position is acquired below
   const mapSeedCenter: [number, number] = [
@@ -165,38 +168,53 @@ export function MapLocationPicker({ initialLat, initialLng, onConfirm, onClose }
   return (
     <div className="fixed inset-0 z-[9998] flex flex-col bg-white">
       {/* Header */}
-      <div className="flex shrink-0 items-center gap-3 border-b border-black/6 bg-white px-4 py-3 shadow-sm">
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex size-9 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-surface-card"
-          aria-label={t("close_map")}
-        >
-          <X className="size-5 text-foreground/70" />
-        </button>
+      <div className="flex shrink-0 flex-col gap-2.5 border-b border-black/6 bg-white px-4 py-3 shadow-sm">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex size-9 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-surface-card"
+            aria-label={t("close_map")}
+          >
+            <X className="size-5 text-foreground/70" />
+          </button>
 
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-            {t("delivery_address_title")}
-          </p>
-          <h2 className="text-sm font-semibold text-foreground">{t("map_picker_title")}</h2>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
+              {t("delivery_address_title")}
+            </p>
+            <h2 className="text-sm font-semibold text-foreground">{t("map_picker_title")}</h2>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleGetGPS}
+            disabled={isLocating}
+            className="flex shrink-0 items-center gap-1.5 rounded-full bg-surface-card px-3 py-2 text-xs font-medium text-kun-products-forest ring-1 ring-black/6 transition-colors hover:ring-black/10 disabled:opacity-50"
+          >
+            {isLocating ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Navigation className="size-3.5" />
+            )}
+            {t("my_location")}
+          </button>
         </div>
 
-        <button
-          type="button"
-          onClick={handleGetGPS}
-          disabled={isLocating}
-          className="flex shrink-0 items-center gap-1.5 rounded-full bg-surface-card px-3 py-2 text-xs font-medium text-kun-products-forest ring-1 ring-black/6 transition-colors hover:ring-black/10 disabled:opacity-50"
-        >
-          {isLocating ? (
-            <Loader2 className="size-3.5 animate-spin" />
-          ) : (
-            <Navigation className="size-3.5" />
-          )}
-          {t("my_location")}
-        </button>
+        {/* Search row — normal flow, không che các nút phía trên */}
+        <AddressAutocompleteInput
+          value={searchQuery}
+          onChange={setSearchQuery}
+          onSelect={(s) => {
+            setFlyTarget([s.lat, s.lng]);
+            setAddressPreview(s.displayName);
+          }}
+          placeholder={t("search_address_placeholder")}
+          className="h-10 w-full rounded-full border border-black/8 bg-surface-card px-4 text-sm focus:outline-none focus:ring-2 focus:ring-kun-primary/30"
+          boundingBox={DA_NANG_BOUNDING_BOX}
+          querySuffix={DA_NANG_QUERY_SUFFIX}
+        />
       </div>
-
       {/* Map */}
       <div className="relative min-h-0 flex-1">
         <MapContainer

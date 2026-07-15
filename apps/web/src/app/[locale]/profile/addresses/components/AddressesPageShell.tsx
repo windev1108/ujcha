@@ -28,6 +28,8 @@ import {
 } from "@/services/order/hooks";
 import { revealTransition, easeOutSmooth } from "@/app/[locale]/(landing)/components/RevealSection";
 import type { UserAddress } from "@/services/order/api";
+import { AddressAutocompleteInput } from "@/components/common/AddressAutocompleteInput";
+import { DA_NANG_BOUNDING_BOX, DA_NANG_QUERY_SUFFIX } from "@/lib/constants";
 
 const MapLocationPicker = dynamic(
   () =>
@@ -339,12 +341,15 @@ function AddressModal({
                 </button>
               </div>
             </div>
-            <Input
-              placeholder={t("address_placeholder")}
+            <AddressAutocompleteInput
               value={form.fullAddress}
-              onChange={(e) => patch({ fullAddress: e.target.value })}
+              onChange={(v) => patch({ fullAddress: v })}
+              onSelect={(s) => patch({ fullAddress: s.displayName, lat: s.lat, lng: s.lng })}
+              placeholder={t("address_placeholder")}
               className={inputClass}
               autoComplete="street-address"
+              boundingBox={DA_NANG_BOUNDING_BOX}
+              querySuffix={DA_NANG_QUERY_SUFFIX}
             />
             {errors.fullAddress && <p className="mt-1 text-xs text-red-500">{errors.fullAddress}</p>}
             {geoError && <p className="mt-1 text-xs text-red-500">{geoError}</p>}

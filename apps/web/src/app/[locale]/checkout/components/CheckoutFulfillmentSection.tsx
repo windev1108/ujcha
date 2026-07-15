@@ -23,6 +23,8 @@ import type { UserAddress } from "@/services/order/api";
 import { ROUTES } from "@/lib/routes";
 import { useRouter } from "@/i18n/navigation";
 import { PickupScheduler } from "./PickupScheduler";
+import { AddressAutocompleteInput } from "@/components/common/AddressAutocompleteInput";
+import { DA_NANG_BOUNDING_BOX, DA_NANG_QUERY_SUFFIX } from "@/lib/constants";
 
 const MapLocationPicker = dynamic(
   () => import("./MapLocationPicker").then((m) => ({ default: m.MapLocationPicker })),
@@ -426,14 +428,15 @@ function DeliveryFulfillmentCard({
                     </button>
                   </div>
                 </div>
-                <input
-                  type="text"
-                  placeholder={t("address_placeholder")}
+                <AddressAutocompleteInput
                   value={form.fullAddress}
-                  onChange={(e) => onChange({ fullAddress: e.target.value })}
+                  onChange={(v) => onChange({ fullAddress: v })}
+                  onSelect={(s) => onChange({ fullAddress: s.displayName, lat: s.lat, lng: s.lng })}
+                  placeholder={t("address_placeholder")}
                   className={inputCls}
-                  name="fullAddress"
                   autoComplete="street-address"
+                  boundingBox={DA_NANG_BOUNDING_BOX}
+                  querySuffix={DA_NANG_QUERY_SUFFIX}
                 />
                 {geoError && (
                   <p className="mt-1.5 text-xs text-red-500">{geoError}</p>
