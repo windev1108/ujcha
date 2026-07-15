@@ -1192,6 +1192,6 @@
   "error_store_not_open":"Quán chưa mở cửa. Vui lòng đặt lại sau",
   "error_store_closed":"Cửa hàng đã đóng cửa. Vui lòng đặt hàng vào ngày mai",
   "search_address_placeholder": "Nhập địa chỉ, tên quán hoặc khu vực",
-  "exact_address_label": "Vị trí gần đúng — chưa xác định số nhà chính xác",
+  "exact_address_label": "Vị trí tương đối — chưa xác định số nhà chính xác, bạn cần thêm số nhà cụ thể vào trước địa chỉ",
   "not_found_address_label": "Không tìm thấy địa chỉ phù hợp"
 }

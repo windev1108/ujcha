@@ -1193,6 +1193,6 @@
   "error_store_not_open":"The shop is not open yet. Please place your order during opening hours.",
   "error_store_closed":"The store is closed. Please place your order tomorrow.",
   "search_address_placeholder": "Search for an address or place",
-  "exact_address_label": "Approximate location — exact house number not determined",
+  "exact_address_label": "Approximate location — exact house number not yet determined; you need to add the specific house number to the beginning of the address.",
   "not_found_address_label": "No matching address found"
 }
