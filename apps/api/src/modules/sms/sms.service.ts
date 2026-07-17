@@ -15,7 +15,7 @@ export class SmsService {
 
   async sendOtp(phone: string, code: string): Promise<void> {
     // ASCII-only to stay in 1 segment (160 chars)
-    const message = `[UjCha] OTP code: ${code}.`;
+    const message = `[UjCha] OTP code: ${code}`;
     const normalizedPhone = phone.startsWith('+')
       ? phone.replace('+', '')
       : phone;

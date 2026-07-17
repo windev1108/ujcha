@@ -14,6 +14,7 @@ import {
   Bell, Menu, X,
   UtensilsCrossed, Tag, Users, Share2, BookOpen, Info,
   LogOut, Star, ShoppingBag, User, MapPin, ClipboardList, ArrowRight,
+  MessageSquare,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useAuth } from "@/hooks";
@@ -69,6 +70,7 @@ export function AppHeader() {
     { href: ROUTES.LOYALTY_PAGE, label: t("loyalty_nav_label"), Icon: Star },
     { href: ROUTES.BLOG, label: t("blog"), Icon: BookOpen },
     { href: ROUTES.ABOUT, label: t("about"), Icon: Info },
+    { href: ROUTES.FEEDBACK, label: t("feedback"), Icon: MessageSquare },
   ];
 
   const unreadCount = useNotificationStore((s) => s.unreadCount);
