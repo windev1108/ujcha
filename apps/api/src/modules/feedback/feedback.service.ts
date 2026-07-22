@@ -11,7 +11,7 @@ const PINNED_PRODUCT_SELECT = {
 
 @Injectable()
 export class FeedbackService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async create(dto: CreateFeedbackDto, ip: string | null) {
     if (ip) {
@@ -45,7 +45,7 @@ export class FeedbackService {
     return this.prisma.feedback.findMany({
       where: { isPinned: true },
       orderBy: [{ rating: 'desc' }, { createdAt: 'desc' }],
-      take: 12,
+      // take: 12,
       select: {
         id: true,
         name: true,
