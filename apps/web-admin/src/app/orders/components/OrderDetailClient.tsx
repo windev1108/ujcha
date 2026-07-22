@@ -3,6 +3,7 @@
 import { Fragment } from "react";
 import dynamic from "next/dynamic";
 import {
+  Avatar,
   Button,
   Card,
   CardContent,
@@ -150,13 +151,12 @@ function StatusTimeline({ order }: { order: AdminOrder }) {
                         <span className="absolute -inset-[5px] animate-ping rounded-full bg-[#1a3c34]/15" aria-hidden />
                       )}
                       <div
-                        className={`relative flex size-9 items-center justify-center rounded-full transition-all ${
-                          active
-                            ? "bg-[#1a3c34] text-white shadow-[0_0_0_4px_rgba(26,60,52,0.12)]"
-                            : done
-                              ? "bg-[#1a3c34]/10 text-[#1a3c34]"
-                              : "bg-black/5 text-foreground/25"
-                        }`}
+                        className={`relative flex size-9 items-center justify-center rounded-full transition-all ${active
+                          ? "bg-[#1a3c34] text-white shadow-[0_0_0_4px_rgba(26,60,52,0.12)]"
+                          : done
+                            ? "bg-[#1a3c34]/10 text-[#1a3c34]"
+                            : "bg-black/5 text-foreground/25"
+                          }`}
                       >
                         {done ? (
                           active ? (
@@ -171,17 +171,15 @@ function StatusTimeline({ order }: { order: AdminOrder }) {
                     </div>
                     {!isLast && (
                       <div
-                        className={`mt-1 w-0.5 flex-1 min-h-[24px] rounded-full sm:hidden ${
-                          i < activeIdx ? "bg-[#1a3c34]/20" : "bg-black/8"
-                        }`}
+                        className={`mt-1 w-0.5 flex-1 min-h-[24px] rounded-full sm:hidden ${i < activeIdx ? "bg-[#1a3c34]/20" : "bg-black/8"
+                          }`}
                       />
                     )}
                   </div>
                   <div className={`pt-1.5 sm:pt-0 sm:text-center ${isLast ? "" : "pb-5 sm:pb-0"}`}>
                     <p
-                      className={`text-sm font-semibold leading-tight sm:text-[11px] transition-colors ${
-                        active ? "text-[#1a3c34]" : done ? "text-foreground/75" : "text-foreground/30"
-                      }`}
+                      className={`text-sm font-semibold leading-tight sm:text-[11px] transition-colors ${active ? "text-[#1a3c34]" : done ? "text-foreground/75" : "text-foreground/30"
+                        }`}
                     >
                       {STATUS_META[step].label}
                     </p>
@@ -189,9 +187,8 @@ function StatusTimeline({ order }: { order: AdminOrder }) {
                 </div>
                 {!isLast && (
                   <div
-                    className={`hidden sm:block h-0.5 min-w-3 flex-1 self-start mt-[18px] rounded-full ${
-                      i < activeIdx ? "bg-[#1a3c34]/20" : "bg-black/8"
-                    }`}
+                    className={`hidden sm:block h-0.5 min-w-3 flex-1 self-start mt-[18px] rounded-full ${i < activeIdx ? "bg-[#1a3c34]/20" : "bg-black/8"
+                      }`}
                   />
                 )}
               </Fragment>
@@ -648,136 +645,159 @@ export function OrderDetailClient({ orderId }: Props) {
         }
 
         return (
-        <Card className="rounded-2xl border border-violet-200 bg-violet-50/30">
-          <CardContent className="p-0">
-            <div className="flex items-center gap-2 border-b border-violet-200/60 px-5 py-4">
-              <Users className="size-4 text-violet-600" />
-              <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-violet-700">
-                  Đơn nhóm · {go.participants.length} thành viên ·{" "}
-                  {go.paymentMode === "host_pays" ? "Chủ trả" : "Chia tiền"}
-                </p>
+          <Card className="rounded-2xl border border-violet-200 bg-violet-50/30">
+            <CardContent className="p-0">
+              <div className="flex items-center gap-2 border-b border-violet-200/60 px-5 py-4">
+                <Users className="size-4 text-violet-600" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-violet-700">
+                    Đơn nhóm · {go.participants.length} thành viên ·{" "}
+                    {go.paymentMode === "host_pays" ? "Chủ trả" : "Chia tiền"}
+                  </p>
+                </div>
+                <a
+                  href={`/group-orders/${go.token}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold text-violet-600 hover:underline"
+                >
+                  <ExternalLink className="size-3" />
+                  Xem nhóm
+                </a>
               </div>
-              <a
-                href={`/group-orders/${go.token}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold text-violet-600 hover:underline"
-              >
-                <ExternalLink className="size-3" />
-                Xem nhóm
-              </a>
-            </div>
-            <div className="divide-y divide-black/5">
-              {go.participants.map((p) => {
-                const name = p.user?.name ?? p.guestName ?? "Khách";
-                const subtotal = p.items.reduce((s, it) => s + Number(it.unitPrice) * it.quantity, 0);
-                const paymentCalc = calcParticipantTotal(subtotal, p.isHost);
-                const paymentTotal = typeof paymentCalc === "object" ? paymentCalc.total : paymentCalc;
-                const hasExtra = isSplit && typeof paymentCalc === "object" && (paymentCalc.discountShare > 0 || paymentCalc.shippingShare > 0);
-                const isPaidParticipant = p.paymentStatus === "paid";
-                const isBusy = markPaidMut.isPending && markPaidMut.variables === p.id;
-                return (
-                  <div key={p.id} className="px-5 py-4">
-                    <div className="mb-3 flex items-center gap-2">
-                      <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[11px] font-bold text-violet-700">
-                        {name[0]?.toUpperCase()}
-                      </div>
-                      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
-                        {name}
-                      </span>
-                      {p.isHost && (
-                        <Crown className="size-3.5 shrink-0 text-amber-500" />
-                      )}
-                      <span className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                        isPaidParticipant
+              <div className="divide-y divide-black/5">
+                {go.participants.map((p) => {
+                  const name = p.user?.name ?? p.guestName ?? "Khách";
+                  const subtotal = p.items.reduce((s, it) => s + Number(it.unitPrice) * it.quantity, 0);
+                  const paymentCalc = calcParticipantTotal(subtotal, p.isHost);
+                  const paymentTotal = typeof paymentCalc === "object" ? paymentCalc.total : paymentCalc;
+                  const hasExtra = isSplit && typeof paymentCalc === "object" && (paymentCalc.discountShare > 0 || paymentCalc.shippingShare > 0);
+                  const isPaidParticipant = p.paymentStatus === "paid";
+                  const isBusy = markPaidMut.isPending && markPaidMut.variables === p.id;
+                  return (
+                    <div key={p.id} className="px-5 py-4">
+                      <div className="mb-3 flex items-center gap-2">
+                        <Avatar className="shrink-0" size="md" {...({} as any)}>
+                          <Avatar.Fallback className="text-xs font-bold" {...({} as any)}>
+                            {name[0]?.toUpperCase() ?? "N/A"}
+                          </Avatar.Fallback>
+                        </Avatar>
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
+                          {name}
+                        </span>
+                        {p.isHost && (
+                          <Crown className="size-3.5 shrink-0 text-amber-500" />
+                        )}
+                        <span className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${isPaidParticipant
                           ? "bg-emerald-100 text-emerald-700"
                           : "bg-amber-100 text-amber-700"
-                      }`}>
-                        {isPaidParticipant ? (
-                          <><CheckCircle2 className="size-3" />Đã TT</>
-                        ) : "Chưa TT"}
-                      </span>
-                      {!isPaidParticipant && p.items.length > 0 && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="shrink-0 rounded-full px-2 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50"
-                          isDisabled={isBusy || markPaidMut.isPending}
-                          onPress={() => markPaidMut.mutate(p.id)}
-                        >
-                          {isBusy ? "…" : "Xác nhận TT"}
-                        </Button>
-                      )}
-                    </div>
-                    {p.items.length === 0 ? (
-                      <p className="text-xs text-foreground/40 italic">Chưa chọn món</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {p.items.map((it) => {
-                          const img = Array.isArray(it.product?.imageUrls) && typeof it.product?.imageUrls[0] === "string"
-                            ? it.product.imageUrls[0] : null;
-                          return (
-                            <div key={it.id} className="flex items-center gap-3">
-                              <div className="relative size-9 shrink-0 overflow-hidden rounded-lg bg-black/5">
-                                {img ? (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img src={img} alt="" className="size-full object-cover" />
-                                ) : (
-                                  <div className="flex size-full items-center justify-center text-[9px] text-foreground/30">—</div>
+                          }`}>
+                          {isPaidParticipant ? (
+                            <><CheckCircle2 className="size-3" />Đã TT</>
+                          ) : "Chưa TT"}
+                        </span>
+                        {!isPaidParticipant && p.items.length > 0 && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="shrink-0 rounded-full px-2 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50"
+                            isDisabled={isBusy || markPaidMut.isPending}
+                            onPress={() => markPaidMut.mutate(p.id)}
+                          >
+                            {isBusy ? "…" : "Xác nhận TT"}
+                          </Button>
+                        )}
+                      </div>
+                      {p.items.length === 0 ? (
+                        <p className="text-xs text-foreground/40 italic">Chưa chọn món</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {p.items.map((it) => {
+                            const img = Array.isArray(it.product?.imageUrls) && typeof it.product?.imageUrls[0] === "string"
+                              ? it.product.imageUrls[0] : null;
+                            return (
+                              <div key={it.id} className="flex flex-col gap-2">
+                                <div className="flex items-center gap-3">
+                                  <div className="relative size-9 shrink-0 overflow-hidden rounded-lg bg-black/5">
+                                    {img ? (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img src={img} alt="" className="size-full object-cover" />
+                                    ) : (
+                                      <div className="flex size-full items-center justify-center text-[9px] text-foreground/30">—</div>
+                                    )}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate text-sm font-medium text-foreground">
+                                      {it.product?.name ?? "Sản phẩm"}
+                                    </p>
+                                    {it.note?.trim() && (
+                                      <p className="text-xs italic text-amber-700">&ldquo;{it.note.trim()}&rdquo;</p>
+                                    )}
+                                  </div>
+                                  <div className="shrink-0 text-right">
+                                    <p className="text-xs text-foreground/50">×{it.quantity}</p>
+                                    <p className="text-sm font-semibold tabular-nums text-[#1a3c34]">
+                                      {formatVnd(Number(it.unitPrice) * it.quantity)}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  {Object.entries(parseOrderItemOptions(it.selectedOptions)).map(([k, v]) => (
+                                    <span
+                                      key={k}
+                                      className="inline-block bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded-md"
+                                    >
+                                      {k}: {v}
+                                    </span>
+                                  ))}
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  {Array.isArray(it.toppingsJson) && it.toppingsJson.map((topping) => (
+                                    <span
+                                      key={topping.id}
+                                      className="inline-block bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded-md"
+                                    >
+                                      {topping.name}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                          <div className="border-t border-black/6 pt-2 space-y-1">
+                            {hasExtra && typeof paymentCalc === "object" && (
+                              <>
+                                <div className="flex justify-between text-xs text-foreground/50">
+                                  <span>Tạm tính</span>
+                                  <span className="tabular-nums">{formatVnd(subtotal)}</span>
+                                </div>
+                                {paymentCalc.discountShare > 0 && (
+                                  <div className="flex justify-between text-xs text-foreground/50">
+                                    <span>Giảm giá</span>
+                                    <span className="tabular-nums text-red-500">-{formatVnd(paymentCalc.discountShare)}</span>
+                                  </div>
                                 )}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-medium text-foreground">
-                                  {it.product?.name ?? "Sản phẩm"}
-                                </p>
-                                {it.note?.trim() && (
-                                  <p className="text-xs italic text-amber-700">&ldquo;{it.note.trim()}&rdquo;</p>
+                                {paymentCalc.shippingShare > 0 && (
+                                  <div className="flex justify-between text-xs text-foreground/50">
+                                    <span>Phí ship</span>
+                                    <span className="tabular-nums">+{formatVnd(paymentCalc.shippingShare)}</span>
+                                  </div>
                                 )}
-                              </div>
-                              <div className="shrink-0 text-right">
-                                <p className="text-xs text-foreground/50">×{it.quantity}</p>
-                                <p className="text-sm font-semibold tabular-nums text-[#1a3c34]">
-                                  {formatVnd(Number(it.unitPrice) * it.quantity)}
-                                </p>
-                              </div>
+                              </>
+                            )}
+                            <div className="flex justify-between text-xs font-semibold text-foreground/60">
+                              <span>{isSplit ? "Phải trả" : `Tổng ${name.split(" ").pop()}`}</span>
+                              <span className="tabular-nums text-[#1a3c34]">{formatVnd(paymentTotal)}</span>
                             </div>
-                          );
-                        })}
-                        <div className="border-t border-black/6 pt-2 space-y-1">
-                          {hasExtra && typeof paymentCalc === "object" && (
-                            <>
-                              <div className="flex justify-between text-xs text-foreground/50">
-                                <span>Tạm tính</span>
-                                <span className="tabular-nums">{formatVnd(subtotal)}</span>
-                              </div>
-                              {paymentCalc.discountShare > 0 && (
-                                <div className="flex justify-between text-xs text-foreground/50">
-                                  <span>Giảm giá</span>
-                                  <span className="tabular-nums text-red-500">-{formatVnd(paymentCalc.discountShare)}</span>
-                                </div>
-                              )}
-                              {paymentCalc.shippingShare > 0 && (
-                                <div className="flex justify-between text-xs text-foreground/50">
-                                  <span>Phí ship</span>
-                                  <span className="tabular-nums">+{formatVnd(paymentCalc.shippingShare)}</span>
-                                </div>
-                              )}
-                            </>
-                          )}
-                          <div className="flex justify-between text-xs font-semibold text-foreground/60">
-                            <span>{isSplit ? "Phải trả" : `Tổng ${name.split(" ").pop()}`}</span>
-                            <span className="tabular-nums text-[#1a3c34]">{formatVnd(paymentTotal)}</span>
                           </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
         );
       })()}
 

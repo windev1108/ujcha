@@ -71,7 +71,7 @@ export function CustomersTable({
                   <Table.Row key={customer.id} id={customer.id}>
                     <Table.Cell className="px-5 py-4 align-middle">
                       <div className="flex items-center gap-3">
-                        <Avatar className="shrink-0" size="sm" {...({} as any)}>
+                        <Avatar className="shrink-0" size="md" {...({} as any)}>
                           <Avatar.Image src={customer.avatar!} />
                           <Avatar.Fallback className="text-xs font-bold" {...({} as any)}>
                             {customer.name?.slice(0, 2).toUpperCase() ?? "N/A"}
