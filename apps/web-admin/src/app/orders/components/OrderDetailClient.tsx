@@ -741,21 +741,19 @@ export function OrderDetailClient({ orderId }: Props) {
                                     </p>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-3 flex-wrap text-sm">
                                   {Object.entries(parseOrderItemOptions(it.selectedOptions)).map(([k, v]) => (
                                     <span
                                       key={k}
-                                      className="inline-block bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded-md"
+                                      className="inline-block bg-green-100 text-green-800 text-xs px-2 py-1 rounded-md"
                                     >
-                                      {k}: {v}
+                                      {v}
                                     </span>
                                   ))}
-                                </div>
-                                <div className="flex items-center gap-3">
                                   {Array.isArray(it.toppingsJson) && it.toppingsJson.map((topping) => (
                                     <span
                                       key={topping.id}
-                                      className="inline-block bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded-md"
+                                      className="inline-block bg-green-100 text-green-800 text-xs px-2 py-1 rounded-md"
                                     >
                                       {topping.name}
                                     </span>
