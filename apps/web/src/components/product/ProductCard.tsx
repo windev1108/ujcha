@@ -27,9 +27,10 @@ type Props = {
   product: ApiProduct;
   index?: number;
   eager?: boolean;
+  onPick?: (p: ApiProduct) => void;
 };
 
-export function ProductCard({ product, index = 0, eager = false }: Props) {
+export function ProductCard({ product, index = 0, eager = false, onPick }: Props) {
   const locale = useLocale();
   const t = useTranslations();
   const displayName = getDisplayName(product, locale);
@@ -57,7 +58,14 @@ export function ProductCard({ product, index = 0, eager = false }: Props) {
           {/* Image — opens quick-add modal for all users */}
           <button
             type="button"
-            onClick={() => !product.isSoldOut && setModalOpen(true)}
+            onClick={() => {
+              if (!product.isSoldOut) return
+              if (onPick) {
+                onPick(product);
+              } else {
+                setModalOpen(true)
+              }
+            }}
             disabled={product.isSoldOut}
             className="cursor-pointer relative aspect-[4/3] w-full overflow-hidden text-left disabled:cursor-not-allowed"
             style={{ backgroundColor: imageUrl ? undefined : bgColor }}

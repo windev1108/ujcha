@@ -37,6 +37,7 @@ import { normalizeOptionGroups, computeOptionSurcharge, formatVnd } from "@/lib/
 
 import { ROUTES } from "@/lib/routes";
 import { getDisplayName, getValueLabel } from "@/lib/product-name";
+import { ProductCard } from "@/components/product/ProductCard";
 
 const TABLE_STORAGE_KEY = "ujcha_table_id";
 const PAGE_SIZE = 12;
@@ -294,77 +295,77 @@ function CategoryTabs({
 
 // ── Product Card ──────────────────────────────────────────────────────────────
 
-function ProductCard({
-  product,
-  onPick,
-}: {
-  product: ApiProduct;
-  onPick: (p: ApiProduct) => void;
-}) {
-  const t = useTranslations();
-  const locale = useLocale();
-  const img = product.imageUrls[0];
-  const sold = product.isSoldOut || !product.isAvailable;
-  const disc = product.discountPercent > 0;
-  const discPrice = disc ? product.finalPrice : null;
+// function ProductCard({
+//   product,
+//   onPick,
+// }: {
+//   product: ApiProduct;
+//   onPick: (p: ApiProduct) => void;
+// }) {
+//   const t = useTranslations();
+//   const locale = useLocale();
+//   const img = product.imageUrls[0];
+//   const sold = product.isSoldOut || !product.isAvailable;
+//   const disc = product.discountPercent > 0;
+//   const discPrice = disc ? product.finalPrice : null;
 
-  return (
-    <button
-      type="button"
-      disabled={sold}
-      onClick={() => onPick(product)}
-      className={`relative flex flex-col overflow-hidden rounded-xl bg-white text-left shadow-[0_4px_20px_-8px_rgba(0,0,0,0.1)] transition-all active:scale-[0.98] ${sold
-        ? "cursor-not-allowed opacity-50"
-        : "hover:shadow-[0_4px_20px_-4px_rgba(26,60,52,0.15)]"
-        }`}
-    >
-      <div className="relative aspect-square w-full bg-surface-card">
-        {img ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={img} alt={getDisplayName(product, locale)} className="h-full w-full object-cover" loading="lazy" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <Utensils className="size-8 text-black/20" />
-          </div>
-        )}
-        {sold && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-            <span className="rounded-full bg-black/80 px-2.5 py-1 text-[11px] font-bold text-white">
-              {t("sold_out")}
-            </span>
-          </div>
-        )}
-        {disc && !sold && (
-          <span className="absolute right-2 top-2 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
-            -{product.discountPercent}%
-          </span>
-        )}
-        {!sold && (
-          <div className="absolute bottom-2 right-2 flex size-6 items-center justify-center rounded-full bg-kun-primary shadow-sm">
-            <Plus className="size-3.5 text-white" strokeWidth={2.5} />
-          </div>
-        )}
-      </div>
-      <div className="flex flex-1 flex-col gap-1 p-2.5">
-        <p className="line-clamp-2 text-xs font-semibold leading-tight text-kun-primary">
-          {getDisplayName(product, locale)}
-        </p>
-        <div className="mt-auto flex items-center gap-1.5">
-          {discPrice ? (
-            <>
-              <span className="text-xs font-bold text-red-600">{formatVnd(discPrice)}</span>
-              <span className="text-[10px] text-foreground/40 line-through">
-                {formatVnd(product.price)}
-              </span>
-            </>
-          ) : (
-            <span className="text-xs font-bold text-kun-primary">{formatVnd(product.price)}</span>
-          )}
-        </div>
-      </div>
-    </button>
-  );
-}
+//   return (
+//     <button
+//       type="button"
+//       disabled={sold}
+//       onClick={() => onPick(product)}
+//       className={`relative flex flex-col overflow-hidden rounded-xl bg-white text-left shadow-[0_4px_20px_-8px_rgba(0,0,0,0.1)] transition-all active:scale-[0.98] ${sold
+//         ? "cursor-not-allowed opacity-50"
+//         : "hover:shadow-[0_4px_20px_-4px_rgba(26,60,52,0.15)]"
+//         }`}
+//     >
+//       <div className="relative aspect-square w-full bg-surface-card">
+//         {img ? (
+//           // eslint-disable-next-line @next/next/no-img-element
+//           <img src={img} alt={getDisplayName(product, locale)} className="h-full w-full object-cover" loading="lazy" />
+//         ) : (
+//           <div className="flex h-full w-full items-center justify-center">
+//             <Utensils className="size-8 text-black/20" />
+//           </div>
+//         )}
+//         {sold && (
+//           <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+//             <span className="rounded-full bg-black/80 px-2.5 py-1 text-[11px] font-bold text-white">
+//               {t("sold_out")}
+//             </span>
+//           </div>
+//         )}
+//         {disc && !sold && (
+//           <span className="absolute right-2 top-2 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+//             -{product.discountPercent}%
+//           </span>
+//         )}
+//         {!sold && (
+//           <div className="absolute bottom-2 right-2 flex size-6 items-center justify-center rounded-full bg-kun-primary shadow-sm">
+//             <Plus className="size-3.5 text-white" strokeWidth={2.5} />
+//           </div>
+//         )}
+//       </div>
+//       <div className="flex flex-1 flex-col gap-1 p-2.5">
+//         <p className="line-clamp-2 text-xs font-semibold leading-tight text-kun-primary">
+//           {getDisplayName(product, locale)}
+//         </p>
+//         <div className="mt-auto flex items-center gap-1.5">
+//           {discPrice ? (
+//             <>
+//               <span className="text-xs font-bold text-red-600">{formatVnd(discPrice)}</span>
+//               <span className="text-[10px] text-foreground/40 line-through">
+//                 {formatVnd(product.price)}
+//               </span>
+//             </>
+//           ) : (
+//             <span className="text-xs font-bold text-kun-primary">{formatVnd(product.price)}</span>
+//           )}
+//         </div>
+//       </div>
+//     </button>
+//   );
+// }
 
 // ── Product Pick Modal ────────────────────────────────────────────────────────
 
@@ -472,8 +473,8 @@ function ProductPickModal({
                           type="button"
                           onClick={() => setSelectedOptions((o) => ({ ...o, [grp.name]: v.label }))}
                           className={`rounded-full px-3 py-1 text-xs font-semibold transition-all ${active
-                              ? "bg-[#1a3c34] text-white"
-                              : "bg-white text-foreground/70 ring-1 ring-black/10 hover:ring-[#1a3c34]/30"
+                            ? "bg-[#1a3c34] text-white"
+                            : "bg-white text-foreground/70 ring-1 ring-black/10 hover:ring-[#1a3c34]/30"
                             }`}
                         >
                           {getValueLabel(v, locale)}
@@ -517,8 +518,8 @@ function ProductPickModal({
                       type="button"
                       onClick={() => toggleTopping(tp.id)}
                       className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${active
-                          ? "border-[#1a3c34]/30 bg-[#f0faf6]"
-                          : "border-transparent bg-white hover:border-black/[0.08]"
+                        ? "border-[#1a3c34]/30 bg-[#f0faf6]"
+                        : "border-transparent bg-white hover:border-black/[0.08]"
                         }`}
                     >
                       <div className={`flex size-[18px] shrink-0 items-center justify-center rounded-full border-2 transition-colors ${active ? "border-[#1a3c34] bg-[#1a3c34]" : "border-black/20 bg-white"
