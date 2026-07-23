@@ -1,9 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import {
-    OrderType,
-    PaymentStatus,
-    PointTransactionType,
-} from '@prisma/client';
+import { OrderType, PaymentStatus, PointTransactionType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 
 function startOfUtcDay(d: Date): Date {
@@ -49,11 +45,10 @@ export class AdminOverviewService {
         const typeRangeStart = addUtcDays(todayStart, -29);
         const typeRangeEnd = endOfUtcDay(todayStart);
 
+        const last7StartStr = last7Start.toISOString().slice(0, 10);
+        const last7EndStr = last7End.toISOString().slice(0, 10);
 
-        const last7StartStr = last7Start.toISOString().slice(0, 10)
-    const last7EndStr = last7End.toISOString().slice(0, 10)
-
-    const [
+        const [
             revenueByDay,
             curRevenue,
             prevRevenue,
@@ -95,7 +90,7 @@ export class AdminOverviewService {
                     finalAmount: true,
                     createdAt: true,
                     type: true,
-                    user: { select: { name: true, phone: true } },
+                    user: { select: { name: true, phone: true, avatar: true } },
                     guestDeliveryName: true,
                     guestDeliveryPhone: true,
                     items: {
@@ -127,11 +122,18 @@ export class AdminOverviewService {
         const platformByDate = new Map<string, number>();
         const platformBreakdown: Record<string, number> = {};
         for (const r of platformRevenue) {
-            platformByDate.set(r.date, (platformByDate.get(r.date) ?? 0) + r.totalEarnings);
-            platformBreakdown[r.platform] = (platformBreakdown[r.platform] ?? 0) + r.totalEarnings;
+            platformByDate.set(
+                r.date,
+                (platformByDate.get(r.date) ?? 0) + r.totalEarnings,
+            );
+            platformBreakdown[r.platform] =
+                (platformBreakdown[r.platform] ?? 0) + r.totalEarnings;
         }
-        const platformTotal = Object.values(platformBreakdown).reduce((s, v) => s + v, 0);
-        const revenueByDayCombined = revenueByDay.map(d => ({
+        const platformTotal = Object.values(platformBreakdown).reduce(
+            (s, v) => s + v,
+            0,
+        );
+        const revenueByDayCombined = revenueByDay.map((d) => ({
             date: d.date,
             revenue: d.revenue + (platformByDate.get(d.date) ?? 0),
             systemRevenue: d.revenue,
@@ -200,11 +202,14 @@ export class AdminOverviewService {
                 customerName:
                     o.user?.name ??
                     o.guestDeliveryName ??
-                    (o.guestDeliveryPhone ? `Khách ${o.guestDeliveryPhone}` : "Anonymous"),
-                firstItemName: o.items[0]?.product?.name ?? "—",
+                    (o.guestDeliveryPhone
+                        ? `Khách ${o.guestDeliveryPhone}`
+                        : 'Anonymous'),
+                firstItemName: o.items[0]?.product?.name ?? '—',
+                customerAvatar: o.user?.avatar ?? null,
             })),
             totalOrdersAllTime: totalOrdersCount,
-            platformRevenueSynced: platformRevenue.map(r => ({
+            platformRevenueSynced: platformRevenue.map((r) => ({
                 id: r.id,
                 platform: r.platform,
                 date: r.date,
@@ -228,9 +233,13 @@ export class AdminOverviewService {
         return Number(r._sum.finalAmount ?? 0);
     }
 
-    private async buildRevenueByDay7(from: Date): Promise<Array<{ date: string; revenue: number }>> {
+    private async buildRevenueByDay7(
+        from: Date,
+    ): Promise<Array<{ date: string; revenue: number }>> {
         const to = endOfUtcDay(addUtcDays(from, 6));
-        const rows = await this.prisma.$queryRaw<Array<{ day: Date; revenue: unknown }>>`
+        const rows = await this.prisma.$queryRaw<
+            Array<{ day: Date; revenue: unknown }>
+        >`
             SELECT date_trunc('day', "createdAt") AS day,
                    COALESCE(SUM("finalAmount"), 0) AS revenue
             FROM "Order"
@@ -240,7 +249,9 @@ export class AdminOverviewService {
             GROUP BY 1
             ORDER BY 1 ASC
         `;
-        const byDate = new Map(rows.map((r) => [r.day.toISOString().slice(0, 10), Number(r.revenue)]));
+        const byDate = new Map(
+            rows.map((r) => [r.day.toISOString().slice(0, 10), Number(r.revenue)]),
+        );
         return Array.from({ length: 7 }, (_, i) => {
             const day = addUtcDays(from, i);
             const date = day.toISOString().slice(0, 10);

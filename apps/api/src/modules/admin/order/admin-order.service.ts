@@ -51,7 +51,7 @@ function isUuid(s: string): boolean {
 }
 
 const adminOrderInclude = {
-  user: { select: { id: true, name: true, phone: true, email: true } },
+  user: { select: { id: true, name: true, phone: true, email: true, avatar: true } },
   address: true,
   table: true,
   shipper: true,

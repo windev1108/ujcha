@@ -3,7 +3,7 @@
 import { Download, MoreHorizontal } from "lucide-react";
 import NextLink from "next/link";
 
-import { Button, Card, CardContent, Link } from "@heroui/react";
+import { Avatar, Button, Card, CardContent, Link } from "@heroui/react";
 
 import { formatVnd } from "@/lib/product-display";
 import { ROUTES } from "@/lib/routes";
@@ -97,9 +97,12 @@ export function RecentOrdersTable({ data, isLoading }: Props) {
                   </td>
                   <td className="px-5 py-4 sm:px-6">
                     <div className="flex items-center gap-2">
-                      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#bbf7d0] text-[10px] font-bold text-[#14532d]">
-                        {initialsFromName(row.customerName)}
-                      </span>
+                      <Avatar className="shrink-0" size="md" {...({} as any)}>
+                        <Avatar.Image src={row.customerAvatar!} />
+                        <Avatar.Fallback className="text-xs font-bold" {...({} as any)}>
+                          {initialsFromName(row.customerName)}
+                        </Avatar.Fallback>
+                      </Avatar>
                       <span className="font-medium text-foreground">
                         {row.customerName}
                       </span>

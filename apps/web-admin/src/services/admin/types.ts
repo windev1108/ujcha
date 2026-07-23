@@ -235,6 +235,7 @@ export type AdminOverviewDashboard = {
     createdAt: string;
     customerName: string;
     firstItemName: string;
+    customerAvatar?: string
   }>;
   totalOrdersAllTime: number;
   platformRevenueSynced?: PlatformRevenueSummary[];
@@ -245,6 +246,7 @@ export type AdminOrderUser = {
   name: string | null;
   phone: string | null;
   email: string | null;
+  avatar?: string;
 };
 
 export type OrderItemExtraSnapshot = {

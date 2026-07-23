@@ -383,6 +383,7 @@ export function OrderTable({
                     <Table.Cell className="px-4 py-3 align-middle">
                       <div className="flex items-center gap-2">
                         <Avatar size="sm" className="shrink-0" {...({} as any)}>
+                          <Avatar.Image src={order?.user?.avatar} />
                           <Avatar.Fallback className="text-[10px] font-bold" {...({} as any)}>
                             <>
                               {customerInitials(order)}
