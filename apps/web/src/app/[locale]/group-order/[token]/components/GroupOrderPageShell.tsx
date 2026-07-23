@@ -600,7 +600,7 @@ function ProductPickerDrawer({
               //     </button>
               //   ))}
               // </div>
-              <div className="relative scrollbar-none shrink-0 flex gap-2 overflow-x-auto px-5 pb-1 pt-3">
+              <div className="relative min-w-0 flex-1">
                 {/* Left fade + arrow */}
                 {fadeLeft && (
                   <>
