@@ -17,6 +17,7 @@ import {
   Minus,
   Plus,
   RotateCcw,
+  Search,
   ShoppingBag,
   StickyNote,
   Trash2,
@@ -194,18 +195,23 @@ function LocationGate({
 
 function CategoryTabs({
   categories,
+  search,
+  onSearch,
   selectedId,
   onSelect,
 }: {
   categories: ApiCategory[];
   selectedId: string | null;
+  search: string;
+  onSearch: (search: string) => void;
   onSelect: (id: string | null) => void;
 }) {
   const t = useTranslations();
-  const locale = useLocale();
   const pillsRef = useRef<HTMLDivElement>(null);
   const [fadeLeft, setFadeLeft] = useState(false);
   const [fadeRight, setFadeRight] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const syncFade = () => {
     const el = pillsRef.current;
@@ -214,6 +220,15 @@ function CategoryTabs({
     setFadeRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
   };
 
+  const openSearch = () => {
+    setShowSearch(true);
+    setTimeout(() => inputRef.current?.focus(), 40);
+  };
+
+  const closeSearch = () => {
+    setShowSearch(false);
+    onSearch("");
+  };
   useEffect(() => {
     const el = pillsRef.current;
     if (!el) return;
@@ -229,66 +244,88 @@ function CategoryTabs({
 
   return (
     <div className="sticky top-[57px] z-20 border-b border-black/[0.06] bg-white">
-      <div className="relative px-4 py-2.5">
-        {fadeLeft && (
-          <>
-            <div className="pointer-events-none absolute inset-y-0 left-4 z-10 w-10 bg-gradient-to-r from-white to-transparent" />
-            <button
-              type="button"
-              aria-label={t("scroll_left")}
-              onClick={() => pillsRef.current?.scrollBy({ left: -180, behavior: "smooth" })}
-              className="absolute left-3 top-1/2 z-20 flex size-6 -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white shadow-sm transition-colors hover:bg-black/[0.04]"
-            >
-              <ChevronLeft className="size-3.5 text-foreground/55" />
-            </button>
-          </>
-        )}
-
-        <div
-          ref={pillsRef}
-          className="overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        >
-          <div className="flex w-max min-w-full items-center gap-2">
-            <button
-              type="button"
-              onClick={() => onSelect(null)}
-              className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${selectedId === null
-                ? "bg-kun-primary text-white"
-                : "bg-black/[0.05] text-foreground/60 hover:bg-black/[0.08]"
-                }`}
-            >
-              {t("all")}
-            </button>
-            {categories.map((cat) => (
+      <div className="flex items-center gap-2">
+        {/* Horizontal-scroll pills */}
+        <div className="relative min-w-0 flex-1">
+          {/* Left fade + arrow */}
+          {fadeLeft && (
+            <>
+              <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-10 bg-gradient-to-r from-white to-transparent" />
               <button
-                key={cat.id}
                 type="button"
-                onClick={() => onSelect(cat.id)}
-                className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${selectedId === cat.id
-                  ? "bg-kun-primary text-white"
-                  : "bg-black/[0.05] text-foreground/60 hover:bg-black/[0.08]"
+                aria-label="Cuộn trái"
+                onClick={() => pillsRef.current?.scrollBy({ left: -180, behavior: "smooth" })}
+                className="absolute left-0 top-1/2 z-20 flex size-6 -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white shadow-sm transition-colors hover:bg-black/[0.04]"
+              >
+                <ChevronLeft className="size-3.5 text-foreground/55" />
+              </button>
+            </>
+          )}
+
+          <div
+            ref={pillsRef}
+            className="overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            <div className="flex w-max min-w-full items-center gap-1.5 pb-px">
+              <button
+                type="button"
+                onClick={() => onSearch("")}
+                className={`shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors ${selectedId === ""
+                  ? "bg-kun-products-forest text-white shadow-sm"
+                  : "bg-kun-filter-pill-bg text-foreground/80 hover:bg-black/[0.07]"
                   }`}
               >
-                {locale === "vi" ? cat.name : (cat.nameTranslation?.[locale] || cat.name)}
+                {t("all")}
               </button>
-            ))}
+              {categories?.map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => onSelect(cat.slug)}
+                  className={`shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors ${selectedId === cat.slug
+                    ? "bg-kun-products-forest text-white shadow-sm"
+                    : "bg-kun-filter-pill-bg text-foreground/80 hover:bg-black/[0.07]"
+                    }`}
+                >
+                  {cat.name}
+                </button>
+              ))}
+            </div>
           </div>
+
+          {/* Right fade + arrow */}
+          {fadeRight && (
+            <>
+              <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-white to-transparent" />
+              <button
+                type="button"
+                aria-label="Cuộn phải"
+                onClick={() => pillsRef.current?.scrollBy({ left: 180, behavior: "smooth" })}
+                className="absolute right-0 top-1/2 z-20 flex size-6 -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white shadow-sm transition-colors hover:bg-black/[0.04]"
+              >
+                <ChevronRight className="size-3.5 text-foreground/55" />
+              </button>
+            </>
+          )}
         </div>
 
-        {fadeRight && (
-          <>
-            <div className="pointer-events-none absolute inset-y-0 right-4 z-10 w-10 bg-gradient-to-l from-white to-transparent" />
-            <button
-              type="button"
-              aria-label={t("scroll_right")}
-              onClick={() => pillsRef.current?.scrollBy({ left: 180, behavior: "smooth" })}
-              className="absolute right-3 top-1/2 z-20 flex size-6 -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white shadow-sm transition-colors hover:bg-black/[0.04]"
-            >
-              <ChevronRight className="size-3.5 text-foreground/55" />
-            </button>
-          </>
-        )}
+        {/* Vertical divider */}
+        <div className="h-5 w-px shrink-0 bg-black/10" />
+
+        {/* Search icon toggle */}
+        <button
+          type="button"
+          onClick={showSearch ? closeSearch : openSearch}
+          aria-label={showSearch ? t("close") : t("search_product")}
+          className={`cursor-pointer flex size-8 shrink-0 items-center justify-center rounded-full transition-colors ${showSearch || search
+            ? "bg-kun-products-forest text-white"
+            : "bg-kun-filter-pill-bg text-foreground/60 hover:bg-black/[0.07] hover:text-foreground"
+            }`}
+        >
+          {showSearch ? <X className="size-3.5" /> : <Search className="size-3.5" />}
+        </button>
       </div>
+
     </div>
   );
 }
@@ -863,6 +900,7 @@ export function TableLandingShell({ tableId }: { tableId: string }) {
 
   // menu
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [search, setSearch] = useState<string>("");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [basket, setBasket] = useState<TableOrderItem[]>([]);
@@ -947,12 +985,25 @@ export function TableLandingShell({ tableId }: { tableId: string }) {
   const menuEnabled = geoPhase === "ok" && !!table?.isActive;
 
   const locale = useLocale()
-  const productsQuery = useQuery({
+  const products = useQuery({
     queryKey: ["products", selectedCategoryId, locale],
     queryFn: () => fetchProducts({ ...(selectedCategoryId ? { categoryId: selectedCategoryId } : {}), locale }),
     staleTime: 3 * 60_000,
     enabled: menuEnabled,
-  });
+  })
+
+  const filtered = search
+    ? (products ?? [])?.data?.filter(
+      (p) =>
+        p.name.toLowerCase().includes(search.toLowerCase()) ||
+        (p.description ?? "").toLowerCase().includes(search.toLowerCase()),
+    )
+    : products?.data;
+
+
+  const available = (filtered?.filter((p) => p.isAvailable) ?? [])
+    .sort((a, b) => Number(b.isBestSeller) - Number(a.isBestSeller));
+
 
   const categoriesQuery = useQuery({
     queryKey: ["categories"],
@@ -968,7 +1019,7 @@ export function TableLandingShell({ tableId }: { tableId: string }) {
   useEffect(() => {
     const el = sentinelRef.current;
     if (!el) return;
-    const total = productsQuery.data?.length ?? 0;
+    const total = available?.length ?? 0;
     if (visibleCount >= total) return;
     const obs = new IntersectionObserver(
       ([entry]) => { if (entry.isIntersecting) setVisibleCount((c) => c + PAGE_SIZE); },
@@ -976,7 +1027,7 @@ export function TableLandingShell({ tableId }: { tableId: string }) {
     );
     obs.observe(el);
     return () => obs.disconnect();
-  }, [visibleCount, productsQuery.data]);
+  }, [visibleCount, available]);
   const basketCount = basket.reduce((s, b) => s + b.quantity, 0);
   const basketTotal = basket.reduce((s, b) => s + b.unitPrice * b.quantity, 0);
 
@@ -1088,17 +1139,19 @@ export function TableLandingShell({ tableId }: { tableId: string }) {
         categories={categoriesQuery.data ?? []}
         selectedId={selectedCategoryId}
         onSelect={setSelectedCategoryId}
+        search={search}
+        onSearch={setSearch}
       />
 
       {/* Product grid */}
       <div className="px-4 pb-32 pt-5">
-        {productsQuery.isLoading ? (
+        {products?.isLoading ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="aspect-[3/4] animate-pulse rounded-3xl bg-black/[0.06]" />
             ))}
           </div>
-        ) : !productsQuery.data?.length ? (
+        ) : !available?.length ? (
           <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
             <Utensils className="size-10 text-black/15" />
             <p className="text-sm text-foreground/40">{t("no_items_in_category")}</p>
@@ -1106,11 +1159,11 @@ export function TableLandingShell({ tableId }: { tableId: string }) {
         ) : (
           <>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {productsQuery.data.slice(0, visibleCount).map((p) => (
+              {available?.slice(0, visibleCount).map((p) => (
                 <ProductCard key={p.id} product={p} onPick={setPickingProduct} />
               ))}
             </div>
-            {visibleCount < productsQuery.data.length && (
+            {visibleCount < available?.length && (
               <div ref={sentinelRef} className="flex justify-center py-8">
                 <Loader2 className="size-5 animate-spin text-kun-primary/40" />
               </div>
