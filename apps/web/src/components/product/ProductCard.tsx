@@ -59,7 +59,7 @@ export function ProductCard({ product, index = 0, eager = false, onPick }: Props
           <button
             type="button"
             onClick={() => {
-              if (!product.isSoldOut) return
+              if (product.isSoldOut) return
               if (onPick) {
                 onPick(product);
               } else {
