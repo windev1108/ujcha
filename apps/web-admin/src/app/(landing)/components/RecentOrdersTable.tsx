@@ -97,7 +97,7 @@ export function RecentOrdersTable({ data, isLoading }: Props) {
                   </td>
                   <td className="px-5 py-4 sm:px-6">
                     <div className="flex items-center gap-2">
-                      <Avatar className="shrink-0" size="md" {...({} as any)}>
+                      <Avatar className="shrink-0" size="sm" {...({} as any)}>
                         <Avatar.Image src={row.customerAvatar!} />
                         <Avatar.Fallback className="text-xs font-bold" {...({} as any)}>
                           {initialsFromName(row.customerName)}
