@@ -469,7 +469,7 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
                           </button>
                         )}
                       </div>
-                      <div className="max-h-[172px] overflow-y-auto overscroll-contain rounded-xl grid grid-cols-1 gap-1.5">
+                      <div className="overscroll-contain rounded-xl grid grid-cols-1 gap-1.5">
                         {toppings.map((top) => {
                           const isActive = selectedToppings.has(top.id);
                           return (

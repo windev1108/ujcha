@@ -342,7 +342,7 @@ function ProductCustomizeSheet({
                   </button>
                 )}
               </div>
-              <div className="grid grid-cols-1 gap-1.5 overflow-y-auto overscroll-contain rounded-xl" style={{ maxHeight: "172px" }}>
+              <div className="grid grid-cols-1 gap-1.5 overscroll-contain rounded-xl">
                 {toppings.map((top) => {
                   const active = selectedToppings.has(top.id);
                   return (

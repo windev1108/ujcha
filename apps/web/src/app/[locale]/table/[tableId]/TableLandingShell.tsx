@@ -581,7 +581,7 @@ function ProductPickModal({
                   </button>
                 )}
               </div>
-              <div className="max-h-[11rem] space-y-1.5 overflow-y-auto overscroll-contain rounded-2xl border border-black/[0.06] bg-[#f9fafb] p-2">
+              <div className="space-y-1.5 overscroll-contain rounded-2xl border border-black/[0.06] bg-[#f9fafb] p-2">
                 {productToppings.map((tp) => {
                   const active = selectedToppingIds.includes(tp.id);
                   return (
