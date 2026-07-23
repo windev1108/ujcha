@@ -39,6 +39,8 @@ import { normalizeOptionGroups, computeOptionSurcharge, formatVnd } from "@/lib/
 import { ROUTES } from "@/lib/routes";
 import { getDisplayName, getValueLabel } from "@/lib/product-name";
 import { ProductCard } from "@/components/product/ProductCard";
+import { easeOutSmooth } from "../../(landing)/components/RevealSection";
+import { useProductsQuery } from "@/services/product/hooks";
 
 const TABLE_STORAGE_KEY = "ujcha_table_id";
 const PAGE_SIZE = 12;
@@ -243,7 +245,7 @@ function CategoryTabs({
   useEffect(() => { syncFade(); }, [categories]);
 
   return (
-    <div className="sticky top-[57px] z-20 border-b border-black/[0.06] bg-white">
+    <div className="sticky top-[57px] z-20 border-b border-black/[0.06] bg-white p-2">
       <div className="flex items-center gap-2">
         {/* Horizontal-scroll pills */}
         <div className="relative min-w-0 flex-1">
@@ -269,7 +271,7 @@ function CategoryTabs({
             <div className="flex w-max min-w-full items-center gap-1.5 pb-px">
               <button
                 type="button"
-                onClick={() => onSearch("")}
+                onClick={() => onSelect("")}
                 className={`shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors ${selectedId === ""
                   ? "bg-kun-products-forest text-white shadow-sm"
                   : "bg-kun-filter-pill-bg text-foreground/80 hover:bg-black/[0.07]"
@@ -325,7 +327,40 @@ function CategoryTabs({
           {showSearch ? <X className="size-3.5" /> : <Search className="size-3.5" />}
         </button>
       </div>
-
+      {/* Row 2: search input (slides in/out) */}
+      <AnimatePresence initial={false}>
+        {showSearch && (
+          <motion.div
+            key="search-row"
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.16, ease: easeOutSmooth }}
+          >
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 size-3.5 text-muted" />
+              <input
+                ref={inputRef}
+                type="text"
+                value={search}
+                onChange={(e) => onSearch(e.target.value)}
+                placeholder={t("search_product")}
+                className="h-9 w-full rounded-full border border-black/8 bg-surface-soft pl-9 pr-9 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-kun-primary/25 focus:border-transparent"
+                maxLength={80}
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => onSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground transition-colors"
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -984,21 +1019,17 @@ export function TableLandingShell({ tableId }: { tableId: string }) {
   // React Query — only enabled after geo passes
   const menuEnabled = geoPhase === "ok" && !!table?.isActive;
 
-  const locale = useLocale()
-  const products = useQuery({
-    queryKey: ["products", selectedCategoryId, locale],
-    queryFn: () => fetchProducts({ ...(selectedCategoryId ? { categoryId: selectedCategoryId } : {}), locale }),
-    staleTime: 3 * 60_000,
-    enabled: menuEnabled,
-  })
+  const { data: products, isLoading } = useProductsQuery(
+    selectedCategoryId ? { categorySlug: selectedCategoryId } : undefined,
+  );
 
   const filtered = search
-    ? (products ?? [])?.data?.filter(
+    ? (products ?? [])?.filter(
       (p) =>
         p.name.toLowerCase().includes(search.toLowerCase()) ||
         (p.description ?? "").toLowerCase().includes(search.toLowerCase()),
     )
-    : products?.data;
+    : products;
 
 
   const available = (filtered?.filter((p) => p.isAvailable) ?? [])
@@ -1145,7 +1176,7 @@ export function TableLandingShell({ tableId }: { tableId: string }) {
 
       {/* Product grid */}
       <div className="px-4 pb-32 pt-5">
-        {products?.isLoading ? (
+        {isLoading ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="aspect-[3/4] animate-pulse rounded-3xl bg-black/[0.06]" />
