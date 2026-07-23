@@ -245,9 +245,8 @@ function CategoryTabs({
   useEffect(() => { syncFade(); }, [categories]);
 
   return (
-    <div className="sticky top-[57px] z-20 border-b border-black/[0.06] bg-white p-2">
+    <div className="sticky top-[57px] z-20 border-b border-black/[0.06] bg-white p-2 flex flex-col gap-2">
       <div className="flex items-center gap-2">
-        {/* Horizontal-scroll pills */}
         <div className="relative min-w-0 flex-1">
           {/* Left fade + arrow */}
           {fadeLeft && (

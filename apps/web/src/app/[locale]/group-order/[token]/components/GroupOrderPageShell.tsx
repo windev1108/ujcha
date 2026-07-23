@@ -13,6 +13,7 @@ import {
   Bike,
   Check,
   CheckCircle2,
+  ChevronLeft,
   ChevronRight,
   Clock,
   Copy,
@@ -458,7 +459,9 @@ function ProductPickerDrawer({
   const [activeCategoryId, setActiveCategoryId] = useState<string | undefined>();
   const [search, setSearch] = useState("");
   const [customizeTarget, setCustomizeTarget] = useState<ApiProduct | null>(null);
-
+  const pillsRef = useRef<HTMLDivElement>(null);
+  const [fadeLeft, setFadeLeft] = useState(false);
+  const [fadeRight, setFadeRight] = useState(false);
   const { data: categories = [] } = useCategoriesQuery();
   const effectiveCategoryId = search.trim() ? undefined : activeCategoryId;
   const { data: allProducts = [], isLoading: productsLoading } = useProductsQuery({
@@ -572,30 +575,92 @@ function ProductPickerDrawer({
             </div>
 
             {!search && (
-              <div className="scrollbar-none shrink-0 flex gap-2 overflow-x-auto px-5 pb-1 pt-3">
-                <button
-                  type="button"
-                  onClick={() => setActiveCategoryId(undefined)}
-                  className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${!activeCategoryId
-                    ? "bg-[#1a3c34] text-white"
-                    : "bg-black/6 text-foreground/60 hover:bg-black/10"
-                    }`}
+              // <div className="scrollbar-none shrink-0 flex gap-2 overflow-x-auto px-5 pb-1 pt-3">
+              //   <button
+              //     type="button"
+              //     onClick={() => setActiveCategoryId(undefined)}
+              //     className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${!activeCategoryId
+              //       ? "bg-[#1a3c34] text-white"
+              //       : "bg-black/6 text-foreground/60 hover:bg-black/10"
+              //       }`}
+              //   >
+              //     {t("group_all_categories")}
+              //   </button>
+              //   {categories.map((cat) => (
+              //     <button
+              //       key={cat.id}
+              //       type="button"
+              //       onClick={() => setActiveCategoryId(cat.id)}
+              //       className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${activeCategoryId === cat.id
+              //         ? "bg-[#1a3c34] text-white"
+              //         : "bg-black/6 text-foreground/60 hover:bg-black/10"
+              //         }`}
+              //     >
+              //       {cat.name}
+              //     </button>
+              //   ))}
+              // </div>
+              <div className="relative scrollbar-none shrink-0 flex gap-2 overflow-x-auto px-5 pb-1 pt-3">
+                {/* Left fade + arrow */}
+                {fadeLeft && (
+                  <>
+                    <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-10 bg-gradient-to-r from-white to-transparent" />
+                    <button
+                      type="button"
+                      aria-label="Cuộn trái"
+                      onClick={() => pillsRef.current?.scrollBy({ left: -180, behavior: "smooth" })}
+                      className="absolute left-0 top-1/2 z-20 flex size-6 -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white shadow-sm transition-colors hover:bg-black/[0.04]"
+                    >
+                      <ChevronLeft className="size-3.5 text-foreground/55" />
+                    </button>
+                  </>
+                )}
+
+                <div
+                  ref={pillsRef}
+                  className="overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                 >
-                  {t("group_all_categories")}
-                </button>
-                {categories.map((cat) => (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => setActiveCategoryId(cat.id)}
-                    className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${activeCategoryId === cat.id
-                      ? "bg-[#1a3c34] text-white"
-                      : "bg-black/6 text-foreground/60 hover:bg-black/10"
-                      }`}
-                  >
-                    {cat.name}
-                  </button>
-                ))}
+                  <div className="flex w-max min-w-full items-center gap-1.5 pb-px">
+                    <button
+                      type="button"
+                      onClick={() => setActiveCategoryId(undefined)}
+                      className={`shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors ${!activeCategoryId
+                        ? "bg-kun-products-forest text-white shadow-sm"
+                        : "bg-kun-filter-pill-bg text-foreground/80 hover:bg-black/[0.07]"
+                        }`}
+                    >
+                      {t("all")}
+                    </button>
+                    {categories?.map((cat) => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setActiveCategoryId(cat.id)}
+                        className={`shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors ${activeCategoryId === cat.id
+                          ? "bg-kun-products-forest text-white shadow-sm"
+                          : "bg-kun-filter-pill-bg text-foreground/80 hover:bg-black/[0.07]"
+                          }`}
+                      >
+                        {cat.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Right fade + arrow */}
+                {fadeRight && (
+                  <>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-white to-transparent" />
+                    <button
+                      type="button"
+                      aria-label="Cuộn phải"
+                      onClick={() => pillsRef.current?.scrollBy({ left: 180, behavior: "smooth" })}
+                      className="absolute right-0 top-1/2 z-20 flex size-6 -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white shadow-sm transition-colors hover:bg-black/[0.04]"
+                    >
+                      <ChevronRight className="size-3.5 text-foreground/55" />
+                    </button>
+                  </>
+                )}
               </div>
             )}
 
