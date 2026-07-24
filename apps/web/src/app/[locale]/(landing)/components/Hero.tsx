@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { ArrowUpRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { ROUTES } from "@/lib/routes";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 export interface FigurineSlide {
   src: string;
@@ -145,7 +145,7 @@ export default function HeroSection() {
 
   const imgMaxH = isMobile ? "46vh" : "64vh";
   const imgMaxW = isMobile ? "56vw" : "30vw";
-
+  const t = useTranslations()
   // bottom-bar heights
   const barPb = isMobile ? 20 : 28;
   const btnSize = isMobile ? 38 : 44;
@@ -272,7 +272,7 @@ export default function HeroSection() {
               transition: "transform 0.2s ease, box-shadow 0.2s ease, color 0.65s cubic-bezier(0.4,0,0.2,1)",
               marginBottom: 16,
             }}>
-            Explore now
+            {t('explore_button')}
             <ArrowUpRight size={13} />
           </button>
 

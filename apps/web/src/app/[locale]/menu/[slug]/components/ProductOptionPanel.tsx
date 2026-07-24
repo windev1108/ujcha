@@ -248,7 +248,7 @@ export function ProductOptionPanel({ product }: Props) {
                 )}
               </div>
               <div
-                className="space-y-1.5 overflow-y-auto scroll-smooth rounded-2xl border border-black/[0.07] bg-surface-secondary/40 p-2 pr-1"
+                className="max-h-96 space-y-1.5 overflow-y-auto scroll-smooth rounded-2xl border border-black/[0.07] bg-surface-secondary/40 p-2 pr-1"
                 role="listbox"
                 aria-label="Danh sách topping"
                 aria-multiselectable="false"

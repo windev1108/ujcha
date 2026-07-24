@@ -1194,5 +1194,6 @@
   "search_address_placeholder": "Nhập địa chỉ, tên quán hoặc khu vực",
   "exact_address_label": "Vị trí tương đối — chưa xác định số nhà chính xác, bạn cần thêm số nhà cụ thể vào trước địa chỉ",
   "not_found_address_label": "Không tìm thấy địa chỉ phù hợp",
-  "error_select_address_from_suggestion": "Vui lòng chọn một địa chỉ hợp lệ."
+  "error_select_address_from_suggestion": "Vui lòng chọn một địa chỉ hợp lệ.",
+  "explore_button": "Khám phá ngay"
 }
