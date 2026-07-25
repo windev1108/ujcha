@@ -35,6 +35,7 @@ interface Props {
     querySuffix?: string;
     /** Hiển thị viền đỏ + thông báo lỗi khi input trống nhưng required */
     error?: string;
+    hasValidCoordinates?: boolean;
 }
 
 const NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search";
@@ -100,6 +101,7 @@ export function AddressAutocompleteInput({
     strictBounds = true,
     querySuffix,
     error,
+    hasValidCoordinates,
 }: Props) {
     const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
     const [loading, setLoading] = useState(false);
@@ -112,7 +114,14 @@ export function AddressAutocompleteInput({
     const t = useTranslations();
     const requestIdRef = useRef(0);
     const mountedRef = useRef(true);
+    const coordinatesConfirmedRef = useRef(hasValidCoordinates ?? false);
 
+    useEffect(() => {
+        if (hasValidCoordinates) {
+            coordinatesConfirmedRef.current = true;
+            confirmedValueRef.current = value;
+        }
+    }, [hasValidCoordinates, value]);
     // Giá trị được coi là "hợp lệ" — tức đã đi kèm toạ độ, do người dùng CHỌN
     // từ dropdown (không phải tự gõ). Khởi tạo bằng giá trị ban đầu, vì có thể
     // đây là địa chỉ đã lưu sẵn hợp lệ (VD khi mở modal edit).
@@ -240,6 +249,7 @@ export function AddressAutocompleteInput({
         skipNextSearchRef.current = true;
         confirmedValueRef.current = s.displayName;
         prevExternalValueRef.current = s.displayName;
+        coordinatesConfirmedRef.current = true;
         onChange(s.displayName);
         onSelect(s);
         setSuggestions([]);
@@ -252,6 +262,12 @@ export function AddressAutocompleteInput({
         // trước khi ta kiểm tra và có thể clear input.
         setTimeout(() => {
             if (!mountedRef.current) return;
+
+            if (coordinatesConfirmedRef.current) {
+                setOpen(false);
+                return;
+            }
+
             const trimmedValue = value.trim();
             const isConfirmed = trimmedValue === confirmedValueRef.current.trim() && trimmedValue !== "";
 
