@@ -438,6 +438,7 @@ function DeliveryFulfillmentCard({
                   autoComplete="street-address"
                   boundingBox={DA_NANG_BOUNDING_BOX}
                   querySuffix={DA_NANG_QUERY_SUFFIX}
+                  hasValidCoordinates={form.lat != null && form.lng != null}
                 />
                 {geoError && (
                   <p className="mt-1.5 text-xs text-red-500">{geoError}</p>

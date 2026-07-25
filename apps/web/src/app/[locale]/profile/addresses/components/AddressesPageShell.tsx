@@ -352,6 +352,7 @@ function AddressModal({
               boundingBox={DA_NANG_BOUNDING_BOX}
               querySuffix={DA_NANG_QUERY_SUFFIX}
               error={errors.fullAddress}
+              hasValidCoordinates={form.lat != null && form.lng != null}
             />
             {errors.fullAddress && <p className="mt-1 text-xs text-red-500">{errors.fullAddress}</p>}
             {geoError && <p className="mt-1 text-xs text-red-500">{geoError}</p>}
