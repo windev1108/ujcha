@@ -117,8 +117,8 @@ export function AddressAutocompleteInput({
     const coordinatesConfirmedRef = useRef(hasValidCoordinates ?? false);
 
     useEffect(() => {
+        coordinatesConfirmedRef.current = hasValidCoordinates ?? false;
         if (hasValidCoordinates) {
-            coordinatesConfirmedRef.current = true;
             confirmedValueRef.current = value;
         }
     }, [hasValidCoordinates, value]);
