@@ -50,7 +50,7 @@ export class LoyaltyService {
         .mul(policy.effectiveEarnPercent)
         .div(100)
         .div(policy.pointRate);
-      potentialPoints = Math.max(0, Math.round(Number(earned.toString()) * 10) / 10);
+      potentialPoints = Math.max(0, Math.floor(Number(earned.toString())));
     }
 
     const isEligible =
