@@ -12,7 +12,7 @@ export class LoyaltyService {
     private readonly pointPolicy: PointPolicyService,
     private readonly pointService: PointService,
     private readonly notificationService: NotificationService,
-  ) {}
+  ) { }
 
   async getOrderInfo(paymentCode: string) {
     const order = await this.prisma.order.findUnique({
@@ -22,6 +22,7 @@ export class LoyaltyService {
         status: true,
         paymentStatus: true,
         finalAmount: true,
+        shippingFee: true,
         paymentCode: true,
         type: true,
         createdAt: true,
@@ -44,7 +45,8 @@ export class LoyaltyService {
     const policy = await this.pointPolicy.resolve(new Date());
     let potentialPoints = 0;
     if (policy && !alreadyClaimed) {
-      const earned = order.finalAmount
+      const eligibleAmount = order.finalAmount.sub(order.shippingFee);
+      const earned = eligibleAmount
         .mul(policy.effectiveEarnPercent)
         .div(100)
         .div(policy.pointRate);
@@ -101,7 +103,8 @@ export class LoyaltyService {
       throw new BadRequestException({ message: 'Đơn không đủ điều kiện tích điểm.', code: 'ORDER_BELOW_MINIMUM' });
     }
 
-    const earned = order.finalAmount
+    const eligibleAmount = order.finalAmount.sub(order.shippingFee);
+    const earned = eligibleAmount
       .mul(policy.effectiveEarnPercent)
       .div(100)
       .div(policy.pointRate);
