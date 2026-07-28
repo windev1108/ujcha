@@ -1413,7 +1413,7 @@ export function GroupOrderPageShell() {
       if (user) {
         getDeviceId().then((deviceId) => joinGroupOrder(token, { deviceId }).catch(() => { }));
       }
-      void subscribePush();
+      void subscribePush(storedParticipant ?? undefined)
       return;
     }
     if (user) {
@@ -1426,7 +1426,7 @@ export function GroupOrderPageShell() {
             const res = await joinGroupOrder(token, { deviceId });
             setSessionToken(res.sessionToken);
             localStorage.setItem(SESSION_KEY(token), res.sessionToken);
-            void subscribePush()
+            void subscribePush(existing.id)
           } catch { }
         });
         return;
@@ -1471,7 +1471,7 @@ export function GroupOrderPageShell() {
       localStorage.setItem(PARTICIPANT_KEY(token), res.participantId);
       localStorage.removeItem(JOIN_LOCK_KEY(token));
       setNeedsGuestName(false);
-      void subscribePush(); // ← auto request permission + subscribe ngay sau khi join
+      void subscribePush(res.participantId);
       const go = await fetchGroupOrder(token);
       setState(go);
     } catch (err: unknown) {

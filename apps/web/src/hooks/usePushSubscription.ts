@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { subscribePush } from "@/services/push/api";
-import { getDeviceId } from "@/hooks/useDeviceId"; // 
+import { getDeviceId } from "@/hooks/useDeviceId";
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
 
@@ -16,6 +16,9 @@ function urlBase64ToUint8Array(base64String: string) {
 export function usePushSubscription(participantId?: string | null) {
     const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
     const [subscribing, setSubscribing] = useState(false);
+    // Luôn giữ giá trị participantId MỚI NHẤT, không phụ thuộc closure cũ
+    const participantIdRef = useRef(participantId);
+    useEffect(() => { participantIdRef.current = participantId; }, [participantId]);
 
     useEffect(() => {
         if (typeof window === "undefined" || !("Notification" in window)) {
@@ -25,14 +28,14 @@ export function usePushSubscription(participantId?: string | null) {
         setPermission(Notification.permission);
     }, []);
 
-    const subscribe = useCallback(async () => {
+    const subscribe = useCallback(async (overrideParticipantId?: string | null) => {
         if (!("serviceWorker" in navigator) || !("PushManager" in window) || !VAPID_PUBLIC_KEY) {
             return false;
         }
         setSubscribing(true);
         try {
             const reg = await navigator.serviceWorker.register("/sw.js");
-            const perm = await Notification.requestPermission(); // no-op nếu đã granted/denied — không cần gesture
+            const perm = await Notification.requestPermission();
             setPermission(perm);
             if (perm !== "granted") return false;
 
@@ -46,12 +49,15 @@ export function usePushSubscription(participantId?: string | null) {
 
             const json = sub.toJSON();
             const deviceId = await getDeviceId();
+            // Ưu tiên tham số truyền trực tiếp > ref mới nhất > prop lúc hook khởi tạo
+            const finalParticipantId = overrideParticipantId ?? participantIdRef.current ?? participantId;
+
             await subscribePush({
                 endpoint: json.endpoint!,
                 p256dh: json.keys!.p256dh,
                 auth: json.keys!.auth,
                 deviceId,
-                participantId: participantId ?? undefined,
+                participantId: finalParticipantId ?? undefined,
             });
             return true;
         } catch (err) {
