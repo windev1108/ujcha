@@ -29,6 +29,7 @@ import { usePublicStoreLocationQuery } from "@/services/store/hooks";
 import { usePublicPaymentConfigQuery } from "@/services/payment-config/hooks";
 import { useAuthStore } from "@/store/auth-store";
 import { env } from "@/config/env";
+import { usePushSubscription } from "@/hooks/usePushSubscription";
 
 // ── formatters ────────────────────────────────────────────────────────────────
 
@@ -253,11 +254,10 @@ function OrderItemBadges({ optionDetails = [], extras, note, locale }: { optionD
             return (
               <span
                 key={i}
-                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
-                  hasDelta
-                    ? "bg-kun-mint/20 text-kun-products-forest"
-                    : "bg-surface-secondary text-foreground/70"
-                }`}
+                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${hasDelta
+                  ? "bg-kun-mint/20 text-kun-products-forest"
+                  : "bg-surface-secondary text-foreground/70"
+                  }`}
               >
                 {formatOptionLabel(od.group, displayLabel, locale)}
                 {hasDelta && (
@@ -459,11 +459,34 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
     return null;
   }, [groupOrder, order, isGroupOrder, groupToken, authUser?.id]);
 
+  const myGroupParticipantForPush: GroupOrderParticipant | null = useMemo(() => {
+    if (!groupOrder || !isGroupOrder) return null;
+    const storedId = typeof window !== "undefined"
+      ? localStorage.getItem(`group_order_participant_${groupToken}`)
+      : null;
+    if (storedId) {
+      const byId = groupOrder.participants.find((p) => p.id === storedId);
+      if (byId) return byId;
+    }
+    if (authUser?.id) {
+      return groupOrder.participants.find((p) => p.userId === authUser.id) ?? null;
+    }
+    return null;
+  }, [groupOrder, isGroupOrder, groupToken, authUser?.id]);
+
+  const { subscribe: subscribePushOnOrder } = usePushSubscription(myGroupParticipantForPush?.id ?? null);
+
+  useEffect(() => {
+    if (myGroupParticipantForPush?.id) {
+      void subscribePushOnOrder();
+    }
+  }, [myGroupParticipantForPush?.id, subscribePushOnOrder]);
+
   // Countdown: group bank_transfer expires same as regular orders (order.createdAt + expiry window).
   // order is not yet available here, so we pass the ISO string after computing it lazily.
   // The hook handles undefined by returning 0 immediately — value is replaced once order loads.
   const groupQrExpiresAt = order
-    ? new Date(new Date(order.createdAt).getTime() + 15 * 60_000).toISOString()
+    ? new Date(new Date(order.createdAt).getTime() + 30 * 60_000).toISOString()
     : undefined;
   const groupQrRemaining = useCountdown(groupQrExpiresAt);
 
@@ -1196,8 +1219,8 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                           {t("group_payment_status_members")}
                         </p>
                         <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums ${paidCount === activeParts.length
-                            ? "bg-emerald-50 text-emerald-600"
-                            : "bg-[#1a3c34]/8 text-[#1a3c34]"
+                          ? "bg-emerald-50 text-emerald-600"
+                          : "bg-[#1a3c34]/8 text-[#1a3c34]"
                           }`}>
                           {paidCount === activeParts.length && <CheckCircle2 className="size-3" />}
                           {paidCount}/{activeParts.length}

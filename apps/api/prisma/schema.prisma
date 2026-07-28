@@ -971,6 +971,7 @@ model GroupOrderParticipant {
   /// Fingerprint thiết bị — chặn cùng device join nhiều lần để trục lợi discount.
   deviceId       String?
   items          GroupOrderParticipantItem[]
+  pushSubscriptions PushSubscription[]
 
   @@index([groupOrderId])
   @@index([userId])
@@ -1003,4 +1004,20 @@ model GroupOrderConfig {
   /// JSON mảng bậc giảm giá: [{ minParticipants: 2, discountPercent: 5 }, ...]
   discountTiersJson Json     @default("[]")
   updatedAt         DateTime @updatedAt
+}
+
+model PushSubscription {
+  id            String                 @id @default(uuid()) @db.Uuid
+  endpoint      String                 @unique
+  p256dh        String
+  auth          String
+  deviceId      String
+  participantId String?                @db.Uuid
+  participant   GroupOrderParticipant? @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  userId        String?                @db.Uuid
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  @@index([deviceId])
+  @@index([participantId])
 }

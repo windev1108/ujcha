@@ -34,6 +34,8 @@ import { TrackingModule } from './modules/tracking/tracking.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { MailModule } from './modules/mail/mail.module';
 import { PublicStoreModule } from './modules/public-store/public-store.module';
+import { PushModule } from './modules/push/push.module';
+import { PaymentReminderModule } from './modules/payment-reminder/payment-reminder.module';
 
 @Module({
   imports: [
@@ -76,6 +78,8 @@ import { PublicStoreModule } from './modules/public-store/public-store.module';
     NotificationModule,
     MailModule,
     PublicStoreModule,
+    PushModule,
+    PaymentReminderModule,
   ],
   controllers: [AppController],
   providers: [AppService],

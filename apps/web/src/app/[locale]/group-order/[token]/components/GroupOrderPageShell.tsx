@@ -82,6 +82,7 @@ import { toast } from "sonner";
 import { useLocale, useTranslations } from "next-intl";
 import { getDisplayName } from "@/lib/product-name";
 import { getDeviceId } from "@/hooks/useDeviceId";
+import { usePushSubscription } from "@/hooks/usePushSubscription";
 
 const SESSION_KEY = (token: string) => `group_order_session_${token}`;
 const PARTICIPANT_KEY = (token: string) => `group_order_participant_${token}`;
@@ -1320,13 +1321,19 @@ export function GroupOrderPageShell() {
     (p) => (myParticipantId && p.id === myParticipantId) || (user?.id && p.userId === user.id),
   );
   const isHost = me?.isHost ?? false;
+  const { permission: pushPermission, subscribing: pushSubscribing, subscribe: subscribePush } =
+    usePushSubscription(myParticipantId);
 
   const matchedAddress = savedAddresses.find((a) => a.id === state?.address?.id);
   const addrLat = matchedAddress?.lat && matchedAddress.lat !== 0 ? matchedAddress.lat : null;
   const addrLng = matchedAddress?.lng && matchedAddress.lng !== 0 ? matchedAddress.lng : null;
   const { data: shippingEstimate } = useShippingEstimateQuery(addrLat, addrLng, 0);
-  const { data: payConfig } = usePublicPaymentConfigQuery();
-  const { data: shippingConfig } = usePublicShippingConfigQuery();
+
+  useEffect(() => {
+    if (pushPermission === "granted" && myParticipantId) {
+      void subscribePush();
+    }
+  }, [pushPermission, myParticipantId, subscribePush]);
 
   const load = useCallback(async () => {
     try {
@@ -1404,6 +1411,7 @@ export function GroupOrderPageShell() {
       if (user) {
         getDeviceId().then((deviceId) => joinGroupOrder(token, { deviceId }).catch(() => { }));
       }
+      void subscribePush();
       return;
     }
     if (user) {
@@ -1416,6 +1424,7 @@ export function GroupOrderPageShell() {
             const res = await joinGroupOrder(token, { deviceId });
             setSessionToken(res.sessionToken);
             localStorage.setItem(SESSION_KEY(token), res.sessionToken);
+            void subscribePush()
           } catch { }
         });
         return;
@@ -1433,7 +1442,6 @@ export function GroupOrderPageShell() {
   }, [state?.id, user?.id]);
 
   const handleJoin = useCallback(async (guestName?: string) => {
-    // Layer 1: localStorage lock — guards concurrent same-browser joins before BC listener is active
     const lockTs = localStorage.getItem(JOIN_LOCK_KEY(token));
     if (lockTs && Date.now() - parseInt(lockTs) < JOIN_LOCK_TTL) {
       setDuplicateTab(true);
@@ -1441,7 +1449,6 @@ export function GroupOrderPageShell() {
     }
     localStorage.setItem(JOIN_LOCK_KEY(token), Date.now().toString());
 
-    // Layer 2: BroadcastChannel — detect already-joined tab
     const isDuplicate = await detectDuplicateTab(token);
     if (isDuplicate) {
       localStorage.removeItem(JOIN_LOCK_KEY(token));
@@ -1462,6 +1469,7 @@ export function GroupOrderPageShell() {
       localStorage.setItem(PARTICIPANT_KEY(token), res.participantId);
       localStorage.removeItem(JOIN_LOCK_KEY(token));
       setNeedsGuestName(false);
+      void subscribePush(); // ← auto request permission + subscribe ngay sau khi join
       const go = await fetchGroupOrder(token);
       setState(go);
     } catch (err: unknown) {
@@ -1471,7 +1479,7 @@ export function GroupOrderPageShell() {
     } finally {
       setJoining(false);
     }
-  }, [token, t]);
+  }, [token, t, subscribePush]);
 
   useEffect(() => {
     const socket = io(`${env.API_URL}/group`, {

@@ -9,7 +9,7 @@ import { useOrderPaymentSocket } from "@/hooks/useOrderPaymentSocket";
 import { revealTransition } from "@/app/[locale]/(landing)/components/RevealSection";
 
 const SEPAY_QR_BASE = "https://qr.sepay.vn/img";
-const EXPIRE_MINUTES = 15;
+const EXPIRE_MINUTES = 30;
 
 function buildQrUrl(bank: string, acc: string, amount: number, des: string): string {
   const params = new URLSearchParams({

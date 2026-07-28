@@ -21,7 +21,7 @@ export class OrderExpiryCronService {
   ) {
     const raw = this.config.get<string>('ORDER_BANK_TRANSFER_EXPIRY_MINUTES');
     const parsed = raw ? parseInt(raw, 10) : NaN;
-    this.expiryMinutes = Number.isFinite(parsed) && parsed > 0 ? parsed : 15;
+    this.expiryMinutes = Number.isFinite(parsed) && parsed > 0 ? parsed : 30;
     this.logger.log(`Bank-transfer expiry window: ${this.expiryMinutes} min`);
   }
 

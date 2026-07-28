@@ -9,6 +9,7 @@ import { NotificationModule } from '../../notification/notification.module';
 import { GroupOrderModule } from '../../group-order/group-order.module';
 import { AdminOrderController } from './admin-order.controller';
 import { AdminOrderService } from './admin-order.service';
+import { PushModule } from '../../push/push.module';
 
 @Module({
   imports: [
@@ -20,9 +21,10 @@ import { AdminOrderService } from './admin-order.service';
     EventsModule,
     NotificationModule,
     GroupOrderModule,
+    PushModule
   ],
   controllers: [AdminOrderController],
   providers: [AdminOrderService],
   exports: [AdminOrderService],
 })
-export class AdminOrderModule {}
+export class AdminOrderModule { }

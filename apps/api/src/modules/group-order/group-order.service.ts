@@ -26,6 +26,7 @@ import type {
   JoinGroupOrderDto,
 } from './dto/group-order.dto';
 import { MailService } from '../mail/mail.service';
+import { PaymentReminderService } from '../payment-reminder/payment-reminder.service';
 
 const GROUP_ORDER_CONFIG_KEY = 'ujcha:group-order:config';
 const GROUP_ORDER_CONFIG_TTL = 60; // 60 seconds
@@ -58,6 +59,7 @@ export class GroupOrderService {
     private readonly ordersGateway: OrdersGateway,
     private readonly notificationService: NotificationService,
     private readonly mailService: MailService,
+    private readonly paymentReminder: PaymentReminderService,
   ) { }
 
   private fullInclude() {
@@ -353,6 +355,11 @@ export class GroupOrderService {
       data: { status: GroupOrderStatus.cancelled },
       include: this.fullInclude(),
     });
+    await Promise.all(
+      go.participants.map((p) =>
+        this.paymentReminder.cancelForParticipant(p.id),
+      ),
+    );
     return this.serialize(updated);
   }
 
@@ -375,6 +382,7 @@ export class GroupOrderService {
     if (participant.isHost)
       throw new ForbiddenException('Chủ nhóm không thể rời nhóm.');
     const leaverName = participant.user?.name ?? participant.guestName ?? '?';
+    await this.paymentReminder.cancelForParticipant(participant.id)
     await this.prisma.groupOrderParticipant.delete({
       where: { id: participant.id },
     });
@@ -406,6 +414,7 @@ export class GroupOrderService {
     const target = go.participants.find((p) => p.id === participantId);
     if (!target) throw new NotFoundException('Không tìm thấy thành viên.');
     if (target.isHost) throw new ForbiddenException('Không thể xóa chủ nhóm.');
+    await this.paymentReminder.cancelForParticipant(participantId)
     await this.prisma.groupOrderParticipant.delete({
       where: { id: participantId },
     });
@@ -646,6 +655,10 @@ export class GroupOrderService {
               paymentType: 'bank_transfer',
             } as any,
           });
+          await this.paymentReminder.scheduleForParticipant(
+            host.id,
+            order.paymentCode,
+          );
         }
       } else {
         for (const p of goFull!.participants.filter(
@@ -658,6 +671,10 @@ export class GroupOrderService {
               paymentType: 'bank_transfer',
             } as any,
           });
+          await this.paymentReminder.scheduleForParticipant(
+            p.id,
+            order.paymentCode,
+          );
         }
       }
 
@@ -844,6 +861,7 @@ export class GroupOrderService {
         paidAt: new Date(),
       },
     });
+    await this.paymentReminder.cancelForParticipant(participantId);
 
     const goCheck = await this.prisma.groupOrder.findUnique({
       where: { token },
@@ -891,6 +909,15 @@ export class GroupOrderService {
     if (go.status !== GroupOrderStatus.locked) {
       throw new BadRequestException('Don nhom chua duoc khoa.');
     }
+    const goWithParticipants = await this.prisma.groupOrder.findUnique({
+      where: { token },
+      include: { participants: true },
+    });
+    await Promise.all(
+      (goWithParticipants?.participants ?? []).map((p) =>
+        this.paymentReminder.cancelForParticipant(p.id),
+      ),
+    );
 
     await this.prisma.groupOrder.update({
       where: { token },
@@ -909,19 +936,28 @@ export class GroupOrderService {
     sessionToken: string,
     dto: SetFulfillmentInput,
   ) {
-    const { go, participant } = await this.resolveParticipant(token, sessionToken);
+    const { go, participant } = await this.resolveParticipant(
+      token,
+      sessionToken,
+    );
 
     if (!participant.isHost) {
-      throw new ForbiddenException('Chi chu nhom moi co the thiet lap giao hang.');
+      throw new ForbiddenException(
+        'Chi chu nhom moi co the thiet lap giao hang.',
+      );
     }
     if (go.status !== GroupOrderStatus.collecting) {
-      throw new BadRequestException('Chi co the thiet lap khi don nhom dang o trang thai thu thap.');
+      throw new BadRequestException(
+        'Chi co the thiet lap khi don nhom dang o trang thai thu thap.',
+      );
     }
 
     const data: Prisma.GroupOrderUncheckedUpdateInput = {
       type: dto.type as OrderType,
       shippingFee: new Prisma.Decimal(dto.shippingFee ?? 0),
-      ...(dto.shippingFeeMode !== undefined ? { shippingFeeMode: dto.shippingFeeMode } : {}),
+      ...(dto.shippingFeeMode !== undefined
+        ? { shippingFeeMode: dto.shippingFeeMode }
+        : {}),
       addressId: null,
       tableId: null,
       pickupTime: null,
@@ -933,7 +969,9 @@ export class GroupOrderService {
 
     if (dto.type === 'delivery') {
       if (dto.addressId) {
-        const addr = await this.prisma.address.findUnique({ where: { id: dto.addressId } });
+        const addr = await this.prisma.address.findUnique({
+          where: { id: dto.addressId },
+        });
         if (!addr) throw new BadRequestException('Dia chi khong ton tai.');
         data.addressId = dto.addressId;
       } else if (dto.inlineAddress?.fullAddress?.trim()) {
@@ -1074,9 +1112,7 @@ export class GroupOrderService {
     return match?.discountPercent ?? 0;
   }
 
-  async autoConfirmParticipantPaid(
-    participantId: string,
-  ): Promise<{
+  async autoConfirmParticipantPaid(participantId: string): Promise<{
     token: string;
     state: ReturnType<typeof this.serialize>;
     orderId: string | null;
@@ -1099,7 +1135,7 @@ export class GroupOrderService {
       where: { id: participantId },
       data: { paymentStatus: 'paid' as any, paidAt: new Date() },
     });
-
+    await this.paymentReminder.cancelForParticipant(participantId);
     const goCheck = await this.prisma.groupOrder.findUnique({
       where: { token },
       include: { participants: { include: { items: true } } },
@@ -1250,7 +1286,9 @@ export class GroupOrderService {
         paymentCode,
         guestDeliveryName: host?.name ?? null,
         guestDeliveryPhone: host?.phone ?? null,
-        guestDeliveryAddress: !go.addressId ? (go.inlineFullAddress ?? null) : null,
+        guestDeliveryAddress: !go.addressId
+          ? (go.inlineFullAddress ?? null)
+          : null,
         guestDeliveryLat: !go.addressId ? (go.inlineLat ?? null) : null,
         guestDeliveryLng: !go.addressId ? (go.inlineLng ?? null) : null,
         items: { createMany: { data: orderItemsData } },

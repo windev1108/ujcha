@@ -28,6 +28,7 @@ import type { AssignShipperDto } from './dto/assign-shipper.dto';
 import type { AdminOrderListQueryDto } from './dto/admin-order-list-query.dto';
 import type { BulkUpdateOrderStatusDto } from './dto/bulk-update-order-status.dto';
 import { withGuestAddressFallback } from '../../../helper/utils';
+import { PushService } from '../../push/push.service';
 
 const VN_TZ = '+07:00';
 function vnStartOfDay(d: string): Date {
@@ -158,6 +159,7 @@ export class AdminOrderService {
     private readonly notificationService: NotificationService,
     private readonly groupOrderGateway: GroupOrderGateway,
     private readonly groupOrderService: GroupOrderService,
+    private readonly pushService: PushService,
   ) { }
 
   async findAll(query: AdminOrderListQueryDto) {
@@ -453,6 +455,13 @@ export class AdminOrderService {
           orderId,
           status: dto.status,
         });
+        void this.pushService
+          .notifyOrderStatusToParticipants(
+            orderId,
+            dto.status,
+            updated.paymentCode,
+          )
+          .catch((err: unknown) => this.logger.error(err));
       }
 
       return this.withTypeDisplay(updated);
@@ -685,6 +694,10 @@ export class AdminOrderService {
     });
 
     for (const o of bulkOrders) {
+      this.ordersGateway.emitOrderStatusUpdated({ orderId: o.id, status: dto.status });
+      void this.pushService
+        .notifyOrderStatusToParticipants(o.id, dto.status, o.paymentCode)
+        .catch((err: unknown) => this.logger.error(err));
       if (dto.status === OrderStatus.completed) {
         this.fireOrderCompletionSideEffects(o.id, o.userId, o.paymentCode);
       } else {

@@ -7,9 +7,16 @@ import { GroupOrderController } from './group-order.controller';
 import { GroupOrderGateway } from './group-order.gateway';
 import { GroupOrderService } from './group-order.service';
 import { MailService } from '../mail/mail.service';
+import { PaymentReminderModule } from '../payment-reminder/payment-reminder.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, EventsModule, NotificationModule],
+  imports: [
+    PrismaModule,
+    AuthModule,
+    EventsModule,
+    NotificationModule,
+    PaymentReminderModule,
+  ],
   controllers: [GroupOrderController],
   providers: [GroupOrderService, GroupOrderGateway, MailService],
   exports: [GroupOrderService, GroupOrderGateway, MailService],
