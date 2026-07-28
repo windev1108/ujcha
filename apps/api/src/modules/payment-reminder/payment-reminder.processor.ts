@@ -34,7 +34,7 @@ export class PaymentReminderProcessor extends WorkerHost {
                 step === 0
                     ? 'Nhấn để thanh toán phần của mình cho đơn nhóm.'
                     : `Đơn #${paymentCode} vẫn đang chờ bạn thanh toán.`,
-            url: `/order/${paymentCode}`,
+            url: `/orders/${paymentCode}`,
         });
 
         this.logger.log(`Reminder step=${step} → participant=${participantId}`);
