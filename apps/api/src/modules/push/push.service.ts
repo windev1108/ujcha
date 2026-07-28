@@ -121,6 +121,7 @@ export class PushService {
         status: OrderStatus,
         paymentCode: string,
     ) {
+        this.logger.log(`notifyOrderStatusToParticipants called: orderId=${orderId} status=${status} enabled=${this.enabled}`);
         if (!this.enabled) return;
         const msg = ORDER_STATUS_PUSH_MESSAGES[status];
         if (!msg) return;
