@@ -1328,6 +1328,8 @@ export function GroupOrderPageShell() {
   const addrLat = matchedAddress?.lat && matchedAddress.lat !== 0 ? matchedAddress.lat : null;
   const addrLng = matchedAddress?.lng && matchedAddress.lng !== 0 ? matchedAddress.lng : null;
   const { data: shippingEstimate } = useShippingEstimateQuery(addrLat, addrLng, 0);
+  const { data: payConfig } = usePublicPaymentConfigQuery();
+  const { data: shippingConfig } = usePublicShippingConfigQuery();
 
   useEffect(() => {
     if (pushPermission === "granted" && myParticipantId) {
