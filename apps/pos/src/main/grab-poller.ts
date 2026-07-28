@@ -1,3 +1,4 @@
+//grab-poller.ts
 import { app } from 'electron'
 import { join } from 'path'
 import { readFileSync } from 'fs'

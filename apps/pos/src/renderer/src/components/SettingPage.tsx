@@ -712,7 +712,19 @@ function PrinterSection({
 function ShopeeSection() {
     const shopeeCalls = (eAPI as unknown as {
         spfPartner?: {
-            getStatus(): Promise<{ connected: boolean; polling: boolean; restaurantId: string | null; restaurantName: string | null; savedAt: string | null; pollIntervalMs: number }>
+            getStatus(): Promise<{
+                connected: boolean
+                polling: boolean
+                restaurantId: string | null
+                restaurantName: string | null
+                savedAt: string | null
+                pollIntervalMs: number
+                lastPollOk: boolean
+                lastPollError: string | null
+                lastSuccessfulPollAt: string | null
+                consecutiveFailures: number
+                needsReauth: boolean
+            }>
             webLogin(): Promise<{ ok: boolean; restaurantId?: string; error?: string }>
             reset(): Promise<{ ok: boolean }>
             setPollInterval(ms: number): Promise<void>
@@ -720,7 +732,12 @@ function ShopeeSection() {
     })
 
     // Partner API status
-    const [partnerStatus, setPartnerStatus] = useState<{ connected: boolean; polling: boolean; restaurantId: string | null; restaurantName: string | null; savedAt: string | null; pollIntervalMs: number } | null>(null)
+    const [partnerStatus, setPartnerStatus] = useState<{
+        connected: boolean; polling: boolean; restaurantId: string | null
+        restaurantName: string | null; savedAt: string | null; pollIntervalMs: number
+        lastPollOk: boolean; lastPollError: string | null
+        lastSuccessfulPollAt: string | null; consecutiveFailures: number; needsReauth: boolean
+    } | null>(null)
     const [webLogging, setWebLogging] = useState(false)
     const [loginError, setLoginError] = useState<string | null>(null)
     const [resetting, setResetting] = useState(false)
@@ -818,6 +835,24 @@ function ShopeeSection() {
                         </div>
                     ) : (
                         <div className="space-y-3">
+                            {partnerStatus?.needsReauth && (
+                                <div className="rounded-xl bg-red-50 border border-red-200 px-3 py-2.5 space-y-1">
+                                    <p className="text-xs font-semibold text-red-700">
+                                        ⚠ Phiên đăng nhập có thể đã hết hạn
+                                    </p>
+                                    <p className="text-xs text-red-600">
+                                        {partnerStatus.consecutiveFailures} lần kiểm tra liên tiếp thất bại
+                                        {partnerStatus.lastPollError ? ` — ${partnerStatus.lastPollError}` : ''}.
+                                        Vui lòng bấm "Ngắt kết nối" rồi đăng nhập lại.
+                                    </p>
+                                </div>
+                            )}
+                            {!partnerStatus?.needsReauth && partnerStatus?.lastSuccessfulPollAt && (
+                                <p className="text-[11px] text-gray-400">
+                                    Lần nhận đơn gần nhất:{' '}
+                                    {new Date(partnerStatus.lastSuccessfulPollAt).toLocaleTimeString('vi-VN')}
+                                </p>
+                            )}
                             <SpacingSlider
                                 label={`Kiểm tra mỗi ${pollIntervalSecs}s`}
                                 sub="UjCha POS gọi ShopeeFood Partner API theo chu kỳ này để phát hiện đơn mới"

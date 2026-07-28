@@ -1,3 +1,4 @@
+//grab-print.ts
 import type { AdminOrder } from '../types/common'
 import type { BillConfig, LabelConfig } from '../../../preload'
 import { DEFAULT_BILL_CONFIG, DEFAULT_LABEL_CONFIG } from '../types/common'

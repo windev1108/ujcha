@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import { SpfOrderFull } from 'src/main/shopee-partner-poller';
 
 // ─── Shared Types ─────────────────────────────────────────────────────────────
 
@@ -325,6 +326,56 @@ const electronAPI = {
   },
   // ── ShopeeFood Partner API ──────────────────────────────────────────────────
   spfPartner: {
+    listOrdersPage: (
+      fromDate: string, toDate: string, pageNum: number, pageSize: number,
+    ): Promise<{
+      ok: boolean
+      orders: SpfOrderFull[]
+      totalCount: number
+      pageSize: number
+      pageNum: number
+      error?: string
+    }> => ipcRenderer.invoke('spfPartner:listOrdersPage', fromDate, toDate, pageNum, pageSize),
+    listOrders: (
+      fromDate: string,
+      toDate: string,
+      pageNum?: number,
+      pageSize?: number,
+    ): Promise<{
+      ok: boolean
+      orders: Array<{
+        code: string
+        id: number
+        order_status: number
+        order_time: number
+        actual_deliver_time?: number
+        order_user: { name: string; avatar_url?: string; latest_rating?: number }
+        assignee?: { name: string; avatar_url?: string }
+        deliver_address: { contact_name: string; address: string }
+        order_items: Array<{
+          id: number
+          dish: { name: string; image?: string; discount_price: number; description?: string }
+          quantity: number
+          discount_price: number
+          note?: string
+          options_groups: Array<{ id: number; name: string; options: Array<{ name: string; discount_price: number; quantity: number }> }>
+        }>
+        total_dish: number
+        order_value_amount: number
+        total_value_amount: number
+        customer_bill: { sub_total: number; total_amount: number; shipping_fee: number; total_discount: number }
+        cancel_info?: { allow_cancel: boolean; reason?: string }
+        is_asap?: boolean
+        shipping_info?: { distance: number }
+        [key: string]: unknown
+      }>
+      totalCount: number
+      resultCount: number
+      error?: string
+    }> => ipcRenderer.invoke('spfPartner:listOrders', fromDate, toDate, pageNum ?? 1, pageSize ?? 50),
+
+    getOrder: (code: string): Promise<{ ok: boolean; order?: Record<string, unknown>; error?: string }> =>
+      ipcRenderer.invoke('spfPartner:getOrder', code),
     getStatus: (): Promise<{
       connected: boolean
       polling: boolean

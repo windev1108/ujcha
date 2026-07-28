@@ -1,10 +1,12 @@
+//shopee-partner-poller.ts
 import { BrowserWindow, net, session } from 'electron'
 import { readSubConfig, writeSubConfig } from '../renderer/src/store/config-store'
 
 const SPF_API = 'https://gmerchant.deliverynow.vn'
 const PARTNER_API = 'https://api.partner.shopee.vn'
 const SPF_ORIGIN = 'https://partner.shopee.vn'
-const DEFAULT_POLL_INTERVAL_MS = 15_000
+const SPF_ORDER_LIST_PAGE = 'https://partner.shopee.vn/shopee-food/order-management'
+const DEFAULT_POLL_INTERVAL_MS = 30_000
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,6 +36,12 @@ export interface SpfPartnerStatus {
   entityId: string | null
   savedAt: string | null
   pollIntervalMs: number
+  // health
+  lastPollOk: boolean
+  lastPollError: string | null
+  lastSuccessfulPollAt: string | null
+  consecutiveFailures: number
+  needsReauth: boolean
 }
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -45,6 +53,197 @@ interface SpfPartnerConfig {
   entityId?: string
   savedAt?: string
   pollIntervalMs?: number
+}
+
+// ─── Order types (get_list_with_pagination) ───────────────────────────────────
+
+export interface SpfDish {
+  id: number
+  name: string
+  image?: string
+  mms_image?: string
+  original_price: number
+  discount_price: number
+  has_promotion?: boolean
+  description?: string
+}
+
+export interface SpfOrderItemOption {
+  id: number
+  name: string
+  original_price: number
+  discount_price: number
+  quantity: number
+}
+
+export interface SpfOrderItemOptionGroup {
+  id: number
+  name: string
+  options: SpfOrderItemOption[]
+}
+
+export interface SpfOrderItem {
+  id: number
+  dish: SpfDish
+  quantity: number
+  original_price: number
+  discount_price: number
+  has_promotion: boolean
+  is_free_item: boolean
+  note?: string
+  options_groups: SpfOrderItemOptionGroup[]
+}
+
+export interface SpfCustomerBill {
+  sub_total: number
+  total_amount: number
+  total_discount: number
+  shipping_fee: number
+  packing_fee: number
+  parking_fee: number
+  surcharge_fee: number
+  hand_deliver_fee: number
+  item_discount: number
+  small_order_fee: number
+  service_fee: number
+  merchant_discount: number
+  bad_weather_fee: number
+}
+
+export interface SpfDeliverAddress {
+  contact_name: string
+  address: string
+}
+
+export interface SpfPerson {
+  id?: number
+  name: string
+  avatar_url?: string
+  is_deleted?: boolean
+}
+
+export interface SpfCancelInfo {
+  allow_cancel: boolean
+  type?: number
+  reason?: string
+  reason_id?: number[]
+  time?: number
+}
+
+export interface SpfOrderFull {
+  code: string
+  id: number
+  restaurant_id: number
+  restaurant_name: string
+  store_id: number
+  order_status: number
+  order_time: number
+  merchant_confirm_time?: number
+  pick_time?: number
+  deliver_time?: number
+  actual_pick_time?: number
+  actual_deliver_time?: number
+  prepare_time: number
+  actual_prepare_time?: number
+  order_user: SpfPerson & { latest_rating?: number }
+  assignee?: SpfPerson
+  deliver_address: SpfDeliverAddress
+  customer_bill: SpfCustomerBill
+  order_items: SpfOrderItem[]
+  total_dish: number
+  order_value_amount: number
+  total_value_amount: number
+  commission?: { amount: number; value: number }
+  cancel_info?: SpfCancelInfo
+  bad_order_note_content?: string | null
+  shipping_info?: { distance: number; method: number }
+  is_asap?: boolean
+  is_done?: boolean
+  notes?: Record<string, unknown>
+  serial?: string
+  [key: string]: unknown
+}
+
+interface SpfOrderListResponse {
+  msg?: string
+  code: number
+  data?: {
+    total_count: number
+    result_count: number
+    orders: SpfOrderFull[]
+  }
+}
+
+// Cache of most-recently-fetched orders, keyed by order code — lets the detail
+// modal open instantly from data we already have instead of an extra request.
+const _lastOrdersCache = new Map<string, SpfOrderFull>()
+let _lastRequestRange: { from_time: number; to_time: number } | null = null
+let _lastRequestPageNum: number | null = null
+let _lastTotalCount = 0
+let _lastPageSize = 10
+
+
+const _rangeCache = new Map<string, { orders: SpfOrderFull[]; at: number }>()
+const RANGE_CACHE_TTL_MS = 8_000
+
+// Thêm sau RANGE_CACHE_TTL_MS
+const DEFAULT_RANGE_DAYS = 30
+const DEFAULT_RANGE_CACHE_TTL_MS = 60_000  // cache "toàn bộ default range" — tránh spam portal khi nhiều lời gọi liên tiếp
+
+let _defaultRangeOrders: SpfOrderFull[] = []
+let _defaultRangeFetchedAt = 0
+let _defaultRangeFetching: Promise<void> | null = null
+
+function isWithinDefaultWindow(fromTs: number): boolean {
+  const cutoffTs = Math.floor((Date.now() - DEFAULT_RANGE_DAYS * 86_400_000) / 1000)
+  return fromTs >= cutoffTs
+}
+
+// Lấy default range (portal tự set sẵn ~30 ngày) — KHÔNG set date picker,
+// KHÔNG có expected range nên không bao giờ bị "KHÔNG khớp" / retry.
+async function refreshDefaultRangeCache(force = false): Promise<void> {
+  if (!force && Date.now() - _defaultRangeFetchedAt < DEFAULT_RANGE_CACHE_TTL_MS) return
+  if (_defaultRangeFetching) return _defaultRangeFetching
+
+  _defaultRangeFetching = (async () => {
+    // Chủ động truyền range 30 ngày thật sự — để triggerPortalOrderFetch dùng
+    // đúng shortcut "30 ngày qua" (qua matchShortcutLabel) thay vì phó mặc
+    // cho bất kỳ range nào portal đang giữ sẵn.
+    const toDate = vnDateStr(0)
+    const fromDate = vnDateStr(29)
+    await withPortalLock(() => triggerPortalOrderFetch(fromDate, toDate))
+    if (_lastInterceptedOrderList) {
+      _defaultRangeOrders = _lastInterceptedOrderList
+      _defaultRangeFetchedAt = Date.now()
+      console.log(`[ShopeePartner] Default-range cache refreshed — ${_defaultRangeOrders.length} orders`)
+    }
+  })()
+
+  try {
+    await _defaultRangeFetching
+  } finally {
+    _defaultRangeFetching = null
+  }
+}
+
+function rangeCacheKey(fromDate: string, toDate: string): string {
+  return `${fromDate}|${toDate}`
+}
+
+export async function fetchSpfOrderDetailByCode(
+  code: string,
+): Promise<{ ok: boolean; order?: SpfOrderFull; error?: string }> {
+  const cached = _lastOrdersCache.get(code)
+  if (cached) return { ok: true, order: cached }
+
+  const today = (() => {
+    const ms = Date.now() + 7 * 60 * 60 * 1000
+    return new Date(ms).toISOString().slice(0, 10)
+  })()
+  const result = await fetchSpfOrderList(today, today)
+  const found = result.orders.find(o => o.code === code)
+  if (found) return { ok: true, order: found }
+  return { ok: false, error: 'Không tìm thấy chi tiết đơn — đơn có thể nằm ngoài khoảng ngày hôm nay' }
 }
 
 function getConfig(): SpfPartnerConfig {
@@ -67,10 +266,58 @@ let seeded = false  // true after first poll seeds baseline; only notify on subs
 let _onNewOrderCb: ((orderCode: string) => void) | null = null
 let _pollerWin: BrowserWindow | null = null
 let _pollerReady: Promise<void> | null = null
-let _lastXsap: { ri: string; sec: string; capturedAt: number } | null = null
-let _workingEndpointIdx: number | null = null
-let _interceptedOrders: string[] | null = null   // order codes captured via CDP or api.partner.shopee.vn
-let _lastPortalNavMs = 0
+
+// Đơn hàng lấy được từ chính request thật do portal tự phát ra (KHÔNG phải fetch giả).
+// Được set trong Network.responseReceived handler của initPollerWin().
+let _lastInterceptedOrderList: SpfOrderFull[] | null = null
+let _lastInterceptedAt = 0
+
+// ─── Health tracking ──────────────────────────────────────────────────────────
+let _consecutiveFailures = 0
+let _lastPollOk = true
+let _lastPollError: string | null = null
+let _lastSuccessfulPollAt: number | null = null
+let _lastPortalReloadMs = 0
+const PORTAL_REFRESH_INTERVAL_MS = 20 * 60 * 1000 // reload portal mỗi 20 phút để làm mới session
+const MAX_CONSECUTIVE_FAILURES_BEFORE_REAUTH_FLAG = 5
+
+function markPollResult(ok: boolean, error?: string) {
+  _lastPollOk = ok
+  _lastPollError = ok ? null : (error ?? 'unknown error')
+  if (ok) {
+    _consecutiveFailures = 0
+    _lastSuccessfulPollAt = Date.now()
+  } else {
+    _consecutiveFailures++
+  }
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T | null> {
+  return new Promise((resolve) => {
+    let settled = false
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      console.warn(`[ShopeePartner] ${label} timed out after ${ms}ms — bỏ qua để giải phóng hàng đợi`)
+      resolve(null)
+    }, ms)
+    promise.then(
+      (v) => { if (!settled) { settled = true; clearTimeout(timer); resolve(v) } },
+      (e) => { if (!settled) { settled = true; clearTimeout(timer); console.warn(`[ShopeePartner] ${label} rejected:`, e); resolve(null) } },
+    )
+  })
+}
+
+// Khi 1 thao tác bị treo thật sự (timeout), cửa sổ portal có thể đang ở trạng
+// thái dở dang (đang giữa lúc click/loadURL) — an toàn nhất là huỷ và dựng lại
+// window mới hoàn toàn, tránh 2 thao tác tranh chấp trên cùng 1 window sau này.
+async function forceRecreatePollerWin(): Promise<void> {
+  console.warn('[ShopeePartner] Force recreating poller window do thao tác bị treo')
+  try { _pollerWin?.destroy() } catch { /* ignore */ }
+  _pollerWin = null
+  _pollerReady = null
+  await initPollerWin()
+}
 
 export function setOnNewSpfOrderCallback(cb: (orderCode: string) => void) {
   _onNewOrderCb = cb
@@ -112,77 +359,286 @@ function getPollIntervalMs(): number {
   return DEFAULT_POLL_INTERVAL_MS
 }
 
-// ─── Hidden portal window — CDP captures x-sap tokens from portal's own calls ─
-// gmerchant.deliverynow.vn has no CORS headers → browser fetch always blocked.
-// net.request (main process) bypasses CORS. x-sap-ri/x-sap-sec are captured via
-// CDP from the hidden partner.shopee.vn window and injected into net.request.
+function getRestaurantId(): string | null {
+  return cachedRestaurantId ?? getConfig().restaurantId
+    ?? cachedEntityId ?? getConfig().entityId ?? null
+}
 
+// ─── Portal window ─────────────────────────────────────────────────────────
+// Portal tự gọi get_list_with_pagination bằng chữ ký thật của nó khi ta điều
+// hướng tới trang order/list — y hệt như khi người dùng tự bấm vào tab lịch
+// sử đơn hàng. Ta KHÔNG tự soạn fetch() (luôn bị CORS chặn), chỉ đọc lại
+// response thật đó qua CDP. Cửa sổ này CHÍNH LÀ cửa sổ người dùng dùng để
+// đăng nhập (webLogin trong main.ts) — không tạo cửa sổ ẩn riêng nữa, để
+// tránh phải đăng nhập lại / capture header hai lần.
+
+async function clickPaginationNav(win: BrowserWindow, direction: 'prev' | 'next'): Promise<boolean> {
+  const cls = direction === 'prev' ? 'shopee-food-pagination-prev' : 'shopee-food-pagination-next'
+  const rectJs = `(function(){
+    var li = document.querySelector('.${cls}');
+    if (!li) return null;
+    if (li.getAttribute('aria-disabled') === 'true') return { disabled: true };
+    var btn = li.querySelector('button, a') || li;
+    var r = btn.getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  })()`
+  let result: { x?: number; y?: number; disabled?: boolean } | null = null
+  try {
+    result = await win.webContents.executeJavaScript(rectJs)
+  } catch { return false }
+  if (!result || result.disabled) return false
+
+  const wc = win.webContents
+  wc.sendInputEvent({ type: 'mouseMove', x: result.x!, y: result.y! })
+  await new Promise(r => setTimeout(r, 40))
+  wc.sendInputEvent({ type: 'mouseDown', x: result.x!, y: result.y!, button: 'left', clickCount: 1 })
+  await new Promise(r => setTimeout(r, 40))
+  wc.sendInputEvent({ type: 'mouseUp', x: result.x!, y: result.y!, button: 'left', clickCount: 1 })
+  return true
+}
+
+// Đổi số dòng/trang bằng cách click nút "Số dòng: 10/20/30/40/50"
+async function clickPageSizeOption(win: BrowserWindow, pageSize: number): Promise<boolean> {
+  const rectJs = `(function(){
+    var btns = document.querySelectorAll('.shopee-food-pagination-total-text button.shopee-food-btn-link');
+    for (var i = 0; i < btns.length; i++) {
+      if (btns[i].textContent.trim() === '${pageSize}') {
+        var r = btns[i].getBoundingClientRect();
+        return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+      }
+    }
+    return null;
+  })()`
+  let rect: { x: number; y: number } | null = null
+  try {
+    rect = await win.webContents.executeJavaScript(rectJs)
+  } catch { return false }
+  if (!rect) return false
+
+  const wc = win.webContents
+  wc.sendInputEvent({ type: 'mouseMove', x: rect.x, y: rect.y })
+  await new Promise(r => setTimeout(r, 40))
+  wc.sendInputEvent({ type: 'mouseDown', x: rect.x, y: rect.y, button: 'left', clickCount: 1 })
+  await new Promise(r => setTimeout(r, 40))
+  wc.sendInputEvent({ type: 'mouseUp', x: rect.x, y: rect.y, button: 'left', clickCount: 1 })
+  return true
+}
+
+async function navigateToPage(win: BrowserWindow, targetPage: number): Promise<boolean> {
+  const MAX_STEPS = 50 // an toàn, ứng với tối đa 50 trang từ vị trí hiện tại
+  for (let i = 0; i < MAX_STEPS; i++) {
+    if (_lastRequestPageNum === targetPage) return true
+    const direction: 'prev' | 'next' = (_lastRequestPageNum ?? 1) < targetPage ? 'next' : 'prev'
+    const before = _lastInterceptedAt
+    const clicked = await clickPaginationNav(win, direction)
+    if (!clicked) return _lastRequestPageNum === targetPage
+
+    const deadline = Date.now() + 8000
+    while (Date.now() < deadline) {
+      if (_lastInterceptedAt > before) break
+      await new Promise(r => setTimeout(r, 200))
+    }
+    if (_lastInterceptedAt <= before) return false // click không trigger được request mới
+  }
+  return _lastRequestPageNum === targetPage
+}
+
+export async function fetchSpfOrderListPage(
+  fromDate: string,
+  toDate: string,
+  pageNum: number,
+  pageSize: number,
+): Promise<{ ok: boolean; orders: SpfOrderFull[]; totalCount: number; pageSize: number; pageNum: number; error?: string }> {
+  const headers = getActiveHeaders()
+  if (!headers) return { ok: false, orders: [], totalCount: 0, pageSize, pageNum, error: 'Chưa kết nối ShopeeFood Partner' }
+  const restaurantId = getRestaurantId()
+  if (!restaurantId) return { ok: false, orders: [], totalCount: 0, pageSize, pageNum, error: 'Chưa có Restaurant ID' }
+  if (!_pollerWin || _pollerWin.isDestroyed()) {
+    return { ok: false, orders: [], totalCount: 0, pageSize, pageNum, error: 'Cửa sổ portal chưa sẵn sàng' }
+  }
+
+  return withPortalLock(async () => {
+    // Bước 1: đưa portal về đúng range ngày + trang 1 (dùng lại triggerPortalOrderFetch)
+    _lastRequestPageNum = null
+    await triggerPortalOrderFetch(fromDate, toDate)
+
+    // Bước 2: nếu page_size portal đang khác mong muốn, đổi nó
+    if (_lastPageSize !== pageSize) {
+      const before = _lastInterceptedAt
+      const changed = await clickPageSizeOption(_pollerWin!, pageSize)
+      if (changed) {
+        const deadline = Date.now() + 8000
+        while (Date.now() < deadline) {
+          if (_lastInterceptedAt > before) break
+          await new Promise(r => setTimeout(r, 200))
+        }
+      }
+    }
+
+    // Bước 3: điều hướng tới đúng trang
+    if (pageNum > 1) {
+      const ok = await navigateToPage(_pollerWin!, pageNum)
+      if (!ok) {
+        return {
+          ok: false, orders: [], totalCount: _lastTotalCount, pageSize, pageNum,
+          error: 'Không điều hướng được tới trang yêu cầu',
+        }
+      }
+    }
+
+    if (!_lastInterceptedOrderList) {
+      return { ok: false, orders: [], totalCount: 0, pageSize, pageNum, error: 'Portal không trả về dữ liệu' }
+    }
+
+    return {
+      ok: true,
+      orders: _lastInterceptedOrderList,
+      totalCount: _lastTotalCount,
+      pageSize: _lastPageSize,
+      pageNum: _lastRequestPageNum ?? pageNum,
+    }
+  })
+}
+
+function attachCdpInterceptor(win: BrowserWindow) {
+
+  try {
+    if (!win.webContents.debugger.isAttached()) {
+      win.webContents.debugger.attach('1.3')
+    }
+    void win.webContents.debugger.sendCommand('Network.enable', {
+      maxTotalBufferSize: 200_000_000,      // 200MB tổng
+      maxResourceBufferSize: 100_000_000,   // 100MB mỗi resource
+      maxPostDataSize: 50_000_000,
+    })
+
+    void win.webContents.debugger.sendCommand('Page.enable')
+    // Bỏ patch MIN_PAGE_SIZE — giờ tôn trọng page_size mặc định của portal (10),
+    // và điều khiển phân trang bằng click Prev/Next thật thay vì lấy 1 lần lớn.
+    void win.webContents.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', {
+      source: `(function(){ /* không patch page_size nữa — để trống hoặc xoá script này */ })();`,
+    })
+
+    win.webContents.debugger.removeAllListeners('message')
+
+    // Theo dõi requestId của request order-list đang chờ loadingFinished,
+    // vì gọi getResponseBody ngay lúc responseReceived hay bị lỗi/treo do
+    // response chưa tải xong hoàn toàn (race condition phổ biến của CDP).
+    let pendingOrderListRequestId: string | null = null
+
+    win.webContents.debugger.on('message', async (_, method, params) => {
+      if (method === 'Network.requestWillBeSent') {
+        const p = params as {
+          requestId?: string
+          request?: { url?: string; method?: string; postData?: string }
+        }
+        const url = p.request?.url ?? ''
+        if (url.includes('gmerchant.deliverynow.vn') || url.includes('api.partner.shopee.vn')) {
+          console.log('[ShopeePartner] Portal→API:', p.request?.method, url.replace(/\?.*/, ''))
+        }
+
+        // Log payload gửi đi cho request order-list, kể cả khi postData
+        // không kèm sẵn trong sự kiện (một số trường hợp CDP không đính kèm
+        // postData trực tiếp, phải gọi getRequestPostData riêng).
+        if (url.includes('get_list_with_pagination')) {
+          let postDataStr: string | undefined = p.request?.postData
+          if (!postDataStr && p.requestId) {
+            try {
+              const pd = await win.webContents.debugger.sendCommand(
+                'Network.getRequestPostData', { requestId: p.requestId },
+              ) as { postData?: string }
+              postDataStr = pd.postData
+            } catch (e) {
+              console.warn('[ShopeePartner] Could not get request post data:', e)
+            }
+          }
+          if (postDataStr) {
+            console.log('[ShopeePartner] order-list REQUEST BODY:', postDataStr)
+            try {
+              const parsed = JSON.parse(postDataStr) as { from_time?: number; to_time?: number; page_num?: number; page_size?: number }
+              if (typeof parsed.from_time === 'number' && typeof parsed.to_time === 'number') {
+                _lastRequestRange = { from_time: parsed.from_time, to_time: parsed.to_time }
+              }
+              if (typeof parsed.page_num === 'number') _lastRequestPageNum = parsed.page_num
+              if (typeof parsed.page_size === 'number') _lastPageSize = parsed.page_size
+            } catch { /* ignore parse error */ }
+          }
+        }
+        return
+      }
+
+      if (method === 'Network.responseReceived') {
+        const p = params as { requestId?: string; response?: { url?: string; status?: number; statusText?: string } }
+        const url = p.response?.url ?? ''
+        if (!url.includes('get_list_with_pagination')) return
+        console.log('[ShopeePartner] order-list responseReceived, status:', p.response?.status, p.response?.statusText, '| requestId:', p.requestId)
+        if (p.requestId) {
+          pendingOrderListRequestId = p.requestId
+        }
+        return
+      }
+
+      if (method === 'Network.loadingFinished') {
+        const p = params as { requestId?: string }
+        if (!p.requestId || p.requestId !== pendingOrderListRequestId) return
+        const requestId = p.requestId
+        pendingOrderListRequestId = null
+
+        try {
+          const result = await win.webContents.debugger.sendCommand(
+            'Network.getResponseBody', { requestId },
+          )
+          const raw = (result as { body: string; base64Encoded?: boolean }).body
+          console.log('[ShopeePartner] order-list RAW RESPONSE:', raw.slice(0, 2000))
+          const body = JSON.parse(raw) as SpfOrderListResponse
+          console.log('[ShopeePartner] Parsed — code:', body.code, 'msg:', body.msg,
+            '| orders:', body.data?.orders?.length ?? 0)
+          if (body.code === 0 && body.data?.orders) {
+            _lastInterceptedOrderList = body.data.orders
+            _lastInterceptedAt = Date.now()
+            _lastTotalCount = body.data.total_count
+            for (const o of body.data.orders) _lastOrdersCache.set(o.code, o)
+          }
+        } catch (e) {
+          console.warn('[ShopeePartner] Could not read order-list response body:', e)
+        }
+      }
+
+      if (method === 'Network.loadingFailed') {
+        const p = params as { requestId?: string; errorText?: string; blockedReason?: string }
+        if (p.requestId === pendingOrderListRequestId) {
+          console.warn('[ShopeePartner] order-list loadingFailed:', p.errorText, p.blockedReason)
+          pendingOrderListRequestId = null
+        }
+      }
+    })
+  } catch (e) {
+    console.warn('[ShopeePartner] CDP attach failed:', e)
+  }
+}
+
+// Dùng khi tự tạo window mới (ví dụ sau khi app khởi động lại và có sẵn session cũ).
 function initPollerWin(): Promise<void> {
   if (_pollerWin && !_pollerWin.isDestroyed()) return _pollerReady ?? Promise.resolve()
 
   _pollerWin = new BrowserWindow({
-    show: false,
+    x: -3000,
+    y: -3000,
+    width: 1100,
+    height: 760,
+    show: true,
+    skipTaskbar: true,
     webPreferences: { nodeIntegration: false, contextIsolation: true, partition: 'persist:spf-partner' },
   })
   _pollerWin.webContents.setBackgroundThrottling(false)
+  attachCdpInterceptor(_pollerWin)
 
-  try {
-    _pollerWin.webContents.debugger.attach('1.3')
-    void _pollerWin.webContents.debugger.sendCommand('Network.enable')
-    _pollerWin.webContents.debugger.on('message', async (_, method, params) => {
-      if (method === 'Network.requestWillBeSent') {
-        const p = params as { request?: { url?: string; headers?: Record<string, string> } }
-        const url = p.request?.url ?? ''
-        if (!url.startsWith('https://')) return
-        if (url.includes('gmerchant.deliverynow.vn') || url.includes('api.partner.shopee.vn')) {
-          console.log('[ShopeePartner] Portal→API:', url.replace(/\?.*/, ''))
-        }
-        if (!url.includes('gmerchant.deliverynow.vn')) return
-        const h = p.request?.headers ?? {}
-        const ri = h['x-sap-ri'] ?? h['X-Sap-Ri'] ?? ''
-        const sec = h['x-sap-sec'] ?? h['X-Sap-Sec'] ?? ''
-        if (ri && sec) {
-          _lastXsap = { ri, sec, capturedAt: Date.now() }
-          console.log('[ShopeePartner] x-sap captured from portal')
-        }
-      }
-
-      // Intercept ALL portal API responses for discovery + order extraction
-      if (method === 'Network.responseReceived') {
-        const p = params as { requestId?: string; response?: { url?: string; status?: number } }
-        const url = p.response?.url ?? ''
-        const isSpfDomain = url.includes('gmerchant.deliverynow.vn') || url.includes('api.partner.shopee.vn')
-        if (!isSpfDomain || p.response?.status !== 200 || !p.requestId) return
-        try {
-          const result = await _pollerWin!.webContents.debugger.sendCommand('Network.getResponseBody', { requestId: p.requestId })
-          const raw = (result as { body: string }).body
-          const body = JSON.parse(raw) as { code?: number; result?: number; data?: unknown; [k: string]: unknown }
-          const apiCode = body.code ?? body.result ?? -1
-          console.log('[ShopeePartner] Intercepted:', url.replace(/\?.*/, ''), '→ code:', apiCode, '|', raw.slice(0, 400))
-          if (apiCode === 0) {
-            const codes = extractOrderCodes(body.data)
-            if (codes.length > 0) {
-              _interceptedOrders = codes
-              console.log('[ShopeePartner] Got', codes.length, 'orders via portal interception')
-            }
-          }
-        } catch { /* response body not available or not JSON */ }
-      }
-    })
-  } catch (e) {
-    console.warn('[ShopeePartner] CDP attach failed on poller window:', e)
-  }
+  _pollerWin.on('closed', () => {
+    if (_pollerWin) { _pollerWin = null; _pollerReady = null }
+  })
 
   _pollerReady = new Promise<void>((resolve) => {
-    _pollerWin!.webContents.once('did-finish-load', () => {
-      // Simulate visibility so the portal doesn't pause its own polling
-      void _pollerWin!.webContents.executeJavaScript(`
-        Object.defineProperty(document,'hidden',{get:()=>false});
-        Object.defineProperty(document,'visibilityState',{get:()=>'visible'});
-        document.dispatchEvent(new Event('visibilitychange'));
-      `).catch(() => {})
-      resolve()
-    })
+    _pollerWin!.webContents.once('did-finish-load', () => resolve())
     setTimeout(resolve, 15_000)
   })
 
@@ -190,6 +646,285 @@ function initPollerWin(): Promise<void> {
   return _pollerReady
 }
 
+// Dùng ngay sau khi người dùng đăng nhập xong trong cửa sổ webLogin (main.ts) —
+// biến chính cửa sổ đó thành cửa sổ polling, không tạo cửa sổ mới, không đóng
+// cửa sổ đang có session/cookie thật.
+export function adoptPollerWindow(win: BrowserWindow): void {
+  if (_pollerWin && !_pollerWin.isDestroyed() && _pollerWin !== win) {
+    _pollerWin.destroy()
+  }
+  _pollerWin = win
+  _pollerWin.webContents.setBackgroundThrottling(false)
+  if (!_pollerWin.isVisible()) _pollerWin.showInactive()
+  _pollerWin.setPosition(-3000, -3000)
+  _pollerWin.setSkipTaskbar(true)
+  attachCdpInterceptor(_pollerWin)
+  _pollerWin.on('closed', () => {
+    if (_pollerWin === win) { _pollerWin = null; _pollerReady = null }
+  })
+  _pollerReady = Promise.resolve()
+  console.log('[ShopeePartner] Adopted login window as poller window')
+}
+
+// Cửa sổ portal có thể bị đóng ngoài ý muốn (người dùng bấm X, crash, v.v.)
+// → tự phát hiện và dựng lại cửa sổ ẩn mới, nếu không polling sẽ "chết lặng".
+async function ensurePollerWinAlive(): Promise<void> {
+  if (_pollerWin && !_pollerWin.isDestroyed()) return
+  console.warn('[ShopeePartner] Poller window missing — recreating')
+  _pollerWin = null
+  _pollerReady = null
+  await initPollerWin()
+  await new Promise(r => setTimeout(r, 2000))
+}
+
+// Làm mới phiên portal định kỳ — giống việc người dùng tự F5 trang sau một
+// khoảng thời gian dài, để tránh session tự hết hạn phía Shopee.
+async function maybeRefreshPortal(): Promise<void> {
+  if (!_pollerWin || _pollerWin.isDestroyed()) return
+  const now = Date.now()
+  if (now - _lastPortalReloadMs < PORTAL_REFRESH_INTERVAL_MS) return
+  _lastPortalReloadMs = now
+  try {
+    console.log('[ShopeePartner] Refreshing portal session (periodic reload)')
+    await _pollerWin.loadURL(SPF_ORDER_LIST_PAGE)
+    await new Promise(r => setTimeout(r, 3000))
+  } catch (e) {
+    console.warn('[ShopeePartner] Portal refresh failed:', e)
+  }
+}
+
+// Điều hướng lại trang order/list để CHÍNH PORTAL tự gọi API của nó — nhưng
+// trang này chỉ gọi get_list_with_pagination khi người dùng bấm nút "Áp dụng"
+// (filter submit), không tự gọi khi vừa load xong. Nên sau khi điều hướng,
+// ta tự tìm và click nút đó trong DOM — vẫn là hành động click thật trong
+// ngữ cảnh trang, không phải tự soạn request.
+async function clickApplyFilterButton(): Promise<boolean> {
+  if (!_pollerWin || _pollerWin.isDestroyed()) return false
+
+  // Lấy toạ độ thật của nút trong viewport
+  const rectJs = `(function(){
+    var btn = document.querySelector('button.shopee-food-btn.shopee-food-btn-primary[type="submit"]');
+    if (!btn) return null;
+    var r = btn.getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  })()`
+
+  let rect: { x: number; y: number } | null = null
+  try {
+    rect = await _pollerWin.webContents.executeJavaScript(rectJs)
+  } catch (e) {
+    console.warn('[ShopeePartner] getBoundingClientRect failed:', e)
+    return false
+  }
+  if (!rect) {
+    console.warn('[ShopeePartner] Apply button not found in DOM')
+    return false
+  }
+
+  const { x, y } = rect
+  const wc = _pollerWin.webContents
+
+  // Gửi input event thật — isTrusted: true ở phía trang web
+  wc.sendInputEvent({ type: 'mouseMove', x, y })
+  await new Promise(r => setTimeout(r, 50))
+  wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 })
+  await new Promise(r => setTimeout(r, 50))
+  wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 })
+
+  console.log('[ShopeePartner] Sent real mouse click at', x, y)
+  return true
+}
+
+// Click 1 dòng shortcut theo đúng text hiển thị — nhanh và đáng tin cậy hơn
+// nhiều so với điều hướng + click ô lịch, dùng cho các range phổ biến.
+async function clickShortcutItem(win: BrowserWindow, label: string): Promise<boolean> {
+  const rectJs = `(function(){
+    var items = document.querySelectorAll('.shopee-food-custom-date-panel-shortcut-item');
+    for (var i = 0; i < items.length; i++) {
+      var txt = items[i].querySelector('div') ? items[i].querySelector('div').textContent.trim() : items[i].textContent.trim();
+      if (txt === ${JSON.stringify(label)}) {
+        var r = items[i].getBoundingClientRect();
+        return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+      }
+    }
+    return null;
+  })()`
+  let rect: { x: number; y: number } | null = null
+  try {
+    rect = await win.webContents.executeJavaScript(rectJs)
+  } catch { return false }
+  if (!rect) {
+    console.warn('[ShopeePartner] Shortcut not found:', label)
+    return false
+  }
+
+  const wc = win.webContents
+  wc.sendInputEvent({ type: 'mouseMove', x: rect.x, y: rect.y })
+  await new Promise(r => setTimeout(r, 40))
+  wc.sendInputEvent({ type: 'mouseDown', x: rect.x, y: rect.y, button: 'left', clickCount: 1 })
+  await new Promise(r => setTimeout(r, 40))
+  wc.sendInputEvent({ type: 'mouseUp', x: rect.x, y: rect.y, button: 'left', clickCount: 1 })
+  await new Promise(r => setTimeout(r, 200))
+  console.log('[ShopeePartner] Clicked shortcut:', label, 'at', rect.x, rect.y)
+  return true
+}
+
+// Xác định label shortcut khớp với range yêu cầu, nếu có
+function matchShortcutLabel(fromDate: string, toDate: string): string | null {
+  const today = vnDateStr(0)
+  const yesterday = vnDateStr(1)
+  const week7 = vnDateStr(6)
+  const days30 = vnDateStr(29)
+
+  if (fromDate === today && toDate === today) return 'Hôm nay'
+  if (fromDate === yesterday && toDate === yesterday) return 'Hôm qua'
+  if (fromDate === week7 && toDate === today) return '7 ngày qua'
+  if (fromDate === days30 && toDate === today) return '30 ngày qua'
+  return null
+}
+
+async function setPortalDateRange(win: BrowserWindow, fromDate: string, toDate: string): Promise<boolean> {
+  // 1. Mở picker
+  const openRectJs = `(function(){
+    var el = document.getElementById('timePeriod');
+    if (!el) return null;
+    var r = el.getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  })()`
+  const openRect: { x: number; y: number } | null = await win.webContents.executeJavaScript(openRectJs).catch(() => null)
+  if (!openRect) { console.warn('[ShopeePartner] Không tìm thấy #timePeriod'); return false }
+
+  const wc = win.webContents
+  wc.sendInputEvent({ type: 'mouseMove', x: openRect.x, y: openRect.y })
+  await new Promise(r => setTimeout(r, 40))
+  wc.sendInputEvent({ type: 'mouseDown', x: openRect.x, y: openRect.y, button: 'left', clickCount: 1 })
+  await new Promise(r => setTimeout(r, 40))
+  wc.sendInputEvent({ type: 'mouseUp', x: openRect.x, y: openRect.y, button: 'left', clickCount: 1 })
+  await new Promise(r => setTimeout(r, 400))
+
+  const panelOpened = await win.webContents.executeJavaScript(
+    `!!document.querySelector('.shopee-food-custom-date-panel')`
+  ).catch(() => false)
+  if (!panelOpened) { console.warn('[ShopeePartner] Popup lịch không mở'); return false }
+
+  // ── Ưu tiên: dùng shortcut nếu range khớp preset có sẵn ──────────────────
+  const shortcutLabel = matchShortcutLabel(fromDate, toDate)
+  if (shortcutLabel) {
+    const clicked = await clickShortcutItem(win, shortcutLabel)
+    if (clicked) {
+      await clickOutsidePopup(win)
+      console.log('[ShopeePartner] Đã set date range qua shortcut:', shortcutLabel)
+      return true
+    }
+    console.warn('[ShopeePartner] Click shortcut thất bại, fallback sang chọn lịch thủ công')
+  }
+
+  // ── Fallback: chọn thủ công qua calendar (giữ nguyên logic cũ) ───────────
+  const fromTs = new Date(fromDate + 'T00:00:00').getTime()
+  const toTs = new Date(toDate + 'T00:00:00').getTime()
+  const nowTs = Date.now()
+
+  const okFrom = await navigateAndClickDate(win, fromDate, fromTs, nowTs)
+  if (!okFrom) { console.warn('[ShopeePartner] Không click được fromDate:', fromDate); return false }
+
+  const okTo = await navigateAndClickDate(win, toDate, toTs, fromTs)
+  if (!okTo) { console.warn('[ShopeePartner] Không click được toDate:', toDate); return false }
+
+  await clickOutsidePopup(win)
+  console.log('[ShopeePartner] Đã set date range qua calendar:', fromDate, '→', toDate)
+  return true
+}
+
+
+
+function vnDateStr(offsetDays = 0): string {
+  const ms = Date.now() + 7 * 60 * 60 * 1000 - offsetDays * 86_400_000
+  return new Date(ms).toISOString().slice(0, 10)
+}
+
+async function waitForSelector(win: BrowserWindow, selector: string, timeoutMs = 8000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const found = await win.webContents.executeJavaScript(
+      `!!document.querySelector(${JSON.stringify(selector)})`
+    ).catch(() => false)
+    if (found) return true
+    await new Promise(r => setTimeout(r, 200))
+  }
+  return false
+}
+const MAX_DATE_SET_RETRIES = 3
+const DATE_MATCH_TOLERANCE_SEC = 3600
+const ORDER_LIST_RESPONSE_TIMEOUT_MS = 25_000 // MỚI: page_size=999 trả về nhiều dữ liệu hơn nên cần chờ lâu hơn hẳn so với page_size=10 trước đây
+
+async function triggerPortalOrderFetch(fromDate?: string, toDate?: string): Promise<void> {
+  if (!_pollerWin || _pollerWin.isDestroyed()) return
+
+  const expectedFromTs = fromDate
+    ? Math.floor(new Date(fromDate + 'T00:00:00+07:00').getTime() / 1000)
+    : null
+  const expectedToTs = toDate
+    ? Math.floor(new Date(toDate + 'T23:59:59+07:00').getTime() / 1000)
+    : null
+
+  const currentUrl = _pollerWin.webContents.getURL()
+  const alreadyOnOrderPage = currentUrl.startsWith(SPF_ORDER_LIST_PAGE)
+
+  for (let attempt = 1; attempt <= MAX_DATE_SET_RETRIES; attempt++) {
+    const before = _lastInterceptedAt
+    _lastRequestRange = null
+
+    // Chỉ load lại trang nếu chưa ở đúng trang, hoặc đây là lần retry sau thất bại
+    // (retry thì load lại để đảm bảo trạng thái sạch, tránh kẹt DOM cũ).
+    if (!alreadyOnOrderPage || attempt > 1) {
+      await _pollerWin.loadURL(SPF_ORDER_LIST_PAGE).catch((e) => {
+        console.warn('[ShopeePartner] loadURL failed:', e)
+      })
+    }
+
+    const ready = await waitForSelector(_pollerWin, 'button.shopee-food-btn.shopee-food-btn-primary[type="submit"]', 10000)
+    if (!ready) {
+      console.warn(`[ShopeePartner] Apply button never appeared (lần ${attempt})`)
+      continue
+    }
+
+    if (fromDate && toDate) {
+      const ok = await setPortalDateRange(_pollerWin, fromDate, toDate)
+      if (!ok) console.warn(`[ShopeePartner] Set date-range thất bại (lần ${attempt})`)
+    }
+
+    for (let a = 0; a < 3; a++) {
+      const clicked = await clickApplyFilterButton()
+      if (clicked) break
+      await new Promise(r => setTimeout(r, 500))
+    }
+
+    const deadline = Date.now() + ORDER_LIST_RESPONSE_TIMEOUT_MS
+    while (Date.now() < deadline) {
+      if (_lastInterceptedAt > before) break
+      await new Promise(r => setTimeout(r, 300))
+    }
+
+    if (_lastInterceptedAt <= before) {
+      console.warn(`[ShopeePartner] Timed out chờ response (lần ${attempt})`)
+      continue
+    }
+
+    if (expectedFromTs === null || expectedToTs === null) return
+
+    if (
+      _lastRequestRange &&
+      Math.abs(_lastRequestRange.from_time - expectedFromTs) <= DATE_MATCH_TOLERANCE_SEC &&
+      Math.abs(_lastRequestRange.to_time - expectedToTs) <= DATE_MATCH_TOLERANCE_SEC
+    ) {
+      return
+    }
+
+    console.warn(`[ShopeePartner] Request range KHÔNG khớp (lần ${attempt}/${MAX_DATE_SET_RETRIES})`)
+  }
+
+  console.error('[ShopeePartner] Đã thử', MAX_DATE_SET_RETRIES, 'lần vẫn thất bại')
+}
 function sessionFetch(
   url: string,
   method = 'GET',
@@ -200,13 +935,6 @@ function sessionFetch(
     const req = net.request({ url, method, session: ses })
     const hdrs = buildHeaders()
     if (bodyObj) hdrs['content-type'] = 'application/json'
-
-    if (_lastXsap && Date.now() - _lastXsap.capturedAt < 60_000) {
-      hdrs['x-sap-ri'] = _lastXsap.ri
-      hdrs['x-sap-sec'] = _lastXsap.sec
-      console.log('[ShopeePartner] x-sap age:', Math.round((Date.now() - _lastXsap.capturedAt) / 1000) + 's')
-    }
-
     for (const [k, v] of Object.entries(hdrs)) req.setHeader(k, v)
     req.on('response', (res) => {
       const chunks: Buffer[] = []
@@ -223,200 +951,219 @@ function sessionFetch(
   })
 }
 
-// Runs fetch() from inside the portal window — browser handles CORS + cookies, no x-sap needed
-async function probeFromPortalContext(url: string, body: Record<string, unknown>): Promise<{ status: number; data: unknown } | null> {
-  if (!_pollerWin || _pollerWin.isDestroyed()) return null
-  try {
-    const js = `(async()=>{
-      try{
-        const r=await fetch(${JSON.stringify(url)},{method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify(${JSON.stringify(body)})});
-        const d=await r.json().catch(()=>null);
-        return JSON.stringify({status:r.status,data:d});
-      }catch(e){return JSON.stringify({error:String(e)});}
-    })()`
-    const raw = await _pollerWin.webContents.executeJavaScript(js) as string
-    return JSON.parse(raw) as { status: number; data: unknown }
-  } catch { return null }
+// ─── Order list ─────────────────────────────────────────────────────────────
+// fromDate/toDate hiện không dùng để lọc trực tiếp (portal tự quyết định range
+// theo tab đang mở) — giữ tham số để tương thích API cũ; lọc theo ngày nếu cần
+// có thể làm ở phía renderer dựa trên order_time trả về.
+// Bỏ toàn bộ triggerPortalOrderFetch() / clickApplyFilterButton() / CDP intercept
+// cho luồng lấy order-list. Gọi thẳng như fetchSpfRestaurantList() đã làm thành công.
+let _fetchQueue: Promise<void> = Promise.resolve()
+
+function withPortalLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = _fetchQueue.then(fn, fn)
+  _fetchQueue = run.then(() => undefined, () => undefined)
+  return run
 }
 
+
+// Tìm nút prev/next đang HIỂN THỊ (không bị visibility:hidden) — vì layout có
+// 2 cặp nút, chỉ 1 cặp active tuỳ theo panel trái/phải.
+async function clickVisibleNavButton(win: BrowserWindow, direction: 'prev' | 'next'): Promise<boolean> {
+  const cls = direction === 'prev' ? 'shopee-food-picker-header-prev-btn' : 'shopee-food-picker-header-next-btn'
+  const rectJs = `(function(){
+    var btns = document.querySelectorAll('.${cls}');
+    for (var i = 0; i < btns.length; i++) {
+      var style = btns[i].getAttribute('style') || '';
+      if (style.indexOf('hidden') === -1) {
+        var r = btns[i].getBoundingClientRect();
+        return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+      }
+    }
+    return null;
+  })()`
+  let rect: { x: number; y: number } | null = null
+  try {
+    rect = await win.webContents.executeJavaScript(rectJs)
+  } catch { return false }
+  if (!rect) return false
+
+  const wc = win.webContents
+  wc.sendInputEvent({ type: 'mouseMove', x: rect.x, y: rect.y })
+  await new Promise(r => setTimeout(r, 40))
+  wc.sendInputEvent({ type: 'mouseDown', x: rect.x, y: rect.y, button: 'left', clickCount: 1 })
+  await new Promise(r => setTimeout(r, 40))
+  wc.sendInputEvent({ type: 'mouseUp', x: rect.x, y: rect.y, button: 'left', clickCount: 1 })
+  await new Promise(r => setTimeout(r, 150))
+  return true
+}
+
+// Kiểm tra cell có title=isoDate đã tồn tại trên DOM chưa (bất kể panel trái/phải)
+async function isDateCellVisible(win: BrowserWindow, isoDate: string): Promise<boolean> {
+  const js = `!!document.querySelector('td[title="${isoDate}"]')`
+  try {
+    return await win.webContents.executeJavaScript(js)
+  } catch { return false }
+}
+
+// Click vào cell theo title — click vào .shopee-food-picker-cell-inner bên trong td
+async function clickDateCellByTitle(win: BrowserWindow, isoDate: string, preferRightPanel = false): Promise<boolean> {
+  const rectJs = `(function(){
+    var tds = document.querySelectorAll('td[title="${isoDate}"]');
+    if (tds.length === 0) return null;
+    var target = tds[0];
+    if (${preferRightPanel} && tds.length > 1) {
+      // Panel phải là panel thứ 2 trong .shopee-food-picker-panels
+      var panels = document.querySelectorAll('.shopee-food-picker-panel');
+      for (var i = 0; i < tds.length; i++) {
+        if (panels[1] && panels[1].contains(tds[i])) { target = tds[i]; break; }
+      }
+    }
+    var inner = target.querySelector('.shopee-food-picker-cell-inner') || target;
+    var r = inner.getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  })()`
+  let rect: { x: number; y: number } | null = null
+  try {
+    rect = await win.webContents.executeJavaScript(rectJs)
+  } catch { return false }
+  if (!rect) return false
+
+  const wc = win.webContents
+  wc.sendInputEvent({ type: 'mouseMove', x: rect.x, y: rect.y })
+  await new Promise(r => setTimeout(r, 40))
+  wc.sendInputEvent({ type: 'mouseDown', x: rect.x, y: rect.y, button: 'left', clickCount: 1 })
+  await new Promise(r => setTimeout(r, 40))
+  wc.sendInputEvent({ type: 'mouseUp', x: rect.x, y: rect.y, button: 'left', clickCount: 1 })
+  await new Promise(r => setTimeout(r, 200))
+  return true
+}
+
+// Điều hướng lịch (bấm prev/next liên tục) cho tới khi cell isoDate xuất hiện trên DOM,
+// rồi click vào nó. Giới hạn 36 lần bấm (~3 năm) để tránh vòng lặp vô hạn nếu lệch hướng.
+async function navigateAndClickDate(win: BrowserWindow, isoDate: string, targetTs: number, refTs: number): Promise<boolean> {
+  if (await isDateCellVisible(win, isoDate)) {
+    return clickDateCellByTitle(win, isoDate)
+  }
+  const direction: 'prev' | 'next' = targetTs < refTs ? 'prev' : 'next'
+  for (let i = 0; i < 36; i++) {
+    const moved = await clickVisibleNavButton(win, direction)
+    if (!moved) break
+    if (await isDateCellVisible(win, isoDate)) {
+      return clickDateCellByTitle(win, isoDate)
+    }
+  }
+  return false
+}
+
+// Click ra ngoài popup để đóng nó (không có nút confirm riêng trong panel này)
+async function clickOutsidePopup(win: BrowserWindow) {
+  const rectJs = `(function(){
+    var label = Array.from(document.querySelectorAll('div, span')).find(
+      el => el.textContent.trim() === 'Tên quán'
+    );
+    if (!label) return { x: 50, y: 50 };
+    var r = label.getBoundingClientRect();
+    return { x: r.x, y: r.y };
+  })()`
+  const rect: { x: number; y: number } = await win.webContents.executeJavaScript(rectJs).catch(() => ({ x: 50, y: 50 }))
+  const wc = win.webContents
+  wc.sendInputEvent({ type: 'mouseMove', x: rect.x, y: rect.y })
+  await new Promise(r => setTimeout(r, 40))
+  wc.sendInputEvent({ type: 'mouseDown', x: rect.x, y: rect.y, button: 'left', clickCount: 1 })
+  await new Promise(r => setTimeout(r, 40))
+  wc.sendInputEvent({ type: 'mouseUp', x: rect.x, y: rect.y, button: 'left', clickCount: 1 })
+  await new Promise(r => setTimeout(r, 200))
+}
+
+
+export async function fetchSpfOrderList(
+  fromDate: string,
+  toDate: string,
+): Promise<{ ok: boolean; orders: SpfOrderFull[]; totalCount: number; resultCount: number; error?: string }> {
+  const headers = getActiveHeaders()
+  if (!headers) return { ok: false, orders: [], totalCount: 0, resultCount: 0, error: 'Chưa kết nối ShopeeFood Partner' }
+
+  const restaurantId = getRestaurantId()
+  if (!restaurantId) return { ok: false, orders: [], totalCount: 0, resultCount: 0, error: 'Chưa có Restaurant ID' }
+
+  if (!_pollerWin || _pollerWin.isDestroyed()) {
+    return { ok: false, orders: [], totalCount: 0, resultCount: 0, error: 'Cửa sổ portal chưa sẵn sàng' }
+  }
+
+  const fromTs = Math.floor(new Date(fromDate + 'T00:00:00+07:00').getTime() / 1000)
+  const toTs = Math.floor(new Date(toDate + 'T23:59:59+07:00').getTime() / 1000)
+
+  // ─── Trong mốc 30 ngày → dùng cache default-range, filter bằng JS, KHÔNG trigger portal event ───
+  if (isWithinDefaultWindow(fromTs)) {
+    await refreshDefaultRangeCache()
+    const orders = _defaultRangeOrders.filter(o => o.order_time >= fromTs && o.order_time <= toTs)
+    return { ok: true, orders, totalCount: orders.length, resultCount: orders.length }
+  }
+
+  // ─── Ngoài mốc 30 ngày → data không có trong default cache, phải trigger filter thật trên portal ───
+  const cacheKey = rangeCacheKey(fromDate, toDate)
+  const cached = _rangeCache.get(cacheKey)
+  if (cached && Date.now() - cached.at < RANGE_CACHE_TTL_MS) {
+    return { ok: true, orders: cached.orders, totalCount: cached.orders.length, resultCount: cached.orders.length }
+  }
+
+  await withPortalLock(() => triggerPortalOrderFetch(fromDate, toDate))
+
+  if (!_lastInterceptedOrderList) {
+    return {
+      ok: false, orders: [], totalCount: 0, resultCount: 0,
+      error: 'Portal không trả về dữ liệu — có thể session đã hết hạn, cần đăng nhập lại',
+    }
+  }
+
+  const rangeMismatch = !_lastRequestRange ||
+    Math.abs(_lastRequestRange.from_time - fromTs) > DATE_MATCH_TOLERANCE_SEC ||
+    Math.abs(_lastRequestRange.to_time - toTs) > DATE_MATCH_TOLERANCE_SEC
+
+  const orders = _lastInterceptedOrderList.filter(o => o.order_time >= fromTs && o.order_time <= toTs)
+
+  if (rangeMismatch && orders.length === 0) {
+    return {
+      ok: false, orders: [], totalCount: 0, resultCount: 0,
+      error: 'Không set được filter ngày trên portal sau nhiều lần thử — vui lòng bấm Tải lại',
+    }
+  }
+
+  _rangeCache.set(cacheKey, { orders, at: Date.now() })
+  return { ok: true, orders, totalCount: orders.length, resultCount: orders.length }
+}
 // ─── Polling ──────────────────────────────────────────────────────────────────
-
-function getRestaurantId(): string | null {
-  return cachedRestaurantId ?? getConfig().restaurantId
-    ?? cachedEntityId ?? getConfig().entityId ?? null
-}
-
-// Candidate endpoints tried in order; first code:0 response wins and is cached
-const ORDER_CANDIDATES: Array<{
-  label: string
-  build: (rid: string, eid: string, date: string) => { url: string; method: 'GET' | 'POST'; body?: unknown }
-}> = [
-  {
-    label: 'order/get_order_list rid POST',
-    build: (rid, _, date) => ({
-      url: `${SPF_API}/api/v5/seller/store/order/get_order_list`,
-      method: 'POST',
-      body: { restaurant_id: Number(rid), from_date: date, to_date: date, page: 1, page_size: 50 },
-    }),
-  },
-  {
-    label: 'order/get_order_list eid POST',
-    build: (_, eid, date) => ({
-      url: `${SPF_API}/api/v5/seller/store/order/get_order_list`,
-      method: 'POST',
-      body: { restaurant_id: Number(eid), from_date: date, to_date: date, page: 1, page_size: 50 },
-    }),
-  },
-  {
-    label: 'order/get_orders rid POST',
-    build: (rid) => ({
-      url: `${SPF_API}/api/v5/seller/store/order/get_orders`,
-      method: 'POST',
-      body: { restaurant_id: Number(rid), page: 1, page_size: 50 },
-    }),
-  },
-  {
-    label: 'store/get_new_order rid POST',
-    build: (rid) => ({
-      url: `${SPF_API}/api/v5/seller/store/order/get_new_order`,
-      method: 'POST',
-      body: { restaurant_id: Number(rid) },
-    }),
-  },
-  {
-    label: 'store/get_new_order eid POST',
-    build: (_, eid) => ({
-      url: `${SPF_API}/api/v5/seller/store/order/get_new_order`,
-      method: 'POST',
-      body: { restaurant_id: Number(eid) },
-    }),
-  },
-  {
-    label: 'report/get_order_revenue rid GET',
-    build: (rid, _, date) => ({
-      url: `${SPF_API}/api/v5/seller/store/report/get_order_revenue?from_date=${date}&restaurant_id=${rid}&to_date=${date}`,
-      method: 'GET',
-    }),
-  },
-  {
-    label: 'airpay_transactions eid GET',
-    build: (_, eid, date) => ({
-      url: `${SPF_API}/api/v5/seller/store/report/get_airpay_transactions?from_date=${date}&restaurant_id=${eid}&to_date=${date}`,
-      method: 'GET',
-    }),
-  },
-]
-
-function extractOrderCodes(data: unknown): string[] {
-  if (!data || typeof data !== 'object') return []
-  const d = data as Record<string, unknown>
-  // Try common field names for the order array
-  const list = (d['orders'] ?? d['order_list'] ?? d['data'] ?? d['items'] ?? []) as SpfOrder[]
-  if (!Array.isArray(list)) return []
-  return list.map((o: SpfOrder) => o.order_code ?? o.code ?? String(o.order_id ?? o.id ?? '')).filter(Boolean)
-}
-
-// AR category with unread items (observed: cate33=2)
-const AR_CATE_ORDER = 33
-let _lastArUnreadCount = -1   // -1 = first run, always probe
-let _arProbeComplete = false   // true once we've found the AR list method name or exhausted all guesses
-
-async function pollTransactions(): Promise<string[]> {
-  // Step 1: GetArUnreadCount (POST — GET returns 405)
-  let orderCateCount = 0
-  try {
-    const countRes = await sessionFetch(
-      `${PARTNER_API}/nb/mss/web-api/PartnerNotiServer/GetArUnreadCount`,
-      'POST', {},
-    )
-    if (countRes.ok) {
-      const body = JSON.parse(countRes.body) as {
-        errorCode: number
-        data?: { unreadCountList?: Array<{ actionCate: number; unreadCount: number }> }
-      }
-      if (body.errorCode === 0) {
-        const list = body.data?.unreadCountList ?? []
-        console.log('[ShopeePartner] AR counts:', list.map(i => `cate${i.actionCate}=${i.unreadCount}`).join(' '))
-        orderCateCount = list.find(i => i.actionCate === AR_CATE_ORDER)?.unreadCount ?? 0
-      }
-    }
-  } catch (e) {
-    console.warn('[ShopeePartner] GetArUnreadCount error:', e)
-  }
-
-  // Skip probing if count unchanged
-  if (orderCateCount === _lastArUnreadCount && _lastArUnreadCount !== -1 && _arProbeComplete) {
-    return _interceptedOrders ?? []
-  }
-  _lastArUnreadCount = orderCateCount
-
-  // Step 2: try AR list method names via portal context (browser handles CORS/cookies)
-  const arMethods = [
-    'GetArNotificationList', 'GetArRecordList', 'GetArList', 'GetArItems',
-    'GetArRecord', 'GetArNotification', 'ListAr', 'GetArActionList',
-  ]
-  for (const method of arMethods) {
-    const url = `${PARTNER_API}/nb/mss/web-api/PartnerNotiServer/${method}`
-    const r = await probeFromPortalContext(url, { actionCate: AR_CATE_ORDER, pageNum: 1, pageSize: 50 })
-    if (r) {
-      console.log(`[ShopeePartner] portal:${method}: HTTP ${r.status} | ${JSON.stringify(r.data).slice(0, 400)}`)
-      if (r.status === 200) {
-        const d = r.data as { error_code?: number; errorCode?: number; data?: unknown }
-        const errCode = d?.error_code ?? d?.errorCode ?? -1
-        if (errCode === 0) {
-          const codes = extractOrderCodes(d?.data)
-          console.log('[ShopeePartner] portal AR list from', method, '→', codes.length, 'codes')
-          _interceptedOrders = codes
-          _arProbeComplete = true
-          return codes
-        }
-      }
-    }
-  }
-
-  // Step 3: try GetTransactionList with date range via portal context
-  const ms = Date.now() + 7 * 60 * 60 * 1000
-  const today = new Date(ms).toISOString().slice(0, 10)
-  const startTs = Math.floor(new Date(today + 'T00:00:00+07:00').getTime() / 1000)
-  const endTs = Math.floor(new Date(today + 'T23:59:59+07:00').getTime() / 1000)
-  const txnUrl = `${PARTNER_API}/nb/mss/web-api/PartnerTransactionServer/GetTransactionList`
-  for (const body of [
-    { start_time: startTs, end_time: endTs },
-    { startTime: startTs, endTime: endTs },
-    { from_date: today, to_date: today },
-  ]) {
-    const r = await probeFromPortalContext(txnUrl, body)
-    if (r) {
-      console.log(`[ShopeePartner] portal:GetTransactionList ${JSON.stringify(body)}: HTTP ${r.status} | ${JSON.stringify(r.data).slice(0, 400)}`)
-      if (r.status === 200) {
-        const d = r.data as { errorCode?: number; data?: unknown }
-        if ((d?.errorCode ?? -1) === 0 && d?.data != null) {
-          const codes = extractOrderCodes(d.data)
-          if (codes.length > 0) {
-            _interceptedOrders = codes
-            _arProbeComplete = true
-            return codes
-          }
-        }
-      }
-    }
-  }
-
-  _arProbeComplete = true
-  return _interceptedOrders ?? []
-}
+let _pollBusy = false
 
 async function runPoll() {
-  const headers = getActiveHeaders()
-  if (!headers) return
-
-  if (!getRestaurantId()) return
-
+  if (_pollBusy) {
+    console.log('[ShopeePartner] Poll tick skipped — previous poll still running')
+    return
+  }
+  _pollBusy = true
   try {
-    const codes = await pollTransactions()
+    const headers = getActiveHeaders()
+    if (!headers) return
+    if (!getRestaurantId()) return
+
+    const today = (() => {
+      const ms = Date.now() + 7 * 60 * 60 * 1000
+      return new Date(ms).toISOString().slice(0, 10)
+    })()
+    const result = await fetchSpfOrderList(today, today)
+
+    if (!result.ok) {
+      markPollResult(false, result.error)
+      if (_consecutiveFailures >= MAX_CONSECUTIVE_FAILURES_BEFORE_REAUTH_FLAG) {
+        console.warn('[ShopeePartner] Too many consecutive failures — likely needs re-login')
+      }
+      return
+    }
+
+    markPollResult(true)
+    const codes = result.orders.map(o => o.code)
 
     if (!seeded) {
-      // First run: seed the known set so existing orders don't fire as "new"
       codes.forEach(c => lastKnownOrderCodes.add(c))
       seeded = true
       console.log(`[ShopeePartner] Seeded ${lastKnownOrderCodes.size} existing order codes`)
@@ -430,7 +1177,10 @@ async function runPoll() {
       _onNewOrderCb?.(code)
     }
   } catch (err) {
+    markPollResult(false, err instanceof Error ? err.message : String(err))
     console.error('[ShopeePartner] Poll error:', err)
+  } finally {
+    _pollBusy = false
   }
 }
 
@@ -451,10 +1201,7 @@ export function startSpfPartnerPolling() {
     return
   }
 
-  // Polling requires entityId (store_id used in transactions endpoint)
-  if (!cachedEntityId) {
-    // Saved session has headers but no restaurant_id (old session before fix)
-    // Migrate by probing the partner info endpoint
+  if (!cachedRestaurantId) {
     console.log('[ShopeePartner] No restaurantId saved — probing partner API to migrate...')
     void fetchSpfRestaurantList().then(restaurants => {
       if (restaurants.length > 0) {
@@ -463,40 +1210,32 @@ export function startSpfPartnerPolling() {
         cachedRestaurantName = r.name
         saveConfig({ restaurantId: cachedRestaurantId, restaurantName: r.name })
         console.log('[ShopeePartner] Migrated restaurantId:', cachedRestaurantId)
-        if (!pollTimer) {
-          void initPollerWin().then(() => {
-            if (_pollerWin && !_pollerWin.isDestroyed()) {
-              _lastPortalNavMs = Date.now()
-              _pollerWin.loadURL('https://partner.food.shopee.vn/').catch(() => {})
-            }
-          })
-          void runPoll()
-          pollTimer = setInterval(() => void runPoll(), getPollIntervalMs())
-          console.log(`[ShopeePartner] Polling started after migration, interval=${getPollIntervalMs() / 1000}s`)
-        }
       } else {
         console.warn('[ShopeePartner] Migration failed — still no restaurantId')
       }
+      beginPolling()
     })
     return
   }
 
-  // Start hidden portal window for CDP interception of the portal's own API calls
-  void initPollerWin().then(() => {
-    // Navigate to orders page immediately so the portal makes its first API calls
-    if (_pollerWin && !_pollerWin.isDestroyed()) {
-      _lastPortalNavMs = Date.now()
-      const url = 'https://partner.food.shopee.vn/'
-      console.log('[ShopeePartner] Initial portal navigation:', url)
-      _pollerWin.loadURL(url).catch(() => {})
-    }
-  })
-
-  void runPoll()
-  pollTimer = setInterval(() => void runPoll(), getPollIntervalMs())
-  console.log(`[ShopeePartner] Polling started, interval=${getPollIntervalMs() / 1000}s`)
+  beginPolling()
 }
 
+function beginPolling() {
+  if (pollTimer) return
+
+  void initPollerWin().then(async () => {
+    if (_pollerWin && !_pollerWin.isDestroyed()) {
+      console.log('[ShopeePartner] Initial portal navigation:', SPF_ORDER_LIST_PAGE)
+      const result = await withTimeout(refreshDefaultRangeCache(true), 25_000, 'initial refreshDefaultRangeCache')
+      if (result === null) await forceRecreatePollerWin()
+      console.log('[ShopeePartner] Initial default-range orders:', _defaultRangeOrders.length)
+    }
+    void runPoll()
+    pollTimer = setInterval(() => void runPoll(), getPollIntervalMs())
+    console.log(`[ShopeePartner] Polling started, interval=${getPollIntervalMs() / 1000}s`)
+  })
+}
 export function stopSpfPartnerPolling() {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
 }
@@ -514,11 +1253,16 @@ export function resetSpfPartnerSession() {
   cachedEntityId = null
   lastKnownOrderCodes.clear()
   seeded = false
-  _workingEndpointIdx = null
-  _interceptedOrders = null
-  _lastPortalNavMs = 0
-  _lastArUnreadCount = -1
-  _arProbeComplete = false
+  _lastInterceptedOrderList = null
+  _lastInterceptedAt = 0
+  _rangeCache.clear()
+  _defaultRangeOrders = []
+  _defaultRangeFetchedAt = 0
+  _consecutiveFailures = 0
+  _lastPollOk = true
+  _lastPollError = null
+  _lastSuccessfulPollAt = null
+  _lastPortalReloadMs = 0
   if (_pollerWin && !_pollerWin.isDestroyed()) { _pollerWin.destroy(); _pollerWin = null }
   _pollerReady = null
   writeSubConfig('spfPartnerSetting', {})
@@ -532,11 +1276,16 @@ export function getSpfPartnerStatus(): SpfPartnerStatus {
   return {
     connected: !!getActiveHeaders() && !!(rid ?? eid),
     polling: pollTimer !== null,
-    restaurantId: rid,                           // display: real restaurant_id
+    restaurantId: rid,
     restaurantName: cachedRestaurantName ?? cfg.restaurantName ?? null,
     entityId: eid,
     savedAt: cfg.savedAt ?? null,
     pollIntervalMs: getPollIntervalMs(),
+    lastPollOk: _lastPollOk,
+    lastPollError: _lastPollError,
+    lastSuccessfulPollAt: _lastSuccessfulPollAt ? new Date(_lastSuccessfulPollAt).toISOString() : null,
+    consecutiveFailures: _consecutiveFailures,
+    needsReauth: _consecutiveFailures >= MAX_CONSECUTIVE_FAILURES_BEFORE_REAUTH_FLAG,
   }
 }
 
@@ -569,13 +1318,13 @@ export async function saveSpfPartnerSession(
 ): Promise<void> {
   cachedHeaders = headersMap
 
-  const entityId = headersMap['x-foody-entity-id'] ?? headersMap['X-Foody-Entity-Id'] ?? null
+  const entityId = headersMap['x-foody-entity-id'] ?? headersMap['X-Foody-Entity-Id']
+    ?? headersMap['x-foody-entity-mid'] ?? headersMap['X-Foody-Entity-Mid'] ?? null
   if (entityId) cachedEntityId = entityId
 
   if (restaurantId) cachedRestaurantId = restaurantId
   if (restaurantName) cachedRestaurantName = restaurantName
 
-  // If we still don't have the real restaurant_id (CDP didn't capture it), probe the API
   if (!cachedRestaurantId || !cachedRestaurantName) {
     const restaurants = await fetchSpfRestaurantList()
     if (restaurants.length > 0) {
@@ -599,7 +1348,7 @@ export async function saveSpfPartnerSession(
   console.log('[ShopeePartner] Session saved — restaurantId:', cachedRestaurantId, 'entityId:', cachedEntityId, 'name:', cachedRestaurantName)
 }
 
-// ─── Data fetching ────────────────────────────────────────────────────────────
+// ─── Transactions (giữ nguyên — dùng sessionFetch trên api.partner.shopee.vn, domain này có CORS) ─
 
 export async function fetchSpfTransactions(
   _restaurantId: string,
@@ -617,7 +1366,6 @@ export async function fetchSpfTransactions(
   const endTs = Math.floor(new Date(toDate + 'T23:59:59+07:00').getTime() / 1000)
   const txnUrl = `${PARTNER_API}/nb/mss/web-api/PartnerTransactionServer/GetTransactionList`
 
-  // Try api.partner.shopee.vn with various date param formats (no x-sap tokens needed)
   const paramVariants: Record<string, unknown>[] = [
     { start_time: startTs, end_time: endTs },
     { startTime: startTs, endTime: endTs },
@@ -634,7 +1382,6 @@ export async function fetchSpfTransactions(
         errorCode: number; errorMsg?: string
         data?: { list?: unknown[]; total?: number; total_amount?: number } | null
       }
-      console.log('[ShopeePartner] fetchSpfTransactions', JSON.stringify(params), '→ errorCode:', body.errorCode, 'data:', JSON.stringify(body.data).slice(0, 200))
       if (body.errorCode !== 0) continue
 
       const list = body.data?.list ?? []
@@ -661,7 +1408,6 @@ export async function fetchSpfTransactions(
     } catch { /* try next variant */ }
   }
 
-  // All variants returned empty — no transactions for this period
   return {
     ok: true,
     data: { total_amount: { value: 0, text: '0', unit: 'VND' }, transactions: [] },

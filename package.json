@@ -4,7 +4,7 @@
   "private": true,
   "description": "UjCha monorepo — apps (web, api, admin,pos, delivery …) và shared packages",
   "scripts": {
-    "dev": "turbo run dev --filter=!ujcha-delivery --filter=!ujcha --parallel",
+    "dev": "turbo run dev --filter=!ujcha-delivery --filter=!ujcha --filter=!ujcha-pos --parallel",
     "dev:web": "turbo dev --filter=web",
     "dev:api": "turbo dev --filter=api",
     "dev:admin": "turbo dev --filter=web-admin",

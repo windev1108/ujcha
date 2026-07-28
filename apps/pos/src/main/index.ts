@@ -3,7 +3,7 @@ import { join } from 'path'
 import { readConfig, writeConfig, readSubConfig, writeSubConfig } from '../renderer/src/store/config-store'
 import { connectedPrinters, registerPrinterHandlers } from '../renderer/src/lib/printer-handler'
 import { getGrabStatus, connectGrabByCredentials, syncGrabSession, saveGrabAuthHeaders, resetGrabSession, startGrabPolling, stopGrabPolling, resumeGrabPolling, fetchGrabOrderList, fetchGrabOrderDetailById, fetchGrabPreparingOrderList, fetchGrabLiveOrders, markGrabOrderReady, setGrabMerchantId, syncGrabRevenueSummary, applyPollInterval, startDailySyncQueue, setOnNewOrderCallback } from './grab-poller'
-import { getSpfPartnerStatus, saveSpfPartnerSession, resetSpfPartnerSession, startSpfPartnerPolling, stopSpfPartnerPolling, resumeSpfPartnerPolling, fetchSpfTransactions, applySpfPollInterval, setOnNewSpfOrderCallback, fetchSpfRestaurantList } from './shopee-partner-poller'
+import { getSpfPartnerStatus, saveSpfPartnerSession, resetSpfPartnerSession, startSpfPartnerPolling, stopSpfPartnerPolling, resumeSpfPartnerPolling, fetchSpfTransactions, applySpfPollInterval, setOnNewSpfOrderCallback, fetchSpfRestaurantList, fetchSpfOrderList, fetchSpfOrderDetailByCode, adoptPollerWindow, fetchSpfOrderListPage } from './shopee-partner-poller'
 import { registerAiHandlers } from './ai-agent/registerHandlers'
 import { setupUpdater, registerUpdaterHandlers } from './updater'
 import { readFileSync } from 'fs'
@@ -556,13 +556,24 @@ ipcMain.handle('spfPartner:webLogin', () => {
           win.close(); return
         }
 
-        try { win.webContents.debugger.detach() } catch { /* ignore */ }
+        if (Object.keys(headersMap).length === 0) {
+          try { win.webContents.debugger.detach() } catch { /* ignore */ }
+          settle({ ok: false, error: 'Không bắt được auth header — bạn đã đăng nhập và chọn nhà hàng chưa?' })
+          win.close(); return
+        }
 
         const restaurantId = capturedRestaurantId ?? undefined
         const restaurantName = capturedRestaurantName ?? undefined
         await saveSpfPartnerSession(headersMap, restaurantId, restaurantName)
+
+        // KHÔNG đóng cửa sổ nữa — biến nó thành cửa sổ polling luôn, giữ nguyên
+        // session/cookie thật đã đăng nhập, tránh phải mở cửa sổ ẩn mới từ đầu.
+        // (adoptPollerWindow tự gỡ debugger listener cũ và gắn lại listener chuẩn
+        // cho việc bắt đơn hàng — không cần tự detach debugger ở đây nữa.)
+        adoptPollerWindow(win)
+        win.setPosition(-3000, -3000)
+        win.setSkipTaskbar(true)
         resumeSpfPartnerPolling()
-        win.close()
         settle({ ok: true, restaurantId })
       } catch { /* window may not be ready */ }
     }, 1000)
@@ -574,6 +585,13 @@ ipcMain.handle('spfPartner:webLogin', () => {
     })
   })
 })
+
+ipcMain.handle('spfPartner:listOrdersPage', (_e, fromDate: string, toDate: string, pageNum: number, pageSize: number) =>
+  fetchSpfOrderListPage(fromDate, toDate, pageNum, pageSize))
+
+ipcMain.handle('spfPartner:listOrders', (_e, fromDate: string, toDate: string) =>
+  fetchSpfOrderList(fromDate, toDate))
+ipcMain.handle('spfPartner:getOrder', (_e, code: string) => fetchSpfOrderDetailByCode(code))
 
 ipcMain.handle('font:getBase64', () => {
   try {

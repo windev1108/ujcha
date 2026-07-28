@@ -15,6 +15,7 @@ import type { BillConfig, LabelConfig } from '../../../preload'
 import type { GrabFull } from '@/lib/grab-print'
 import { GRAB_STATUS_COLOR, GRAB_STATUS_DOT, GRAB_STATUS_LABEL, QUICK_DATES, STATUS_COLOR, STATUS_DOT, STATUS_LABEL } from '@/lib/constants'
 import GrabOrderDetailModal from './GrabOrderDetailModal'
+import SpfOrderDetailModal, { SpfOrderFull, statusInfo } from './SpfOrderDetailModal'
 
 // ─── Vietnam timezone helpers ─────────────────────────────────────────────────
 
@@ -208,6 +209,45 @@ export function ExternalOrdersModal({
   const [spfTo, setSpfTo] = useState(() => vnDateStr(0))
   const [spfQuick, setSpfQuick] = useState<'today' | 'yesterday' | 'week' | 'custom'>('today')
 
+
+  const [spfOrders, setSpfOrders] = useState<SpfOrderFull[]>([])
+  const [spfOrdersLoading, setSpfOrdersLoading] = useState(false)
+  const [spfOrdersError, setSpfOrdersError] = useState<string | null>(null)
+  const [spfDetail, setSpfDetail] = useState<{ code: string; data: SpfOrderFull | null; loading: boolean } | null>(null)
+
+
+  const [spfPageNum, setSpfPageNum] = useState(1)
+  const [spfPageSize, setSpfPageSize] = useState(10)
+  const [spfTotalCount, setSpfTotalCount] = useState(0)
+
+  const loadSpfOrders = useCallback(async (from: string, to: string, pageNum = 1, pageSize = spfPageSize) => {
+    setSpfOrdersLoading(true)
+    setSpfOrdersError(null)
+    try {
+      const result = await (grabAPI().spfPartner as any).listOrdersPage(from, to, pageNum, pageSize)
+      if (result.ok) {
+        setSpfOrders([...result.orders].sort((a: SpfOrderFull, b: SpfOrderFull) => b.order_time - a.order_time))
+        setSpfTotalCount(result.totalCount)
+        setSpfPageNum(result.pageNum)
+        setSpfPageSize(result.pageSize)
+      } else {
+        setSpfOrdersError(result.error ?? 'Lỗi không xác định')
+      }
+    } catch (e) { setSpfOrdersError(String(e)) }
+    finally { setSpfOrdersLoading(false) }
+  }, [spfPageSize])
+
+
+  const openSpfDetail = useCallback(async (code: string) => {
+    setSpfDetail({ code, data: null, loading: true })
+    try {
+      const result = await grabAPI().spfPartner.getOrder(code)
+      setSpfDetail({ code, data: result.ok ? (result.order as unknown as SpfOrderFull ?? null) : null, loading: false })
+    } catch {
+      setSpfDetail({ code, data: null, loading: false })
+    }
+  }, [])
+
   const loadSpfTransactions = useCallback(async (from: string, to: string, rid?: string) => {
     const restaurantId = rid ?? spfRestaurantId
     if (!restaurantId) return
@@ -357,11 +397,12 @@ export function ExternalOrdersModal({
             const today = vnDateStr(0)
             setSpfFrom(today); setSpfTo(today); setSpfQuick('today')
             await loadSpfTransactions(today, today, s.restaurantId)
+            await loadSpfOrders(today, today)
           }
         } catch { /* ignore */ }
       })()
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [platformFilter, shopeePartnerConnected])
 
   useEffect(() => {
@@ -448,21 +489,6 @@ export function ExternalOrdersModal({
             </span>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            {!isGrabTab && (
-              <div className="flex items-center gap-1">
-                {QUICK_DATES.map(f => (
-                  <button
-                    key={f.key}
-                    onClick={() => setQuickDate(f.key)}
-                    className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-all ${quickDate === f.key
-                      ? 'bg-brand text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-            )}
             <button
               onClick={() => {
                 if (isGrabTab) {
@@ -472,6 +498,7 @@ export function ExternalOrdersModal({
                   void loadGrabOrders(grabFrom, grabTo, 0)
                 } else if (isSpfPartnerTab) {
                   void loadSpfTransactions(spfFrom, spfTo)
+                  void loadSpfOrders(spfFrom, spfTo)
                 } else {
                   void load(quickDate)
                 }
@@ -534,11 +561,32 @@ export function ExternalOrdersModal({
               from={spfFrom}
               to={spfTo}
               quick={spfQuick}
-              onQuickChange={(q, from, to) => { setSpfQuick(q); setSpfFrom(from); setSpfTo(to); void loadSpfTransactions(from, to) }}
-              onCustomDateBlur={() => spfQuick === 'custom' && void loadSpfTransactions(spfFrom, spfTo)}
+              orders={spfOrders}
+              ordersLoading={spfOrdersLoading}
+              ordersError={spfOrdersError}
+              onOpenOrder={openSpfDetail}
+              onQuickChange={(q, from, to) => {
+                setSpfQuick(q); setSpfFrom(from); setSpfTo(to)
+                void loadSpfTransactions(from, to)
+                void loadSpfOrders(from, to, 1, spfPageSize)
+              }}
+              onCustomDateBlur={() => {
+                if (spfQuick === 'custom') {
+                  void loadSpfTransactions(spfFrom, spfTo)
+                  void loadSpfOrders(spfFrom, spfTo)
+                }
+              }}
               onFromChange={v => { setSpfQuick('custom'); setSpfFrom(v) }}
               onToChange={v => { setSpfQuick('custom'); setSpfTo(v) }}
-              onApplyCustom={() => void loadSpfTransactions(spfFrom, spfTo)}
+              onApplyCustom={() => {
+                void loadSpfTransactions(spfFrom, spfTo)
+                void loadSpfOrders(spfFrom, spfTo)    // thêm
+              }}
+              pageNum={spfPageNum}
+              pageSize={spfPageSize}
+              totalCount={spfTotalCount}
+              onPageChange={(p) => void loadSpfOrders(spfFrom, spfTo, p, spfPageSize)}
+              onPageSizeChange={(sz) => void loadSpfOrders(spfFrom, spfTo, 1, sz)}
             />
           ) : null}
 
@@ -825,6 +873,15 @@ export function ExternalOrdersModal({
           markReadyResult={markReadyResults[grabDetail.id]}
           onMarkReady={() => void markReady(grabDetail.id, grabDetail.preparationTaskID)}
           onClose={() => setGrabDetail(null)}
+        />
+      )}
+
+      {spfDetail && (
+        <SpfOrderDetailModal
+          code={spfDetail.code}
+          data={spfDetail.data}
+          loading={spfDetail.loading}
+          onClose={() => setSpfDetail(null)}
         />
       )}
     </>
@@ -1161,7 +1218,8 @@ function ExternalOrderCard({
 
 function SpfPartnerTabContent({
   restaurantId, restaurantName, transactions, totalAmount, loading, error,
-  from, to, quick, onQuickChange, onFromChange, onToChange, onCustomDateBlur, onApplyCustom,
+  pageNum, pageSize, totalCount, onPageChange, onPageSizeChange,
+  from, to, quick, orders, ordersLoading, ordersError, onOpenOrder, onQuickChange, onFromChange, onToChange, onCustomDateBlur, onApplyCustom,
 }: {
   restaurantId: string | null
   restaurantName: string | null
@@ -1172,6 +1230,15 @@ function SpfPartnerTabContent({
   from: string
   to: string
   quick: string
+  orders: SpfOrderFull[]
+  ordersLoading: boolean
+  ordersError: string | null
+  pageNum: number
+  pageSize: number
+  totalCount: number
+  onPageChange: (p: number) => void
+  onPageSizeChange: (sz: number) => void
+  onOpenOrder: (code: string) => void
   onQuickChange(q: 'today' | 'yesterday' | 'week' | 'custom', from: string, to: string): void
   onFromChange(v: string): void
   onToChange(v: string): void
@@ -1182,7 +1249,7 @@ function SpfPartnerTabContent({
     const ms = Date.now() + 7 * 60 * 60 * 1000 - offsetDays * 86_400_000
     return new Date(ms).toISOString().slice(0, 10)
   }
-
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
   if (!restaurantId) {
     return (
       <div className="flex h-48 flex-col items-center justify-center gap-2 text-gray-400">
@@ -1194,21 +1261,6 @@ function SpfPartnerTabContent({
   return (
     <div>
       {/* Restaurant info */}
-      {restaurantName && (
-        <div className="mb-4 flex items-center gap-2 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3">
-          <img src={shopeeFoodLogo} className="h-5 w-5 object-contain shrink-0" alt="" />
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold text-orange-800 truncate">{restaurantName}</p>
-            <p className="text-xs text-orange-500 font-mono">ID: {restaurantId}</p>
-          </div>
-          {totalAmount > 0 && (
-            <div className="text-right shrink-0">
-              <p className="text-sm font-black text-orange-700">{fmt(totalAmount)}</p>
-              <p className="text-[10px] text-orange-400">Tổng kỳ</p>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Date filter */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -1220,6 +1272,7 @@ function SpfPartnerTabContent({
           <button
             key={p.key}
             onClick={() => onQuickChange(p.key, p.from, p.to)}
+            disabled={ordersLoading}
             className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-all ${quick === p.key ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
           >
             {p.label}
@@ -1246,30 +1299,91 @@ function SpfPartnerTabContent({
         </div>
       </div>
 
-      {/* Transaction list */}
-      {loading ? (
-        <div className="flex h-48 items-center justify-center gap-2 text-sm text-gray-400">
-          <Loader2 className="size-4 animate-spin" /> Đang tải từ ShopeeFood…
-        </div>
-      ) : error ? (
-        <div className="flex h-48 flex-col items-center justify-center gap-2">
-          <p className="text-sm text-red-500">{error}</p>
-        </div>
-      ) : transactions.length === 0 ? (
-        <div className="flex h-48 flex-col items-center justify-center gap-2 text-gray-400">
-          <ShoppingBag className="size-8 opacity-30" />
-          <p className="text-sm">Không có giao dịch trong khoảng thời gian này</p>
-        </div>
-      ) : (
-        <>
-          <div className="mb-2 text-xs text-gray-400">{transactions.length} giao dịch</div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {transactions.map(txn => (
-              <SpfTransactionCard key={txn.transaction_id} txn={txn} />
-            ))}
+      {/* Order list */}
+      <div className="relative">
+        {ordersLoading ? (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-white/80 backdrop-blur-[1px] rounded-2xl">
+            <Loader2 className="size-5 animate-spin text-orange-500" />
+            <p className="text-xs text-gray-500">Đang đồng bộ với ShopeeFood — có thể mất vài giây…</p>
           </div>
-        </>
+        ) : ordersError ? (
+          <p className="text-sm text-red-500">{ordersError}</p>
+        ) : orders.length === 0 && !ordersLoading ? (
+          <div className="flex h-48 flex-col items-center justify-center gap-2 text-gray-400">
+            <ShoppingBag className="size-8 opacity-30" />
+            <p className="text-sm">Không có đơn hàng trong khoảng thời gian này</p>
+          </div>
+        ) : (
+          <>
+            <div className="mb-2 text-xs text-gray-400">{orders.length} đơn hàng</div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {orders.map(order => {
+                const s = statusInfo(order)
+                return (
+                  <button
+                    key={order.code}
+                    onClick={() => onOpenOrder(order.code)}
+                    className="text-left rounded-2xl border border-orange-100 bg-white shadow-sm hover:shadow-md transition-all p-4"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-mono text-sm font-black text-gray-800">{order.code}</span>
+                      <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${s.color}`}>
+                        <span className={`size-1.5 rounded-full ${s.dot}`} />
+                        {s.label}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 truncate">{order.deliver_address.contact_name}</p>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-[10px] font-bold text-orange-600">{order.total_dish} món</span>
+                      <p className="text-sm font-black text-orange-600">{fmt(order.customer_bill.total_amount)}</p>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </>
+        )}
+      </div>
+
+
+      {totalCount > 0 && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-3">
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <span>Số dòng:</span>
+            {[10, 20, 30, 40, 50].map(sz => (
+              <button
+                key={sz}
+                onClick={() => onPageSizeChange(sz)}
+                className={`font-semibold ${sz === pageSize ? 'text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                {sz}
+              </button>
+            ))}
+            <span className="ml-2">Tổng cộng {totalCount}</span>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => onPageChange(pageNum - 1)}
+              disabled={pageNum <= 1}
+              className="rounded-lg px-2 py-1 text-xs font-semibold text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              ‹ Trước
+            </button>
+            <span className="px-2 text-xs text-gray-600">
+              Trang {pageNum} / {totalPages}
+            </span>
+            <button
+              onClick={() => onPageChange(pageNum + 1)}
+              disabled={pageNum >= totalPages}
+              className="rounded-lg px-2 py-1 text-xs font-semibold text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              Sau ›
+            </button>
+          </div>
+        </div>
       )}
+
     </div>
   )
 }

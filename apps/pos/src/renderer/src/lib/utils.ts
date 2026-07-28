@@ -80,3 +80,5 @@ export function applyProductDiscount(basePrice: number, discountPercent: number)
     if (!discountPercent) return basePrice;
     return Math.round(basePrice * (1 - discountPercent / 100) / 1000) * 1000;
 }
+
+
