@@ -20,14 +20,14 @@ export function ProductGrid({ categorySlug, search }: Props) {
 
   const filtered = search
     ? (products ?? []).filter(
-        (p) =>
-          p.name.toLowerCase().includes(search.toLowerCase()) ||
-          (p.description ?? "").toLowerCase().includes(search.toLowerCase()),
-      )
+      (p) =>
+        p.name.toLowerCase().includes(search.toLowerCase()) ||
+        (p.description ?? "").toLowerCase().includes(search.toLowerCase()),
+    )
     : products;
 
   const available = (filtered?.filter((p) => p.isAvailable) ?? [])
-    .sort((a, b) => Number(b.isBestSeller) - Number(a.isBestSeller));
+
 
   if (!isLoading && available.length === 0) {
     return (
@@ -73,8 +73,8 @@ export function ProductGrid({ categorySlug, search }: Props) {
         {isLoading
           ? Array.from({ length: 8 }).map((_, i) => <ProductCardSkeleton key={i} />)
           : available.map((product, index) => (
-              <ProductCard key={product.id} product={product} index={index} />
-            ))}
+            <ProductCard key={product.id} product={product} index={index} />
+          ))}
       </div>
     </div>
   );

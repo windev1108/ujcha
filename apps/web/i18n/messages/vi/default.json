@@ -1195,5 +1195,6 @@
   "exact_address_label": "Vị trí tương đối — chưa xác định số nhà chính xác, bạn cần thêm số nhà cụ thể vào trước địa chỉ",
   "not_found_address_label": "Không tìm thấy địa chỉ phù hợp",
   "error_select_address_from_suggestion": "Vui lòng chọn một địa chỉ hợp lệ.",
-  "explore_button": "Khám phá ngay"
+  "explore_button": "Khám phá ngay",
+  "sold_count": "Đã bán {count}"
 }

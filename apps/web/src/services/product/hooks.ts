@@ -1,7 +1,7 @@
 'use client'
 import { useQuery } from '@tanstack/react-query'
 import { useLocale } from 'next-intl'
-import { fetchProducts, fetchProductBySlug, fetchProductById } from './api'
+import { fetchProducts, fetchProductBySlug, fetchProductById, fetchBestSellers } from './api'
 import { productKeys } from './keys'
 
 export function useProductsQuery(options?: { categoryId?: string; categorySlug?: string }) {
@@ -10,6 +10,15 @@ export function useProductsQuery(options?: { categoryId?: string; categorySlug?:
   return useQuery({
     queryKey: [...productKeys.list(filterKey), locale],
     queryFn: () => fetchProducts({ ...options, locale }),
+    staleTime: 5 * 60_000,
+  })
+}
+
+export function useBestSellersQuery(options?: { limit?: string }) {
+  const locale = useLocale()
+  return useQuery({
+    queryKey: [...productKeys.bestSellers(options?.limit), locale],
+    queryFn: () => fetchBestSellers({ ...options, locale }),
     staleTime: 5 * 60_000,
   })
 }

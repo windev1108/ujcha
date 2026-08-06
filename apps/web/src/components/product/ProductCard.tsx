@@ -6,12 +6,13 @@ import { motion } from "motion/react";
 import Image from "next/image";
 import { Link } from "@/i18n/navigation";
 import { revealTransition } from "@/app/[locale]/(landing)/components/RevealSection";
-import { ShoppingBag, ExternalLink, SpeakerIcon, SparklesIcon, StarIcon } from "lucide-react";
+import { ShoppingBag, ExternalLink, SpeakerIcon, SparklesIcon, StarIcon, FlameIcon } from "lucide-react";
 import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { ProductQuickAddModal } from "./ProductQuickAddModal";
 import { getDisplayName } from "@/lib/product-name";
 
+const SOLD_COUNT_DISPLAY_BOOST = 10;
 
 const PLACEHOLDER_BG = [
   "#1a3c34", "#2d1a0a", "#0d2035", "#1a0d2e",
@@ -29,6 +30,13 @@ type Props = {
   eager?: boolean;
   onPick?: (p: ApiProduct) => void;
 };
+
+function formatSoldCount(n: number) {
+  if (n >= 1000) {
+    return `${(n / 1000).toFixed(n % 1000 >= 100 ? 1 : 0)}k`;
+  }
+  return String(n);
+}
 
 export function ProductCard({ product, index = 0, eager = false, onPick }: Props) {
   const locale = useLocale();
@@ -166,8 +174,23 @@ function ProductCardImage({ imageUrl, name, bgColor }: { imageUrl: string | null
   );
 }
 
-function ProductCardBadges({ hasDiscount, discountPercent, isSoldOut, isBestSeller }: { hasDiscount: boolean; discountPercent: number; isSoldOut: boolean; isBestSeller: boolean }) {
+function ProductCardBadges({
+  hasDiscount,
+  discountPercent,
+  isSoldOut,
+  isBestSeller,
+  soldCount,
+}: {
+  hasDiscount: boolean;
+  discountPercent: number;
+  isSoldOut: boolean;
+  isBestSeller: boolean;
+  soldCount?: number;
+}) {
   const t = useTranslations();
+  const displaySoldCount =
+    Number(soldCount) > 0 ? Number(soldCount) + SOLD_COUNT_DISPLAY_BOOST : 0;
+
   return (
     <>
       {isBestSeller && !isSoldOut && (
@@ -177,14 +200,12 @@ function ProductCardBadges({ hasDiscount, discountPercent, isSoldOut, isBestSell
           animate={{ scale: 1, opacity: 1 }}
           transition={{ type: "spring", stiffness: 320, damping: 18, delay: 0.1 }}
         >
-          {/* shimmer sweep */}
           <motion.span
             aria-hidden
             className="pointer-events-none absolute inset-0 -skew-x-[20deg] bg-gradient-to-r from-transparent via-white/50 to-transparent"
             animate={{ x: ["-120%", "220%"] }}
             transition={{ repeat: Infinity, duration: 2.2, ease: "easeInOut", repeatDelay: 2 }}
           />
-          {/* glow pulse ring */}
           <motion.span
             aria-hidden
             className="pointer-events-none absolute inset-0 rounded-full ring-2 ring-amber-300/70"
@@ -195,11 +216,26 @@ function ProductCardBadges({ hasDiscount, discountPercent, isSoldOut, isBestSell
           <span className="relative"> {t("bestseller")}</span>
         </motion.span>
       )}
+
       {hasDiscount && !isSoldOut && (
         <span className="absolute left-2.5 top-2.5 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
           -{discountPercent}%
         </span>
       )}
+
+      {/* Góc phải dưới — đẩy lên tránh nút quick-add tròn trên mobile (sm:hidden) */}
+      {displaySoldCount > 0 && !isSoldOut && (
+        <motion.span
+          className="absolute bottom-11 right-2.5 flex items-center gap-1 rounded-full bg-gradient-to-r from-orange-500 to-rose-500 px-2 py-0.5 text-[10px] font-bold text-white shadow-[0_2px_8px_-2px_rgba(244,63,94,0.6)] sm:bottom-2.5"
+          initial={{ scale: 0.7, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 320, damping: 18, delay: 0.15 }}
+        >
+          <FlameIcon className="size-3 fill-current" />
+          {t("sold_count", { count: displaySoldCount })}
+        </motion.span>
+      )}
+
       {isSoldOut && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/45 backdrop-blur-[2px]">
           <span className="rounded-full border border-white/25 bg-black/55 px-3 py-1 text-[11px] font-semibold tracking-wide text-white">

@@ -14,6 +14,25 @@ export async function fetchProducts(
   return data
 }
 
+export async function fetchBestSellers(
+  options?: { limit?: string; locale?: string },
+): Promise<ApiProduct[]> {
+  const { data } = await api.get<ApiProduct[]>('/products/best-sellers', {
+    params: {
+      ...(options?.limit && { limit: options.limit }),
+      ...(options?.locale && { locale: options.locale }),
+    },
+  })
+  return data
+}
+
+      ...(options?.categorySlug && { categorySlug: options.categorySlug }),
+      ...(options?.locale && { locale: options.locale }),
+    },
+  })
+return data
+}
+
 export async function fetchProductBySlug(slug: string, locale?: string): Promise<ApiProduct> {
   const { data } = await api.get<ApiProduct>(`/products/by-slug/${slug}`, {
     params: locale ? { locale } : undefined,

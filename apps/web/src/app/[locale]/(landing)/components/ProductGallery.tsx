@@ -5,16 +5,15 @@ import { RevealSection, easeOutSmooth } from "./RevealSection";
 import { motion } from "motion/react";
 import { ChevronRight } from "lucide-react";
 import { Link } from "@/i18n/navigation";
-import { useProductsQuery } from "@/services/product/hooks";
+import { useBestSellersQuery } from "@/services/product/hooks";
 import { ProductCard, ProductCardSkeleton } from "@/components/product/ProductCard";
 import { useTranslations } from "next-intl";
 
 export function ProductGallery() {
-  const { data: products, isLoading } = useProductsQuery();
+  const { data: products, isLoading } = useBestSellersQuery();
   const displayed = products
-    ?.filter((p) => p.isAvailable)
-    .sort((a, b) => Number(b.isBestSeller) - Number(a.isBestSeller))
-    .slice(0, 12) ?? [];
+    ?.filter((p) => p.isAvailable) ?? []
+
   const t = useTranslations()
   if (!isLoading && displayed.length === 0) return null;
 

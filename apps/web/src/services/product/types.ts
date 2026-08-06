@@ -46,5 +46,6 @@ export interface ApiProduct {
   isBestSeller: boolean
   discountPercent: number
   finalPrice: number
+  soldCount: number
   category: { id: string; name: string; nameTranslation?: Record<string, string>; slug: string; thumbnail: string | null }
 }
