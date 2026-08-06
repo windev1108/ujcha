@@ -156,8 +156,16 @@ export function computeFinalPrice(price: unknown, discountPercent: number): numb
 }
 
 
-export function withSoldCount<T extends { id: string }>(product: T, soldCounts: Record<string, number>): T & { soldCount: number } {
-  return { ...product, soldCount: soldCounts[product.id] ?? 0 };
+const SOLD_COUNT_MIN = 10;
+const SOLD_COUNT_BOOST = 10;
+
+export function withSoldCount<T extends { id: string }>(
+  product: T,
+  soldCounts: Record<string, number>,
+): T & { soldCount: number } {
+  const raw = soldCounts[product.id] ?? 0;
+  const soldCount = raw > 0 ? raw + SOLD_COUNT_BOOST : SOLD_COUNT_MIN;
+  return { ...product, soldCount };
 }
 
 /** Bán chạy nhất lên đầu; hoà lượt bán thì ưu tiên badge isBestSeller, sau đó tên A-Z. */
