@@ -193,7 +193,7 @@ function ProductCardBadges({
     <>
       {displaySoldCount > 0 && !isSoldOut && (
         <motion.span
-          className="flex items-center gap-1 absolute right-2.5 top-2.5 overflow-hidden rounded-full bg-gradient-to-r from-orange-500 to-rose-500 px-2 py-0.5 text-[10px] font-bold text-white shadow-[0_0_10px_2px_rgba(244,63,94,0.45)]"
+          className="flex items-center gap-1 absolute right-2.5 top-2.5 overflow-hidden rounded-full bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 px-2 py-0.5 text-[10px] font-bold text-amber-900 shadow-[0_0_10px_2px_rgba(251,191,36,0.55)]"
           initial={{ scale: 0.7, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ type: "spring", stiffness: 320, damping: 18, delay: 0.1 }}
@@ -204,7 +204,7 @@ function ProductCardBadges({
             animate={{ x: ["-120%", "220%"] }}
             transition={{ repeat: Infinity, duration: 2.2, ease: "easeInOut", repeatDelay: 2 }}
           />
-          <FlameIcon className="size-3 fill-current" />
+          <FlameIcon className="size-3 fill-current text-amber-900" />
           <span className="relative">{t("sold_count", { count: displaySoldCount })}</span>
         </motion.span>
       )}
