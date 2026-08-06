@@ -43,3 +43,10 @@ export function canSubmitOrder(params: {
     // pickup / table: tuỳ logic hiện có của bạn, giữ nguyên
     return true;
 }
+
+export function formatSoldCount(n: number) {
+    if (n >= 1000) {
+        return `${(n / 1000).toFixed(n % 1000 >= 100 ? 1 : 0)}k`;
+    }
+    return String(n);
+}

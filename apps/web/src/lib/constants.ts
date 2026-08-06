@@ -10,3 +10,5 @@ export const DA_NANG_BOUNDING_BOX: BoundingBox = {
 };
 
 export const DA_NANG_QUERY_SUFFIX = "Đà Nẵng, Việt Nam";
+
+export const SOLD_COUNT_DISPLAY_BOOST = 10;

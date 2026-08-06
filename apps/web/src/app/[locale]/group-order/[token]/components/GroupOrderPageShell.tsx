@@ -18,6 +18,7 @@ import {
   Clock,
   Copy,
   Crown,
+  FlameIcon,
   Info,
   Link2,
   Loader2,
@@ -83,6 +84,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { getDisplayName } from "@/lib/product-name";
 import { getDeviceId } from "@/hooks/useDeviceId";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
+import { SOLD_COUNT_DISPLAY_BOOST } from "@/lib/constants";
 
 const SESSION_KEY = (token: string) => `group_order_session_${token}`;
 const PARTICIPANT_KEY = (token: string) => `group_order_participant_${token}`;
@@ -468,7 +470,7 @@ function ProductPickerDrawer({
   const products = (search.trim()
     ? allProducts.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()))
     : allProducts
-  ).slice().sort((a, b) => Number(b.isBestSeller) - Number(a.isBestSeller));
+  ).slice()
 
   const totalCount = Array.from(draft.values()).reduce((s, v) => s + v.quantity, 0);
 
@@ -651,9 +653,9 @@ function ProductPickerDrawer({
                               -{product.discountPercent}%
                             </span>
                           )}
-                          {product.isBestSeller && !product.isSoldOut && (
+                          {Number(product.soldCount) > 0 && !product.isSoldOut && (
                             <motion.span
-                              className="flex gap-1 absolute top-2 right-2 overflow-hidden rounded-full bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 px-1.5 py-0.5 text-[9px] font-bold text-amber-900 shadow-[0_0_8px_1px_rgba(251,191,36,0.5)]"
+                              className="flex items-center gap-1 absolute top-2 right-2 overflow-hidden rounded-full bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 px-1.5 py-0.5 text-[9px] font-bold text-amber-900 shadow-[0_0_8px_1px_rgba(251,191,36,0.5)]"
                               initial={{ scale: 0.7, opacity: 0 }}
                               animate={{ scale: 1, opacity: 1 }}
                               transition={{ type: "spring", stiffness: 320, damping: 18, delay: 0.1 }}
@@ -664,8 +666,10 @@ function ProductPickerDrawer({
                                 animate={{ x: ["-120%", "220%"] }}
                                 transition={{ repeat: Infinity, duration: 2.2, ease: "easeInOut", repeatDelay: 2.5 }}
                               />
-                              <StarIcon className="size-3.5 text-amber-900" />
-                              <span className="relative">{t("bestseller")}</span>
+                              <FlameIcon className="size-3 fill-current text-amber-900" />
+                              <span className="relative">
+                                {t("sold_count", { count: Number(product.soldCount) + SOLD_COUNT_DISPLAY_BOOST })}
+                              </span>
                             </motion.span>
                           )}
                           {/* {qty > 0 && (

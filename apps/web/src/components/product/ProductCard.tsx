@@ -11,8 +11,7 @@ import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { ProductQuickAddModal } from "./ProductQuickAddModal";
 import { getDisplayName } from "@/lib/product-name";
-
-const SOLD_COUNT_DISPLAY_BOOST = 10;
+import { SOLD_COUNT_DISPLAY_BOOST } from "@/lib/constants";
 
 const PLACEHOLDER_BG = [
   "#1a3c34", "#2d1a0a", "#0d2035", "#1a0d2e",
@@ -30,13 +29,6 @@ type Props = {
   eager?: boolean;
   onPick?: (p: ApiProduct) => void;
 };
-
-function formatSoldCount(n: number) {
-  if (n >= 1000) {
-    return `${(n / 1000).toFixed(n % 1000 >= 100 ? 1 : 0)}k`;
-  }
-  return String(n);
-}
 
 export function ProductCard({ product, index = 0, eager = false, onPick }: Props) {
   const locale = useLocale();
