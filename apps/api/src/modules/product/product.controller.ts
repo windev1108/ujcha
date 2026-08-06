@@ -32,6 +32,20 @@ export class ProductController {
         return this.productService.list(categoryId, categorySlug, q, locale);
     }
 
+
+    @Get('best-sellers')
+    @ApiOperation({ summary: 'Top sản phẩm bán chạy (sort theo lượt bán, tie-break isBestSeller)' })
+    @ApiQuery({ name: 'limit', required: false, description: 'Mặc định 12' })
+    @ApiQuery({ name: 'locale', required: false, description: 'vi | en' })
+    async bestSellers(
+        @Query('limit') limit?: string,
+        @Query('locale') locale?: string,
+    ) {
+        const n = Number(limit);
+        const take = Number.isFinite(n) && n > 0 && n <= 50 ? n : 12;
+        return this.productService.bestSellers(take, locale);
+    }
+
     @Get('by-slug/:slug')
     @ApiOperation({ summary: 'Tìm sản phẩm theo slug' })
     @ApiQuery({ name: 'locale', required: false })

@@ -154,3 +154,17 @@ export function computeFinalPrice(price: unknown, discountPercent: number): numb
   if (!discountPercent) return base;
   return Math.round(base * (1 - discountPercent / 100) / 1000) * 1000;
 }
+
+
+export function withSoldCount<T extends { id: string }>(product: T, soldCounts: Record<string, number>): T & { soldCount: number } {
+  return { ...product, soldCount: soldCounts[product.id] ?? 0 };
+}
+
+/** Bán chạy nhất lên đầu; hoà lượt bán thì ưu tiên badge isBestSeller, sau đó tên A-Z. */
+export function sortBySales<T extends { soldCount: number; isBestSeller: boolean; name: string }>(products: T[]): T[] {
+  return [...products].sort((a, b) => {
+    if (b.soldCount !== a.soldCount) return b.soldCount - a.soldCount;
+    if (a.isBestSeller !== b.isBestSeller) return a.isBestSeller ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+}

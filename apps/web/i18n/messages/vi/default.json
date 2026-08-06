@@ -124,7 +124,7 @@
   "group_n_items": "{count} món",
   "admin_go_add_first_tier": "Thêm bậc đầu tiên",
   "admin_go_add_tier": "Thêm bậc",
-  "admin_go_config_desc": "Bật chức năng đặt hàng nhóm và cấu hình bậc giảm giá theo số lượng thành viên tham gia.",
+  "admin_go_config_desc": "Bật chức năng đặt đơn nhóm và cấu hình bậc giảm giá theo số lượng thành viên tham gia.",
   "admin_go_config_title": "Cấu hình đơn hàng nhóm",
   "admin_go_discount_pct": "Giảm giá (%)",
   "admin_go_example_title": "Ví dụ bậc giảm giá",

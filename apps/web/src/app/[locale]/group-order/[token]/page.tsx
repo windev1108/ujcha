@@ -12,19 +12,19 @@ import { ROUTES } from "@/lib/routes";
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations();
   const title = t("group_order_session_title");
-  const description = "Cùng bạn bè đặt hàng nhóm và nhận ưu đãi giảm giá khi có nhiều người tham gia.";
+  const description = "Cùng bạn bè đặt đơn nhóm và nhận ưu đãi giảm giá khi có nhiều người tham gia.";
   return {
     title,
     description,
     openGraph: {
-      title: "Đặt hàng nhóm cùng UjCha — Càng đông càng rẻ!",
+      title: "Đặt đơn nhóm cùng UjCha — Càng đông càng rẻ!",
       description,
       type: "website",
       images: [{ url: "/og/group-order.png", width: 1200, height: 630, alt: "UjCha Group Order" }],
     },
     twitter: {
       card: "summary_large_image",
-      title: "Đặt hàng nhóm cùng UjCha — Càng đông càng rẻ!",
+      title: "Đặt đơn nhóm cùng UjCha — Càng đông càng rẻ!",
       description,
       images: ["/og/group-order.png"],
     },

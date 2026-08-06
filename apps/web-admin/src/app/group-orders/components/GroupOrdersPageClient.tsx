@@ -270,7 +270,7 @@ function GroupOrderConfigTab() {
           {/* Toggle */}
           <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl bg-[#f9fafb] px-4 py-3 ring-1 ring-black/[0.06]">
             <div>
-              <Text className="text-sm font-semibold">Bật chức năng đặt hàng nhóm</Text>
+              <Text className="text-sm font-semibold">Bật chức năng đặt đơn nhóm</Text>
               <Description className="text-xs">Tắt sẽ không cho phép tạo đơn hàng nhóm mới.</Description>
             </div>
             <Switch isSelected={isEnabled} onChange={setIsEnabled}>
