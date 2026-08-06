@@ -101,7 +101,7 @@ export function ProductCard({ product, index = 0, eager = false, onPick }: Props
               </div>
             )}
 
-            <ProductCardBadges hasDiscount={hasDiscount} discountPercent={product.discountPercent} isSoldOut={product.isSoldOut} isBestSeller={product.isBestSeller} />
+            <ProductCardBadges hasDiscount={hasDiscount} discountPercent={product.discountPercent} isSoldOut={product.isSoldOut} isBestSeller={product.isBestSeller} soldCount={product?.soldCount} />
           </button>
 
           {/* Info */}
