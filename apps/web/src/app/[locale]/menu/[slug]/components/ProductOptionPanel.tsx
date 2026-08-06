@@ -143,7 +143,7 @@ export function ProductOptionPanel({ product }: Props) {
               />
               <FlameIcon className="size-3.5 fill-current text-amber-900" />
               <span className="relative">
-                {t("sold_count", { count: Number(product.soldCount) + SOLD_COUNT_DISPLAY_BOOST })}
+                {t("sold_count", { count: Number(product.soldCount) })}
               </span>
             </motion.span>
           )}

@@ -11,7 +11,6 @@ import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { ProductQuickAddModal } from "./ProductQuickAddModal";
 import { getDisplayName } from "@/lib/product-name";
-import { SOLD_COUNT_DISPLAY_BOOST } from "@/lib/constants";
 
 const PLACEHOLDER_BG = [
   "#1a3c34", "#2d1a0a", "#0d2035", "#1a0d2e",
@@ -179,7 +178,7 @@ function ProductCardBadges({
 }) {
   const t = useTranslations();
   const displaySoldCount =
-    Number(soldCount) > 0 ? Number(soldCount) + SOLD_COUNT_DISPLAY_BOOST : 0;
+    Number(soldCount) > 0 ? Number(soldCount) : 0;
 
   return (
     <>
