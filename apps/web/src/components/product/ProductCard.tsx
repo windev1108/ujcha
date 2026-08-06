@@ -101,7 +101,7 @@ export function ProductCard({ product, index = 0, eager = false, onPick }: Props
               </div>
             )}
 
-            <ProductCardBadges hasDiscount={hasDiscount} discountPercent={product.discountPercent} isSoldOut={product.isSoldOut} isBestSeller={product.isBestSeller} soldCount={product?.soldCount} />
+            <ProductCardBadges hasDiscount={hasDiscount} discountPercent={product.discountPercent} isSoldOut={product.isSoldOut} soldCount={product?.soldCount} />
           </button>
 
           {/* Info */}
@@ -178,13 +178,11 @@ function ProductCardBadges({
   hasDiscount,
   discountPercent,
   isSoldOut,
-  isBestSeller,
   soldCount,
 }: {
   hasDiscount: boolean;
   discountPercent: number;
   isSoldOut: boolean;
-  isBestSeller: boolean;
   soldCount?: number;
 }) {
   const t = useTranslations();
@@ -193,9 +191,9 @@ function ProductCardBadges({
 
   return (
     <>
-      {isBestSeller && !isSoldOut && (
+      {displaySoldCount > 0 && !isSoldOut && (
         <motion.span
-          className="flex gap-1 absolute right-2.5 top-2.5 overflow-hidden rounded-full bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 px-1.5 py-0.5 text-[10px] font-bold text-amber-900 shadow-[0_0_10px_2px_rgba(251,191,36,0.55)]"
+          className="flex items-center gap-1 absolute right-2.5 top-2.5 overflow-hidden rounded-full bg-gradient-to-r from-orange-500 to-rose-500 px-2 py-0.5 text-[10px] font-bold text-white shadow-[0_0_10px_2px_rgba(244,63,94,0.45)]"
           initial={{ scale: 0.7, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ type: "spring", stiffness: 320, damping: 18, delay: 0.1 }}
@@ -206,14 +204,8 @@ function ProductCardBadges({
             animate={{ x: ["-120%", "220%"] }}
             transition={{ repeat: Infinity, duration: 2.2, ease: "easeInOut", repeatDelay: 2 }}
           />
-          <motion.span
-            aria-hidden
-            className="pointer-events-none absolute inset-0 rounded-full ring-2 ring-amber-300/70"
-            animate={{ opacity: [0.6, 1, 0.6], scale: [1, 1.06, 1] }}
-            transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-          />
-          <StarIcon className="size-3.5 text-amber-900" />
-          <span className="relative"> {t("bestseller")}</span>
+          <FlameIcon className="size-3 fill-current" />
+          <span className="relative">{t("sold_count", { count: displaySoldCount })}</span>
         </motion.span>
       )}
 
@@ -221,19 +213,6 @@ function ProductCardBadges({
         <span className="absolute left-2.5 top-2.5 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
           -{discountPercent}%
         </span>
-      )}
-
-      {/* Góc phải dưới — đẩy lên tránh nút quick-add tròn trên mobile (sm:hidden) */}
-      {displaySoldCount > 0 && !isSoldOut && (
-        <motion.span
-          className="absolute bottom-11 right-2.5 flex items-center gap-1 rounded-full bg-gradient-to-r from-orange-500 to-rose-500 px-2 py-0.5 text-[10px] font-bold text-white shadow-[0_2px_8px_-2px_rgba(244,63,94,0.6)] sm:bottom-2.5"
-          initial={{ scale: 0.7, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: "spring", stiffness: 320, damping: 18, delay: 0.15 }}
-        >
-          <FlameIcon className="size-3 fill-current" />
-          {t("sold_count", { count: displaySoldCount })}
-        </motion.span>
       )}
 
       {isSoldOut && (
