@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { revealTransition } from "@/app/[locale]/(landing)/components/RevealSection";
-import { ShoppingCart, Check, Loader2, Minus, Plus, StickyNote, StarIcon } from "lucide-react";
+import { ShoppingCart, Check, Loader2, Minus, Plus, StickyNote, StarIcon, FlameIcon } from "lucide-react";
 import { Button, Checkbox } from "@heroui/react";
 import { useAddToCartMutation } from "@/services/cart/hooks";
 import { useAuthStore } from "@/store/auth-store";
@@ -16,6 +16,7 @@ import {
 } from "@/lib/product-options";
 import { useTranslations, useLocale } from "next-intl";
 import { getDisplayName, getValueLabel, getDisplayDescription } from "@/lib/product-name";
+import { SOLD_COUNT_DISPLAY_BOOST } from "@/lib/constants";
 
 
 type Props = { product: ApiProduct };
@@ -121,7 +122,7 @@ export function ProductOptionPanel({ product }: Props) {
           <span className="rounded-full bg-surface-secondary px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-muted">
             {getDisplayName(product.category, locale)}
           </span>
-          {product.isBestSeller && !product.isSoldOut && (
+          {Number(product.soldCount) > 0 && !product.isSoldOut && (
             <motion.span
               className="flex gap-1 relative overflow-hidden rounded-full bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 px-1.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-amber-900 shadow-[0_0_12px_2px_rgba(251,191,36,0.45)]"
               initial={{ scale: 0.8, opacity: 0 }}
@@ -140,8 +141,10 @@ export function ProductOptionPanel({ product }: Props) {
                 animate={{ opacity: [0.5, 1, 0.5], scale: [1, 1.05, 1] }}
                 transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
               />
-              <StarIcon className="size-3.5 text-amber-900" />
-              <span className="relative">{t("bestseller")}</span>
+              <FlameIcon className="size-3.5 fill-current text-amber-900" />
+              <span className="relative">
+                {t("sold_count", { count: Number(product.soldCount) + SOLD_COUNT_DISPLAY_BOOST })}
+              </span>
             </motion.span>
           )}
           {product.isSoldOut && (
