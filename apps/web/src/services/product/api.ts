@@ -19,7 +19,7 @@ export async function fetchBestSellers(
 ): Promise<ApiProduct[]> {
   const { data } = await api.get<ApiProduct[]>('/products/best-sellers', {
     params: {
-      ...(options?.limit && { categoryId: options.limit }),
+      ...(options?.limit && { limit: options.limit }),
       ...(options?.locale && { locale: options.locale }),
     },
   })
