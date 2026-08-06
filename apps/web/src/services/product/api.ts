@@ -19,18 +19,11 @@ export async function fetchBestSellers(
 ): Promise<ApiProduct[]> {
   const { data } = await api.get<ApiProduct[]>('/products/best-sellers', {
     params: {
-      ...(options?.limit && { limit: options.limit }),
+      ...(options?.limit && { categoryId: options.limit }),
       ...(options?.locale && { locale: options.locale }),
     },
   })
   return data
-}
-
-      ...(options?.categorySlug && { categorySlug: options.categorySlug }),
-      ...(options?.locale && { locale: options.locale }),
-    },
-  })
-return data
 }
 
 export async function fetchProductBySlug(slug: string, locale?: string): Promise<ApiProduct> {
