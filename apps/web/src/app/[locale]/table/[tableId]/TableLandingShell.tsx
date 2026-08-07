@@ -474,7 +474,11 @@ function ProductPickModal({
   const unitPrice = baseEffective + optionSurcharge + toppingSum;
 
   function toggleTopping(id: string) {
-    setSelectedToppingIds((prev) => (prev[0] === id ? [] : [id]));
+    setSelectedToppingIds((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (prev.length >= 2) return prev; // đã đủ 2, bỏ qua
+      return [...prev, id];
+    });
   }
 
   return (

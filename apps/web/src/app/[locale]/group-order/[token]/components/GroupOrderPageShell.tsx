@@ -185,7 +185,16 @@ function ProductCustomizeSheet({
   const unitPrice = basePrice + optionSurcharge + toppingTotal;
 
   const toggleTopping = (id: string, checked: boolean) => {
-    setSelectedToppings(checked ? new Set([id]) : new Set());
+    setSelectedToppings((prev) => {
+      const next = new Set(prev);
+      if (checked) {
+        if (next.size >= 2) return prev; // đã đủ 2, bỏ qua
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+      return next;
+    });
   };
 
   const handleConfirm = () => {

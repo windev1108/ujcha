@@ -163,7 +163,16 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
   const totalPrice = unitPrice * quantity;
 
   function toggleTopping(id: string, isCurrentlyActive: boolean) {
-    setSelectedToppings(isCurrentlyActive ? new Set() : new Set([id]));
+    setSelectedToppings((prev) => {
+      const next = new Set(prev);
+      if (isCurrentlyActive) {
+        next.delete(id);
+      } else {
+        if (next.size >= 2) return prev; // đã đủ 2 topping, bỏ qua
+        next.add(id);
+      }
+      return next;
+    });
   }
 
   function handleSubmit() {
