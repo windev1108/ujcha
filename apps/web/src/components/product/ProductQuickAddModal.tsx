@@ -168,7 +168,7 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
       if (isCurrentlyActive) {
         next.delete(id);
       } else {
-        if (next.size >= 2) return prev; // đã đủ 2 topping, bỏ qua
+        if (next.size >= 3) return prev; // đã đủ 3 topping, bỏ qua
         next.add(id);
       }
       return next;

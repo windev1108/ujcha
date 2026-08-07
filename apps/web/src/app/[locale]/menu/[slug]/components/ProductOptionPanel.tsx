@@ -74,7 +74,7 @@ export function ProductOptionPanel({ product }: Props) {
     setSelectedToppings((prev) => {
       const next = new Set(prev);
       if (checked) {
-        if (next.size >= 2) return prev; // đã đủ 2, bỏ qua
+        if (next.size >= 3) return prev; // đã đủ 3, bỏ qua
         next.add(id);
       } else {
         next.delete(id);

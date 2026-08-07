@@ -476,7 +476,7 @@ function ProductPickModal({
   function toggleTopping(id: string) {
     setSelectedToppingIds((prev) => {
       if (prev.includes(id)) return prev.filter((x) => x !== id);
-      if (prev.length >= 2) return prev; // đã đủ 2, bỏ qua
+      if (prev.length >= 3) return prev; // đã đủ 3, bỏ qua
       return [...prev, id];
     });
   }
