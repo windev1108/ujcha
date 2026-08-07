@@ -476,7 +476,7 @@ function ProductPickModal({
   function toggleTopping(id: string) {
     setSelectedToppingIds((prev) => {
       if (prev.includes(id)) return prev.filter((x) => x !== id);
-      if (prev.length >= 3) return prev; // đã đủ 3, bỏ qua
+      if (prev.length >= 3) return [prev[1], id]; // bỏ cái chọn đầu, thêm cái mới
       return [...prev, id];
     });
   }
@@ -574,15 +574,20 @@ function ProductPickModal({
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/40">
                   {t("extra_toppings")}
                 </p>
-                {selectedToppingIds.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedToppingIds([])}
-                    className="text-[10px] font-semibold text-foreground/40 hover:text-foreground transition-colors"
-                  >
-                    {t("remove")}
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-semibold tabular-nums text-foreground/40">
+                    {selectedToppingIds.length}/3
+                  </span>
+                  {selectedToppingIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedToppingIds([])}
+                      className="text-[10px] font-semibold text-foreground/40 hover:text-foreground transition-colors"
+                    >
+                      {t("remove")}
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="space-y-1.5 overscroll-contain rounded-2xl border border-black/[0.06] bg-[#f9fafb] p-2">
                 {productToppings.map((tp) => {

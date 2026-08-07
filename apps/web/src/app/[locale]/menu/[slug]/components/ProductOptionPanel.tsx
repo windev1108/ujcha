@@ -74,7 +74,10 @@ export function ProductOptionPanel({ product }: Props) {
     setSelectedToppings((prev) => {
       const next = new Set(prev);
       if (checked) {
-        if (next.size >= 3) return prev; // đã đủ 3, bỏ qua
+        if (next.size >= 3) {
+          const oldest = next.values().next().value;
+          next.delete(oldest!);
+        }
         next.add(id);
       } else {
         next.delete(id);
@@ -253,11 +256,9 @@ export function ProductOptionPanel({ product }: Props) {
                   </p>
                   <p className="mt-0.5 text-xs text-foreground/50">{t("topping_desc")}</p>
                 </div>
-                {selectedToppings.size > 0 && (
-                  <span className="shrink-0 text-[11px] font-semibold tabular-nums text-kun-products-forest">
-                    {t("selected")}
-                  </span>
-                )}
+                <span className="shrink-0 text-[11px] font-semibold tabular-nums text-kun-products-forest">
+                  {selectedToppings.size}/3
+                </span>
               </div>
               <div
                 className="max-h-96 space-y-1.5 overflow-y-auto scroll-smooth rounded-2xl border border-black/[0.07] bg-surface-secondary/40 p-2 pr-1"

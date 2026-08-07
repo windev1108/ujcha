@@ -188,7 +188,10 @@ function ProductCustomizeSheet({
     setSelectedToppings((prev) => {
       const next = new Set(prev);
       if (checked) {
-        if (next.size >= 3) return prev; // đã đủ 3, bỏ qua
+        if (next.size >= 3) {
+          const oldest = next.values().next().value;
+          next.delete(oldest!);
+        }
         next.add(id);
       } else {
         next.delete(id);
@@ -345,15 +348,20 @@ function ProductCustomizeSheet({
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted">
                   {t("extra_toppings")}
                 </p>
-                {selectedToppings.size > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedToppings(new Set())}
-                    className="text-[11px] font-medium text-muted transition-colors hover:text-foreground"
-                  >
-                    {t("remove")}
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-semibold tabular-nums text-muted">
+                    {selectedToppings.size}/2
+                  </span>
+                  {selectedToppings.size > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedToppings(new Set())}
+                      className="text-[11px] font-medium text-muted transition-colors hover:text-foreground"
+                    >
+                      {t("remove")}
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="grid grid-cols-1 gap-1.5 overscroll-contain rounded-xl">
                 {toppings.map((top) => {

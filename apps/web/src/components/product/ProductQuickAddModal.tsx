@@ -168,7 +168,10 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
       if (isCurrentlyActive) {
         next.delete(id);
       } else {
-        if (next.size >= 3) return prev; // đã đủ 3 topping, bỏ qua
+        if (next.size >= 3) {
+          const oldest = next.values().next().value;
+          next.delete(oldest!);
+        }
         next.add(id);
       }
       return next;
@@ -468,15 +471,20 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
                         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted">
                           {t("extra_toppings")}
                         </p>
-                        {selectedToppings.size > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => setSelectedToppings(new Set())}
-                            className="text-[11px] font-medium text-muted hover:text-foreground transition-colors"
-                          >
-                            {t("remove")}
-                          </button>
-                        )}
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-semibold tabular-nums text-muted">
+                            {selectedToppings.size}/3
+                          </span>
+                          {selectedToppings.size > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedToppings(new Set())}
+                              className="text-[11px] font-medium text-muted hover:text-foreground transition-colors"
+                            >
+                              {t("remove")}
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <div className="overscroll-contain rounded-xl grid grid-cols-1 gap-1.5">
                         {toppings.map((top) => {
