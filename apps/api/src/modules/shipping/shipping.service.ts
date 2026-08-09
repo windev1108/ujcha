@@ -23,7 +23,7 @@ export type PublicShippingConfig = {
 
 @Injectable()
 export class ShippingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async getConfig() {
     return this.prisma.shippingConfig.upsert({
@@ -90,7 +90,7 @@ export class ShippingService {
     }
 
     const extraKm = Math.max(0, distanceKm - cfg.baseKm);
-    const rawFee = cfg.baseFee + Math.ceil(extraKm) * cfg.feePerKm;
+    const rawFee = cfg.baseFee + Math.round(extraKm) * cfg.feePerKm;
     const isFreeByAmount = cfg.freeThreshold > 0 && orderAmount >= cfg.freeThreshold;
     const isFreeByDistance = cfg.freeShipDistanceKm > 0 && distanceKm <= cfg.freeShipDistanceKm;
     const isFree = isFreeByAmount || isFreeByDistance;
