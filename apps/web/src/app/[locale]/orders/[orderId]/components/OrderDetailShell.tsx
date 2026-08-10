@@ -1337,7 +1337,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                               )}
                             </div>
                             <p className="text-xs text-foreground/50">
-                              {participant.items.length} món ·{" "}
+                              {participant.items.length} {t("dish")} ·{" "}
                               <span className="text-sm font-bold tabular-nums text-[#1a3c34]">{fmtVnd(participant.subtotal)}</span>
                             </p>
                           </div>

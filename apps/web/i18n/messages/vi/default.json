@@ -1196,5 +1196,6 @@
   "not_found_address_label": "Không tìm thấy địa chỉ phù hợp",
   "error_select_address_from_suggestion": "Vui lòng chọn một địa chỉ hợp lệ.",
   "explore_button": "Khám phá ngay",
-  "sold_count": "Đã bán {count}"
+  "sold_count": "Đã bán {count}",
+  "dish": "món"
 }

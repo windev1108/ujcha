@@ -1197,5 +1197,6 @@
   "not_found_address_label": "No matching address found",
   "error_select_address_from_suggestion": "Please select an invalid address from the suggestions.",
   "explore_button": "Explore Now",
-  "sold_count": "{count} sold"
+  "sold_count": "{count} sold",
+  "dish": "dish"
 }

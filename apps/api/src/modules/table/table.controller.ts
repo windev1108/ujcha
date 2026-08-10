@@ -63,6 +63,10 @@ export class TableController {
       tableId: id,
       items: dto.items,
     });
+    this.ordersGateway.emitOrderCreated({
+      orderId: order.id,
+      type: order.type,
+    });
     return order;
   }
 }
