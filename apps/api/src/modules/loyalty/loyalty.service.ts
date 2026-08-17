@@ -25,6 +25,7 @@ export class LoyaltyService {
         shippingFee: true,
         paymentCode: true,
         type: true,
+        completedAt: true,
         createdAt: true,
       },
     });
@@ -42,7 +43,8 @@ export class LoyaltyService {
       select: { id: true },
     });
 
-    const policy = await this.pointPolicy.resolve(new Date());
+    const policyCheckDate = order.completedAt ?? order.createdAt ?? new Date();
+    const policy = await this.pointPolicy.resolve(policyCheckDate);
     let potentialPoints = 0;
     if (policy && !alreadyClaimed) {
       const eligibleAmount = order.finalAmount.sub(order.shippingFee);
@@ -83,7 +85,9 @@ export class LoyaltyService {
     if (order.paymentStatus !== PaymentStatus.paid) {
       throw new BadRequestException({ message: 'Đơn chưa thanh toán.', code: 'ORDER_NOT_PAID' });
     }
-
+    if (!order.completedAt) {
+      throw new BadRequestException({ message: 'Thiếu thời điểm hoàn thành đơn.', code: 'ORDER_MISSING_COMPLETED_AT' });
+    }
     const already = await this.prisma.pointTransaction.findFirst({
       where: {
         type: PointTransactionType.earn,
@@ -95,7 +99,7 @@ export class LoyaltyService {
       throw new BadRequestException({ message: 'Điểm đã được tích cho đơn này rồi.', code: 'POINTS_ALREADY_CLAIMED' });
     }
 
-    const policy = await this.pointPolicy.resolve(new Date());
+    const policy = await this.pointPolicy.resolve(order.completedAt);
     if (!policy) {
       throw new BadRequestException({ message: 'Chưa có chính sách tích điểm.', code: 'NO_POINT_POLICY' });
     }
