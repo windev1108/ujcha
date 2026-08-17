@@ -36,6 +36,7 @@ export interface GroupOrderState {
   id: string
   token: string
   status: GroupOrderStatus
+  scheduledDeliveryTime?: string | null
   paymentMode: GroupPaymentMode
   paymentType: 'cash' | 'bank_transfer'
   type: 'delivery' | 'pickup' | 'table'
@@ -224,6 +225,7 @@ export async function setGroupOrderFulfillment(
     inlineAddress?: { fullAddress: string; lat: number; lng: number };
     tableId?: string
     pickupTime?: string
+    scheduledDeliveryTime?: string
     shippingFee?: number
     paymentType?: 'cash' | 'bank_transfer'
     shippingFeeMode?: 'split' | 'host_pays'

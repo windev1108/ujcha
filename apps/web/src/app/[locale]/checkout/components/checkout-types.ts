@@ -5,6 +5,8 @@ export type DeliveryForm = {
   note: string;
   lat: number | null;
   lng: number | null;
+  mode: "asap" | "scheduled";
+  scheduledTime: string;
 };
 
 export type PickupForm = {

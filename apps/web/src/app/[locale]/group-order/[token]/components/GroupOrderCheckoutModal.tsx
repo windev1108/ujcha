@@ -43,6 +43,7 @@ interface Props {
     addressId?: string;
     shippingFee?: number;
     paymentType: "cash" | "bank_transfer";
+    scheduledDeliveryTime?: string;
     pickupTime?: string;
   }) => Promise<void>;
   totalAmount: number;
@@ -151,6 +152,10 @@ export function GroupOrderCheckoutModal({
 
   async function handleConfirm() {
     setError(null);
+    if (type === "delivery" && deliveryForm.mode === "scheduled" && !deliveryForm.scheduledTime) {
+      setError(t("error_select_delivery_time"));
+      return;
+    }
     if (type === "delivery") {
       if (shippingIsOutOfRange) { setError(t("error_delivery_out_of_range")); return; }
       if (showNewForm && (!deliveryForm.fullAddress.trim() || deliveryForm.lat == null || deliveryForm.lng == null)) {
@@ -187,6 +192,10 @@ export function GroupOrderCheckoutModal({
               ? new Date(pickupForm.scheduledTime).toISOString()
               : undefined;
       }
+      const scheduledDeliveryTime =
+        type === "delivery" && deliveryForm.mode === "scheduled" && deliveryForm.scheduledTime
+          ? new Date(deliveryForm.scheduledTime).toISOString()
+          : undefined;
 
       await onSave({
         type,
@@ -195,6 +204,7 @@ export function GroupOrderCheckoutModal({
         shippingFee: type === "delivery" ? shippingFee : 0,
         paymentType,
         pickupTime,
+        scheduledDeliveryTime
       });
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string | string[] } } };

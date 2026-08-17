@@ -1328,13 +1328,13 @@ export function GroupOrderPageShell() {
   const [localType, setLocalType] = useState<"delivery" | "pickup">("delivery");
   const [localSelectedAddressId, setLocalSelectedAddressId] = useState<string | null>(null);
   const [localDeliveryForm, setLocalDeliveryForm] = useState<DeliveryForm>({
-    fullAddress: "", name: "", phone: "", note: "", lat: null, lng: null,
+    fullAddress: "", name: "", phone: "", note: "", lat: null, lng: null, mode: "asap", scheduledTime: "",
   });
   const [localPickupForm, setLocalPickupForm] = useState<PickupForm>({
     mode: "asap", scheduledTime: "", name: "", phone: "",
   });
   const splitCashConfirmRef = useRef(false);
-  const autoSavePendingRef = useRef(false);
+  // const autoSavePendingRef = useRef(false);
 
   const socketRef = useRef<Socket | null>(null);
 
@@ -1351,6 +1351,8 @@ export function GroupOrderPageShell() {
   const { data: shippingEstimate } = useShippingEstimateQuery(addrLat, addrLng, 0);
   const { data: payConfig } = usePublicPaymentConfigQuery();
   const { data: shippingConfig } = usePublicShippingConfigQuery();
+  const [savingFulfillment, setSavingFulfillment] = useState(false);
+  const [fulfillmentSaved, setFulfillmentSaved] = useState(true); // true = đã đồng bộ với server
 
   useEffect(() => {
     if (pushPermission === "granted" && myParticipantId) {
@@ -1614,6 +1616,11 @@ export function GroupOrderPageShell() {
     if (!state) return;
     setLocalType((state.type === "table" ? "pickup" : state.type) as "delivery" | "pickup");
     setLocalSelectedAddressId(state.address?.id ?? null);
+    setLocalDeliveryForm((p) => ({
+      ...p,
+      mode: state.scheduledDeliveryTime ? "scheduled" : "asap",
+      scheduledTime: state.scheduledDeliveryTime ?? "",
+    }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.id]);
 
@@ -1668,53 +1675,152 @@ export function GroupOrderPageShell() {
   const localShippingIsOutOfRange = localType === "delivery" && (localShippingEstimate?.isOutOfRange ?? false);
 
   // Mark auto-save pending whenever the user changes type, address, or payment
-  useEffect(() => {
-    autoSavePendingRef.current = true;
-  }, [localType, localSelectedAddressId]);
+  // useEffect(() => {
+  //   if (localType === "delivery") {
+  //     if (localShippingFetching || localShippingIsOutOfRange) return;
+  //     if (!localShowNewForm && !localSelectedAddressId) return;
+  //     if (localShowNewForm && !localDeliveryForm.lat) return;
+  //     if (localDeliveryForm.mode === "scheduled" && !localDeliveryForm.scheduledTime) return;
+  //   }
+  //   autoSavePendingRef.current = true;
+  // }, [localType, localSelectedAddressId, localDeliveryForm.mode, localDeliveryForm.scheduledTime]);
 
   // Trigger auto-save once shipping estimate settles (or immediately for pickup)
-  useEffect(() => {
-    if (!autoSavePendingRef.current || !isHost || state?.status !== "collecting" || !sessionToken) return;
-    if (localType === "delivery") {
-      if (localShippingFetching || localShippingIsOutOfRange) return;
-      if (!localShowNewForm && !localSelectedAddressId) return;
-      if (localShowNewForm && !localDeliveryForm.lat) return;
-    }
-    autoSavePendingRef.current = false;
-    void (async () => {
-      try {
-        let addressId: string | undefined;
-        let inlineAddress: { fullAddress: string; lat: number; lng: number } | undefined;
+  // useEffect(() => {
+  //   if (!autoSavePendingRef.current || !isHost || state?.status !== "collecting" || !sessionToken) return;
+  //   if (localType === "delivery") {
+  //     if (localShippingFetching || localShippingIsOutOfRange) return;
+  //     if (!localShowNewForm && !localSelectedAddressId) return;
+  //     if (localShowNewForm && !localDeliveryForm.lat) return;
+  //   }
+  //   autoSavePendingRef.current = false;
+  //   void (async () => {
+  //     try {
+  //       let addressId: string | undefined;
+  //       let inlineAddress: { fullAddress: string; lat: number; lng: number } | undefined;
 
-        if (localType === "delivery") {
-          if (localShowNewForm) {
-            inlineAddress = {
-              fullAddress: localDeliveryForm.fullAddress.trim(),
-              lat: localDeliveryForm.lat ?? 0,
-              lng: localDeliveryForm.lng ?? 0,
-            };
-          } else {
-            addressId = localSelectedAddressId ?? undefined;
-          }
-        }
-        const pickupTime = localType === "pickup"
-          ? new Date(Date.now() + 20 * 60_000).toISOString()
-          : undefined;
-        const newState = await setGroupOrderFulfillment(token, sessionToken, {
-          type: localType,
-          addressId,
-          inlineAddress,
-          shippingFee: localType === "delivery" ? localShippingFee : 0,
-          pickupTime,
-          shippingFeeMode: state?.shippingFeeMode,
-        });
-        setState(newState);
-      } catch {
-        // Silent fail — user can retry via the lock action
-      }
-    })();
+  //       if (localType === "delivery") {
+  //         if (localShowNewForm) {
+  //           inlineAddress = {
+  //             fullAddress: localDeliveryForm.fullAddress.trim(),
+  //             lat: localDeliveryForm.lat ?? 0,
+  //             lng: localDeliveryForm.lng ?? 0,
+  //           };
+  //         } else {
+  //           addressId = localSelectedAddressId ?? undefined;
+  //         }
+  //       }
+  //       const pickupTime = localType === "pickup"
+  //         ? new Date(Date.now() + 20 * 60_000).toISOString()
+  //         : undefined;
+
+  //       const scheduledDeliveryTime =
+  //         localType === "delivery" && localDeliveryForm.mode === "scheduled" && localDeliveryForm.scheduledTime
+  //           ? new Date(localDeliveryForm.scheduledTime).toISOString()
+  //           : undefined;
+
+  //       const newState = await setGroupOrderFulfillment(token, sessionToken, {
+  //         type: localType,
+  //         addressId,
+  //         inlineAddress,
+  //         shippingFee: localType === "delivery" ? localShippingFee : 0,
+  //         pickupTime,
+  //         scheduledDeliveryTime,
+  //         shippingFeeMode: state?.shippingFeeMode,
+  //       });
+  //       setState(newState);
+  //     } catch {
+  //       // Silent fail — user can retry via the lock action
+  //     }
+  //   })();
+  //   // eslint-disable-next-line react-hooks/exhaustive-deps
+  // }, [localShippingFetching, localShippingFee]);
+
+  useEffect(() => {
+    setFulfillmentSaved(false);
+  }, [localType, localSelectedAddressId, localDeliveryForm.mode, localDeliveryForm.scheduledTime, localDeliveryForm.fullAddress, localDeliveryForm.lat, localDeliveryForm.lng]);
+
+  useEffect(() => {
+    if (!state) return;
+    setLocalType((state.type === "table" ? "pickup" : state.type) as "delivery" | "pickup");
+    setLocalSelectedAddressId(state.address?.id ?? null);
+    setLocalDeliveryForm((p) => ({
+      ...p,
+      mode: state.scheduledDeliveryTime ? "scheduled" : "asap",
+      scheduledTime: state.scheduledDeliveryTime ?? "",
+    }));
+    setFulfillmentSaved(true); // vừa đồng bộ từ server
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [localShippingFetching, localShippingFee]);
+  }, [state?.id]);
+
+  const handleConfirmFulfillment = useCallback(async () => {
+    if (!isHost || state?.status !== "collecting" || !sessionToken) return;
+
+    if (localType === "delivery") {
+      if (localShippingIsOutOfRange) {
+        toast.error(t("error_delivery_out_of_range"));
+        return;
+      }
+      if (!localShowNewForm && !localSelectedAddressId) {
+        toast.error(t("error_select_address"));
+        return;
+      }
+      if (localShowNewForm && (!localDeliveryForm.fullAddress.trim() || localDeliveryForm.lat == null)) {
+        toast.error(t("error_select_address_from_suggestion"));
+        return;
+      }
+      if (localDeliveryForm.mode === "scheduled" && !localDeliveryForm.scheduledTime) {
+        toast.error(t("error_select_delivery_time"));
+        return;
+      }
+    }
+
+    setSavingFulfillment(true);
+    try {
+      let addressId: string | undefined;
+      let inlineAddress: { fullAddress: string; lat: number; lng: number } | undefined;
+
+      if (localType === "delivery") {
+        if (localShowNewForm) {
+          inlineAddress = {
+            fullAddress: localDeliveryForm.fullAddress.trim(),
+            lat: localDeliveryForm.lat ?? 0,
+            lng: localDeliveryForm.lng ?? 0,
+          };
+        } else {
+          addressId = localSelectedAddressId ?? undefined;
+        }
+      }
+
+      const pickupTime = localType === "pickup"
+        ? new Date(Date.now() + 20 * 60_000).toISOString()
+        : undefined;
+
+      const scheduledDeliveryTime =
+        localType === "delivery" && localDeliveryForm.mode === "scheduled" && localDeliveryForm.scheduledTime
+          ? new Date(localDeliveryForm.scheduledTime).toISOString()
+          : undefined;
+
+      const newState = await setGroupOrderFulfillment(token, sessionToken, {
+        type: localType,
+        addressId,
+        inlineAddress,
+        shippingFee: localType === "delivery" ? localShippingFee : 0,
+        pickupTime,
+        scheduledDeliveryTime,
+        shippingFeeMode: state?.shippingFeeMode,
+      });
+      setState(newState);
+      setFulfillmentSaved(true);
+      toast.success(t("group_fulfillment_saved"));
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string | string[] } } };
+      const msg = err?.response?.data?.message ?? "Có lỗi xảy ra.";
+      toast.error(typeof msg === "string" ? msg : msg.join(", "));
+    } finally {
+      setSavingFulfillment(false);
+    }
+  }, [isHost, state?.status, state?.shippingFeeMode, sessionToken, token, localType, localShowNewForm, localSelectedAddressId, localDeliveryForm, localShippingFee, localShippingIsOutOfRange, t]);
 
   // Per-participant amount for split mode (discount proportional, shipping per shippingFeeMode)
   const myAmountBreakdown = useMemo(() => {
@@ -2103,6 +2209,10 @@ export function GroupOrderPageShell() {
                 className="gap-1.5 rounded-full bg-[#1a3c34] px-4 font-semibold text-white disabled:opacity-60"
                 isDisabled={lockLoading || actionLoading}
                 onPress={() => {
+                  if (!fulfillmentSaved) {
+                    toast.error(t("group_fulfillment_unsaved_warning"));
+                    return;
+                  }
                   if (localType === "delivery" && (localShippingLat == null || localShippingLng == null)) {
                     toast.error(t("error_select_address_from_suggestion"));
                     return;
@@ -2476,6 +2586,34 @@ export function GroupOrderPageShell() {
                       </motion.div>
                     )}
                   </AnimatePresence>
+
+                  {/* ── Nút xác nhận ── */}
+                  <button
+                    type="button"
+                    onClick={() => void handleConfirmFulfillment()}
+                    disabled={savingFulfillment || fulfillmentSaved || (localType === "delivery" && localShippingFetching)}
+                    className={`flex h-11 w-full items-center justify-center gap-2 rounded-full text-sm font-semibold transition-colors disabled:cursor-not-allowed ${fulfillmentSaved
+                      ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+                      : "bg-[#1a3c34] text-white hover:opacity-90 disabled:opacity-60"
+                      }`}
+                  >
+                    {savingFulfillment ? (
+                      <>
+                        <Loader2 className="size-4 animate-spin" />
+                        {t("group_saving_delivery")}
+                      </>
+                    ) : fulfillmentSaved ? (
+                      <>
+                        <CheckCircle2 className="size-4" />
+                        {t("group_fulfillment_confirmed")}
+                      </>
+                    ) : (
+                      <>
+                        <Check className="size-4" />
+                        {t("group_confirm_fulfillment_btn")}
+                      </>
+                    )}
+                  </button>
                 </div>
               </motion.div>
             )}

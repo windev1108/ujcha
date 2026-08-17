@@ -284,7 +284,7 @@ export interface AdminOrder {
   user: { id: string; name: string; email: string; phone?: string | null } | null
   address: { id: string; fullAddress: string; lat?: number | null; lng?: number | null } | null
   shipper: { id: string; name: string } | null
-
+  scheduledDeliveryTime: string | null;
   items: AdminOrderItem[]
 
   groupOrder: {

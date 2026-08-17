@@ -44,6 +44,7 @@ interface SetFulfillmentInput {
   shippingFee?: number;
   paymentType?: string;
   shippingFeeMode?: string;
+  scheduledDeliveryTime?: string | null;
 }
 
 type GroupOrderFull = Prisma.GroupOrderGetPayload<{
@@ -184,7 +185,6 @@ export class GroupOrderService {
     const expiresAt = new Date(
       Date.now() + (cfg.expiryMinutes ?? 120) * 60 * 1000,
     );
-
     const go = await this.prisma.groupOrder.create({
       data: {
         token,
@@ -197,6 +197,7 @@ export class GroupOrderService {
         shippingFee: dto.shippingFee
           ? new Prisma.Decimal(dto.shippingFee)
           : new Prisma.Decimal(0),
+        scheduledDeliveryTime: dto.scheduledDeliveryTime ?? null,
         note: dto.note ?? null,
         expiresAt,
         participants: {
@@ -961,6 +962,7 @@ export class GroupOrderService {
       addressId: null,
       tableId: null,
       pickupTime: null,
+      scheduledDeliveryTime: null,
       inlineFullAddress: null,
       inlineLat: null,
       inlineLng: null,
@@ -987,12 +989,17 @@ export class GroupOrderService {
       data.pickupTime = new Date(dto.pickupTime);
     }
 
+    if (dto.type === 'delivery' && dto.scheduledDeliveryTime) {
+      data.scheduledDeliveryTime = new Date(dto.scheduledDeliveryTime);
+    }
+
     await this.prisma.groupOrder.update({ where: { token }, data });
 
     const updated = await this.prisma.groupOrder.findUnique({
       where: { token },
       include: this.fullInclude(),
     });
+    console.log({ updated })
     return this.serialize(updated!);
   }
 
@@ -1274,6 +1281,7 @@ export class GroupOrderService {
         addressId: go.addressId ?? null,
         tableId: go.tableId ?? null,
         pickupTime: go.pickupTime ?? null,
+        scheduledDeliveryTime: go.scheduledDeliveryTime ?? null,
         totalAmount,
         discountAmount,
         pointDiscountAmount: new Prisma.Decimal(0),

@@ -289,7 +289,7 @@ export function OrderDetailModal({
         const printerName = labelCfg.printerName || address
         if (!address) { setLabelStatus('error'); return }
         try {
-            const fontBase64 = await getFontBase64()
+            // const fontBase64 = await getFontBase64()
             const allLabels = buildOrderLabels(order, {
                 labelWidth: labelCfg.labelWidth,
                 labelHeight: labelCfg.labelHeight,
@@ -301,10 +301,15 @@ export function OrderDetailModal({
                 feedAfterCut: labelCfg.feedAfterCut,
                 paddingTop: labelCfg.paddingTop,
                 paddingBottom: labelCfg.paddingBottom,
-            }, fontBase64)
+            }, '')
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const result = await (eAPI?.printer as any)?.printLabelsByAddress(address, printerName, allLabels, labelCfg) ?? { ok: true }
             setLabelStatus(result?.ok === false ? 'error' : 'done')
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            // const r = result as any
+            // if (r?.ms !== undefined) {
+            //     alert(`In ${r.count ?? allLabels.length} tem — chế độ: ${r.mode} — mất ${r.ms}ms (${(r.ms / 1000).toFixed(1)}s)`)
+            // }
         } catch {
             setLabelStatus('error')
         }
@@ -406,6 +411,12 @@ export function OrderDetailModal({
                                     Giao hàng{order.shipper ? ` · ${order.shipper.name}` : ''}
                                 </span>
                             )}
+                            {order.type === 'delivery' && order.scheduledDeliveryTime && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-200">
+                                    <Clock className="size-3" />
+                                    Hẹn giờ giao · {formatDate(order.scheduledDeliveryTime)}
+                                </span>
+                            )}
                             {order.type === 'table' && (
                                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 ring-1 ring-amber-200">
                                     <UtensilsCrossed className="size-3" />
@@ -469,6 +480,14 @@ export function OrderDetailModal({
                                         <div className="flex items-start gap-2.5 text-sm">
                                             <MapPin className="size-4 shrink-0 text-sky-500 mt-0.5" />
                                             <span className="text-gray-700 leading-snug">{deliveryAddr}</span>
+                                        </div>
+                                    )}
+                                    {order.scheduledDeliveryTime && (
+                                        <div className="flex items-center gap-2.5 text-sm">
+                                            <Clock className="size-4 shrink-0 text-sky-500" />
+                                            <span className="text-gray-700">
+                                                Giao lúc: <strong>{formatDate(order.scheduledDeliveryTime)}</strong>
+                                            </span>
                                         </div>
                                     )}
                                 </div>

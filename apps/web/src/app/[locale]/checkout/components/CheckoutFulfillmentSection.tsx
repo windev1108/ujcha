@@ -381,6 +381,41 @@ function DeliveryFulfillmentCard({
         </div>
       )}
 
+      {/* ── Delivery time — luôn hiển thị, không phụ thuộc showNewForm ── */}
+      <div>
+        <label className="mb-2 block text-xs font-medium text-foreground/70">
+          {t("delivery_time_label")}
+        </label>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            onClick={() => onChange({ mode: "asap", scheduledTime: "" })}
+            className={`flex-1 rounded-2xl border-2 px-4 py-3 text-left text-sm font-medium transition-colors ${form.mode !== "scheduled"
+              ? "border-kun-products-forest bg-kun-mint/15 text-kun-products-forest"
+              : "border-transparent bg-kun-filter-pill-bg text-foreground/80 ring-1 ring-black/6"
+              }`}
+          >
+            {t("delivery_asap")}
+          </button>
+          <button
+            type="button"
+            onClick={() => onChange({ mode: "scheduled" })}
+            className={`flex-1 rounded-2xl border-2 px-4 py-3 text-left text-sm font-medium transition-colors ${form.mode === "scheduled"
+              ? "border-kun-products-forest bg-kun-mint/15 text-kun-products-forest"
+              : "border-transparent bg-kun-filter-pill-bg text-foreground/80 ring-1 ring-black/6"
+              }`}
+          >
+            {t("delivery_schedule")}
+          </button>
+        </div>
+        {form.mode === "scheduled" && (
+          <PickupScheduler
+            value={form.scheduledTime}
+            onChange={(iso) => onChange({ scheduledTime: iso })}
+          />
+        )}
+      </div>
+
       {/* New address form */}
       <AnimatePresence initial={false}>
         {showNewForm && (
@@ -453,9 +488,9 @@ function DeliveryFulfillmentCard({
 
               {/* Recipient info — toggle between account and custom */}
               <div className="space-y-3">
-                <label className="block text-xs font-medium text-foreground/70">
+                {/* <label className="block text-xs font-medium text-foreground/70">
                   {t("recipient_label")} *
-                </label>
+                </label> */}
                 {canUseAccount && (
                   <ContactModeToggle mode={contactMode} onModeChange={handleContactModeChange} />
                 )}

@@ -75,9 +75,9 @@ const STATUS_DOT: Record<OrderStatus, string> = {
 }
 
 const ORDER_TYPE_LABEL: Record<string, { label: string; Icon: React.ElementType }> = {
-  table:    { label: 'Tại bàn',   Icon: Utensils },
+  table: { label: 'Tại bàn', Icon: Utensils },
   delivery: { label: 'Giao hàng', Icon: Truck },
-  pickup:   { label: 'Mang về',   Icon: ShoppingBag },
+  pickup: { label: 'Mang về', Icon: ShoppingBag },
 }
 
 const PAYMENT_TYPE_LABEL: Record<string, string> = {
@@ -209,7 +209,7 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
   const [quickDate, setQuickDate] = useState<QuickDate>('today')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
-
+  const [preOrderOnly, setPreOrderOnly] = useState(false)
   // Queue: IDs of pending orders that arrived since last full-clear; audio plays until queue is empty
   const [newOrderQueue, setNewOrderQueue] = useState<Set<string>>(new Set())
 
@@ -221,6 +221,8 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
   const [returningSet, setReturningSet] = useState<Set<string>>(new Set())
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const scheduledCount = orders.filter(o => !!o.scheduledDeliveryTime).length
+
 
   useEffect(() => {
     const audio = new Audio(newOrderMp3)
@@ -230,7 +232,7 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
     audioRef.current = audio
     audio.play()
       .then(() => { audio.pause(); audio.currentTime = 0 })
-      .catch(() => {})
+      .catch(() => { })
     return () => { audio.pause(); audio.src = ''; audioRef.current = null }
   }, [])
 
@@ -409,7 +411,8 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
       || (o.orderRef ?? '').toLowerCase().includes(q)
       || o.items.some(i => i.product?.name?.toLowerCase().includes(q))
       || (o.table?.name ?? '').toLowerCase().includes(q)
-    return matchStatus && matchSearch
+    const matchSchedule = !preOrderOnly || !!o.scheduledDeliveryTime
+    return matchStatus && matchSearch && matchSchedule
   })
 
   const handleRefresh = () => {
@@ -557,6 +560,27 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
                 </button>
               )
             })}
+            {/* Divider */}
+            <div className="mx-1 h-4 w-px shrink-0 bg-gray-200" />
+            {/* Đặt trước toggle */}
+            <button
+              onClick={() => setPreOrderOnly(v => !v)}
+              className={`flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all ${preOrderOnly
+                ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/25'
+                : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                }`}
+            >
+              <Clock className="size-3 shrink-0" />
+              Đặt trước
+              {scheduledCount > 0 && (
+                <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none ${preOrderOnly
+                  ? 'bg-white/25 text-white'
+                  : 'bg-indigo-200/70 text-indigo-700'
+                  }`}>
+                  {scheduledCount}
+                </span>
+              )}
+            </button>
           </div>
         </div>
 
@@ -774,6 +798,11 @@ function OrderCard({
             {order.type === 'delivery' && order.shipper && (
               <span className="inline-flex items-center gap-0.5 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">
                 <Bike className="size-2.5" />{order.shipper.name}
+              </span>
+            )}
+            {order.type === 'delivery' && order.scheduledDeliveryTime && (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700">
+                <Clock className="size-2.5" /> Hẹn giờ giao · {formatDate(order.scheduledDeliveryTime)}
               </span>
             )}
             {order.paymentStatus === 'paid' && (

@@ -1197,5 +1197,14 @@
   "error_select_address_from_suggestion": "Vui lòng chọn một địa chỉ hợp lệ.",
   "explore_button": "Khám phá ngay",
   "sold_count": "Đã bán {count}",
-  "dish": "món"
+  "dish": "món",
+  "delivery_time_label": "Hình thức giao hàng",
+  "delivery_asap": "Giao ngay",
+  "delivery_schedule": "Hẹn giờ giao",
+  "error_select_delivery_time": "Vui lòng chọn thời gian giao hàng.",
+  "scheduled_delivery_badge": "Hẹn giờ giao",
+  "group_confirm_fulfillment_btn": "Xác nhận thông tin giao hàng",
+  "group_fulfillment_confirmed": "Đã xác nhận",
+  "group_fulfillment_saved": "Đã lưu thông tin giao hàng",
+  "group_fulfillment_unsaved_warning": "Vui lòng xác nhận thông tin giao hàng trước khi chốt đơn"
 }

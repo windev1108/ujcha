@@ -102,6 +102,17 @@ export class CreateOrderDto {
   @IsDateString()
   pickupTime?: string;
 
+  @ApiPropertyOptional({
+    description:
+      'ISO 8601 — hẹn giờ giao hàng (tùy chọn, chỉ áp dụng type = delivery). Không truyền = giao ngay (ASAP).',
+  })
+  @ValidateIf(
+    (o: CreateOrderDto) =>
+      o.type === OrderType.delivery && !!o.scheduledDeliveryTime,
+  )
+  @IsDateString()
+  scheduledDeliveryTime?: string;
+
   @ApiProperty({ type: [CreateOrderItemDto] })
   @IsArray()
   @ValidateNested({ each: true })

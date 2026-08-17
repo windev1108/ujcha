@@ -366,6 +366,8 @@ model Order {
   tableId        String?       @db.Uuid
   table          Table?        @relation(fields: [tableId], references: [id], onDelete: SetNull)
   pickupTime     DateTime?
+  scheduledDeliveryTime DateTime?
+
   /// Giao hàng không đăng nhập: địa chỉ đầy đủ (khi không dùng addressId).
   guestDeliveryAddress String?
   guestDeliveryPhone   String?
@@ -937,6 +939,7 @@ model GroupOrder {
   tableId     String?          @db.Uuid
   table       Table?           @relation(fields: [tableId], references: [id], onDelete: SetNull)
   pickupTime  DateTime?
+  scheduledDeliveryTime DateTime?
   paymentType      GroupParticipantPaymentType @default(cash)
   shippingFee      Decimal          @default(0) @db.Decimal(12, 2)
   shippingFeeMode  String           @default("split")

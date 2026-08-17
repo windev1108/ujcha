@@ -43,6 +43,10 @@ export class CreateGroupOrderDto {
 
   @IsOptional()
   @IsString()
+  scheduledDeliveryTime?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(500)
   note?: string;
 }
@@ -157,6 +161,10 @@ export class SetFulfillmentDto {
   @ValidateNested()
   @Type(() => InlineAddressDto)
   inlineAddress?: InlineAddressDto;
+
+  @IsOptional()
+  @IsString()
+  scheduledDeliveryTime?: string | null;
 }
 
 export class DiscountTierDto {

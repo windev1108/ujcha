@@ -126,6 +126,19 @@ export function formatOptionDisplay(key: string, value: string): string {
   return value
 }
 
+function isDefaultLabelOption(key: string, rawValue: string): boolean {
+  const k = key.trim().toLowerCase()
+  const v = stripEmbeddedPrice(rawValue).trim().toLowerCase()
+
+  const isSweetnessKey = k.includes('ngọt') || k.includes('đường')
+  const isIceKey = k.includes('đá')
+
+  if (isSweetnessKey) return v.includes('vừa') || v.includes('bình thường')
+  if (isIceKey) return v.includes('bình thường')
+
+  return false
+}
+
 export function stripEmbeddedPrice(text: string): string {
   return text
     .replace(/\+?\s*[\d.,]+\s*(đ|vnđ|vnd)(?![a-zA-Z0-9])/gi, '')
@@ -467,7 +480,8 @@ export function buildSingleLabelHtml(
     item.optionsJson &&
       typeof item.optionsJson === 'object' &&
       !Array.isArray(item.optionsJson)
-      ? Object.entries(item.optionsJson as Record<string, string>).filter(([, v]) => Boolean(v))
+      ? Object.entries(item.optionsJson as Record<string, string>)
+        .filter(([k, v]) => Boolean(v) && !isDefaultLabelOption(k, v))
       : []
 
   const extras = parseExtras(item.extrasJson)

@@ -1198,5 +1198,14 @@
   "error_select_address_from_suggestion": "Please select an invalid address from the suggestions.",
   "explore_button": "Explore Now",
   "sold_count": "{count} sold",
-  "dish": "dish"
+  "dish": "dish",
+  "delivery_time_label": "Delivery time",
+  "delivery_asap": "Deliver ASAP",
+  "delivery_schedule": "Schedule Delivery",
+  "error_select_delivery_time": "Please select a delivery time.",
+  "scheduled_delivery_badge": "Scheduled",
+  "group_confirm_fulfillment_btn": "Confirm Delivery Information",
+  "group_fulfillment_confirmed": "Delivery Information Confirmed",
+  "group_fulfillment_saved": "Delivery Information Saved",
+  "group_fulfillment_unsaved_warning": "Please confirm delivery information before checking out"
 }

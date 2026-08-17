@@ -35,6 +35,7 @@ export interface CreateOrderPayload {
   addressId?: string
   inlineAddress?: InlineAddressPayload
   pickupTime?: string
+  scheduledDeliveryTime?: string
   tableId?: string
   items: CreateOrderItem[]
   voucherCode?: string
@@ -239,6 +240,7 @@ export interface OrderDetail extends Omit<UserOrder, 'items' | 'address'> {
   readyAt: string | null
   deliveringAt: string | null
   pickedUpAt: string | null
+  scheduledDeliveryTime: string | null
   arrivedAt: string | null
   completedAt: string | null
   cancelledAt: string | null

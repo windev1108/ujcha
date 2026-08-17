@@ -661,6 +661,12 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                 <span className="rounded-full bg-surface-secondary px-3 py-1 text-xs font-medium text-foreground/70">
                   {t(order.paymentType as "cash" | "bank_transfer")}
                 </span>
+                {order.type === "delivery" && order.scheduledDeliveryTime && (
+                  <span className="flex items-center gap-1 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-200">
+                    <Clock className="size-3" />
+                    {`${t("scheduled_delivery_badge")} : ${fmtStepTime(order.scheduledDeliveryTime, locale)}`}
+                  </span>
+                )}
                 {isGroupOrder && groupOrder?.paymentMode === "host_pays" && (
                   <span className="flex items-center gap-1 rounded-full bg-[#1a3c34]/8 px-3 py-1 text-xs font-semibold text-[#1a3c34]">
                     <CreditCard className="size-3" />

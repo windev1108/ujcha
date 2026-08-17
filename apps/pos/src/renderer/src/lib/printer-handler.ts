@@ -571,6 +571,83 @@ async function printHtmlViaElectronWindow(
     return job
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// STRATEGY 4b — In hàng loạt tem qua 1 window dùng chung (thay vì tạo mới mỗi tem)
+// ═══════════════════════════════════════════════════════════════════════════════
+async function printLabelBatchViaElectronWindow(
+    printerName: string,
+    htmlList: string[],
+    paperWidthMm: number,
+    labelHeightMm?: number,
+): Promise<void> {
+    if (!htmlList.length) return
+
+    const win = new BrowserWindow({
+        show: false,
+        x: -9999,
+        y: -9999,
+        width: 600,
+        height: 900,
+        frame: false,
+        skipTaskbar: true,
+        webPreferences: { contextIsolation: true, nodeIntegration: false },
+    })
+
+    try {
+        // win.show()
+
+        const heightMicrons = labelHeightMm && labelHeightMm > 0 ? labelHeightMm * 1000 : 297000
+        const printOpts = {
+            silent: true,
+            deviceName: printerName,
+            printBackground: true,
+            pageSize: { width: paperWidthMm * 1000, height: heightMicrons },
+            margins: { marginType: 'none' as const },
+        }
+
+        // Load tem ĐẦU TIÊN như một trang đầy đủ — parse @font-face/CSS đúng 1 lần duy nhất.
+        const firstDataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(htmlList[0])}`
+        await Promise.race([
+            win.loadURL(firstDataUrl),
+            new Promise<void>((_, reject) =>
+                setTimeout(() => reject(new Error('loadURL timeout (8s)')), 8000)
+            ),
+        ])
+        await new Promise(r => setTimeout(r, 150))
+
+        for (let i = 0; i < htmlList.length; i++) {
+            if (i > 0) {
+                // Chỉ thay nội dung <body> — không điều hướng lại trang, nhờ đó
+                // không phải parse lại font/CSS embedded mỗi tem (đây là nguồn
+                // delay chính trước đây).
+                const bodyMatch = htmlList[i].match(/<body[^>]*>([\s\S]*?)<\/body>/i)
+                const bodyInner = bodyMatch ? bodyMatch[1] : ''
+                await win.webContents.executeJavaScript(
+                    `document.body.innerHTML = ${JSON.stringify(bodyInner)};`
+                )
+                await new Promise(r => setTimeout(r, 40))
+            }
+
+            await new Promise<void>((resolve, reject) => {
+                const fallback = setTimeout(() => {
+                    console.log('[print-batch] callback timeout — coi như đã spool', i + 1, '/', htmlList.length)
+                    resolve()
+                }, 8000)
+                win.webContents.print(printOpts, (success, failureReason) => {
+                    clearTimeout(fallback)
+                    if (success) resolve()
+                    else reject(new Error(failureReason ?? 'Máy in từ chối lệnh in'))
+                })
+            })
+
+            await new Promise(r => setTimeout(r, 150))
+        }
+    } finally {
+        win.destroy()
+    }
+}
+
 async function _doPrint(
     printerName: string,
     html: string,
@@ -876,7 +953,7 @@ async function buildEscPosImageBill(html: string, paperWidthMm: number): Promise
                 })
             `),
             new Promise(r => setTimeout(r, 5000)),
-        ]).catch(() => {})
+        ]).catch(() => { })
 
         // scrollHeight with zoom:ZOOM on body ≈ ZOOM × original CSS height
         let cssDocH = 1600
@@ -1328,12 +1405,26 @@ export function registerPrinterHandlers(): void {
             paddingBottom: cfg.paddingBottom,
         } : undefined
 
-        console.log('[printLabelsByAddress]', { address, printerName, count: labels.length, labelSize, spacing })
+        const isUsb = !isComPort(address) && !isIpAddress(address)
+        const t0 = Date.now()
+
         try {
-            for (const html of labels)
-                await smartPrint(address, printerName || address, html, pw, 'label', labelSize, spacing)
-            return { ok: true }
-        } catch (e) { return { ok: false, error: String(e) } }
+            let mode: string
+            if (isUsb && labels.length > 1) {
+                mode = 'batch'
+                const usbTarget = /^USB\d+$/i.test(address) ? printerName : (address || printerName)
+                await printLabelBatchViaElectronWindow(usbTarget, labels, labelSize.width, labelSize.height)
+            } else {
+                mode = 'sequential'
+                for (const html of labels)
+                    await smartPrint(address, printerName || address, html, pw, 'label', labelSize, spacing)
+            }
+            const ms = Date.now() - t0
+            return { ok: true, ms, mode, count: labels.length }
+        } catch (e) {
+            const ms = Date.now() - t0
+            return { ok: false, error: String(e), ms }
+        }
     })
 
     // ── COM port scan for UI ───────────────────────────────────────────────────

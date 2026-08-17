@@ -136,4 +136,12 @@ export class OrderValidationService {
       });
     }
   }
+
+  assertDeliveryScheduleWindow(
+    scheduledTime: Date,
+    now: Date,
+    opts?: { skipMinLead?: boolean },
+  ) {
+    this.assertPickupWindow(scheduledTime, now, opts);
+  }
 }

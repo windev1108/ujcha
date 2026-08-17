@@ -370,6 +370,10 @@ export class OrderService {
       dto.type === OrderType.pickup && dto.pickupTime
         ? new Date(dto.pickupTime)
         : null;
+    const scheduledDeliveryDate =
+      dto.type === OrderType.delivery && dto.scheduledDeliveryTime
+        ? new Date(dto.scheduledDeliveryTime)
+        : null;
 
     if (dto.type === OrderType.pickup && pickupDate) {
       if (Number.isNaN(pickupDate.getTime())) {
@@ -381,6 +385,20 @@ export class OrderService {
       this.orderValidation.assertPickupWindow(pickupDate, new Date(), {
         skipMinLead: options?.skipPickupLead === true,
       });
+    }
+
+    if (dto.type === OrderType.delivery && scheduledDeliveryDate) {
+      if (Number.isNaN(scheduledDeliveryDate.getTime())) {
+        throw new BadRequestException({
+          message: 'scheduledDeliveryTime không hợp lệ.',
+          code: 'ORDER_SCHEDULED_DELIVERY_TIME_INVALID',
+        });
+      }
+      this.orderValidation.assertDeliveryScheduleWindow(
+        scheduledDeliveryDate,
+        new Date(),
+        { skipMinLead: options?.skipPickupLead === true },
+      );
     }
 
     const MAX_SAVED_ADDRESSES = 3;
@@ -559,6 +577,7 @@ export class OrderService {
           guestDeliveryName: dto.guestDeliveryName?.trim() || null,
           tableId: dto.type === OrderType.table ? dto.tableId! : null,
           pickupTime: dto.type === OrderType.pickup ? pickupDate! : null,
+          scheduledDeliveryTime: scheduledDeliveryDate,
           totalAmount,
           discountAmount,
           shippingFee,

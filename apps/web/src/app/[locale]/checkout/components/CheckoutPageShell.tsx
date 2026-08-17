@@ -123,6 +123,8 @@ export function CheckoutPageShell() {
     note: "",
     lat: null,
     lng: null,
+    mode: "asap",
+    scheduledTime: "",
   });
 
   const [pickupForm, setPickupForm] = useState<PickupForm>({
@@ -286,6 +288,11 @@ export function CheckoutPageShell() {
           return;
         }
       }
+
+      if (deliveryForm.mode === "scheduled" && !deliveryForm.scheduledTime) {
+        setOrderError(t("error_select_delivery_time"));
+        return;
+      }
     }
 
     if (tab === CHECKOUT_TAB.PICKUP) {
@@ -352,6 +359,10 @@ export function CheckoutPageShell() {
       const orderedItemIds = items.map((i) => i.id);
 
       let order: CreatedOrder;
+      const scheduledDeliveryTime =
+        tab === CHECKOUT_TAB.DELIVERY && deliveryForm.mode === "scheduled" && deliveryForm.scheduledTime
+          ? new Date(deliveryForm.scheduledTime).toISOString()
+          : undefined;
 
       if (tab === CHECKOUT_TAB.TABLE) {
         order = await createOrderMutation.mutateAsync({
@@ -375,6 +386,7 @@ export function CheckoutPageShell() {
             guestDeliveryPhone: deliveryForm.phone.trim() || undefined,
             items: orderItems,
             shippingFee: shippingFee > 0 ? shippingFee : undefined,
+            scheduledDeliveryTime
           });
         } else if (isNewAddress) {
           // Member + new address: save to DB via inlineAddress
@@ -392,6 +404,7 @@ export function CheckoutPageShell() {
             voucherCode: appliedVoucher?.code,
             discountAmount: voucherDiscount > 0 ? voucherDiscount : undefined,
             shippingFee: shippingFee > 0 ? shippingFee : undefined,
+            scheduledDeliveryTime
           });
         } else {
           order = await createOrderMutation.mutateAsync({
@@ -402,6 +415,7 @@ export function CheckoutPageShell() {
             voucherCode: appliedVoucher?.code,
             discountAmount: voucherDiscount > 0 ? voucherDiscount : undefined,
             shippingFee: shippingFee > 0 ? shippingFee : undefined,
+            scheduledDeliveryTime
           });
         }
       } else {
