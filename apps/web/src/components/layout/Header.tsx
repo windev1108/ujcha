@@ -15,6 +15,8 @@ import {
   UtensilsCrossed, Tag, Users, Share2, BookOpen, Info,
   LogOut, Star, ShoppingBag, User, MapPin, ClipboardList, ArrowRight,
   MessageSquare,
+  Ticket,
+  StoreIcon,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useAuth } from "@/hooks";
@@ -348,10 +350,14 @@ export function AppHeader() {
                     </p>
                     <div className="grid grid-cols-2 gap-2">
                       {[
-                        { href: ROUTES.ORDERS, label: t("order_history"), Icon: ShoppingBag },
                         { href: ROUTES.PROFILE, label: t("my_account"), Icon: User },
+                        { href: ROUTES.ORDERS, label: t("order_history"), Icon: ShoppingBag },
                         { href: ROUTES.NOTIFICATIONS, label: t("notifications"), Icon: Bell },
                         { href: ROUTES.ADDRESSES, label: t("shipping_addresses"), Icon: MapPin },
+                        { href: ROUTES.GROUP_ORDER_SESSIONS, label: t("group_order_session_title"), Icon: Users },
+                        { href: ROUTES.VOUCHERS, label: t("my_vouchers"), Icon: Ticket },
+                        { href: ROUTES.REWARDS, label: t("redeem_points"), Icon: StoreIcon },
+                        { href: ROUTES.FEEDBACK, label: t("feedback"), Icon: MessageSquare },
                       ].map(({ href, label, Icon: Ic }) => (
                         <Link
                           key={href}
