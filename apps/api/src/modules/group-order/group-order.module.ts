@@ -7,7 +7,6 @@ import { GroupOrderController } from './group-order.controller';
 import { GroupOrderGateway } from './group-order.gateway';
 import { GroupOrderService } from './group-order.service';
 import { MailService } from '../mail/mail.service';
-import { PaymentReminderModule } from '../payment-reminder/payment-reminder.module';
 
 @Module({
   imports: [
@@ -15,7 +14,6 @@ import { PaymentReminderModule } from '../payment-reminder/payment-reminder.modu
     AuthModule,
     EventsModule,
     NotificationModule,
-    PaymentReminderModule,
   ],
   controllers: [GroupOrderController],
   providers: [GroupOrderService, GroupOrderGateway, MailService],

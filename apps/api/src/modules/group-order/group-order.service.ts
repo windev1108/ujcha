@@ -26,7 +26,6 @@ import type {
   JoinGroupOrderDto,
 } from './dto/group-order.dto';
 import { MailService } from '../mail/mail.service';
-import { PaymentReminderService } from '../payment-reminder/payment-reminder.service';
 
 const GROUP_ORDER_CONFIG_KEY = 'ujcha:group-order:config';
 const GROUP_ORDER_CONFIG_TTL = 60; // 60 seconds
@@ -60,7 +59,6 @@ export class GroupOrderService {
     private readonly ordersGateway: OrdersGateway,
     private readonly notificationService: NotificationService,
     private readonly mailService: MailService,
-    private readonly paymentReminder: PaymentReminderService,
   ) { }
 
   private fullInclude() {
@@ -356,11 +354,6 @@ export class GroupOrderService {
       data: { status: GroupOrderStatus.cancelled },
       include: this.fullInclude(),
     });
-    await Promise.all(
-      go.participants.map((p) =>
-        this.paymentReminder.cancelForParticipant(p.id),
-      ),
-    );
     return this.serialize(updated);
   }
 
@@ -383,7 +376,6 @@ export class GroupOrderService {
     if (participant.isHost)
       throw new ForbiddenException('Chủ nhóm không thể rời nhóm.');
     const leaverName = participant.user?.name ?? participant.guestName ?? '?';
-    await this.paymentReminder.cancelForParticipant(participant.id)
     await this.prisma.groupOrderParticipant.delete({
       where: { id: participant.id },
     });
@@ -415,7 +407,6 @@ export class GroupOrderService {
     const target = go.participants.find((p) => p.id === participantId);
     if (!target) throw new NotFoundException('Không tìm thấy thành viên.');
     if (target.isHost) throw new ForbiddenException('Không thể xóa chủ nhóm.');
-    await this.paymentReminder.cancelForParticipant(participantId)
     await this.prisma.groupOrderParticipant.delete({
       where: { id: participantId },
     });
@@ -423,6 +414,16 @@ export class GroupOrderService {
     return { kicked: participantId, groupOrder: updated };
   }
 
+  /**
+   * BUGFIX (session bị đảo lung tung giữa các participant):
+   * - Ưu tiên tuyệt đối: userId (đã đăng nhập) → luôn map đúng participant của chính họ.
+   * - deviceId CHỈ được dùng để tự-reconnect ngầm (không có guestName đi kèm).
+   *   Nếu người dùng vừa nhập tên (`guestName`) để tham gia — tức đang chủ động
+   *   khẳng định một danh tính — TUYỆT ĐỐI không được âm thầm trả về participant
+   *   khác chỉ vì device fingerprint trùng (fingerprint không đảm bảo unique
+   *   giữa các thiết bị khác nhau, đặc biệt trên mobile webview). Đây chính là
+   *   nguyên nhân gây ra bug "vào nhóm thấy bị gán nhầm session người khác".
+   */
   async join(token: string, userId: string | null, dto: JoinGroupOrderDto) {
     const go = await this.prisma.groupOrder.findUnique({
       where: { token },
@@ -461,12 +462,11 @@ export class GroupOrderService {
       }
     }
 
-    // Device match: return existing session (handles cross-browser re-join on same device,
-    // and associates userId when a logged-in user reclaims a guest slot).
-    // Runs before the status check so returning members can always reconnect.
-    if (dto.deviceId) {
+    // Device match: CHỈ áp dụng cho reconnect ngầm (không có guestName).
+    // Không bao giờ dùng để override một lượt join chủ động có nhập tên.
+    if (dto.deviceId && !dto.guestName) {
       const sameDevice = go.participants.find(
-        (p) => (p as any).deviceId === dto.deviceId,
+        (p) => (p as any).deviceId && (p as any).deviceId === dto.deviceId,
       );
       if (sameDevice) {
         if (userId && !(sameDevice as any).userId) {
@@ -491,6 +491,15 @@ export class GroupOrderService {
       throw new BadRequestException({
         message: 'Đơn nhóm không còn nhận thành viên mới.',
         code: 'GROUP_ORDER_NOT_COLLECTING',
+      });
+    }
+
+    // Giới hạn số người tham gia (GroupOrderConfig.limitParticipants, 0 = không giới hạn)
+    const cfg = await this.getConfig();
+    if (cfg.limitParticipants && go.participants.length >= cfg.limitParticipants) {
+      throw new BadRequestException({
+        message: `Đơn nhóm đã đủ ${cfg.limitParticipants} người, không thể tham gia thêm.`,
+        code: 'GROUP_ORDER_FULL',
       });
     }
 
@@ -656,10 +665,6 @@ export class GroupOrderService {
               paymentType: 'bank_transfer',
             } as any,
           });
-          await this.paymentReminder.scheduleForParticipant(
-            host.id,
-            order.paymentCode,
-          );
         }
       } else {
         for (const p of goFull!.participants.filter(
@@ -672,10 +677,6 @@ export class GroupOrderService {
               paymentType: 'bank_transfer',
             } as any,
           });
-          await this.paymentReminder.scheduleForParticipant(
-            p.id,
-            order.paymentCode,
-          );
         }
       }
 
@@ -862,7 +863,6 @@ export class GroupOrderService {
         paidAt: new Date(),
       },
     });
-    await this.paymentReminder.cancelForParticipant(participantId);
 
     const goCheck = await this.prisma.groupOrder.findUnique({
       where: { token },
@@ -910,15 +910,6 @@ export class GroupOrderService {
     if (go.status !== GroupOrderStatus.locked) {
       throw new BadRequestException('Don nhom chua duoc khoa.');
     }
-    const goWithParticipants = await this.prisma.groupOrder.findUnique({
-      where: { token },
-      include: { participants: true },
-    });
-    await Promise.all(
-      (goWithParticipants?.participants ?? []).map((p) =>
-        this.paymentReminder.cancelForParticipant(p.id),
-      ),
-    );
 
     await this.prisma.groupOrder.update({
       where: { token },
@@ -999,7 +990,6 @@ export class GroupOrderService {
       where: { token },
       include: this.fullInclude(),
     });
-    console.log({ updated })
     return this.serialize(updated!);
   }
 
@@ -1030,6 +1020,7 @@ export class GroupOrderService {
         isEnabled: true,
         expiryMinutes: 120,
         discountTiers: [] as unknown[],
+        limitParticipants: 0,
       };
 
     await this.redis.set(
@@ -1044,6 +1035,7 @@ export class GroupOrderService {
     isEnabled?: boolean;
     expiryMinutes?: number;
     discountTiers?: Array<{ minParticipants: number; discountPercent: number }>;
+    limitParticipants?: number;
   }) {
     const updateData: any = { updatedAt: new Date() };
     if (data.isEnabled !== undefined) updateData.isEnabled = data.isEnabled;
@@ -1054,6 +1046,13 @@ export class GroupOrderService {
         (a, b) => b.minParticipants - a.minParticipants,
       );
     }
+    if (data.limitParticipants !== undefined) {
+      // 0 = không giới hạn
+      updateData.limitParticipants = Math.max(
+        0,
+        Math.floor(data.limitParticipants),
+      );
+    }
 
     const cfg = await this.prisma.groupOrderConfig.upsert({
       where: { id: 'default' },
@@ -1062,6 +1061,10 @@ export class GroupOrderService {
         isEnabled: data.isEnabled ?? true,
         expiryMinutes: data.expiryMinutes ?? 120,
         discountTiersJson: updateData.discountTiersJson ?? [],
+        limitParticipants:
+          data.limitParticipants !== undefined
+            ? Math.max(0, Math.floor(data.limitParticipants))
+            : 0,
       },
       update: updateData,
     });
@@ -1075,6 +1078,7 @@ export class GroupOrderService {
     isEnabled: boolean;
     expiryMinutes: number;
     discountTiersJson: unknown;
+    limitParticipants?: number | null;
   }) {
     return {
       id: cfg.id,
@@ -1083,6 +1087,7 @@ export class GroupOrderService {
       discountTiers: Array.isArray(cfg.discountTiersJson)
         ? cfg.discountTiersJson
         : [],
+      limitParticipants: cfg.limitParticipants ?? 0,
     };
   }
 
@@ -1142,7 +1147,6 @@ export class GroupOrderService {
       where: { id: participantId },
       data: { paymentStatus: 'paid' as any, paidAt: new Date() },
     });
-    await this.paymentReminder.cancelForParticipant(participantId);
     const goCheck = await this.prisma.groupOrder.findUnique({
       where: { token },
       include: { participants: { include: { items: true } } },

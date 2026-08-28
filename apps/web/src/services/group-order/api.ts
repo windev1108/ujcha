@@ -62,6 +62,7 @@ export interface GroupOrderConfig {
   isEnabled: boolean
   expiryMinutes: number
   discountTiers: GroupDiscountTier[]
+  limitParticipants: number
 }
 
 export async function createGroupOrder(payload: {

@@ -13,18 +13,14 @@ import {
   Bike,
   Check,
   CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
   Clock,
   Copy,
   Crown,
   FlameIcon,
   Info,
-  Link2,
   Loader2,
   Lock,
   LogOut,
-  MapPin,
   Minus,
   Pencil,
   Plus,
@@ -32,7 +28,6 @@ import {
   Search,
   Share2,
   ShoppingBag,
-  StarIcon,
   StickyNote,
   Trash2,
   Truck,
@@ -84,7 +79,6 @@ import { useLocale, useTranslations } from "next-intl";
 import { getDisplayName } from "@/lib/product-name";
 import { getDeviceId } from "@/hooks/useDeviceId";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
-import { SOLD_COUNT_DISPLAY_BOOST } from "@/lib/constants";
 
 const SESSION_KEY = (token: string) => `group_order_session_${token}`;
 const PARTICIPANT_KEY = (token: string) => `group_order_participant_${token}`;
@@ -852,7 +846,7 @@ function ParticipantRow({
               )}
             </p>
             <p className="text-xs text-foreground/50">
-              {participant.items.length} món ·{" "}
+              {participant.items.length} {t('dish')} ·{" "}
               <span className="text-sm font-bold tabular-nums text-[#1a3c34]">{fmtVnd(participant.subtotal)}</span>
             </p>
           </div>
@@ -1281,6 +1275,7 @@ export function GroupOrderPageShell() {
 
   const [state, setState] = useState<GroupOrderState | null>(null);
   const [config, setConfig] = useState<GroupDiscountTier[]>([]);
+  const [limitParticipants, setLimitParticipants] = useState(0)
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
@@ -1349,7 +1344,6 @@ export function GroupOrderPageShell() {
   const addrLat = matchedAddress?.lat && matchedAddress.lat !== 0 ? matchedAddress.lat : null;
   const addrLng = matchedAddress?.lng && matchedAddress.lng !== 0 ? matchedAddress.lng : null;
   const { data: shippingEstimate } = useShippingEstimateQuery(addrLat, addrLng, 0);
-  const { data: payConfig } = usePublicPaymentConfigQuery();
   const { data: shippingConfig } = usePublicShippingConfigQuery();
   const [savingFulfillment, setSavingFulfillment] = useState(false);
   const [fulfillmentSaved, setFulfillmentSaved] = useState(true); // true = đã đồng bộ với server
@@ -1364,11 +1358,12 @@ export function GroupOrderPageShell() {
     try {
       const [go, cfg] = await Promise.all([
         fetchGroupOrder(token),
-        fetchGroupOrderConfig().catch(() => ({ id: "default", isEnabled: true, discountTiers: [] })),
+        fetchGroupOrderConfig().catch(() => ({ id: "default", isEnabled: true, discountTiers: [], limitParticipants: 0 })),
       ]);
       setState(go);
       prevParticipantIdsRef.current = new Set(go.participants.map((p) => p.id));
       setConfig(cfg.discountTiers);
+      setLimitParticipants(cfg.limitParticipants)
       localStorage.setItem(
         `group_order_meta_${token}`,
         JSON.stringify({ token: go.token, expiresAt: go.expiresAt, type: go.type, status: go.status }),
@@ -2297,7 +2292,7 @@ export function GroupOrderPageShell() {
                 </div>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-card px-2.5 py-1 text-xs font-semibold text-foreground/60">
                   <Users className="size-3" />
-                  {state.participants.length}
+                  {`${state.participants.length}/${limitParticipants}`}
                 </span>
               </div>
               <AnimatePresence mode="popLayout">

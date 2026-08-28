@@ -10,6 +10,7 @@ export interface GroupOrderConfig {
   isEnabled: boolean;
   expiryMinutes: number;
   discountTiers: GroupDiscountTier[];
+  limitParticipants: number;
 }
 
 export async function fetchGroupOrderConfig(): Promise<GroupOrderConfig> {
@@ -18,7 +19,7 @@ export async function fetchGroupOrderConfig(): Promise<GroupOrderConfig> {
 }
 
 export async function updateGroupOrderConfig(
-  body: Partial<Pick<GroupOrderConfig, "isEnabled" | "expiryMinutes" | "discountTiers">>,
+  body: Partial<Pick<GroupOrderConfig, "isEnabled" | "expiryMinutes" | "discountTiers" | "limitParticipants">>,
 ): Promise<GroupOrderConfig> {
   const { data } = await api.put<GroupOrderConfig>("/admin/group-orders/config", body);
   return data;

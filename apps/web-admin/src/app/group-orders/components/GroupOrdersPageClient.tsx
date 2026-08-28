@@ -231,6 +231,7 @@ function GroupOrderConfigTab() {
   const [isEnabled, setIsEnabled] = useState(true);
   const [expiryMinutes, setExpiryMinutes] = useState(120);
   const [tiers, setTiers] = useState<GroupDiscountTier[]>([]);
+  const [limitParticipants, setLimitParticipants] = useState(0);
 
   const cfg = cfgQuery.data;
 
@@ -240,10 +241,11 @@ function GroupOrderConfigTab() {
     setIsEnabled(cfg.isEnabled);
     setExpiryMinutes(cfg.expiryMinutes ?? 120);
     setTiers(cfg.discountTiers ?? []);
+    setLimitParticipants(cfg.limitParticipants ?? 0)
   }, [cfg]);
 
   const saveMut = useMutation({
-    mutationFn: () => updateGroupOrderConfig({ isEnabled, expiryMinutes, discountTiers: tiers }),
+    mutationFn: () => updateGroupOrderConfig({ isEnabled, expiryMinutes, discountTiers: tiers, limitParticipants }),
     onSuccess: () => { void qc.invalidateQueries({ queryKey: adminKeys.groupOrderConfig }); },
   });
 
@@ -360,6 +362,34 @@ function GroupOrderConfigTab() {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Participant limit */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Users className="size-4 text-[#1a3c34]" />
+              <p className="text-sm font-semibold text-[#1a3c34]">Giới hạn số người tham gia</p>
+            </div>
+            <p className="text-[11px] text-foreground/50">
+              Khi đủ số người, thành viên mới sẽ không thể tham gia được nữa. 0 = không giới hạn.
+            </p>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center overflow-hidden rounded-lg border border-black/[0.1] bg-white">
+                <button type="button" className="flex size-9 items-center justify-center border-r border-black/[0.08] text-foreground/60 hover:bg-black/4"
+                  onClick={() => setLimitParticipants((v) => Math.max(0, v - 1))}>
+                  <Minus className="size-3.5" />
+                </button>
+                <input type="number" className="w-20 bg-transparent px-3 py-2 text-center text-sm font-semibold text-foreground focus:outline-none"
+                  value={limitParticipants} min={0}
+                  onChange={(e) => setLimitParticipants(Math.max(0, parseInt(e.target.value, 10) || 0))} />
+                <button type="button" className="flex size-9 items-center justify-center border-l border-black/[0.08] text-foreground/60 hover:bg-black/4"
+                  onClick={() => setLimitParticipants((v) => v + 1)}>
+                  <Plus className="size-3.5" />
+                </button>
+              </div>
+              <span className="text-sm text-foreground/60">người</span>
+              {limitParticipants === 0 && <span className="text-xs text-foreground/40">(không giới hạn)</span>}
+            </div>
           </div>
 
           <DiscountPreview tiers={tiers} />

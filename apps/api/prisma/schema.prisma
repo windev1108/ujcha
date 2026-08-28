@@ -979,7 +979,7 @@ model GroupOrderParticipant {
   @@index([groupOrderId])
   @@index([userId])
   @@index([sessionToken])
-  @@unique([groupOrderId, deviceId])
+  // @@unique([groupOrderId, deviceId])
 }
 
 model GroupOrderParticipantItem {
@@ -1004,6 +1004,7 @@ model GroupOrderConfig {
   id String @id @default("default")
   isEnabled         Boolean  @default(true)
   expiryMinutes     Int      @default(120)
+  limitParticipants Int      @default(0)
   /// JSON mảng bậc giảm giá: [{ minParticipants: 2, discountPercent: 5 }, ...]
   discountTiersJson Json     @default("[]")
   updatedAt         DateTime @updatedAt

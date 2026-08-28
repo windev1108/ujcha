@@ -33,6 +33,7 @@ import {
   type GroupOrderDetail,
   type GroupOrderParticipant,
 } from "@/services/admin/group-order-api";
+import { useInstantTransition } from "motion/react";
 
 function axiosMessage(e: unknown): string {
   const err = e as AxiosError<{ message?: string | string[] }>;
@@ -88,7 +89,6 @@ function ParticipantCard({ p }: { p: GroupOrderParticipant }) {
   const payStatus = p.paymentStatus === "paid"
     ? { label: "Đã thanh toán", cls: "bg-green-50 text-green-700 ring-green-200" }
     : { label: "Chờ thanh toán", cls: "bg-gray-50 text-gray-600 ring-gray-200" };
-
   return (
     <Card className="rounded-2xl border border-black/[0.06] shadow-sm">
       <CardContent className="p-4 space-y-3">
@@ -230,11 +230,10 @@ function AdminActionsPanel({ go, onUpdated, onDeleted }: {
                 key={opt.value}
                 type="button"
                 onClick={() => setSelectedStatus(opt.value)}
-                className={`flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-[12px] font-semibold ring-1 transition ${
-                  selectedStatus === opt.value
+                className={`flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-[12px] font-semibold ring-1 transition ${selectedStatus === opt.value
                     ? opt.cls + " ring-2"
                     : "border-black/8 bg-white text-foreground/70 ring-transparent hover:border-black/15"
-                }`}
+                  }`}
               >
                 {selectedStatus === opt.value && <Check className="size-3.5" />}
                 {opt.label}

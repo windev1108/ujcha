@@ -1206,5 +1206,6 @@
   "group_confirm_fulfillment_btn": "Xác nhận thông tin giao hàng",
   "group_fulfillment_confirmed": "Đã xác nhận",
   "group_fulfillment_saved": "Đã lưu thông tin giao hàng",
-  "group_fulfillment_unsaved_warning": "Vui lòng xác nhận thông tin giao hàng trước khi chốt đơn"
+  "group_fulfillment_unsaved_warning": "Vui lòng xác nhận thông tin giao hàng trước khi chốt đơn",
+  "GROUP_ORDER_FULL": "Đơn nhóm đã đủ số lượng thành viên tối đa, không thể tham gia thêm."
 }

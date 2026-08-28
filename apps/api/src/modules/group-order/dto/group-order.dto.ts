@@ -195,6 +195,11 @@ export class UpdateGroupOrderConfigDto {
   expiryMinutes?: number;
 
   @IsOptional()
+  @IsInt()
+  @Min(0)
+  limitParticipants?: number;
+
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => DiscountTierDto)

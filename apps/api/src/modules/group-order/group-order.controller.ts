@@ -238,6 +238,7 @@ export class GroupOrderController {
     return this.service.updateConfig({
       isEnabled: dto.isEnabled,
       discountTiers: dto.discountTiers,
+      limitParticipants: dto.limitParticipants
     });
   }
 }
