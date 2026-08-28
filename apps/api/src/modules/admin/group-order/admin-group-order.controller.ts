@@ -35,6 +35,7 @@ export class AdminGroupOrderController {
       isEnabled: dto.isEnabled,
       expiryMinutes: dto.expiryMinutes,
       discountTiers: dto.discountTiers,
+      limitParticipants: dto.limitParticipants
     });
   }
 
