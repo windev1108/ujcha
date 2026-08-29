@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Loader2, MapPin, AlertCircle } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { searchLocation } from "@/services/location/api";
 
 export interface AddressSuggestion {
     displayName: string;
@@ -38,7 +39,6 @@ interface Props {
     hasValidCoordinates?: boolean;
 }
 
-const NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search";
 const MIN_QUERY_LENGTH = 3;
 const DEBOUNCE_MS = 400;
 
@@ -115,6 +115,7 @@ export function AddressAutocompleteInput({
     const requestIdRef = useRef(0);
     const mountedRef = useRef(true);
     const coordinatesConfirmedRef = useRef(hasValidCoordinates ?? false);
+    const locale = useLocale()
 
     useEffect(() => {
         coordinatesConfirmedRef.current = hasValidCoordinates ?? false;
@@ -143,48 +144,43 @@ export function AddressAutocompleteInput({
         }
     }, [value]);
 
-    const fetchNominatim = useCallback(
-        async (queryText: string): Promise<AddressSuggestion[]> => {
-            const finalQuery = querySuffix ? `${queryText}, ${querySuffix}` : queryText;
-            const params = new URLSearchParams({
-                q: finalQuery,
-                format: "json",
-                addressdetails: "1",
-                limit: "6",
-                "accept-language": "vi",
+    const searchLocationApi = useCallback(
+        async (
+            queryText: string,
+        ): Promise<AddressSuggestion[]> => {
+            const finalQuery = querySuffix
+                ? `${queryText}, ${querySuffix}`
+                : queryText;
+
+            const results = await searchLocation({
+                query: finalQuery,
+                limit: 6,
+                lang: locale,
                 countrycodes: "vn",
+                bounded: strictBounds,
+                viewbox: boundingBox
+                    ? `${boundingBox.west},${boundingBox.north},${boundingBox.east},${boundingBox.south}`
+                    : undefined,
             });
 
-            if (boundingBox) {
-                params.set(
-                    "viewbox",
-                    `${boundingBox.west},${boundingBox.north},${boundingBox.east},${boundingBox.south}`,
-                );
-                if (strictBounds) params.set("bounded", "1");
-            }
-
-            const resp = await fetch(`${NOMINATIM_SEARCH_URL}?${params.toString()}`, {
-                headers: { "User-Agent": "UjCha/1.0" },
-            });
-            if (!resp.ok) return [];
-
-            const data = (await resp.json()) as Array<{
-                display_name: string;
-                lat: string;
-                lon: string;
-                addresstype?: string;
-                address?: { house_number?: string };
-            }>;
-
-            return data.map((d) => ({
-                displayName: d.display_name,
-                lat: parseFloat(d.lat),
-                lng: parseFloat(d.lon),
-                isExactHouseMatch: d.addresstype === "house" || !!d.address?.house_number,
+            return results.map((item) => ({
+                displayName: item.display_name,
+                lat: Number(item.lat),
+                lng: Number(item.lon),
+                isExactHouseMatch:
+                    item.addresstype === "house" ||
+                    Boolean(
+                        item.address?.house_number,
+                    ),
             }));
         },
-        [boundingBox, strictBounds, querySuffix],
+        [
+            boundingBox,
+            strictBounds,
+            querySuffix,
+        ],
     );
+
 
     const search = useCallback(
         async (query: string) => {
@@ -192,12 +188,12 @@ export function AddressAutocompleteInput({
             setLoading(true);
             try {
                 const normalizedQuery = normalizeVietnameseAddress(query);
-                let results = await fetchNominatim(normalizedQuery);
+                let results = await searchLocationApi(normalizedQuery);
 
                 if (!mountedRef.current || myRequestId !== requestIdRef.current) return;
 
                 if (results.length === 0 && normalizedQuery !== query.trim()) {
-                    results = await fetchNominatim(query.trim());
+                    results = await searchLocationApi(query.trim());
                     if (!mountedRef.current || myRequestId !== requestIdRef.current) return;
                 }
 
@@ -213,7 +209,7 @@ export function AddressAutocompleteInput({
                 }
             }
         },
-        [fetchNominatim],
+        [searchLocationApi],
     );
 
     useEffect(() => {
