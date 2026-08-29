@@ -1,3 +1,4 @@
+import { env } from '@/config/env';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
@@ -14,7 +15,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const apiUrl = process.env.API_URL;
+  const apiUrl = env.API_URL;
 
   if (!apiUrl) {
     console.error('API_URL is not configured');
