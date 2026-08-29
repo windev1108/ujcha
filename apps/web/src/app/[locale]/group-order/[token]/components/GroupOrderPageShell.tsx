@@ -48,7 +48,6 @@ import { normalizeOptionGroups, computeOptionSurcharge, formatVnd, formatOptionL
 
 import { useAddressesQuery } from "@/services/order/hooks";
 import { useShippingEstimateQuery, usePublicShippingConfigQuery } from "@/services/shipping/hooks";
-import { usePublicPaymentConfigQuery } from "@/services/payment-config/hooks";
 import { useProfileQuery } from "@/services/profile/hooks";
 import { usePublicStoreLocationQuery } from "@/services/store/hooks";
 import { CheckoutFulfillmentSection } from "@/app/[locale]/checkout/components/CheckoutFulfillmentSection";

@@ -18,7 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { Button, Input, Label } from "@heroui/react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import {
   useAddressesQuery,
   useCreateAddressMutation,
@@ -30,6 +30,7 @@ import { revealTransition, easeOutSmooth } from "@/app/[locale]/(landing)/compon
 import type { UserAddress } from "@/services/order/api";
 import { AddressAutocompleteInput } from "@/components/common/AddressAutocompleteInput";
 import { DA_NANG_BOUNDING_BOX, DA_NANG_QUERY_SUFFIX } from "@/lib/constants";
+import { reverseGeocode } from "@/services/location/api";
 
 const MapLocationPicker = dynamic(
   () =>
@@ -39,18 +40,18 @@ const MapLocationPicker = dynamic(
   { ssr: false },
 );
 
-async function reverseGeocode(lat: number, lng: number): Promise<string> {
-  try {
-    const resp = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=vi`,
-      { headers: { "User-Agent": "KunRituals/1.0" } },
-    );
-    const data = (await resp.json()) as { display_name?: string };
-    return data.display_name ?? "";
-  } catch {
-    return "";
-  }
-}
+// async function reverseGeocode(lat: number, lng: number): Promise<string> {
+//   try {
+//     const resp = await fetch(
+//       `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=vi`,
+//       { headers: { "User-Agent": "KunRituals/1.0" } },
+//     );
+//     const data = (await resp.json()) as { display_name?: string };
+//     return data.display_name ?? "";
+//   } catch {
+//     return "";
+//   }
+// }
 
 const MAX_ADDRESSES = 3;
 
@@ -219,7 +220,7 @@ function AddressModal({
   const [geoError, setGeoError] = useState<string | null>(null);
   const [showMap, setShowMap] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof AddressForm, string>>>({});
-
+  const locale = useLocale()
   function patch(p: Partial<AddressForm>) {
     setForm((prev) => ({ ...prev, ...p }));
     const touched = Object.keys(p) as (keyof AddressForm)[];
@@ -241,9 +242,9 @@ function AddressModal({
       async (pos) => {
         const { latitude: lat, longitude: lng } = pos.coords;
         patch({ lat, lng });
-        const address = await reverseGeocode(lat, lng);
+        const { display_name, address } = await reverseGeocode(lat, lng, locale);
         setGeoLoading(false);
-        if (address) patch({ fullAddress: address });
+        if (display_name) patch({ fullAddress: display_name ?? address?.road });
       },
       () => {
         setGeoLoading(false);

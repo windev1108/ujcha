@@ -5,9 +5,10 @@ import { MapContainer, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Loader2, MapPin, Navigation, X } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AddressAutocompleteInput } from "@/components/common/AddressAutocompleteInput";
 import { DA_NANG_BOUNDING_BOX, DA_NANG_QUERY_SUFFIX } from "@/lib/constants";
+import { reverseGeocode } from "@/services/location/api";
 
 // Re-use the same fix for webpack-broken default icons
 L.Icon.Default.mergeOptions({
@@ -41,18 +42,18 @@ function FlyTo({ target }: { target: [number, number] | null }) {
   return null;
 }
 
-export async function reverseGeocode(lat: number, lng: number): Promise<string> {
-  try {
-    const resp = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=vi`,
-      { headers: { "User-Agent": "KunRituals/1.0" } },
-    );
-    const data = (await resp.json()) as { display_name?: string };
-    return data.display_name ?? "";
-  } catch {
-    return "";
-  }
-}
+// export async function reverseGeocode(lat: number, lng: number): Promise<string> {
+//   try {
+//     const resp = await fetch(
+//       `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=vi`,
+//       { headers: { "User-Agent": "KunRituals/1.0" } },
+//     );
+//     const data = (await resp.json()) as { display_name?: string };
+//     return data.display_name ?? "";
+//   } catch {
+//     return "";
+//   }
+// }
 
 type Props = {
   initialLat?: number | null;
@@ -71,6 +72,7 @@ export function MapLocationPicker({ initialLat, initialLng, onConfirm, onClose }
     initialLat ?? 10.7769,
     initialLng ?? 106.7009,
   ];
+  const locale = useLocale()
 
   const [center, setCenter] = useState<LatLngLike>({ lat: mapSeedCenter[0], lng: mapSeedCenter[1] });
   const [addressPreview, setAddressPreview] = useState("");
@@ -86,8 +88,8 @@ export function MapLocationPicker({ initialLat, initialLng, onConfirm, onClose }
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     setIsGeocoding(true);
     debounceTimer.current = setTimeout(async () => {
-      const addr = await reverseGeocode(lat, lng);
-      setAddressPreview(addr);
+      const { display_name, address } = await reverseGeocode(lat, lng, locale);
+      setAddressPreview(display_name ?? address.road);
       setIsGeocoding(false);
     }, 700);
   }, []);
@@ -156,7 +158,8 @@ export function MapLocationPicker({ initialLat, initialLng, onConfirm, onClose }
     setIsConfirming(true);
     let address = addressPreview;
     if (!address) {
-      address = await reverseGeocode(center.lat, center.lng);
+      const { display_name, address: addressGeoCode } = await reverseGeocode(center.lat, center.lng, locale);
+      address = display_name ?? addressGeoCode?.road
     }
     if (!address) {
       address = `${center.lat.toFixed(5)}, ${center.lng.toFixed(5)}`;

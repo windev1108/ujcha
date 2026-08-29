@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import type { CheckoutTabId } from "./checkout-tab";
 import { CHECKOUT_TAB } from "./checkout-tab";
 import { easeOutSmooth } from "@/app/[locale]/(landing)/components/RevealSection";
@@ -25,25 +25,25 @@ import { useRouter } from "@/i18n/navigation";
 import { PickupScheduler } from "./PickupScheduler";
 import { AddressAutocompleteInput } from "@/components/common/AddressAutocompleteInput";
 import { DA_NANG_BOUNDING_BOX, DA_NANG_QUERY_SUFFIX } from "@/lib/constants";
-import { canSubmitOrder } from "@/lib/utils";
+import { reverseGeocode } from "@/services/location/api";
 
 const MapLocationPicker = dynamic(
   () => import("./MapLocationPicker").then((m) => ({ default: m.MapLocationPicker })),
   { ssr: false },
 );
 
-async function reverseGeocode(lat: number, lng: number): Promise<string> {
-  try {
-    const resp = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=vi`,
-      { headers: { "User-Agent": "KunRituals/1.0" } },
-    );
-    const data = (await resp.json()) as { display_name?: string };
-    return data.display_name ?? "";
-  } catch {
-    return "";
-  }
-}
+// async function reverseGeocode(lat: number, lng: number): Promise<string> {
+//   try {
+//     const resp = await fetch(
+//       `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=vi`,
+//       { headers: { "User-Agent": "KunRituals/1.0" } },
+//     );
+//     const data = (await resp.json()) as { display_name?: string };
+//     return data.display_name ?? "";
+//   } catch {
+//     return "";
+//   }
+// }
 
 // Native <input> style — focus:ring works correctly here (no HeroUI wrapper)
 const inputCls =
@@ -235,6 +235,7 @@ function DeliveryFulfillmentCard({
   const [geoError, setGeoError] = useState<string | null>(null);
   const [showMap, setShowMap] = useState(false);
   const [contactMode, setContactMode] = useState<ContactMode>("custom");
+  const locale = useLocale()
 
   const canUseAccount = !!(profileName && profilePhone);
   const showNewForm = selectedAddressId === NEW_ADDRESS_ID || savedAddresses.length === 0;
@@ -268,9 +269,9 @@ function DeliveryFulfillmentCard({
       async (pos) => {
         const { latitude: lat, longitude: lng } = pos.coords;
         onChange({ lat, lng });
-        const address = await reverseGeocode(lat, lng);
+        const { display_name, address } = await reverseGeocode(lat, lng, locale);
         setGeoLoading(false);
-        if (address) onChange({ fullAddress: address });
+        if (display_name) onChange({ fullAddress: display_name ?? address?.road });
       },
       () => {
         setGeoLoading(false);
