@@ -43,8 +43,8 @@ export interface LocationSearchParams {
   acceptLanguage?: string;
 }
 
-export interface LocationSearchResult { 
-  place_id?: number; 
+export interface LocationSearchResult {
+  place_id?: number;
   licence?: string;
   osm_type?: string;
   osm_id?: number;
@@ -52,7 +52,7 @@ export interface LocationSearchResult {
   lon: string;
   display_name: string;
   addresstype?: string;
-  address?: { house_number?: string; [key: string]: string | undefined };
+  address?: { house_number?: string;[key: string]: string | undefined };
   boundingbox?: string[];
   [key: string]: unknown;
 }
@@ -207,14 +207,21 @@ export class LocationService {
     return `location:reverse:${normalizedLat}:${normalizedLon}`;
   }
 
-  private buildSearchCacheKey( params: LocationSearchParams, ): string {
-     const query = params.query .trim() .toLowerCase() .replace(/\s+/g, ' ');
-      const viewbox = params.viewbox ?? ''; 
-      const bounded = params.bounded ? '1' : '0'; 
-      const countrycodes = params.countrycodes ?? 'vn'; 
-      const limit = params.limit ?? 6; 
-      const language = params.acceptLanguage ?? 'vi';
-       const rawKey = [ query, viewbox, bounded, countrycodes, limit, language, ].join('|');
-        return `location:search:${encodeURIComponent(rawKey)}`; 
-      }
+  private buildSearchCacheKey(params: LocationSearchParams,): string {
+    const query = params.query.trim().toLowerCase().replace(/\s+/g, ' ');
+    const viewbox = params.viewbox ?? '';
+    const bounded = params.bounded ? '1' : '0';
+    const countrycodes = params.countrycodes ?? 'vn';
+    const limit = params.limit ?? 6;
+    const language = params.acceptLanguage ?? 'vi';
+    const rawKey = [
+      query,
+      viewbox,
+      bounded,
+      countrycodes,
+      limit,
+      language,
+    ].join('|');
+    return `location:search:${encodeURIComponent(rawKey)}`;
+  }
 }
