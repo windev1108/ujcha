@@ -48,4 +48,28 @@ export class LocationController {
       langParam
     );
   }
+  @Get('search')
+   async search( 
+    @Query('q') query: string, 
+    @Query('viewbox') viewbox?: string, 
+    @Query('bounded') bounded?: string, 
+    @Query('countrycodes') countrycodes?: string, 
+    @Query('limit') limitParam?: string, 
+    @Query('accept-language') acceptLanguage?: string, ) 
+    { 
+      if (!query?.trim()) {
+         throw new BadRequestException( 'q is required', );
+         } 
+         const limit = limitParam ? Number(limitParam) : 6;
+          if ( !Number.isInteger(limit) || limit < 1 || limit > 10 ) { 
+            throw new BadRequestException( 'limit must be between 1 and 10', ); 
+          }
+           return this.locationService.search({ 
+            query: query.trim(), 
+            viewbox, 
+            bounded: bounded === '1', 
+            countrycodes: countrycodes || 'vn', 
+            limit, 
+            acceptLanguage: acceptLanguage || 'vi', }); 
+          }
 }
