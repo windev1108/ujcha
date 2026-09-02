@@ -3,7 +3,7 @@
 import { ServerCrashIcon } from "lucide-react";
 
 export function MaintenanceOverlay() {
-    const maintainTitle = process.env.NEXXT_PUBLIC_MAINTENANCE_TITLE ?? "Website đang được bảo trì"
+    const maintainTitle = process.env.NEXT_PUBLIC_MAINTENANCE_TITLE ?? "Website đang được bảo trì"
     const maintainMessage = process.env.NEXT_PUBLIC_MAINTENANCE_MESSAGE ?? `Chúng tôi đang nâng cấp hệ thống để mang lại trải nghiệm tốt hơn.
                     Rất xin lỗi vì sự bất tiện này, vui lòng quay lại sau ít phút.`
     return (
