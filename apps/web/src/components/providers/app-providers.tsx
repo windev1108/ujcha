@@ -6,6 +6,9 @@ import { Toaster } from "sonner";
 
 import { useAuthStore } from "@/store/auth-store";
 import { RefCodeCapture } from "@/components/common/RefCodeCapture";
+import { MaintenanceOverlay } from "../common/MaintenanceOverlay";
+
+const IS_MAINTENANCE = process.env.NEXT_PUBLIC_MAINTENANCE_MODE === "true";
 
 function AuthPersistHydration() {
   const setHydrated = useAuthStore((s) => s.setHydrated);
@@ -42,6 +45,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       <Toaster position="top-right" richColors />
       <QueryClientProvider client={queryClient}>
         {children}
+        {IS_MAINTENANCE && <MaintenanceOverlay />}
       </QueryClientProvider>
     </>
   );
