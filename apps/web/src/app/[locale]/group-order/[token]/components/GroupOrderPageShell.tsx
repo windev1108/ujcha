@@ -1269,7 +1269,11 @@ export function GroupOrderPageShell() {
 
   const user = useAuthStore((s) => s.user);
   const { data: savedAddresses = [] } = useAddressesQuery();
-  const { data: profile } = useProfileQuery();
+  const {
+    data: profile,
+    isLoading: profileLoading,
+    isError: profileError,
+  } = useProfileQuery();
   const { data: storeLocation } = usePublicStoreLocationQuery();
 
   const [state, setState] = useState<GroupOrderState | null>(null);
@@ -1415,8 +1419,14 @@ export function GroupOrderPageShell() {
         localStorage.removeItem(SESSION_KEY(token));
         localStorage.removeItem(PARTICIPANT_KEY(token));
         if (state.status === "collecting") {
-          if (user) {
+          if (user && profileLoading) {
+            return;
+          }
+          if (user && !profileError) {
             void handleJoin();
+          } else if (user && profileError) {
+            useAuthStore.getState().clearSession();
+            setNeedsGuestName(true);
           } else {
             setNeedsGuestName(true);
           }
@@ -1427,13 +1437,23 @@ export function GroupOrderPageShell() {
       if (storedParticipant) setMyParticipantId(storedParticipant);
       // Sync deviceId for logged-in users so incognito bypass is blocked.
       // alreadyJoined path: no broadcast, just a DB update if deviceId was null.
-      if (user) {
+      if (user && !profileLoading && !profileError) {
         getDeviceId().then((deviceId) => joinGroupOrder(token, { deviceId }).catch(() => { }));
       }
       void subscribePush(storedParticipant ?? undefined)
       return;
     }
     if (user) {
+      if (profileLoading) return; // chờ xác thực xong, effect sẽ tự chạy lại khi profileLoading đổi
+      if (profileError) {
+        // accessToken hết hạn VÀ refresh cũng thất bại (react-query/axios interceptor
+        // đã thử refresh ngầm khi gọi useProfileQuery và vẫn lỗi) → coi như phiên đăng
+        // nhập đã chết hẳn. Xoá auth store và cho user join như khách bình thường,
+        // KHÔNG còn tự động join với tên "Khách" nữa.
+        useAuthStore.getState().clearSession();
+        setNeedsGuestName(true);
+        return;
+      }
       const existing = state.participants.find((p) => p.userId === user.id);
       if (existing) {
         setMyParticipantId(existing.id);
@@ -1448,17 +1468,16 @@ export function GroupOrderPageShell() {
         });
         return;
       }
+      if (state.status === "collecting") {
+        void handleJoin();
+      }
+      return;
     }
     if (state.status === "collecting") {
-      if (user) {
-        void handleJoin();
-      } else {
-        // Guest: ask for display name before joining
-        setNeedsGuestName(true);
-      }
+      setNeedsGuestName(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state?.id, user?.id]);
+  }, [state?.id, user?.id, profileLoading, profileError]);
 
   const handleJoin = useCallback(async (guestName?: string) => {
     const lockTs = localStorage.getItem(JOIN_LOCK_KEY(token));

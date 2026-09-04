@@ -1208,5 +1208,7 @@
   "group_fulfillment_confirmed": "Delivery Information Confirmed",
   "group_fulfillment_saved": "Delivery Information Saved",
   "group_fulfillment_unsaved_warning": "Please confirm delivery information before checking out",
-  "GROUP_ORDER_FULL": "The group has reached its maximum number of members and cannot accept any more participants."
+  "GROUP_ORDER_FULL": "The group has reached its maximum number of members and cannot accept any more participants.",
+  "GROUP_ORDER_GUEST_NAME_REQUIRED": "Please enter a name to join the group order.",
+  "session_expired_please_login": "Your session has expired. Please log in again."
 }

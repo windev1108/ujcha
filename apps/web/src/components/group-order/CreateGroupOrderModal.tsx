@@ -139,7 +139,18 @@ export function CreateGroupOrderModal({
         }
       }
       router.push(ROUTES.GROUP_ORDER(result.token));
-    } catch {
+    } catch (e: unknown) {
+      const status = (e as { response?: { status?: number } })?.response?.status;
+      if (status === 401) {
+        // Access token hết hạn và refresh cũng đã thất bại (interceptor đã thử
+        // ngầm trước khi request này reject) — phiên đăng nhập coi như đã chết.
+        // Không để lại accessToken cũ gây hiểu nhầm là vẫn đang đăng nhập.
+        useAuthStore.getState().clearSession();
+        toast.error(t("session_expired_please_login"));
+        onClose();
+        router.push(ROUTES.LOGIN);
+        return;
+      }
       toast.error(t("create_group_order_error"));
       setCreating(false);
     }

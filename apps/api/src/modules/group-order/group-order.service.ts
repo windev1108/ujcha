@@ -415,14 +415,16 @@ export class GroupOrderService {
   }
 
   /**
-   * BUGFIX (session bị đảo lung tung giữa các participant):
-   * - Ưu tiên tuyệt đối: userId (đã đăng nhập) → luôn map đúng participant của chính họ.
-   * - deviceId CHỈ được dùng để tự-reconnect ngầm (không có guestName đi kèm).
-   *   Nếu người dùng vừa nhập tên (`guestName`) để tham gia — tức đang chủ động
-   *   khẳng định một danh tính — TUYỆT ĐỐI không được âm thầm trả về participant
-   *   khác chỉ vì device fingerprint trùng (fingerprint không đảm bảo unique
-   *   giữa các thiết bị khác nhau, đặc biệt trên mobile webview). Đây chính là
-   *   nguyên nhân gây ra bug "vào nhóm thấy bị gán nhầm session người khác".
+   * BUGFIX v2: KHÔNG BAO GIỜ dùng deviceId để tra cứu/trả về session của
+   * participant khác — kể cả khi guestName rỗng. Device fingerprint có thể
+   * trùng giữa nhiều thiết bị/người dùng khác nhau (đặc biệt trong webview
+   * Zalo/Facebook), nên bất kỳ hình thức "auto-resolve danh tính qua
+   * deviceId" nào cũng có nguy cơ trả nhầm session, cart, sessionToken của
+   * người lạ cho người khác. Định danh an toàn duy nhất là:
+   *   1. userId khớp chính xác (JWT xác thực thật — không đoán)
+   *   2. sessionToken lưu sẵn trong localStorage của chính trình duyệt đó
+   * deviceId chỉ được LƯU LẠI để tham khảo/chống gian lận sau này, không
+   * bao giờ dùng để trả về danh tính của người khác.
    */
   async join(token: string, userId: string | null, dto: JoinGroupOrderDto) {
     const go = await this.prisma.groupOrder.findUnique({
@@ -442,16 +444,13 @@ export class GroupOrderService {
       });
     }
 
-    // Logged-in user: return existing session if already joined (works even after collecting)
+    // Duy nhất cách resolve danh tính an toàn: userId khớp chính xác.
     if (userId) {
       const existing = go.participants.find((p) => p.userId === userId);
       if (existing) {
         if (dto.deviceId && !(existing as any).deviceId) {
           await this.prisma.groupOrderParticipant
-            .update({
-              where: { id: existing.id },
-              data: { deviceId: dto.deviceId },
-            })
+            .update({ where: { id: existing.id }, data: { deviceId: dto.deviceId } })
             .catch(() => { });
         }
         return {
@@ -462,31 +461,7 @@ export class GroupOrderService {
       }
     }
 
-    // Device match: CHỈ áp dụng cho reconnect ngầm (không có guestName).
-    // Không bao giờ dùng để override một lượt join chủ động có nhập tên.
-    if (dto.deviceId && !dto.guestName) {
-      const sameDevice = go.participants.find(
-        (p) => (p as any).deviceId && (p as any).deviceId === dto.deviceId,
-      );
-      if (sameDevice) {
-        if (userId && !(sameDevice as any).userId) {
-          // Logged-in user claiming a guest participant slot → link their userId
-          await this.prisma.groupOrderParticipant
-            .update({
-              where: { id: sameDevice.id },
-              data: { userId },
-            })
-            .catch(() => { });
-        }
-        return {
-          sessionToken: (sameDevice as any).sessionToken,
-          participantId: sameDevice.id,
-          alreadyJoined: true,
-        };
-      }
-    }
-
-    // Below here: new participant — only allowed while collecting
+    // Below here: participant mới — chỉ cho phép khi đang collecting
     if (go.status !== 'collecting') {
       throw new BadRequestException({
         message: 'Đơn nhóm không còn nhận thành viên mới.',
@@ -494,7 +469,15 @@ export class GroupOrderService {
       });
     }
 
-    // Giới hạn số người tham gia (GroupOrderConfig.limitParticipants, 0 = không giới hạn)
+    // Khách (chưa đăng nhập hoặc token đã hết hạn) BẮT BUỘC phải nhập tên —
+    // không còn fallback âm thầm thành "Khách" nữa (xem bug 2).
+    if (!userId && !dto.guestName?.trim()) {
+      throw new BadRequestException({
+        message: 'Vui lòng nhập tên để tham gia đơn nhóm.',
+        code: 'GROUP_ORDER_GUEST_NAME_REQUIRED',
+      });
+    }
+
     const cfg = await this.getConfig();
     if (cfg.limitParticipants && go.participants.length >= cfg.limitParticipants) {
       throw new BadRequestException({
@@ -508,7 +491,7 @@ export class GroupOrderService {
       data: {
         groupOrderId: go.id,
         userId: userId ?? null,
-        guestName: !userId ? dto.guestName?.trim() || 'Khách' : null,
+        guestName: !userId ? dto.guestName!.trim() : null,
         sessionToken,
         isHost: false,
         deviceId: dto.deviceId ?? null,
