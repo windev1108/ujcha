@@ -1,3 +1,4 @@
+import { ProductService } from './../../product/product.service';
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { RedisModule } from '../../redis/redis.module';
@@ -8,6 +9,6 @@ import { AdminProductService } from './admin-product.service';
 @Module({
   imports: [PrismaModule, RedisModule, AdminAuthModule],
   controllers: [AdminProductController],
-  providers: [AdminProductService],
+  providers: [AdminProductService, ProductService],
 })
 export class AdminProductModule {}

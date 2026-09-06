@@ -59,10 +59,20 @@ export function ProductConfigModal({ product, onClose, onConfirm }: Props) {
 
     const unitPrice = discountedBase + optionDelta + toppingDelta
 
+    const MAX_TOPPINGS = 3
+
     const toggleTopping = (id: string) => {
-        setSelectedToppingIds(prev =>
-            prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-        )
+        setSelectedToppingIds(prev => {
+            if (prev.includes(id)) {
+                return prev.filter(x => x !== id)
+            }
+
+            if (prev.length >= MAX_TOPPINGS) {
+                return prev
+            }
+
+            return [...prev, id]
+        })
     }
 
     const handleConfirm = () => {
@@ -163,19 +173,32 @@ export function ProductConfigModal({ product, onClose, onConfirm }: Props) {
                                 {availableToppings.map((t) => {
                                     const selected = selectedToppingIds.includes(t.id)
                                     const price = Number(t.price)
+                                    const disabled = !selected && selectedToppingIds.length >= MAX_TOPPINGS
                                     return (
                                         <button
                                             key={t.id}
                                             onClick={() => toggleTopping(t.id)}
+                                            disabled={disabled}
                                             className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium transition-all ${selected
                                                 ? 'border-brand bg-brand text-white shadow-sm'
-                                                : 'border-gray-200 bg-white text-gray-700 hover:border-brand/50 hover:text-brand'
+                                                : disabled
+                                                    ? 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed'
+                                                    : 'border-gray-200 bg-white text-gray-700 hover:border-brand/50 hover:text-brand'
                                                 }`}
                                         >
                                             {selected && <Check className="size-3 shrink-0" />}
+
                                             <span>{t.name}</span>
+
                                             {price > 0 && (
-                                                <span className={`text-xs ${selected ? 'text-white/80' : 'text-gray-400'}`}>
+                                                <span
+                                                    className={`text-xs ${selected
+                                                        ? 'text-white/80'
+                                                        : disabled
+                                                            ? 'text-gray-300'
+                                                            : 'text-gray-400'
+                                                        }`}
+                                                >
                                                     +{fmt(price)}
                                                 </span>
                                             )}

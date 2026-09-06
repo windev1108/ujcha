@@ -1,6 +1,7 @@
 import { defineConfig, externalizeDepsPlugin, loadEnv } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
+import tailwindcss from '@tailwindcss/vite'
 
 const VITE_KEYS = ['VITE_INTERNAL_ANALY_KEY', 'VITE_SPF_RESTAURANT_IDS', 'VITE_KUN_POS_VERSION'] as const
 const SECRET_KEYS = ['GOOGLE_API_KEY', 'GROQ_API_KEY', 'VIETTEL_TTS_TOKEN'] as const
@@ -30,6 +31,7 @@ export default defineConfig(({ mode }) => {
       build: { outDir: 'out/renderer' },
       plugins: [
         react(),
+        tailwindcss(),
         {
           name: 'html-csp-inject',
           transformIndexHtml(html) {

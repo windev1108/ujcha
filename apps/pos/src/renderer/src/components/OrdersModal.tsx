@@ -10,6 +10,10 @@ import type { AdminOrder, OrderStatus } from '../types/common'
 import newOrderMp3 from '../assets/mp3/new-order.mp3'
 import { formatDate } from '@/lib/utils'
 import { OrderDetailModal } from './OrderDetailModal'
+import { DateField, DateRangePicker, Label, Pagination, RangeCalendar } from '@heroui/react'
+import { parseDate, type DateValue } from '@internationalized/date'
+import { I18nProvider } from '@react-aria/i18n';
+
 
 function fmt(n: string | number) { return Number(n).toLocaleString('vi-VN') + 'đ' }
 
@@ -93,7 +97,7 @@ const STATUS_FILTERS: { key: 'all' | OrderStatus; label: string }[] = [
   { key: 'preparing', label: 'Đang làm' },
   { key: 'ready', label: 'Sẵn sàng' },
   { key: 'delivering', label: 'Đang giao' },
-  { key: 'arrived', label: 'Đã đến nơi' },
+  // { key: 'arrived', label: 'Đã đến nơi' },
   { key: 'completed', label: 'Hoàn thành' },
   { key: 'cancelled', label: 'Đã huỷ' },
 ]
@@ -106,20 +110,22 @@ const BULK_STATUS_OPTIONS: { status: OrderStatus; label: string; color: string }
   { status: 'cancelled', label: 'Huỷ đơn', color: 'bg-red-50 text-red-600 hover:bg-red-100 border-red-200' },
 ]
 
-type QuickDate = 'today' | 'week' | 'month' | 'all'
+type QuickDate = 'today' | 'week' | 'month' | 'year' | 'custom'
 
 const QUICK_DATE_FILTERS: { key: QuickDate; label: string }[] = [
   { key: 'today', label: 'Hôm nay' },
   { key: 'week', label: 'Tuần này' },
   { key: 'month', label: 'Tháng này' },
-  { key: 'all', label: 'Tất cả' },
+  { key: 'year', label: 'Năm nay' },
+  { key: 'custom', label: 'Tùy chọn' },
 ]
 
 const QUICK_DATE_TITLES: Record<QuickDate, string> = {
   today: 'Đơn hàng hôm nay',
   week: 'Đơn hàng tuần này',
   month: 'Đơn hàng tháng này',
-  all: 'Tất cả đơn hàng',
+  year: 'Đơn hàng năm nay',
+  custom: 'Đơn hàng theo khoảng ngày',
 }
 
 function toISODate(d: Date): string {
@@ -148,6 +154,12 @@ function getApiDateRange(key: QuickDate, dateFrom: string, dateTo: string): { fr
     const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
     return { from: toISODate(start), to: toISODate(end) }
   }
+  if (key === 'year') {
+    const start = new Date(now.getFullYear(), 0, 1)
+    const end = new Date(now.getFullYear(), 11, 31)
+    return { from: toISODate(start), to: toISODate(end) }
+  }
+  // custom
   return { from: dateFrom || undefined, to: dateTo || undefined }
 }
 
@@ -199,7 +211,7 @@ function SkeletonCard() {
     </div>
   )
 }
-
+const PAGE_SIZE_OPTIONS = [50, 100, 200, 500] as const
 export function OrdersModal({ onClose }: { onClose: () => void }) {
   const [orders, setOrders] = useState<AdminOrder[]>([])
   const [loading, setLoading] = useState(true)
@@ -216,6 +228,9 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set())
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkBusy, setBulkBusy] = useState(false)
+  const [pageSize, setPageSize] = useState<number>(100)
+  const [page, setPage] = useState(1)
+  const [totalOrders, setTotalOrders] = useState<number | null>(null)
 
   // Set of phone/userId strings that have at least one past completed order
   const [returningSet, setReturningSet] = useState<Set<string>>(new Set())
@@ -260,12 +275,20 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
     })
   }
 
-  const load = async (from?: string, to?: string, addToQueue = false) => {
+  const load = async (
+    from?: string,
+    to?: string,
+    addToQueue = false,
+    pageArg = page,
+    pageSizeArg = pageSize,
+  ) => {
     setLoading(true)
     try {
-      const data = await fetchOrders(1, 100, from, to)
+      const data = await fetchOrders(pageArg, pageSizeArg, from, to)
       const items = (data as { items: AdminOrder[] }).items ?? []
+      const total = (data as { items: AdminOrder[]; total?: number }).total
       setOrders(items)
+      setTotalOrders(typeof total === 'number' ? total : null)
       if (addToQueue) {
         setNewOrderQueue(prev => {
           const next = new Set(prev)
@@ -273,7 +296,6 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
           return next
         })
       }
-      // Batch-check returning customer status for all orders with an identifier
       const phones = [...new Set(items.map(o => o.guestDeliveryPhone).filter(Boolean) as string[])]
       const userIds = [...new Set(items.map(o => o.userId).filter(Boolean) as string[])]
       if (phones.length || userIds.length) {
@@ -281,7 +303,7 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
           .then(({ returningPhones, returningUserIds }) => {
             setReturningSet(new Set([...returningPhones, ...returningUserIds]))
           })
-          .catch(() => { /* non-critical, silent fail */ })
+          .catch(() => { })
       }
     } catch { /* ignore */ } finally { setLoading(false) }
   }
@@ -294,12 +316,26 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
   dateFromRef.current = dateFrom
   const dateToRef = useRef(dateTo)
   dateToRef.current = dateTo
+  const pageRef = useRef(page)
+  pageRef.current = page
+  const pageSizeRef = useRef(pageSize)
+  pageSizeRef.current = pageSize
 
   useEffect(() => {
     const { from, to } = getApiDateRange(quickDate, dateFrom, dateTo)
-    void load(from, to)
+    setPage(1)
+    void load(from, to, false, 1, pageSize)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quickDate, dateFrom, dateTo])
+  }, [quickDate, dateFrom, dateTo, pageSize])
+
+  const isFirstPageEffect = useRef(true)
+
+  useEffect(() => {
+    if (isFirstPageEffect.current) { isFirstPageEffect.current = false; return }
+    const { from, to } = getApiDateRange(quickDate, dateFrom, dateTo)
+    void load(from, to, false, page, pageSize)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page])
 
   useEffect(() => {
     const socket = io(API_URL, {
@@ -309,7 +345,7 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
     })
     const fullReload = (addToQueue = false) => {
       const { from, to } = getApiDateRange(quickDateRef.current, dateFromRef.current, dateToRef.current)
-      void loadRef.current(from, to, addToQueue)
+      void loadRef.current(from, to, addToQueue, pageRef.current, pageSizeRef.current)
     }
     socket.on('order:status', (payload: { orderId: string; status: string }) => {
       setOrders(prev => prev.map(o =>
@@ -404,7 +440,9 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
   }, {})
 
   const filtered = orders.filter(o => {
-    const matchStatus = filterStatus === 'all' || o.status === filterStatus
+    const matchStatus = filterStatus === 'all'
+      || o.status === filterStatus
+      || (filterStatus === 'delivering' && o.status === 'arrived')
     const q = search.toLowerCase()
     const matchSearch = !q
       || (o.paymentCode ?? '').toLowerCase().includes(q)
@@ -418,7 +456,7 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
   const handleRefresh = () => {
     const { from, to } = getApiDateRange(quickDate, dateFrom, dateTo)
     setSelectedIds(new Set())
-    void load(from, to)
+    void load(from, to, false, page, pageSize)
   }
 
   function getReturningStatus(order: AdminOrder): boolean | undefined {
@@ -437,7 +475,7 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <>
+    <I18nProvider locale="vi-VN">
       <div className="fixed inset-0 z-40 flex flex-col bg-gray-50 animate-in fade-in duration-200">
 
         {/* ── Header ── */}
@@ -497,28 +535,68 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
               ))}
             </div>
 
-            {quickDate === 'all' && (
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1.5 h-8 rounded-full border border-gray-200 bg-gray-50 px-3">
-                  <Calendar className="size-3 text-gray-400 shrink-0" />
-                  <input
-                    type="date"
-                    value={dateFrom}
-                    onChange={e => setDateFrom(e.target.value)}
-                    className="w-28 bg-transparent text-xs text-gray-700 outline-none"
-                  />
-                </div>
-                <span className="text-xs text-gray-400 select-none">→</span>
-                <div className="flex items-center gap-1.5 h-8 rounded-full border border-gray-200 bg-gray-50 px-3">
-                  <Calendar className="size-3 text-gray-400 shrink-0" />
-                  <input
-                    type="date"
-                    value={dateTo}
-                    onChange={e => setDateTo(e.target.value)}
-                    className="w-28 bg-transparent text-xs text-gray-700 outline-none"
-                  />
-                </div>
-              </div>
+            {quickDate === 'custom' && (
+              <DateRangePicker
+                lang='vi-VN'
+                className="w-72"
+                startName="orderDateFrom"
+                endName="orderDateTo"
+                value={dateFrom && dateTo ? { start: parseDate(dateFrom), end: parseDate(dateTo) } : null}
+                onChange={(range: { start: DateValue; end: DateValue } | null) => {
+                  if (range) {
+                    setDateFrom(range.start.toString())
+                    setDateTo(range.end.toString())
+                  } else {
+                    setDateFrom('')
+                    setDateTo('')
+                  }
+                }}
+              >
+                <Label className="sr-only">Khoảng ngày</Label>
+                <DateField.Group
+                  fullWidth
+                  variant="secondary"
+                  className="h-8 rounded-full border border-gray-200 bg-gray-50 px-3 text-xs"
+                >
+                  <DateField.Input slot="start">
+                    {(segment) => <DateField.Segment segment={segment} />}
+                  </DateField.Input>
+                  <DateRangePicker.RangeSeparator className="px-1 text-gray-400" />
+                  <DateField.Input slot="end">
+                    {(segment) => <DateField.Segment segment={segment} />}
+                  </DateField.Input>
+                  <DateField.Suffix>
+                    <DateRangePicker.Trigger className="text-gray-400">
+                      <DateRangePicker.TriggerIndicator />
+                    </DateRangePicker.Trigger>
+                  </DateField.Suffix>
+                </DateField.Group>
+                <DateRangePicker.Popover>
+                  <RangeCalendar aria-label="Khoảng ngày" lang='vi-VN'>
+                    <RangeCalendar.Header>
+                      <RangeCalendar.YearPickerTrigger>
+                        <RangeCalendar.YearPickerTriggerHeading />
+                        <RangeCalendar.YearPickerTriggerIndicator />
+                      </RangeCalendar.YearPickerTrigger>
+                      <RangeCalendar.NavButton slot="previous" />
+                      <RangeCalendar.NavButton slot="next" />
+                    </RangeCalendar.Header>
+                    <RangeCalendar.Grid>
+                      <RangeCalendar.GridHeader>
+                        {(day) => <RangeCalendar.HeaderCell>{day}</RangeCalendar.HeaderCell>}
+                      </RangeCalendar.GridHeader>
+                      <RangeCalendar.GridBody>
+                        {(date) => <RangeCalendar.Cell date={date} />}
+                      </RangeCalendar.GridBody>
+                    </RangeCalendar.Grid>
+                    <RangeCalendar.YearPickerGrid>
+                      <RangeCalendar.YearPickerGridBody>
+                        {({ year }) => <RangeCalendar.YearPickerCell year={year} />}
+                      </RangeCalendar.YearPickerGridBody>
+                    </RangeCalendar.YearPickerGrid>
+                  </RangeCalendar>
+                </DateRangePicker.Popover>
+              </DateRangePicker>
             )}
 
             <div className="relative ml-auto w-56">
@@ -535,7 +613,11 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
           {/* Row 2: Status filter chips with color dots */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
             {STATUS_FILTERS.map(f => {
-              const count = f.key === 'all' ? orders.length : (counts[f.key] ?? 0)
+              const count = f.key === 'all'
+                ? orders.length
+                : f.key === 'delivering'
+                  ? (counts['delivering'] ?? 0) + (counts['arrived'] ?? 0)
+                  : (counts[f.key] ?? 0)
               return (
                 <button
                   key={f.key}
@@ -668,6 +750,105 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
               </div>
             </>
           )}
+          {/* ── Pagination footer ── */}
+          {!loading && orders.length > 0 && (() => {
+            const totalPages = totalOrders !== null
+              ? Math.max(1, Math.ceil(totalOrders / pageSize))
+              : null
+            const hasNext = totalOrders !== null ? page * pageSize < totalOrders : orders.length >= pageSize
+            const startItem = totalOrders !== null ? (page - 1) * pageSize + 1 : undefined
+            const endItem = totalOrders !== null ? Math.min(page * pageSize, totalOrders) : undefined
+
+            const getPageNumbers = (): (number | 'ellipsis')[] => {
+              if (!totalPages) return [page]
+              if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1)
+              const pages: (number | 'ellipsis')[] = [1]
+              if (page > 3) pages.push('ellipsis')
+              const start = Math.max(2, page - 1)
+              const end = Math.min(totalPages - 1, page + 1)
+              for (let i = start; i <= end; i++) pages.push(i)
+              if (page < totalPages - 2) pages.push('ellipsis')
+              pages.push(totalPages)
+              return pages
+            }
+
+            return (
+              <div className="shrink-0 flex flex-wrap items-center gap-3 border-t border-gray-100 bg-white px-4 py-3">
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <span>Hiển thị</span>
+                  <select
+                    value={pageSize}
+                    onChange={e => setPageSize(Number(e.target.value))}
+                    className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs font-semibold text-gray-700 outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors"
+                  >
+                    {PAGE_SIZE_OPTIONS.map(n => (
+                      <option key={n} value={n}>{n}</option>
+                    ))}
+                  </select>
+                  <span>đơn / trang</span>
+                </div>
+
+                <Pagination className="ml-auto w-auto items-center gap-3">
+                  {totalOrders !== null && (
+                    <Pagination.Summary className="whitespace-nowrap text-xs text-gray-400">
+                      {startItem}–{endItem} / {totalOrders} đơn
+                    </Pagination.Summary>
+                  )}
+                  <Pagination.Content className="gap-1">
+                    <Pagination.Item>
+                      <Pagination.Previous
+                        isDisabled={page <= 1}
+                        onPress={() => setPage(p => Math.max(1, p - 1))}
+                        className="rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                      >
+                        <Pagination.PreviousIcon />
+                      </Pagination.Previous>
+                    </Pagination.Item>
+
+                    {totalOrders !== null ? (
+                      getPageNumbers().map((p, i) =>
+                        p === 'ellipsis' ? (
+                          <Pagination.Item key={`e-${i}`}>
+                            <Pagination.Ellipsis className="text-gray-300" />
+                          </Pagination.Item>
+                        ) : (
+                          <Pagination.Item key={p}>
+                            <Pagination.Link
+                              isActive={p === page}
+                              onPress={() => setPage(p)}
+                              className={
+                                p === page
+                                  ? 'rounded-full bg-brand text-white hover:bg-brand/90'
+                                  : 'rounded-full text-gray-600 hover:bg-gray-100'
+                              }
+                            >
+                              {p}
+                            </Pagination.Link>
+                          </Pagination.Item>
+                        ),
+                      )
+                    ) : (
+                      <Pagination.Item>
+                        <Pagination.Link isActive className="rounded-full bg-brand text-white">
+                          {page}
+                        </Pagination.Link>
+                      </Pagination.Item>
+                    )}
+
+                    <Pagination.Item>
+                      <Pagination.Next
+                        isDisabled={!hasNext}
+                        onPress={() => setPage(p => p + 1)}
+                        className="rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                      >
+                        <Pagination.NextIcon />
+                      </Pagination.Next>
+                    </Pagination.Item>
+                  </Pagination.Content>
+                </Pagination>
+              </div>
+            )
+          })()}
         </div>
       </div>
 
@@ -699,7 +880,7 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
           }}
         />
       )}
-    </>
+    </I18nProvider>
   )
 }
 

@@ -1,6 +1,14 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@layer theme, base, components, utilities;
+
+@import "tailwindcss";
+@import "@heroui/styles";
+
+@theme {
+  --color-brand: #1a3c34;
+  --color-brand-light: #5a8f7a;
+  --color-brand-accent: #71b394;
+  --color-brand-muted: #e8f0ed;
+}
 
 @font-face {
   font-family: 'JetBrains Mono';
@@ -8,7 +16,6 @@
   font-weight: 700;
   font-style: normal;
 }
-
 
 @layer base {
   :root {
@@ -20,7 +27,10 @@
     height: 100%;
     overflow: hidden;
   }
-  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
 }
 
 @layer utilities {

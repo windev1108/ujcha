@@ -63,18 +63,40 @@ const STEP_META: Record<OrderStatus, { label: string; icon: React.ElementType }>
     completed: { label: 'Hoàn thành', icon: CheckCircle2 },
     cancelled: { label: 'Đã huỷ', icon: Ban },
 }
+// Map mỗi step tới field timestamp tương ứng trong AdminOrder.
+const STEP_TIME_FIELD: Partial<Record<OrderStatus, keyof AdminOrder>> = {
+    pending: 'createdAt',
+    confirmed: 'confirmedAt',
+    preparing: 'preparingAt',
+    ready: 'readyAt',
+    delivering: 'deliveringAt',
+    arrived: 'arrivedAt',
+    completed: 'completedAt',
+}
 
-function StatusTimeline({ status, orderType }: { status: OrderStatus; orderType: string }) {
+function formatStepTime(iso: string): string {
+    return new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+}
+
+function StatusTimeline({ order }: { order: AdminOrder }) {
+    const status = order.status
     if (status === 'cancelled') {
         return (
-            <div className="flex items-center gap-2.5 rounded-2xl border border-red-100 bg-red-50 px-4 py-3">
-                <Ban className="size-4 shrink-0 text-red-500" />
-                <p className="text-sm font-semibold text-red-700">Đơn hàng đã bị huỷ</p>
+            <div className="flex items-center justify-between gap-2.5 rounded-2xl border border-red-100 bg-red-50 px-4 py-3">
+                <div className="flex items-center gap-2.5">
+                    <Ban className="size-4 shrink-0 text-red-500" />
+                    <p className="text-sm font-semibold text-red-700">Đơn hàng đã bị huỷ</p>
+                </div>
+                {order.cancelledAt && (
+                    <span className="text-xs font-medium text-red-500 tabular-nums">
+                        {formatStepTime(order.cancelledAt)}
+                    </span>
+                )}
             </div>
         )
     }
 
-    const steps = orderType === 'delivery' ? TIMELINE_STEPS_DELIVERY : TIMELINE_STEPS_OTHER
+    const steps = order.type === 'delivery' ? TIMELINE_STEPS_DELIVERY : TIMELINE_STEPS_OTHER
     const activeIdx = steps.indexOf(steps.includes(status) ? status : 'pending')
 
     return (
@@ -85,6 +107,8 @@ function StatusTimeline({ status, orderType }: { status: OrderStatus; orderType:
                     const active = i === activeIdx
                     const isLast = i === steps.length - 1
                     const StepIcon = STEP_META[step].icon
+                    const timeField = STEP_TIME_FIELD[step]
+                    const timeValue = timeField ? (order[timeField] as string | null | undefined) : undefined
 
                     return (
                         <Fragment key={step}>
@@ -108,6 +132,10 @@ function StatusTimeline({ status, orderType }: { status: OrderStatus; orderType:
                                 <p className={`text-center text-[10px] font-semibold leading-tight ${active ? 'text-brand' : done ? 'text-gray-500' : 'text-gray-300'
                                     }`}>
                                     {STEP_META[step].label}
+                                </p>
+                                <p className={`text-center text-[9px] leading-tight tabular-nums ${done ? 'text-gray-400' : 'text-transparent'
+                                    }`}>
+                                    {timeValue ? formatStepTime(timeValue) : '\u00A0'}
                                 </p>
                             </div>
                             {!isLast && (
@@ -452,7 +480,7 @@ export function OrderDetailModal({
 
                     {/* Status timeline — full width at top */}
                     <div className="px-6 pt-4 pb-3 border-b border-gray-100">
-                        <StatusTimeline status={order.status} orderType={order.type} />
+                        <StatusTimeline order={order} />
                     </div>
 
                     <div className="px-6 py-4 space-y-4">

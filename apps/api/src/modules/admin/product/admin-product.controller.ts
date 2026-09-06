@@ -26,6 +26,7 @@ import { AdminProductService } from './admin-product.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ToggleProductAvailabilityDto } from './dto/toggle-product-availability.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { ProductService } from '../../product/product.service';
 
 @ApiTags('admin-products')
 @ApiBearerAuth('admin-access-token')
@@ -33,18 +34,27 @@ import { UpdateProductDto } from './dto/update-product.dto';
 @Roles(AdminRole.super_admin, AdminRole.staff)
 @Controller('admin/products')
 export class AdminProductController {
-  constructor(private readonly adminProductService: AdminProductService) { }
+  constructor(
+    private readonly adminProductService: AdminProductService,
+    private readonly productService: ProductService
+  ) { }
 
   @Get()
   @ApiOperation({ summary: 'Danh sách sản phẩm' })
   @ApiQuery({ name: 'categoryId', required: false, format: 'uuid' })
-  @ApiQuery({ name: 'q', required: false, description: 'Tìm theo tên / SKU / mô tả' })
+  @ApiQuery({ name: 'categorySlug', required: false })
+  @ApiQuery({
+    name: 'q',
+    required: false,
+    description: 'Tìm theo tên / SKU / mô tả',
+  })
   list(
     @Query('categoryId', new ParseUUIDPipe({ optional: true }))
+    @Query('categorySlug') categorySlug?: string,
     categoryId?: string,
     @Query('q') q?: string,
   ) {
-    return this.adminProductService.list(categoryId, q);
+    return this.productService.list(categoryId, categorySlug, q);
   }
 
   @Get(':id')

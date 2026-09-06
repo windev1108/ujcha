@@ -23,13 +23,14 @@ export class AdminProductService {
     private readonly redis: RedisService,
   ) { }
 
-  async list(categoryId?: string, q?: string) {
+  async list(categoryId?: string, categorySlug?: string, q?: string) {
     const qx = q?.trim();
     const [rows, globalDiscount] = await Promise.all([
       this.prisma.product.findMany({
         where: {
           AND: [
             categoryId ? { categoryId } : {},
+            categorySlug ? { category: { slug: categorySlug } } : {},
             qx
               ? {
                 OR: [

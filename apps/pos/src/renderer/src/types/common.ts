@@ -278,7 +278,13 @@ export interface AdminOrder {
   paidAt: string | null
   createdAt: string
   updatedAt: string
-
+  confirmedAt: string
+  preparingAt: string
+  readyAt: string
+  deliveringAt: string
+  arrivedAt: string
+  completedAt: string
+  cancelledAt: string
   // Expanded relations
   table: { name: string; id?: string } | null
   user: { id: string; name: string; email: string; phone?: string | null } | null
@@ -326,6 +332,7 @@ export interface CustomerUpdate {
   enabled?: boolean
   name?: string
   items?: Array<{
+    cartKey: string
     name: string
     quantity: number
     price: number

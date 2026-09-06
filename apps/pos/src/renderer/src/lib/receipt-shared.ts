@@ -132,10 +132,12 @@ function isDefaultLabelOption(key: string, rawValue: string): boolean {
 
   const isSweetnessKey = k.includes('ngọt') || k.includes('đường')
   const isIceKey = k.includes('đá')
+  const isMatchaTypeKey = k.includes('loại matcha')
 
   if (isSweetnessKey) return v.includes('vừa') || v.includes('bình thường')
   if (isIceKey) return v.includes('bình thường')
-
+  if (isMatchaTypeKey) return v.includes('matcha thường')
+    
   return false
 }
 

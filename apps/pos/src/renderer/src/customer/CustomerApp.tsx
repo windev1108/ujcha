@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { QrCode } from 'lucide-react'
+import { QrCode, StickyNoteIcon } from 'lucide-react'
 import { motion, AnimatePresence } from 'motion/react'
-import type { CustomerUpdate } from '../types/common'
-import logoUrl from '../assets/logo.png'
+import type { CartItem, CustomerUpdate } from '../types/common'
+import logoUrl from '../assets/vertical-logo.png'
 import NumberFlow from '@number-flow/react'
 import { KunBot3D } from './kunbot'
 
@@ -146,7 +146,7 @@ export function CustomerApp() {
             transition={{ duration: 0.35, ease: [0.22, 0.68, 0, 1.2] }}
             className="flex flex-1 flex-col overflow-hidden"
           >
-            <CartScreen key={animKey} items={state.items} total={state.total ?? 0} bot={bot} aiMode={aiMode} />
+            <CartScreen items={state.items} total={state.total ?? 0} bot={bot} aiMode={aiMode} />
           </motion.div>
         )}
 
@@ -571,11 +571,27 @@ function BotOverlay({ bot }: { bot: BotState }) {
   )
 }
 
-function CartScreen({ items, total, bot, aiMode }: {
+function CartScreen({
+  items,
+  total,
+  bot,
+  aiMode,
+}: {
   items: Array<{
-    name: string; quantity: number; price: number; imageUrl?: string | null
-    optionDetails?: Array<{ group: string; label: string; priceDelta: number }>
-    extras?: Array<{ id: string; name: string; price: number }>
+    name: string
+    quantity: number
+    price: number
+    imageUrl?: string | null
+    optionDetails?: Array<{
+      group: string
+      label: string
+      priceDelta: number
+    }>
+    extras?: Array<{
+      id: string
+      name: string
+      price: number
+    }>
     note?: string
   }>
   total: number
@@ -583,115 +599,571 @@ function CartScreen({ items, total, bot, aiMode }: {
   aiMode: boolean
 }) {
   const count = items.length
-  const prevCountRef = useRef(0)
+  const useInlineToppings = count > 15
   const [newItemIndex, setNewItemIndex] = useState<number | null>(null)
+  /**
+   * Customer display:
+   * - NEVER scroll
+   * - Header + footer luôn cố định
+   * - Item area chỉ nhận phần height còn lại
+   * - Grid tự tăng số cột khi có nhiều món
+   */
+
+  const prevItemsRef = useRef(items)
 
   useEffect(() => {
-    const prev = prevCountRef.current
-    if (items.length > prev) {
-      setNewItemIndex(items.length - 1)
-      const t = setTimeout(() => setNewItemIndex(null), 600)
-      prevCountRef.current = items.length
-      return () => clearTimeout(t)
-    }
-    prevCountRef.current = items.length
-  }, [items.length])
+    const prevItems = prevItemsRef.current
 
-  const cols = count <= 1 ? 1 : count <= 4 ? 2 : 3
-  const isVeryCompact = count > 9
-  const isCompact = count > 4
-  const gridGap = isVeryCompact ? 4 : 8
-  const cardPad = isVeryCompact ? 'px-2 py-1.5' : isCompact ? 'px-3 py-2' : 'px-4 py-3'
-  const imgSize = isVeryCompact ? 'h-8 w-8' : isCompact ? 'h-10 w-10' : 'h-12 w-12'
-  const imgText = isVeryCompact ? 'text-base' : 'text-lg'
-  const nameSize = isVeryCompact ? 'text-[11px]' : isCompact ? 'text-xs' : 'text-sm'
-  const priceSize = isVeryCompact ? 'text-[11px]' : 'text-sm'
-  const showSub = !isVeryCompact
+    if (items.length > prevItems.length) {
+      const prevIds = new Set(prevItems.map((item) => item.name + '|' + item.optionDetails?.map((o) => o.group + ':' + o.label).join('|') + '|' + item.extras?.map((e) => e.id).join('|')))
+      const addedItem = items.find((item) => !prevIds.has(item.name + '|' + item.optionDetails?.map((o) => o.group + ':' + o.label).join('|') + '|' + item.extras?.map((e) => e.id).join('|')))
+
+      if (addedItem) {
+        setNewItemIndex(items.indexOf(addedItem))
+
+        const timer = window.setTimeout(() => {
+          setNewItemIndex(null)
+        }, 700)
+
+        return () => window.clearTimeout(timer)
+      }
+    }
+
+    prevItemsRef.current = items
+  }, [items])
+
+  const itemsAreaRef = useRef<HTMLDivElement>(null)
+
+  const [itemsAreaHeight, setItemsAreaHeight] = useState(0)
+  const [contentScales, setContentScales] = useState<Record<string, number>>({})
+  const cardRefs = useRef<Record<string, HTMLDivElement | null>>({})
+
+  useEffect(() => {
+    const element = itemsAreaRef.current
+
+    if (!element) return
+
+    const observer = new ResizeObserver(([entry]) => {
+      setItemsAreaHeight(entry.contentRect.height)
+    })
+
+    observer.observe(element)
+
+    return () => observer.disconnect()
+  }, [])
+
+
+  const GAP = 8
+  const MIN_CARD_HEIGHT = 160
+
+  function calculateGrid(
+    count: number,
+    availableHeight: number,
+  ) {
+    if (count <= 0) {
+      return {
+        cols: 1,
+        rows: 1,
+        cardHeight: availableHeight,
+      }
+    }
+
+    // Always prefer fewer columns.
+    // Increase columns only when the resulting card height is below the minimum.
+    for (let candidateCols = 1; candidateCols <= Math.min(3, count); candidateCols++) {
+      const candidateRows = Math.ceil(count / candidateCols)
+      const candidateCardHeight =
+        (availableHeight - GAP * (candidateRows - 1)) / candidateRows
+
+      if (candidateCardHeight >= MIN_CARD_HEIGHT) {
+        return {
+          cols: candidateCols,
+          rows: candidateRows,
+          cardHeight: candidateCardHeight,
+        }
+      }
+    }
+
+    // More items than the available height can comfortably fit.
+    // Max out at 3 columns; the card will still be constrained by the grid row.
+    const cols = Math.min(3, count)
+    const rows = Math.ceil(count / cols)
+    const cardHeight = Math.max(
+      0,
+      (availableHeight - GAP * (rows - 1)) / rows,
+    )
+
+    return {
+      cols,
+      rows,
+      cardHeight,
+    }
+  }
+
+
+  const { cols, rows, cardHeight } = calculateGrid(
+    items.length,
+    itemsAreaHeight,
+  )
+  // Measure the real rendered content. When a card has many toppings/options,
+  // scale only that card's content enough to fit its allocated row instead of
+  // letting the text overflow into the next row or disappear behind the footer.
+  useEffect(() => {
+    if (!items.length) return
+
+    const measure = () => {
+      const next: Record<string, number> = {}
+
+      items.forEach((item, index) => {
+        const key = `${item.name}-${index}`
+        const card = cardRefs.current[key]
+        if (!card) return
+
+        const content = card.querySelector('[data-card-content]') as HTMLElement | null
+        if (!content) return
+
+        const available = Math.max(1, card.clientHeight - 12)
+        const natural = Math.max(content.scrollHeight, content.getBoundingClientRect().height)
+        const scale = natural > available ? Math.max(0.72, available / natural) : 1
+        next[key] = Number(scale.toFixed(3))
+      })
+
+      setContentScales((prev) => {
+        const prevKeys = Object.keys(prev)
+        const nextKeys = Object.keys(next)
+        if (prevKeys.length === nextKeys.length && nextKeys.every((key) => prev[key] === next[key])) {
+          return prev
+        }
+        return next
+      })
+    }
+
+    const frame = requestAnimationFrame(measure)
+    return () => cancelAnimationFrame(frame)
+  }, [items, cols, rows, cardHeight])
+
+  // Typography is based on the ACTUAL card height.
+  // The number of columns only determines the grid layout.
+  // This means 1, 2 or 3 columns can each use a readable size
+  // depending on how much vertical space each card really has.
+  const cardScale =
+    cardHeight >= 240 ? 'large' :
+      cardHeight >= 190 ? 'medium' :
+        cardHeight >= 160 ? 'compact' :
+          'minimum'
+
+  const cardPad =
+    cardScale === 'large' ? 'px-5 py-4' :
+      cardScale === 'medium' ? 'px-4 py-3.5' :
+        cardScale === 'compact' ? 'px-3.5 py-3' :
+          'px-3 py-2.5'
+
+  const imgSize =
+    cardScale === 'large' ? 'h-20 w-20' :
+      cardScale === 'medium' ? 'h-[72px] w-[72px]' :
+        cardScale === 'compact' ? 'h-16 w-16' :
+          'h-14 w-14'
+
+  const imgText =
+    cardScale === 'large' ? 'text-2xl' :
+      cardScale === 'medium' ? 'text-xl' :
+        cardScale === 'compact' ? 'text-lg' :
+          'text-base'
+
+  const nameSize =
+    cardScale === 'large' ? 'text-lg' :
+      cardScale === 'medium' ? 'text-base' :
+        cardScale === 'compact' ? 'text-sm' :
+          'text-sm'
+
+  const detailSize =
+    cardScale === 'large' ? 'text-sm' :
+      cardScale === 'medium' ? 'text-sm' :
+        cardScale === 'compact' ? 'text-xs' :
+          'text-[11px]'
+
+  const priceSize =
+    cardScale === 'large' ? 'text-lg' :
+      cardScale === 'medium' ? 'text-lg' :
+        cardScale === 'compact' ? 'text-base' :
+          'text-sm'
 
   return (
-    <div className="relative flex flex-1 flex-col bg-white" style={{ minHeight: 0 }}>
-      {/* Header */}
-      <div className="border-b border-[#e8f0ec] bg-white px-6 py-3 shrink-0">
+    <div
+      className="relative flex min-h-0 flex-1 flex-col bg-white"
+    >
+      {/* ============================================================
+          HEADER
+          ============================================================ */}
+      <div className="shrink-0 border-b border-[#e8f0ec] bg-white px-6 py-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#f0faf5] ring-1 ring-[#c2e8d4]">
-            <img src={logoUrl} alt="UjCha" className="h-6 w-6 object-contain" />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#f0faf5] ring-1 ring-[#c2e8d4]">
+            <img
+              src={logoUrl}
+              alt="UjCha"
+              className="h-6 w-6 object-contain"
+            />
           </div>
-          <div>
-            <p className="text-[10px] font-bold tracking-widest text-[#8abfaa] uppercase">Đơn hàng</p>
-            <h2 className="text-base font-bold text-[#1a3c2e]">Xác nhận món của bạn</h2>
+
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[#8abfaa]">
+              Đơn hàng
+            </p>
+
+            <h2 className="text-base font-bold text-[#1a3c2e]">
+              Xác nhận món của bạn
+            </h2>
           </div>
+
           <motion.div
             key={count}
             initial={{ scale: 1.4 }}
             animate={{ scale: 1 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-            className="ml-auto flex h-7 min-w-7 items-center justify-center rounded-full bg-[#2d8a62] px-2.5 text-xs font-bold text-white"
+            transition={{
+              type: 'spring',
+              stiffness: 400,
+              damping: 20,
+            }}
+            className="ml-auto flex h-7 min-w-7 shrink-0 items-center justify-center rounded-full bg-[#2d8a62] px-2.5 text-xs font-bold text-white"
           >
-            {items.reduce((s, i) => s + i.quantity, 0)}
+            {items.reduce((sum, item) => sum + item.quantity, 0)}
           </motion.div>
         </div>
       </div>
 
-      {/* Items grid */}
+      {/* ============================================================
+          ITEMS AREA
+          
+          IMPORTANT:
+          - flex-1
+          - min-h-0
+          - overflow-y-auto
+          
+          Therefore the Total footer below can NEVER be covered.
+          ============================================================ */}
       <div
-        className="flex-1 bg-[#f8fbf9] overflow-hidden"
-        style={{ padding: gridGap, display: 'grid', gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridAutoRows: 'min-content', alignContent: 'start', gap: gridGap, width: '100%', boxSizing: 'border-box' }}
+        ref={itemsAreaRef}
+        className="min-h-0 flex-1 overflow-hidden bg-[#f8fbf9]"
+        style={{
+          padding: 8,
+          boxSizing: 'border-box',
+        }}
       >
-        {items.map((item, i) => {
-          const isNew = i === newItemIndex
-          return (
-            <motion.div
-              key={`${item.name}-${i}`}
-              initial={isNew ? { opacity: 0, scale: 0.93, y: 6 } : false}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              transition={isNew ? { duration: 0.32, ease: [0.22, 0.68, 0, 1.2] } : undefined}
-              className={`flex min-w-0 items-center gap-2 rounded-xl bg-white shadow-sm ring-1 ${cardPad} ${isNew ? 'ring-[#2d8a62]/50' : 'ring-[#e4ede8]'}`}
-            >
-              {item.imageUrl ? (
-                <img src={item.imageUrl} alt={item.name} className={`${imgSize} shrink-0 rounded-lg object-cover ring-1 ring-[#e4ede8]`} />
-              ) : (
-                <div className={`${imgSize} ${imgText} shrink-0 flex items-center justify-center rounded-lg bg-[#f0faf5] font-black text-[#2d8a62]/50 ring-1 ring-[#c2e8d4]`}>
-                  {item.name[0]}
-                </div>
-              )}
-              <div className="min-w-0 flex-1">
-                <p className={`truncate font-semibold text-[#1a3c2e] leading-tight ${nameSize}`}>{item.name}</p>
-                {showSub && item.optionDetails && item.optionDetails.length > 0 && (
-                  <p className={`truncate text-[#8abfaa] mt-0.5 ${nameSize}`}>
-                    {item.optionDetails.map((o, idx) => <span key={o.group}>{idx > 0 && ' · '}{o.label}</span>)}
-                  </p>
-                )}
-                {showSub && item.extras && item.extras.length > 0 && (
-                  <p className={`truncate text-[#8abfaa] mt-0.5 ${nameSize}`}>
-                    {item.extras.map((e, idx) => <span key={e.id}>{idx > 0 && ' · '}+{e.name}</span>)}
-                  </p>
-                )}
-                {showSub && item.note && <p className={`truncate italic text-[#b07a40] mt-0.5 ${nameSize}`}>* {item.note}</p>}
-                <div className={`mt-0.5 inline-flex items-center rounded-full bg-[#f0faf5] px-1.5 py-px font-semibold text-[#5a8f7a] ring-1 ring-[#c2e8d4] ${isVeryCompact ? 'text-[9px]' : 'text-[10px]'}`}>×{item.quantity}</div>
-              </div>
-              <div className="shrink-0 text-right">
-                <p className={`font-bold tabular-nums text-[#1a3c2e] ${priceSize}`}>{fmt(item.price)}</p>
-              </div>
-            </motion.div>
-          )
-        })}
-      </div>
+        <div
+          className="grid h-full min-h-0 w-full"
+          style={{
+            gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+            gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
+            gap: 8,
+          }}
+        >
+          {items.map((item, i) => {
+            const isNew = i === newItemIndex
 
-      {/* Total */}
-      <div className="border-t border-[#e8f0ec] bg-white px-5 py-3 shrink-0">
-        <div className="flex items-center justify-between rounded-2xl bg-[#1a3c2e] px-6 py-3">
-          <span className="font-semibold text-white/70">Tổng cộng</span>
-          <span className="text-3xl font-black tabular-nums text-white">{fmt(total)}</span>
+            return (
+              <motion.div
+                key={`${item.name}-${i}`}
+                ref={(el) => {
+                  cardRefs.current[`${item.name}-${i}`] = el
+                }}
+                initial={
+                  isNew
+                    ? {
+                      opacity: 0,
+                      scale: 0.96,
+                      y: 8,
+                    }
+                    : false
+                }
+                animate={{
+                  opacity: 1,
+                  scale: 1,
+                  y: 0,
+                }}
+                transition={
+                  isNew
+                    ? {
+                      duration: 0.32,
+                      ease: [0.22, 0.68, 0, 1.2],
+                    }
+                    : undefined
+                }
+                className={[
+                  'flex h-full min-h-0 min-w-0 items-start gap-4 overflow-hidden rounded-2xl',
+                  'bg-white shadow-sm ring-1',
+                  cardPad,
+                  isNew
+                    ? 'ring-[#2d8a62]/50'
+                    : 'ring-[#e4ede8]',
+                ].join(' ')}
+              >
+                {/* ==================================================
+                    PRODUCT IMAGE + QUANTITY BADGE
+                    ================================================== */}
+                <div className="relative shrink-0">
+                  {item.imageUrl ? (
+                    <img
+                      src={item.imageUrl}
+                      alt={item.name}
+                      className={[
+                        imgSize,
+                        'rounded-xl object-cover ring-1 ring-[#e4ede8]',
+                      ].join(' ')}
+                    />
+                  ) : (
+                    <div
+                      className={[
+                        imgSize,
+                        imgText,
+                        'flex items-center justify-center rounded-xl',
+                        'bg-[#f0faf5] font-black text-[#2d8a62]/50',
+                        'ring-1 ring-[#c2e8d4]',
+                      ].join(' ')}
+                    >
+                      {item.name?.[0] ?? '?'}
+                    </div>
+                  )}
+
+                  {/* =================================================
+                      QUANTITY
+                      
+                      Bottom-right of image.
+                      No longer inside the content area.
+                      ================================================= */}
+                  <motion.div
+                    key={item.quantity}
+                    initial={{ scale: 0.8 }}
+                    animate={{ scale: 1 }}
+                    className={[
+                      'absolute -bottom-2 -right-2 z-10',
+                      'flex min-h-7 min-w-7 items-center justify-center',
+                      'rounded-full border-2 border-white',
+                      'bg-[#2d8a62] px-2',
+                      'text-[11px] font-black leading-none text-white',
+                      'shadow-md',
+                    ].join(' ')}
+                  >
+                    {item.quantity}
+                  </motion.div>
+                </div>
+
+                {/* ==================================================
+                    PRODUCT CONTENT
+                    ================================================== */}
+                <div
+                  data-card-content
+                  className="min-w-0 flex-1 origin-top-left"
+                  style={{
+                    transform: `scale(${contentScales[`${item.name}-${i}`] ?? 1})`,
+                    width: `${100 / (contentScales[`${item.name}-${i}`] ?? 1)}%`,
+                  }}
+                >
+                  {/* Product name */}
+                  <p
+                    className={[
+                      'font-bold leading-snug text-[#1a3c2e]',
+                      nameSize,
+                      'break-words',
+                    ].join(' ')}
+                  >
+                    {item.name}
+                  </p>
+
+                  {/* ==================================================
+                      OPTIONS
+                      
+                      Options stay vertical for normal carts.
+                      No truncate.
+                      ================================================== */}
+                  {item.optionDetails &&
+                    item.optionDetails.length > 0 && (
+                      <div className="mt-1.5 flex min-w-0 flex-col gap-0.5">
+                        {item.optionDetails.map((option) => (
+                          <div
+                            key={option.group}
+                            className={[
+                              'flex min-w-0 items-center gap-1 whitespace-nowrap',
+                              'leading-snug text-[#6f9c88]',
+                              detailSize,
+                            ].join(' ')}
+                          >
+                            <span className="shrink-0 font-semibold text-[#8abfaa]">
+                              {option.group}:
+                            </span>
+
+                            <span className="min-w-0 break-words">
+                              {option.label}
+
+                              {option.priceDelta > 0 && (
+                                <span className="ml-1 font-medium text-[#86aa99]">
+                                  +{fmt(option.priceDelta)}
+                                </span>
+                              )}
+
+                              {option.priceDelta < 0 && (
+                                <span className="ml-1 font-medium text-[#86aa99]">
+                                  {fmt(option.priceDelta)}
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                  {/* ==================================================
+                      TOPPINGS / EXTRAS
+                      
+                      Each topping gets its own row.
+                      ================================================== */}
+                  {item.extras &&
+                    item.extras.length > 0 && (
+                      <div
+                        className={[
+                          'mt-1.5 flex min-w-0',
+                          useInlineToppings
+                            ? 'flex-row flex-wrap items-center gap-x-3 gap-y-0.5'
+                            : 'flex-col gap-0.5',
+                        ].join(' ')}
+                      >
+                        {item.extras.map((extra) => (
+                          <div
+                            key={extra.id}
+                            className={[
+                              'flex min-w-0 items-center gap-1 whitespace-nowrap',
+                              'leading-snug text-[#6f9c88]',
+                              detailSize,
+                            ].join(' ')}
+                          >
+                            <span className="min-w-0 whitespace-nowrap text-[#6f9c88]">
+                              +{extra.name}
+                              {extra.price > 0 && (
+                                <span className="ml-1 font-medium text-[#86aa99]">
+                                  +{fmt(extra.price)}
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                  {/* ==================================================
+                      NOTE
+                      ================================================== */}
+                  {item.note && (
+                    <div
+                      className={[
+                        'mt-1.5 break-words leading-snug flex items-center font-semibold gap-1',
+                        'text-2xl text-[#2d8a62]/70',
+                        detailSize,
+                      ].join(' ')}
+                    >
+                      <StickyNoteIcon className="size-4" />
+                      <span className="min-w-0 break-words">{item.note}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* ==================================================
+                    PRICE
+                    ================================================== */}
+                <div className="shrink-0 self-start pt-0.5 text-right">
+                  <p
+                    className={[
+                      'font-black tabular-nums text-[#1a3c2e]',
+                      priceSize,
+                    ].join(' ')}
+                  >
+                    {fmt(item.price)}
+                  </p>
+                </div>
+              </motion.div>
+            )
+          })}
         </div>
       </div>
 
-      {/* KunBot overlay — only when AI mode is on */}
+      {/* ============================================================
+          TOTAL
+          
+          shrink-0 + normal flex flow.
+          NEVER position absolute.
+          NEVER overlays the item list.
+          ============================================================ */}
+      <div className="shrink-0 border-t border-[#e8f0ec] bg-white px-5 py-3">
+        <div className="flex items-center justify-between rounded-2xl bg-[#1a3c2e] px-6 py-3">
+          <span className="font-semibold text-white/70">
+            Tổng cộng
+          </span>
+
+          <span className="text-3xl font-black tabular-nums text-white">
+            {fmt(total)}
+          </span>
+        </div>
+      </div>
+
+      {/* ============================================================
+          KUNBOT OVERLAY
+          ============================================================ */}
       {aiMode && (
         <AnimatePresence>
           <BotOverlay bot={bot} />
         </AnimatePresence>
       )}
     </div>
+  )
+}
+
+function CartItemCard({
+  item,
+  isNew,
+}: {
+  item: CartItem
+  isNew: boolean
+}) {
+  return (
+    <motion.div
+      layout
+      initial={
+        isNew
+          ? {
+            opacity: 0,
+            y: 14,
+            scale: 0.96,
+          }
+          : false
+      }
+      animate={{
+        opacity: 1,
+        y: 0,
+        scale: 1,
+      }}
+      exit={{
+        opacity: 0,
+        scale: 0.94,
+        y: -8,
+      }}
+      transition={{
+        layout: {
+          duration: 0.28,
+          ease: [0.22, 0.68, 0, 1],
+        },
+        opacity: {
+          duration: 0.2,
+        },
+        y: {
+          duration: 0.3,
+          ease: [0.22, 0.68, 0, 1],
+        },
+        scale: {
+          duration: 0.3,
+          ease: [0.22, 0.68, 0, 1],
+        },
+      }}
+    >
+      {/* card content */}
+    </motion.div>
   )
 }
 
