@@ -49,9 +49,8 @@ export class AdminProductController {
     description: 'Tìm theo tên / SKU / mô tả',
   })
   list(
-    @Query('categoryId', new ParseUUIDPipe({ optional: true }))
+    @Query('categoryId') categoryId?: string,
     @Query('categorySlug') categorySlug?: string,
-    categoryId?: string,
     @Query('q') q?: string,
   ) {
     return this.productService.list(categoryId, categorySlug, q);

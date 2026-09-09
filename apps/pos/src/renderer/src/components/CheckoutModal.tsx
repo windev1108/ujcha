@@ -316,7 +316,7 @@ export function CheckoutModal({ onClose, initialTab, autoConfirm, onOrderComplet
       type: selectedTableId ? 'table' : 'pickup',
       tableId: selectedTableId ?? undefined,
       paymentStatus,
-      pickupTime: new Date().toISOString(),
+      pickupTime:  selectedTableId ? null : new Date().toISOString(),
       paymentType: tab === 'cash' ? 'cash' : 'bank_transfer',
       ...(linkedCustomer ? { userId: linkedCustomer.id } : {}),
       items: cart.map((item) => ({
