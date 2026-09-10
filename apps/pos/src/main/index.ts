@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, Menu, nativeTheme, screen, shell } from 'e
 import { join } from 'path'
 import { readConfig, writeConfig, readSubConfig, writeSubConfig } from '../renderer/src/store/config-store'
 import { connectedPrinters, registerPrinterHandlers } from '../renderer/src/lib/printer-handler'
-import { getGrabStatus, connectGrabByCredentials, syncGrabSession, saveGrabAuthHeaders, resetGrabSession, startGrabPolling, stopGrabPolling, resumeGrabPolling, fetchGrabOrderList, fetchGrabOrderDetailById, fetchGrabPreparingOrderList, fetchGrabLiveOrders, markGrabOrderReady, setGrabMerchantId, syncGrabRevenueSummary, applyPollInterval, startDailySyncQueue, setOnNewOrderCallback } from './grab-poller'
+import { getGrabStatus, connectGrabByCredentials, syncGrabSession, saveGrabAuthHeaders, resetGrabSession, startGrabPolling, stopGrabPolling, resumeGrabPolling, fetchGrabOrderList, fetchGrabOrderDetailById, fetchGrabPreparingOrderList, fetchGrabLiveOrders, markGrabOrderReady, setGrabMerchantId, syncGrabRevenueSummary, applyPollInterval, startDailySyncQueue, setOnNewOrderCallback, setOnOrderAcceptedCallback } from './grab-poller'
 import { getSpfPartnerStatus, saveSpfPartnerSession, resetSpfPartnerSession, startSpfPartnerPolling, stopSpfPartnerPolling, resumeSpfPartnerPolling, fetchSpfTransactions, applySpfPollInterval, setOnNewSpfOrderCallback, fetchSpfRestaurantList, fetchSpfOrderList, fetchSpfOrderDetailByCode, adoptPollerWindow, fetchSpfOrderListPage } from './shopee-partner-poller'
 import { registerAiHandlers } from './ai-agent/registerHandlers'
 import { setupUpdater, registerUpdaterHandlers } from './updater'
@@ -626,6 +626,7 @@ app.whenReady().then(() => {
 
   // Start GrabFood polling (notification only — no order ingest)
   setOnNewOrderCallback((id: string) => staffWin?.webContents.send('grab:newOrder', id))
+  setOnOrderAcceptedCallback((id: string) => staffWin?.webContents.send('grab:orderAccepted', id))
   startGrabPolling()
   startDailySyncQueue()
 

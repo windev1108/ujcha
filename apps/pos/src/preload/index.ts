@@ -62,6 +62,7 @@ export interface LabelConfig {
   showBarcode: boolean
   showNote: boolean
   customText: string
+  skipItemsWithoutOptions?: boolean
   address?: string | null
   printerName?: string | null
   typeId?: string
@@ -320,7 +321,12 @@ const electronAPI = {
       ipcRenderer.on('grab:newOrder', handler)
       return () => ipcRenderer.removeListener('grab:newOrder', handler)
     },
-
+    /** Đơn Grab đã rời khỏi trạng thái "Đang chuẩn bị" — xác nhận ở đâu cũng bắt được (poll) */
+    onOrderAccepted: (cb: (id: string) => void): (() => void) => {
+      const handler = (_: Electron.IpcRendererEvent, id: string) => cb(id)
+      ipcRenderer.on('grab:orderAccepted', handler)
+      return () => ipcRenderer.removeListener('grab:orderAccepted', handler)
+    },
     setPollInterval: (ms: number): Promise<void> =>
       ipcRenderer.invoke('grab:setPollInterval', ms),
   },

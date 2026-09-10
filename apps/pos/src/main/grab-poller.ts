@@ -36,6 +36,10 @@ const POLL_INTERVAL_MS = 5_000
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let lastKnownOrderIds = new Set<string>()
+// Giá trị times.acceptedAt gần nhất đã ghi nhận cho mỗi đơn — null nghĩa là
+// đơn chưa được xác nhận (accept), có timestamp nghĩa là đã được xác nhận
+// (ở bất kỳ đâu: nhóm Grab, app đối tác, auto-accept, hay trong POS).
+let orderAcceptedAtMap = new Map<string, string | null>()
 let lastPollTime: string | null = null
 let lastPollStatus: 'ok' | 'auth_error' | 'error' | 'idle' = 'idle'
 let cachedHeaders: Record<string, string> | null = null
@@ -309,7 +313,7 @@ export interface GrabPreparingOrder {
     count: number
     items: Array<{ itemID?: string; name: string; quantity: number; comment?: string }>
   }
-  times: { createdAt: string; estimatedPickUpTime?: string }
+  times: { createdAt: string; estimatedPickUpTime?: string; acceptedAt?: string | null }
   labels?: { isRead: boolean; acceptedViaAA?: boolean }
   preparationTaskpoolStatus?: string
   preparationTaskID?: string
@@ -389,12 +393,12 @@ async function fetchOrders(): Promise<{ orders: GrabOrderEntry[]; authError: boo
   }
 }
 
-async function fetchPreparingOrders(): Promise<{ orders: GrabPreparingOrder[]; authError: boolean; nextToken?: string }> {
+async function fetchPreparingOrders(): Promise<{ orders: GrabPreparingOrder[]; authError: boolean; nextToken?: string; success: boolean }> {
   const headers = getActiveHeaders()
-  if (!headers) return { orders: [], authError: true }
+  if (!headers) return { orders: [], authError: true, success: false }
 
   const merchantID = cachedMerchantID ?? getGrabConfig().merchantID
-  if (!merchantID) return { orders: [], authError: false }
+  if (!merchantID) return { orders: [], authError: false, success: false }
 
   const cleanHeaders: Record<string, string> = {}
   for (const [k, v] of Object.entries(headers)) {
@@ -406,19 +410,19 @@ async function fetchPreparingOrders(): Promise<{ orders: GrabPreparingOrder[]; a
     const res = await fetch(url, { method: 'GET', headers: buildReqHeaders(cleanHeaders) })
     console.log('[GrabFood] orders-pagination GET status:', res.status)
 
-    if (res.status === 401 || res.status === 403) return { orders: [], authError: true }
+    if (res.status === 401 || res.status === 403) return { orders: [], authError: true, success: false }
     if (!res.ok) {
       const text = await res.text().catch(() => '')
       console.warn('[GrabFood] orders-pagination error:', res.status, text.slice(0, 200))
-      return { orders: [], authError: false }
+      return { orders: [], authError: false, success: false }
     }
 
     const body = await res.json() as GrabPreparingOrdersResponse
     console.log('[GrabFood] orders-pagination — orders:', (body.orders ?? []).length, 'nextToken:', body.nextSearchToken)
-    return { orders: body.orders ?? [], authError: false, nextToken: body.nextSearchToken }
+    return { orders: body.orders ?? [], authError: false, nextToken: body.nextSearchToken, success: true }
   } catch (err) {
     console.error('[GrabFood] Fetch error:', err)
-    return { orders: [], authError: false }
+    return { orders: [], authError: false, success: false }
   }
 }
 
@@ -452,7 +456,7 @@ async function runPoll() {
   const merchantID = cachedMerchantID ?? getGrabConfig().merchantID
   // Use orders-pagination (PreparingV2) when merchantID is known; fall back to daily-pagination
   if (merchantID) {
-    const { orders, authError, nextToken } = await fetchPreparingOrders()
+    const { orders, authError, nextToken, success } = await fetchPreparingOrders()
     lastPollTime = new Date().toISOString()
 
     if (authError) {
@@ -461,15 +465,55 @@ async function runPoll() {
       return
     }
 
+    // Lỗi mạng/HTTP tạm thời (không phải auth) — KHÔNG được coi orders=[] là
+    // "tất cả đơn đã biến mất", nếu không sẽ tắt còi sai cho mọi đơn đang có.
+    if (!success) return
+
     lastPollStatus = 'ok'
     if (nextToken !== undefined) nextSearchToken = nextToken
 
+    const currentIds = new Set(orders.map(o => o.orderID).filter(Boolean) as string[])
+
     for (const order of orders) {
       const id = order.orderID
-      if (!id || lastKnownOrderIds.has(id)) continue
-      lastKnownOrderIds.add(id)
-      console.log('[GrabFood] New preparing order:', id, order.displayID)
-      _onNewOrderCb?.(id)
+      if (!id) continue
+      const currAcceptedAt = order.times?.acceptedAt ?? null
+
+      if (!lastKnownOrderIds.has(id)) {
+        // Đơn mới xuất hiện lần đầu
+        lastKnownOrderIds.add(id)
+        orderAcceptedAtMap.set(id, currAcceptedAt)
+        console.log('[GrabFood] New preparing order:', id, order.displayID)
+        _onNewOrderCb?.(id)
+
+        // KHÔNG bắn "accepted" ở đây dù currAcceptedAt đã có sẵn (auto-accept
+        // qua AA) — làm vậy sẽ tắt còi ngay sau khi vừa bật, khiến còi im
+        // lặng hoàn toàn cho merchant bật Auto-Accept. Còi phải tiếp tục kêu
+        // để báo staff biết có đơn cần chuẩn bị; chỉ dừng khi đơn thực sự
+        // rời khỏi "Đang chuẩn bị" (xem đoạn dọn dẹp bên dưới) hoặc khi có
+        // một chuyển trạng thái null→có-giá-trị thật sự ở lần poll sau.
+      } else {
+        // Đơn đã biết trước đó — kiểm tra acceptedAt có vừa được set không
+        const prevAcceptedAt = orderAcceptedAtMap.get(id) ?? null
+        if (!prevAcceptedAt && currAcceptedAt) {
+          orderAcceptedAtMap.set(id, currAcceptedAt)
+          console.log('[GrabFood] Order accepted (times.acceptedAt set):', id, currAcceptedAt)
+          _onOrderAcceptedCb?.(id)
+        }
+      }
+    }
+    // Dọn dẹp: đơn rời khỏi PreparingV2 hẳn (đã "Sẵn sàng"/huỷ/hoàn thành).
+    // LUÔN bắn "accepted" ở đây bất kể acceptedAt trước đó thế nào — đây là
+    // điểm dừng còi/badge cho các đơn auto-accept (acceptedAt có sẵn từ đầu
+    // nên nhánh transition ở trên không bao giờ bắt được), đồng thời vẫn là
+    // lưới an toàn cho các đơn accept thủ công lỡ bị miss transition.
+    for (const id of [...lastKnownOrderIds]) {
+      if (!currentIds.has(id)) {
+        lastKnownOrderIds.delete(id)
+        orderAcceptedAtMap.delete(id)
+        console.log('[GrabFood] Order left PreparingV2 — treating as accepted/handled:', id)
+        _onOrderAcceptedCb?.(id)
+      }
     }
   } else {
     // Fallback: daily-pagination (misses orders before delivery state)
@@ -501,6 +545,15 @@ let _onNewOrderCb: ((id: string) => void) | null = null
 
 export function setOnNewOrderCallback(cb: (id: string) => void) {
   _onNewOrderCb = cb
+}
+
+// Bắn khi 1 đơn RỜI KHỎI danh sách "Đang chuẩn bị" (PreparingV2) — nghĩa là
+// đã được xác nhận/chuyển trạng thái, kể cả xác nhận ngoài app (trên nhóm Grab,
+// app đối tác...) chứ không chỉ khi bấm "Sẵn sàng" trong POS.
+let _onOrderAcceptedCb: ((id: string) => void) | null = null
+
+export function setOnOrderAcceptedCallback(cb: (id: string) => void) {
+  _onOrderAcceptedCb = cb
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -732,6 +785,7 @@ export function resetGrabSession() {
   cachedMerchantDisplayRole = null
   nextSearchToken = ''
   lastKnownOrderIds.clear()
+  orderAcceptedAtMap.clear()
   lastPollTime = null
   lastPollStatus = 'idle'
   writeSubConfig('grabSetting', {})

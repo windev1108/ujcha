@@ -8,12 +8,13 @@ import { Fragment, useState, useEffect, useRef } from 'react'
 import { DEFAULT_BILL_CONFIG, DEFAULT_LABEL_CONFIG, type AdminOrder, type OrderStatus } from '../types/common'
 import { fetchShippers, assignShipper, updateOrderStatus, fetchShippingEstimate, fetchGroupOrderLive, type GroupOrderLive, API_URL } from '../api'
 import { io, type Socket } from 'socket.io-client'
-import { buildOrderLabels, buildReceiptDocumentHtml, buildKunLoyaltyQrUrl, formatOptionDisplay } from '@/lib/receipt-shared'
+import { buildOrderLabels, buildReceiptDocumentHtml, buildKunLoyaltyQrUrl, formatOptionDisplay, buildLabelPickerItems } from '@/lib/receipt-shared'
 import { KEYS, loadLocal } from '@/lib/local-storage'
 import { formatDate } from '@/lib/utils'
 import { BillConfig, LabelConfig } from '../../../preload'
 import { getFontBase64 } from '@/lib/font-cache'
 import { LeafletMap } from './LeafletMap'
+import { LabelPickerModal } from './LabelPickerModal'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const eAPI = (window as any).electronAPI as import('../../../preload').ElectronAPI | undefined
@@ -230,7 +231,7 @@ export function OrderDetailModal({
     const [labelCfg, setLabelCfg] = useState<LabelConfig>(DEFAULT_LABEL_CONFIG)
     const [billStatus, setBillStatus] = useState<PrintStatus>('idle')
     const [labelStatus, setLabelStatus] = useState<PrintStatus>('idle')
-
+    const [labelPickerOpen, setLabelPickerOpen] = useState(false)
     const [shippers, setShippers] = useState<{ id: string; name: string; phone?: string | null }[]>([])
     const [selectedShipperId, setSelectedShipperId] = useState(order.shipperId ?? '')
     const [assignBusy, setAssignBusy] = useState(false)
@@ -311,13 +312,12 @@ export function OrderDetailModal({
         }
     }
 
-    async function handlePrintLabel() {
+    async function handlePrintLabel(selectedItemIds?: Set<string>) {
         setLabelStatus('printing')
         const address = labelCfg.address || labelCfg.printerId?.replace('manual-', '')
         const printerName = labelCfg.printerName || address
         if (!address) { setLabelStatus('error'); return }
         try {
-            // const fontBase64 = await getFontBase64()
             const allLabels = buildOrderLabels(order, {
                 labelWidth: labelCfg.labelWidth,
                 labelHeight: labelCfg.labelHeight,
@@ -329,7 +329,8 @@ export function OrderDetailModal({
                 feedAfterCut: labelCfg.feedAfterCut,
                 paddingTop: labelCfg.paddingTop,
                 paddingBottom: labelCfg.paddingBottom,
-            }, '')
+                skipItemsWithoutOptions: labelCfg.skipItemsWithoutOptions,
+            }, '', selectedItemIds)
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const result = await (eAPI?.printer as any)?.printLabelsByAddress(address, printerName, allLabels, labelCfg) ?? { ok: true }
             setLabelStatus(result?.ok === false ? 'error' : 'done')
@@ -719,13 +720,27 @@ export function OrderDetailModal({
                                 status={labelStatus}
                                 disabled={!hasLabelPrinter}
                                 disabledReason={labelDisabledReason}
-                                onPrint={() => void handlePrintLabel()}
+                                onPrint={() => setLabelPickerOpen(true)}
                                 onRetry={() => setLabelStatus('idle')}
                             />
                         </div>
                     </div>
                 </div>
             </div>
+            {labelPickerOpen && (() => {
+                const { items, defaultSelectedIds } = buildLabelPickerItems(order, labelCfg)
+                return (
+                    <LabelPickerModal
+                        items={items}
+                        initiallySelectedIds={defaultSelectedIds}
+                        onClose={() => setLabelPickerOpen(false)}
+                        onConfirm={(ids) => {
+                            setLabelPickerOpen(false)
+                            void handlePrintLabel(ids)
+                        }}
+                    />
+                )
+            })()}
         </div>
     )
 }

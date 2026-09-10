@@ -55,6 +55,7 @@ interface ManualPrinterConfig {
     paddingBottom: number
     labelWidth?: number
     labelHeight?: number
+    skipItemsWithoutOptions?: boolean
 }
 
 // ─── Printer type catalogue ───────────────────────────────────────────────────
@@ -161,6 +162,7 @@ function makeDefaultManual(enabled = true, isBill = true): ManualPrinterConfig {
         paddingBottom: 0,
         labelWidth: 50,
         labelHeight: 30,
+        skipItemsWithoutOptions: false,
     }
 }
 
@@ -555,6 +557,14 @@ function PrinterSection({
                         label={isBill ? 'Tự động in hóa đơn' : 'Tự động in tem nhãn'}
                         sub={isBill ? 'In hóa đơn ngay khi đơn được tạo / thanh toán thành công' : 'In tem nhãn cho pha chế ngay khi nhận đơn mới'}
                     />
+                    {!isBill && (
+                        <Toggle
+                            checked={cfg.skipItemsWithoutOptions ?? false}
+                            onChange={v => onChange({ ...cfg, skipItemsWithoutOptions: v })}
+                            label="Bỏ qua tem cho món không có option"
+                            sub="Không in tem nhãn cho món không có tuỳ chọn nào (VD: bánh kẹo, đồ đóng gói sẵn)"
+                        />
+                    )}
                     {isBill && (
                         <>
                             <div className="pt-3">
@@ -1142,7 +1152,7 @@ function AccountSection({ config }: { config: PosConfig }) {
                 <div className="divide-y divide-gray-100 -mx-5 -my-4">
                     {[
                         { icon: <User className="size-4 text-gray-400" />, label: 'Tên', value: user?.name || '—' },
-                        { icon: <Mail className="size-4 text-gray-400" />, label: 'Email', value: user?.email || '—' },
+                        { icon: <Mail className="size-4 text-gray-400" />, label: 'Email', value: user?.phone || '—' },
                         { icon: <Shield className="size-4 text-gray-400" />, label: 'Vai trò', value: user?.role === 'staff' ? 'Nhân viên' : 'Quản trị viên' },
                         { icon: <FileText className="size-4 text-gray-400" />, label: 'Phiên bản', value: appVersion || '…' },
                     ].map(row => (
@@ -1436,6 +1446,7 @@ export function SettingsPage({
             feedAfterCut: saved.feedAfterCut ?? 2,
             paddingTop: saved.paddingTop ?? 0,
             paddingBottom: saved.paddingBottom ?? 0,
+            skipItemsWithoutOptions: saved.skipItemsWithoutOptions ?? false,
         }
     })
 
@@ -1473,6 +1484,7 @@ export function SettingsPage({
             showBarcode: false,
             showNote: true,
             customText: '',
+            skipItemsWithoutOptions: m.skipItemsWithoutOptions ?? false,
             address: m.address || null,
             printerName: m.address || null,
             typeId: m.typeId,

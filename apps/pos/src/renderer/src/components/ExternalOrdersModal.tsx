@@ -16,6 +16,9 @@ import type { GrabFull } from '@/lib/grab-print'
 import { GRAB_STATUS_COLOR, GRAB_STATUS_DOT, GRAB_STATUS_LABEL, QUICK_DATES, STATUS_COLOR, STATUS_DOT, STATUS_LABEL } from '@/lib/constants'
 import GrabOrderDetailModal from './GrabOrderDetailModal'
 import SpfOrderDetailModal, { SpfOrderFull, statusInfo } from './SpfOrderDetailModal'
+import { DateField, DateRangePicker, Label, RangeCalendar } from '@heroui/react'
+import { parseDate, type DateValue } from '@internationalized/date'
+import { I18nProvider } from '@react-aria/i18n'
 
 // ─── Vietnam timezone helpers ─────────────────────────────────────────────────
 
@@ -129,12 +132,6 @@ function dateRange(key: QuickDate): { from?: string; to?: string } {
 }
 
 type PlatformFilter = 'all' | 'grabfood' | 'shopeefood' | 'other'
-const PLATFORM_FILTERS: { key: PlatformFilter; label: string }[] = [
-  { key: 'all', label: 'Tất cả' },
-  { key: 'grabfood', label: 'GrabFood' },
-  { key: 'shopeefood', label: 'ShopeeFood' },
-  { key: 'other', label: 'Khác' },
-]
 function platformLogo(p: string): string | null {
   if (p.includes('GRAB')) return grabFoodLogo
   if (p.includes('SHOPEE')) return shopeeFoodLogo
@@ -149,11 +146,19 @@ export function ExternalOrdersModal({
   initialTab = 'all',
   grabConnected = false,
   shopeePartnerConnected = false,
+  onStopGrabAlert,
+  onStopShopeeAlert,
+  hasActiveGrabAlert = false,
+  hasActiveShopeeAlert = false,
 }: {
   onClose: () => void
   initialTab?: PlatformFilter
   grabConnected?: boolean
   shopeePartnerConnected?: boolean
+  onStopGrabAlert?: () => void
+  onStopShopeeAlert?: () => void
+  hasActiveGrabAlert?: boolean
+  hasActiveShopeeAlert?: boolean
 }) {
   // ── DB-based orders (all / shopeefood / other tabs) ────────────────────────
   const [orders, setOrders] = useState<AdminOrder[]>([])
@@ -268,14 +273,10 @@ export function ExternalOrdersModal({
     finally { setSpfLoading(false) }
   }, [spfRestaurantId])
 
-  // ── Platform filter ────────────────────────────────────────────────────────
-  const visibleFilters = PLATFORM_FILTERS.filter(f => {
-    if (f.key === 'grabfood') return grabConnected
-    if (f.key === 'shopeefood') return shopeePartnerConnected
-    return true
-  })
-  const safeInitialTab = visibleFilters.some(f => f.key === initialTab) ? initialTab : 'all'
-  const [platformFilter, setPlatformFilter] = useState<PlatformFilter>(safeInitialTab)
+  // ── Platform — cố định theo nút đã bấm ở StaffApp, không cho chuyển tab
+  // trong modal nữa: mở từ GrabFood chỉ thấy Grab, mở từ ShopeeFood chỉ thấy
+  // Shopee. 'all'/'other' vẫn là fallback nếu modal được mở không kèm tab cụ thể.
+  const platformFilter: PlatformFilter = initialTab
 
   // ── Load DB orders ─────────────────────────────────────────────────────────
   const load = useCallback(async (key: QuickDate) => {
@@ -470,7 +471,7 @@ export function ExternalOrdersModal({
   const isSpfPartnerTab = platformFilter === 'shopeefood' && shopeePartnerConnected
 
   return (
-    <>
+    <I18nProvider locale="vi-VN">
       <div className="fixed inset-0 z-40 flex flex-col bg-gray-50 animate-in fade-in duration-200">
 
         {/* ── Header ── */}
@@ -483,12 +484,30 @@ export function ExternalOrdersModal({
           </button>
           <div className="h-5 w-px bg-gray-200" />
           <div className="flex items-center gap-2.5">
-            <h1 className="text-base font-black text-gray-900">Đơn hàng từ đối tác</h1>
+            <h1 className="text-base font-black text-gray-900">
+              {isGrabTab ? 'Đơn hàng GrabFood' : isSpfPartnerTab ? 'Đơn hàng ShopeeFood' : 'Đơn hàng từ đối tác'}
+            </h1>
             <span className="rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-bold text-orange-700">
               {isGrabTab ? liveOrders.filter(o => o.state === 'ORDER_IN_PREPARE').length : isSpfPartnerTab ? spfTransactions.length : filtered.length}
             </span>
           </div>
           <div className="ml-auto flex items-center gap-2">
+            {isGrabTab && onStopGrabAlert && hasActiveGrabAlert && (
+              <button
+                onClick={onStopGrabAlert}
+                className="flex items-center gap-1.5 rounded-xl bg-green-50 px-3 py-1.5 text-sm font-bold text-green-700 hover:bg-green-100 transition-colors"
+              >
+                🔕 Xác nhận đơn
+              </button>
+            )}
+            {isSpfPartnerTab && onStopShopeeAlert && hasActiveShopeeAlert && (
+              <button
+                onClick={onStopShopeeAlert}
+                className="flex items-center gap-1.5 rounded-xl bg-orange-50 px-3 py-1.5 text-sm font-bold text-orange-700 hover:bg-orange-100 transition-colors"
+              >
+                🔕 Xác nhận đơn
+              </button>
+            )}
             <button
               onClick={() => {
                 if (isGrabTab) {
@@ -508,41 +527,6 @@ export function ExternalOrdersModal({
               <RefreshCw className={`size-4 ${(isGrabTab ? liveLoading || upcomingLoading || grabLoading : isSpfPartnerTab ? spfLoading : loading) ? 'animate-spin' : ''}`} />
               Tải lại
             </button>
-          </div>
-        </div>
-
-        {/* ── Platform tabs ── */}
-        <div className="shrink-0 border-b border-gray-200 bg-white">
-          <div className="flex px-4 overflow-x-auto">
-            {visibleFilters.map(f => {
-              const cnt = f.key === 'grabfood'
-                ? liveOrders.filter(o => o.state === 'ORDER_IN_PREPARE').length
-                : (counts[f.key] ?? 0)
-              const isActive = platformFilter === f.key
-              const logo = f.key === 'grabfood' ? grabFoodLogo : f.key === 'shopeefood' ? shopeeFoodLogo : null
-              const dot = !logo && f.key !== 'all' ? platformStyle(f.key.toUpperCase()).dot : ''
-              return (
-                <button
-                  key={f.key}
-                  onClick={() => setPlatformFilter(f.key)}
-                  className={`relative flex shrink-0 items-center gap-1.5 px-4 py-3 text-sm font-semibold border-b-2 transition-all ${isActive
-                    ? 'border-brand text-brand'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                >
-                  {logo
-                    ? <img src={logo} className="h-4 w-4 object-contain shrink-0" alt="" />
-                    : dot && <span className={`size-2 rounded-full ${dot}`} />
-                  }
-                  {f.label}
-                  {cnt > 0 && (
-                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${isActive ? 'bg-brand/10 text-brand' : 'bg-gray-100 text-gray-500'}`}>
-                      {cnt}
-                    </span>
-                  )}
-                </button>
-              )
-            })}
           </div>
         </div>
 
@@ -593,6 +577,26 @@ export function ExternalOrdersModal({
           {/* GrabFood direct API tab */}
           {isGrabTab ? (
             <>
+              {/* ── Tổng doanh thu (theo khoảng ngày đang xem ở Lịch sử) ── */}
+              {(() => {
+                const totalRevenue = grabOrders.reduce((s, o) => s + (o.orderEarningsInMinorUnit || 0), 0)
+                return (
+                  <div className="mb-4 flex items-center gap-3 rounded-2xl border border-green-100 bg-gradient-to-r from-green-50 to-emerald-50 px-4 py-3.5">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-green-100">
+                      <TrendingUp className="size-5 text-green-600" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-green-600">
+                        Tổng doanh thu {grabFrom === grabTo ? grabFrom : `${grabFrom} → ${grabTo}`}
+                      </p>
+                      <p className="text-lg font-black text-green-800 tabular-nums">{fmt(totalRevenue)}</p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-bold text-green-700 ring-1 ring-green-200">
+                      {grabOrders.length} đơn{grabHasMore ? '' : ''}
+                    </span>
+                  </div>
+                )
+              })()}
               {/* ── GrabFood sub-tabs ── */}
               {(() => {
                 const preparingList = liveOrders.filter(o => o.state === 'ORDER_IN_PREPARE')
@@ -746,25 +750,64 @@ export function ExternalOrdersModal({
                               {preset.label}
                             </button>
                           ))}
-                          <div className="flex items-center gap-1.5 ml-1">
-                            <input type="date" value={grabFrom}
-                              onChange={e => { setGrabQuick('custom'); setGrabFrom(e.target.value) }}
-                              onBlur={() => grabQuick === 'custom' && applyGrabFilter(grabFrom, grabTo)}
-                              className="rounded-xl border border-gray-200 px-2 py-1 text-xs text-gray-700 focus:border-green-500 focus:outline-none"
-                            />
-                            <span className="text-xs text-gray-400">→</span>
-                            <input type="date" value={grabTo}
-                              onChange={e => { setGrabQuick('custom'); setGrabTo(e.target.value) }}
-                              onBlur={() => grabQuick === 'custom' && applyGrabFilter(grabFrom, grabTo)}
-                              className="rounded-xl border border-gray-200 px-2 py-1 text-xs text-gray-700 focus:border-green-500 focus:outline-none"
-                            />
-                            {grabQuick === 'custom' && (
-                              <button onClick={() => applyGrabFilter(grabFrom, grabTo)}
-                                className="rounded-xl bg-green-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-green-700">
-                                Lọc
-                              </button>
-                            )}
-                          </div>
+                          <DateRangePicker
+                            lang="vi-VN"
+                            className="w-72"
+                            startName="grabDateFrom"
+                            endName="grabDateTo"
+                            value={{ start: parseDate(grabFrom), end: parseDate(grabTo) }}
+                            onChange={(range: { start: DateValue; end: DateValue } | null) => {
+                              if (range) {
+                                setGrabQuick('custom')
+                                applyGrabFilter(range.start.toString(), range.end.toString())
+                              }
+                            }}
+                          >
+                            <Label className="sr-only">Khoảng ngày</Label>
+                            <DateField.Group
+                              fullWidth
+                              variant="secondary"
+                              className="h-8 rounded-full border border-gray-200 bg-gray-50 px-3 text-xs"
+                            >
+                              <DateField.Input slot="start">
+                                {(segment) => <DateField.Segment segment={segment} />}
+                              </DateField.Input>
+                              <DateRangePicker.RangeSeparator className="px-1 text-gray-400" />
+                              <DateField.Input slot="end">
+                                {(segment) => <DateField.Segment segment={segment} />}
+                              </DateField.Input>
+                              <DateField.Suffix>
+                                <DateRangePicker.Trigger className="text-gray-400">
+                                  <DateRangePicker.TriggerIndicator />
+                                </DateRangePicker.Trigger>
+                              </DateField.Suffix>
+                            </DateField.Group>
+                            <DateRangePicker.Popover>
+                              <RangeCalendar aria-label="Khoảng ngày" lang="vi-VN">
+                                <RangeCalendar.Header>
+                                  <RangeCalendar.YearPickerTrigger>
+                                    <RangeCalendar.YearPickerTriggerHeading />
+                                    <RangeCalendar.YearPickerTriggerIndicator />
+                                  </RangeCalendar.YearPickerTrigger>
+                                  <RangeCalendar.NavButton slot="previous" />
+                                  <RangeCalendar.NavButton slot="next" />
+                                </RangeCalendar.Header>
+                                <RangeCalendar.Grid>
+                                  <RangeCalendar.GridHeader>
+                                    {(day) => <RangeCalendar.HeaderCell>{day}</RangeCalendar.HeaderCell>}
+                                  </RangeCalendar.GridHeader>
+                                  <RangeCalendar.GridBody>
+                                    {(date) => <RangeCalendar.Cell date={date} />}
+                                  </RangeCalendar.GridBody>
+                                </RangeCalendar.Grid>
+                                <RangeCalendar.YearPickerGrid>
+                                  <RangeCalendar.YearPickerGridBody>
+                                    {({ year }) => <RangeCalendar.YearPickerCell year={year} />}
+                                  </RangeCalendar.YearPickerGridBody>
+                                </RangeCalendar.YearPickerGrid>
+                              </RangeCalendar>
+                            </DateRangePicker.Popover>
+                          </DateRangePicker>
                         </div>
 
                         {/* Sync revenue bar */}
@@ -873,6 +916,8 @@ export function ExternalOrdersModal({
           markReadyResult={markReadyResults[grabDetail.id]}
           onMarkReady={() => void markReady(grabDetail.id, grabDetail.preparationTaskID)}
           onClose={() => setGrabDetail(null)}
+          onDismissAlert={onStopGrabAlert}
+          hasActiveAlert={hasActiveGrabAlert}
         />
       )}
 
@@ -884,7 +929,7 @@ export function ExternalOrdersModal({
           onClose={() => setSpfDetail(null)}
         />
       )}
-    </>
+    </I18nProvider>
   )
 }
 
@@ -910,7 +955,10 @@ function GrabPreparingOrderCard({
   const label = stateLabel[order.state] ?? order.state
   const amount = order.orderValue ? Number(order.orderValue) : 0
   return (
-    <div className="relative flex flex-col rounded-2xl border border-green-100 bg-white shadow-sm transition-all hover:shadow-md">
+    <div
+      onClick={onOpen}
+      className="relative flex flex-col rounded-2xl border border-green-100 bg-white shadow-sm transition-all hover:shadow-md cursor-pointer"
+    >
       {/* Header */}
       <div className="flex items-center justify-between rounded-t-2xl bg-green-50 px-4 py-2.5">
         <div className="flex items-center gap-1.5">
@@ -924,7 +972,7 @@ function GrabPreparingOrderCard({
       </div>
 
       {/* Info */}
-      <button onClick={onOpen} className="px-4 pt-3 pb-2 text-left">
+      <div className="px-4 pt-3 pb-2 text-left">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1">
@@ -947,7 +995,7 @@ function GrabPreparingOrderCard({
             </div>
           )}
         </div>
-      </button>
+      </div>
 
       {/* Items preview */}
       {order.itemInfo.items.length > 0 && (
@@ -969,12 +1017,9 @@ function GrabPreparingOrderCard({
 
       {/* View detail hint */}
       <div className="mx-4 border-t border-gray-50" />
-      <button
-        onClick={onOpen}
-        className="flex items-center justify-center gap-1 px-4 py-2 text-[11px] text-gray-400 hover:text-green-600 transition-colors"
-      >
+      <div className="flex items-center justify-center gap-1 px-4 py-2 text-[11px] text-gray-400">
         <ChevronRight className="size-3" /> Xem chi tiết &amp; in
-      </button>
+      </div>
 
       {/* Mark ready button — only for ORDER_IN_PREPARE */}
       {showMarkReady && (
@@ -1260,7 +1305,21 @@ function SpfPartnerTabContent({
 
   return (
     <div>
-      {/* Restaurant info */}
+      {/* ── Tổng doanh thu (đồng bộ giao diện với tab GrabFood) ── */}
+      <div className="mb-4 flex items-center gap-3 rounded-2xl border border-orange-100 bg-gradient-to-r from-orange-50 to-amber-50 px-4 py-3.5">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-orange-100">
+          <TrendingUp className="size-5 text-orange-600" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-orange-600">
+            Tổng doanh thu {from === to ? from : `${from} → ${to}`}
+          </p>
+          <p className="text-lg font-black text-orange-800 tabular-nums">{fmt(totalAmount)}</p>
+        </div>
+        <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-bold text-orange-700 ring-1 ring-orange-200">
+          {transactions.length} giao dịch
+        </span>
+      </div>
 
       {/* Date filter */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -1278,25 +1337,63 @@ function SpfPartnerTabContent({
             {p.label}
           </button>
         ))}
-        <div className="flex items-center gap-1.5 ml-1">
-          <input type="date" value={from}
-            onChange={e => onFromChange(e.target.value)}
-            onBlur={onCustomDateBlur}
-            className="rounded-xl border border-gray-200 px-2 py-1 text-xs text-gray-700 focus:border-orange-400 focus:outline-none"
-          />
-          <span className="text-xs text-gray-400">→</span>
-          <input type="date" value={to}
-            onChange={e => onToChange(e.target.value)}
-            onBlur={onCustomDateBlur}
-            className="rounded-xl border border-gray-200 px-2 py-1 text-xs text-gray-700 focus:border-orange-400 focus:outline-none"
-          />
-          {quick === 'custom' && (
-            <button onClick={onApplyCustom}
-              className="rounded-xl bg-orange-500 px-2.5 py-1 text-xs font-bold text-white hover:bg-orange-600">
-              Lọc
-            </button>
-          )}
-        </div>
+        <DateRangePicker
+          lang="vi-VN"
+          className="w-72"
+          startName="spfDateFrom"
+          endName="spfDateTo"
+          value={{ start: parseDate(from), end: parseDate(to) }}
+          onChange={(range: { start: DateValue; end: DateValue } | null) => {
+            if (range) {
+              onQuickChange('custom', range.start.toString(), range.end.toString())
+            }
+          }}
+        >
+          <Label className="sr-only">Khoảng ngày</Label>
+          <DateField.Group
+            fullWidth
+            variant="secondary"
+            className="h-8 rounded-full border border-gray-200 bg-gray-50 px-3 text-xs"
+          >
+            <DateField.Input slot="start">
+              {(segment) => <DateField.Segment segment={segment} />}
+            </DateField.Input>
+            <DateRangePicker.RangeSeparator className="px-1 text-gray-400" />
+            <DateField.Input slot="end">
+              {(segment) => <DateField.Segment segment={segment} />}
+            </DateField.Input>
+            <DateField.Suffix>
+              <DateRangePicker.Trigger className="text-gray-400">
+                <DateRangePicker.TriggerIndicator />
+              </DateRangePicker.Trigger>
+            </DateField.Suffix>
+          </DateField.Group>
+          <DateRangePicker.Popover>
+            <RangeCalendar aria-label="Khoảng ngày" lang="vi-VN">
+              <RangeCalendar.Header>
+                <RangeCalendar.YearPickerTrigger>
+                  <RangeCalendar.YearPickerTriggerHeading />
+                  <RangeCalendar.YearPickerTriggerIndicator />
+                </RangeCalendar.YearPickerTrigger>
+                <RangeCalendar.NavButton slot="previous" />
+                <RangeCalendar.NavButton slot="next" />
+              </RangeCalendar.Header>
+              <RangeCalendar.Grid>
+                <RangeCalendar.GridHeader>
+                  {(day) => <RangeCalendar.HeaderCell>{day}</RangeCalendar.HeaderCell>}
+                </RangeCalendar.GridHeader>
+                <RangeCalendar.GridBody>
+                  {(date) => <RangeCalendar.Cell date={date} />}
+                </RangeCalendar.GridBody>
+              </RangeCalendar.Grid>
+              <RangeCalendar.YearPickerGrid>
+                <RangeCalendar.YearPickerGridBody>
+                  {({ year }) => <RangeCalendar.YearPickerCell year={year} />}
+                </RangeCalendar.YearPickerGridBody>
+              </RangeCalendar.YearPickerGrid>
+            </RangeCalendar>
+          </DateRangePicker.Popover>
+        </DateRangePicker>
       </div>
 
       {/* Order list */}

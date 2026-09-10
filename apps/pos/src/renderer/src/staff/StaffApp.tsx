@@ -38,6 +38,7 @@ const eAPI = (window as unknown as {
       connect(u: string, p: string, otp?: string): Promise<{ ok: boolean; connected: boolean; needsOtp?: boolean; stores: unknown[]; error?: string }>
       getOrder(id: string): Promise<{ ok: boolean; order?: Record<string, unknown>; error?: string }>
       onNewOrder(cb: (id: string) => void): () => void
+      onOrderAccepted(cb: (id: string) => void): () => void
     }
     spfPartner?: {
       getStatus(): Promise<{ connected: boolean; restaurantId: string | null }>
@@ -45,6 +46,14 @@ const eAPI = (window as unknown as {
     }
     app?: {
       getVersion(): Promise<string>
+    }
+    printer?: {
+      printLabelsByAddress(
+        address: string, printerName: string, labels: string[], cfg?: LabelConfig
+      ): Promise<{ ok: boolean; error?: string }>
+      printBillByAddress(
+        address: string, printerName: string, html: string, copies: number, cfg?: BillConfig
+      ): Promise<{ ok: boolean; error?: string }>
     }
     updater?: {
       check(): void
@@ -78,6 +87,9 @@ export function StaffApp() {
 
   // ── Auto-print dedup: track order IDs already printed this session ─────────
   const autoPrintedIdsRef = useRef<Set<string>>(new Set())
+  // Track Grab order IDs waiting for confirmation — dùng để tự tắt còi khi
+  // đơn được xác nhận Ở ĐÂU CŨNG ĐƯỢC (nhóm Grab, app đối tác, hay trong POS)
+  const pendingGrabOrderIdsRef = useRef<Set<string>>(new Set())
 
   // Auto-print for web orders — ref pattern avoids stale closure in socket handler
   const autoPrintWebOrderRef = useRef<() => Promise<void>>(async () => { })
@@ -93,7 +105,7 @@ export function StaffApp() {
       const newOrders = ((data as { items: AdminOrder[] }).items ?? [])
         .filter(o => !autoPrintedIdsRef.current.has(o.id) && !['cancelled', 'completed'].includes(o.status))
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const printerAPI = eAPI?.printer as any
+      const printerAPI = eAPI?.printer
       for (const o of newOrders) {
         autoPrintedIdsRef.current.add(o.id)
         if (!printerAPI) continue
@@ -109,6 +121,7 @@ export function StaffApp() {
               customText: labelCfg.customText, lineSpacing: labelCfg.lineSpacing,
               feedAfterCut: labelCfg.feedAfterCut, paddingTop: labelCfg.paddingTop,
               paddingBottom: labelCfg.paddingBottom,
+              skipItemsWithoutOptions: labelCfg.skipItemsWithoutOptions,
             }, fontBase64)
             void printerAPI.printLabelsByAddress(addr, name, labels, labelCfg)
               .then((r: { ok: boolean }) => { console.log('[auto-print web label]', o.id, r?.ok ? '✅' : '❌') })
@@ -153,6 +166,19 @@ export function StaffApp() {
 
   // Keep as alias so existing call-sites (stopAlertInterval) still work
   const stopAlertInterval = stopAlert
+
+  // ── Dismiss handlers: dùng để tắt chuông NGAY TRONG modal đang mở,
+  // không cần đóng/mở lại modal như trước ─────────────────────────────────
+  const stopGrabAlert = useCallback(() => {
+    stopAlert()
+    setNewGrabBadge(0)
+    pendingGrabOrderIdsRef.current.clear()
+  }, [stopAlert])
+
+  const stopShopeeAlert = useCallback(() => {
+    stopAlert()
+    setNewShopeeBadge(0)
+  }, [stopAlert])
 
   const startAlert = useCallback((url: string) => {
     stopAlert()
@@ -207,6 +233,7 @@ export function StaffApp() {
     if (!isLoggedIn) return
     const unsub = eAPI?.grab?.onNewOrder?.((id: string) => {
       setNewGrabBadge(n => n + 1)
+      if (id) pendingGrabOrderIdsRef.current.add(id)
       alertHandlerRef.current('GRAB')
 
       // Auto-print bill/label if configured and this order hasn't been printed yet
@@ -229,7 +256,7 @@ export function StaffApp() {
                 })
               }
               if (shouldLabel) {
-                void printGrabLabels(result.order as GrabFull as any).then(r => {
+                void printGrabLabels(adminOrder).then(r => {
                   if (!r.ok) console.warn('[auto-print label]', id, r.error)
                   else console.log('[auto-print label] OK', id)
                 })
@@ -239,6 +266,24 @@ export function StaffApp() {
             console.warn('[auto-print] getOrder error:', e)
           }
         })()
+      }
+    })
+    return () => unsub?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoggedIn])
+
+  // ── Grab order accepted elsewhere (nhóm Grab, app đối tác, hoặc trong POS) ──
+  // Poller phát hiện qua so sánh PreparingV2 mỗi lần poll — không phụ thuộc
+  // việc admin có mở app POS lên xác nhận hay không.
+  useEffect(() => {
+    if (!isLoggedIn) return
+    const unsub = eAPI?.grab?.onOrderAccepted?.((id: string) => {
+      if (!pendingGrabOrderIdsRef.current.delete(id)) return
+      setNewGrabBadge(n => Math.max(0, n - 1))
+      // Chỉ tắt còi nếu không còn đơn Grab nào đang chờ VÀ còi hiện tại đang
+      // phát cho Grab (tránh tắt nhầm còi đang báo ShopeeFood)
+      if (pendingGrabOrderIdsRef.current.size === 0 && alertUrlRef.current === grfVoiceUrl) {
+        stopAlert()
       }
     })
     return () => unsub?.()
@@ -346,7 +391,7 @@ export function StaffApp() {
         const items = ((data as { items: AdminOrder[] }).items ?? [])
         const pending = items.filter((o: AdminOrder) => o.status === 'pending').length
         if (pending > 0) setNewOrderBadge((n) => Math.max(n, pending))
-      }).catch(() => {})
+      }).catch(() => { })
     })
 
     return () => { socket.disconnect() }
@@ -365,6 +410,7 @@ export function StaffApp() {
             const extrasTotal = (i.extras ?? []).reduce((s, e) => s + (e.price ?? 0), 0)
             const unitPrice = i.basePrice + i.optionDelta + extrasTotal
             return {
+              cartKey: i.cartId,
               name: i.name,
               quantity: i.quantity,
               price: unitPrice * i.quantity,  // tổng giá item (đã gồm options + toppings)
@@ -404,8 +450,8 @@ export function StaffApp() {
   if (!isLoggedIn) return <LoginScreen />
 
   const adminUser = posConfig.adminUser
-  const displayName = adminUser?.name || adminUser?.email || 'Admin'
-  const avatarChar = (adminUser?.name || adminUser?.email || 'A')[0].toUpperCase()
+  const displayName = adminUser?.name || adminUser?.phone || 'Admin'
+  const avatarChar = (adminUser?.name || adminUser?.phone || 'A')[0].toUpperCase()
 
   return (
     <div className="flex h-full flex-col bg-gray-50">
@@ -431,7 +477,7 @@ export function StaffApp() {
 
         {grabConnected && (
           <button
-            onClick={() => { setExternalOpen(true); setExternalInitialTab('grabfood'); setNewGrabBadge(0); stopAlertInterval() }}
+            onClick={() => { setExternalOpen(true); setExternalInitialTab('grabfood'); stopGrabAlert() }}
             className="relative flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-semibold text-gray-600 hover:bg-gray-100 hover:text-gray-900"
           >
             <img src={grabFoodLogo} className="h-5 w-5 object-contain shrink-0" alt="GrabFood" />
@@ -446,7 +492,7 @@ export function StaffApp() {
 
         {shopeePartnerConnected && (
           <button
-            onClick={() => { setExternalOpen(true); setExternalInitialTab('shopeefood'); setNewShopeeBadge(0); stopAlertInterval() }}
+            onClick={() => { setExternalOpen(true); setExternalInitialTab('shopeefood'); stopShopeeAlert() }}
             className="relative flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-semibold text-gray-600 hover:bg-gray-100 hover:text-gray-900"
           >
             <img src={shopeeFoodLogo} className="h-5 w-5 object-contain shrink-0" alt="ShopeeFood" />
@@ -530,6 +576,10 @@ export function StaffApp() {
           initialTab={externalInitialTab}
           grabConnected={grabConnected}
           shopeePartnerConnected={shopeePartnerConnected}
+          onStopGrabAlert={stopGrabAlert}
+          onStopShopeeAlert={stopShopeeAlert}
+          hasActiveGrabAlert={newGrabBadge > 0}
+          hasActiveShopeeAlert={newShopeeBadge > 0}
         />
       )}
       {settingsOpen && (

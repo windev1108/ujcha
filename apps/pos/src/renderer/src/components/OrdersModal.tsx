@@ -750,106 +750,106 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
               </div>
             </>
           )}
-          {/* ── Pagination footer ── */}
-          {!loading && orders.length > 0 && (() => {
-            const totalPages = totalOrders !== null
-              ? Math.max(1, Math.ceil(totalOrders / pageSize))
-              : null
-            const hasNext = totalOrders !== null ? page * pageSize < totalOrders : orders.length >= pageSize
-            const startItem = totalOrders !== null ? (page - 1) * pageSize + 1 : undefined
-            const endItem = totalOrders !== null ? Math.min(page * pageSize, totalOrders) : undefined
-
-            const getPageNumbers = (): (number | 'ellipsis')[] => {
-              if (!totalPages) return [page]
-              if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1)
-              const pages: (number | 'ellipsis')[] = [1]
-              if (page > 3) pages.push('ellipsis')
-              const start = Math.max(2, page - 1)
-              const end = Math.min(totalPages - 1, page + 1)
-              for (let i = start; i <= end; i++) pages.push(i)
-              if (page < totalPages - 2) pages.push('ellipsis')
-              pages.push(totalPages)
-              return pages
-            }
-
-            return (
-              <div className="shrink-0 flex flex-wrap items-center gap-3 border-t border-gray-100 bg-white px-4 py-3">
-                <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <span>Hiển thị</span>
-                  <select
-                    value={pageSize}
-                    onChange={e => setPageSize(Number(e.target.value))}
-                    className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs font-semibold text-gray-700 outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors"
-                  >
-                    {PAGE_SIZE_OPTIONS.map(n => (
-                      <option key={n} value={n}>{n}</option>
-                    ))}
-                  </select>
-                  <span>đơn / trang</span>
-                </div>
-
-                <Pagination className="ml-auto w-auto items-center gap-3">
-                  {totalOrders !== null && (
-                    <Pagination.Summary className="whitespace-nowrap text-xs text-gray-400">
-                      {startItem}–{endItem} / {totalOrders} đơn
-                    </Pagination.Summary>
-                  )}
-                  <Pagination.Content className="gap-1">
-                    <Pagination.Item>
-                      <Pagination.Previous
-                        isDisabled={page <= 1}
-                        onPress={() => setPage(p => Math.max(1, p - 1))}
-                        className="rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800"
-                      >
-                        <Pagination.PreviousIcon />
-                      </Pagination.Previous>
-                    </Pagination.Item>
-
-                    {totalOrders !== null ? (
-                      getPageNumbers().map((p, i) =>
-                        p === 'ellipsis' ? (
-                          <Pagination.Item key={`e-${i}`}>
-                            <Pagination.Ellipsis className="text-gray-300" />
-                          </Pagination.Item>
-                        ) : (
-                          <Pagination.Item key={p}>
-                            <Pagination.Link
-                              isActive={p === page}
-                              onPress={() => setPage(p)}
-                              className={
-                                p === page
-                                  ? 'rounded-full bg-brand text-white hover:bg-brand/90'
-                                  : 'rounded-full text-gray-600 hover:bg-gray-100'
-                              }
-                            >
-                              {p}
-                            </Pagination.Link>
-                          </Pagination.Item>
-                        ),
-                      )
-                    ) : (
-                      <Pagination.Item>
-                        <Pagination.Link isActive className="rounded-full bg-brand text-white">
-                          {page}
-                        </Pagination.Link>
-                      </Pagination.Item>
-                    )}
-
-                    <Pagination.Item>
-                      <Pagination.Next
-                        isDisabled={!hasNext}
-                        onPress={() => setPage(p => p + 1)}
-                        className="rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800"
-                      >
-                        <Pagination.NextIcon />
-                      </Pagination.Next>
-                    </Pagination.Item>
-                  </Pagination.Content>
-                </Pagination>
-              </div>
-            )
-          })()}
         </div>
+        {/* ── Pagination footer (fixed at bottom, not affected by list scroll) ── */}
+        {!loading && orders.length > 0 && (() => {
+          const totalPages = totalOrders !== null
+            ? Math.max(1, Math.ceil(totalOrders / pageSize))
+            : null
+          const hasNext = totalOrders !== null ? page * pageSize < totalOrders : orders.length >= pageSize
+          const startItem = totalOrders !== null ? (page - 1) * pageSize + 1 : undefined
+          const endItem = totalOrders !== null ? Math.min(page * pageSize, totalOrders) : undefined
+
+          const getPageNumbers = (): (number | 'ellipsis')[] => {
+            if (!totalPages) return [page]
+            if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1)
+            const pages: (number | 'ellipsis')[] = [1]
+            if (page > 3) pages.push('ellipsis')
+            const start = Math.max(2, page - 1)
+            const end = Math.min(totalPages - 1, page + 1)
+            for (let i = start; i <= end; i++) pages.push(i)
+            if (page < totalPages - 2) pages.push('ellipsis')
+            pages.push(totalPages)
+            return pages
+          }
+
+          return (
+            <div className="shrink-0 z-10 flex flex-wrap items-center gap-3 border-t border-gray-100 bg-white px-4 py-3 shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.05)]">
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <span>Hiển thị</span>
+                <select
+                  value={pageSize}
+                  onChange={e => setPageSize(Number(e.target.value))}
+                  className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs font-semibold text-gray-700 outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors"
+                >
+                  {PAGE_SIZE_OPTIONS.map(n => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+                <span>đơn / trang</span>
+              </div>
+
+              <Pagination className="ml-auto w-auto items-center gap-3">
+                {totalOrders !== null && (
+                  <Pagination.Summary className="whitespace-nowrap text-xs text-gray-400">
+                    {startItem}–{endItem} / {totalOrders} đơn
+                  </Pagination.Summary>
+                )}
+                <Pagination.Content className="gap-1">
+                  <Pagination.Item>
+                    <Pagination.Previous
+                      isDisabled={page <= 1}
+                      onPress={() => setPage(p => Math.max(1, p - 1))}
+                      className="rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                    >
+                      <Pagination.PreviousIcon />
+                    </Pagination.Previous>
+                  </Pagination.Item>
+
+                  {totalOrders !== null ? (
+                    getPageNumbers().map((p, i) =>
+                      p === 'ellipsis' ? (
+                        <Pagination.Item key={`e-${i}`}>
+                          <Pagination.Ellipsis className="text-gray-300" />
+                        </Pagination.Item>
+                      ) : (
+                        <Pagination.Item key={p}>
+                          <Pagination.Link
+                            isActive={p === page}
+                            onPress={() => setPage(p)}
+                            className={
+                              p === page
+                                ? 'rounded-full bg-brand text-white hover:bg-brand/90'
+                                : 'rounded-full text-gray-600 hover:bg-gray-100'
+                            }
+                          >
+                            {p}
+                          </Pagination.Link>
+                        </Pagination.Item>
+                      ),
+                    )
+                  ) : (
+                    <Pagination.Item>
+                      <Pagination.Link isActive className="rounded-full bg-brand text-white">
+                        {page}
+                      </Pagination.Link>
+                    </Pagination.Item>
+                  )}
+
+                  <Pagination.Item>
+                    <Pagination.Next
+                      isDisabled={!hasNext}
+                      onPress={() => setPage(p => p + 1)}
+                      className="rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                    >
+                      <Pagination.NextIcon />
+                    </Pagination.Next>
+                  </Pagination.Item>
+                </Pagination.Content>
+              </Pagination>
+            </div>
+          )
+        })()}
       </div>
 
       {selectedOrder && (

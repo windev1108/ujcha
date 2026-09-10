@@ -147,6 +147,7 @@ export const DEFAULT_LABEL_CONFIG: LabelConfig = {
   showBarcode: false,
   showNote: true,
   customText: '',
+  skipItemsWithoutOptions: false,
 }
 
 // ─── POS app config ───────────────────────────────────────────────────────────

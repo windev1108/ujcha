@@ -7,6 +7,8 @@ import { useState } from "react"
 import { BillConfig, LabelConfig } from "src/preload";
 import grabFoodLogo from '../assets/grab-food.png'
 import { fmt, formatDate } from "@/lib/utils";
+import { buildLabelPickerItems } from "@/lib/receipt-shared";
+import { LabelPickerModal } from "./LabelPickerModal";
 
 function Row({ label, value, green, bold }: { label: string; value: string; green?: boolean; bold?: boolean }) {
     return (
@@ -53,7 +55,7 @@ function PrintButton({ icon, label, subLabel, status, disabled, disabledReason, 
 }
 
 export default function GrabOrderDetailModal({
-    id, data, loading, preparationTaskID, markingReady, markReadyResult, onMarkReady, onClose,
+    id, data, loading, preparationTaskID, markingReady, markReadyResult, onMarkReady, onClose, onDismissAlert, hasActiveAlert = false
 }: {
     id: string
     data: GrabFull | null
@@ -63,11 +65,13 @@ export default function GrabOrderDetailModal({
     markReadyResult?: { ok: boolean; msg: string }
     onMarkReady?: () => void
     onClose: () => void
+    onDismissAlert?: () => void
+    hasActiveAlert?: boolean
 }) {
     const [fareOpen, setFareOpen] = useState(false)
     const [billStatus, setBillStatus] = useState<PrintStatus>('idle')
     const [labelStatus, setLabelStatus] = useState<PrintStatus>('idle')
-
+    const [labelPickerOpen, setLabelPickerOpen] = useState(false)
     const billCfg = loadLocal<BillConfig>(KEYS.bill, DEFAULT_BILL_CONFIG)
     const labelCfg = loadLocal<LabelConfig>(KEYS.label, DEFAULT_LABEL_CONFIG)
     const hasBillPrinter = billCfg.enabled && !!(billCfg.address || billCfg.printerId)
@@ -93,11 +97,11 @@ export default function GrabOrderDetailModal({
         setBillStatus(res.ok ? 'done' : 'error')
     }
 
-    async function handlePrintLabel() {
+    async function handlePrintLabel(selectedItemIds?: Set<string>) {
         if (!data) return
         setLabelStatus('printing')
         const adminOrder = grabFullToAdminOrder(data)
-        const res = await printGrabLabels(adminOrder)
+        const res = await printGrabLabels(adminOrder, selectedItemIds)
         setLabelStatus(res.ok ? 'done' : 'error')
     }
 
@@ -113,7 +117,10 @@ export default function GrabOrderDetailModal({
     void preparationTaskID
 
     return (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 animate-in fade-in duration-150">
+        <div
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 animate-in fade-in duration-150"
+            onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+        >
             <div className="relative flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl">
 
                 {/* Header */}
@@ -130,6 +137,15 @@ export default function GrabOrderDetailModal({
                                 <span className={`size-1.5 rounded-full ${dot}`} />
                                 {label}
                             </span>
+                        )}
+                        {onDismissAlert && hasActiveAlert && (
+                            <button
+                                onClick={onDismissAlert}
+                                title="Xác nhận đã xem — tắt chuông báo đơn mới"
+                                className="flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-1.5 text-xs font-bold text-green-700 hover:bg-green-100 transition-colors"
+                            >
+                                🔕 Xác nhận
+                            </button>
                         )}
                         <button onClick={onClose} className="rounded-xl p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700">
                             <X className="size-5" />
@@ -321,7 +337,7 @@ export default function GrabOrderDetailModal({
                                 status={labelStatus}
                                 disabled={!hasLabelPrinter}
                                 disabledReason={labelDisabledReason}
-                                onPrint={() => void handlePrintLabel()}
+                                onPrint={() => setLabelPickerOpen(true)}
                                 onRetry={() => setLabelStatus('idle')}
                             />
                         </div>
@@ -329,6 +345,21 @@ export default function GrabOrderDetailModal({
                 )}
 
             </div>
+            {labelPickerOpen && data && (() => {
+                const adminOrder = grabFullToAdminOrder(data)
+                const { items, defaultSelectedIds } = buildLabelPickerItems(adminOrder, labelCfg)
+                return (
+                    <LabelPickerModal
+                        items={items}
+                        initiallySelectedIds={defaultSelectedIds}
+                        onClose={() => setLabelPickerOpen(false)}
+                        onConfirm={(ids) => {
+                            setLabelPickerOpen(false)
+                            void handlePrintLabel(ids)
+                        }}
+                    />
+                )
+            })()}
         </div>
     )
 }

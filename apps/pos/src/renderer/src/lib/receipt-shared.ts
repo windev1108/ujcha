@@ -137,7 +137,7 @@ function isDefaultLabelOption(key: string, rawValue: string): boolean {
   if (isSweetnessKey) return v.includes('vừa') || v.includes('bình thường')
   if (isIceKey) return v.includes('bình thường')
   if (isMatchaTypeKey) return v.includes('matcha thường')
-    
+
   return false
 }
 
@@ -465,8 +465,20 @@ export interface LabelHtmlConfig {
   feedAfterCut?: number
   paddingTop?: number
   paddingBottom?: number
+  skipItemsWithoutOptions?: boolean
 }
 
+/** Món có ít nhất 1 option (size, đường, đá...) hoặc topping/extra đã chọn.
+ * Dùng raw optionsJson (chưa lọc theo isDefaultLabelOption) vì mục đích ở đây
+ * là biết món có cần pha chế theo yêu cầu hay không — kể cả khi khách chọn
+ * đúng giá trị mặc định (VD: "đường bình thường"), món vẫn là đồ uống cần tem,
+ * khác với bánh kẹo hoàn toàn không có optionsJson. */
+export function itemHasPrintableOptions(item: AdminOrderItem): boolean {
+  const opts = parseOptions(item.optionsJson)
+  if (Object.keys(opts).length > 0) return true
+  const extras = parseExtras(item.extrasJson)
+  return extras.length > 0
+}
 
 export function buildSingleLabelHtml(
   item: AdminOrderItem,
@@ -574,14 +586,28 @@ export function buildOrderLabels(
   order: AdminOrder,
   cfg: LabelHtmlConfig,
   fontBase64 = '',
+  selectedItemIds?: Set<string>
 ): string[] {
   const labels: string[] = []
   const now = new Date()
   const printedAt = dayjs(now).format('DD/MM HH:mm')
-  const totalLabels = order.items.reduce((sum, item) => sum + item.quantity, 0)
+  // Nếu bật cấu hình này: loại hẳn các món không có option/topping (VD: bánh
+  // kẹo) khỏi cả tổng số tem lẫn danh sách in — không tạo tem trống vô ích.
+  let printableItems = cfg.skipItemsWithoutOptions
+    ? order.items.filter(itemHasPrintableOptions)
+    : order.items
+
+  // Người dùng chọn thủ công từ UI "Chọn tem cần in" — thu hẹp thêm danh sách
+  // trên; món đã bị skipItemsWithoutOptions loại thì không quay lại dù có mặt
+  // trong selectedItemIds (skip vẫn ưu tiên).
+  if (selectedItemIds) {
+    printableItems = printableItems.filter(item => selectedItemIds.has(item.id))
+  }
+
+  const totalLabels = printableItems.reduce((sum, item) => sum + item.quantity, 0)
   const participantMap = buildGroupParticipantMap(order.groupOrder)
   let labelIndex = 1
-  for (const item of order.items) {
+  for (const item of printableItems) {
     // Compute the signature key once per item group (product + options +
     // extras + note) and grab the shared queue of participant names for it.
     let names: string[] | undefined
@@ -621,4 +647,39 @@ export function buildOrderLabels(
     }
   }
   return labels
+}
+
+export interface LabelPickerItem {
+  id: string
+  name: string
+  quantity: number
+  optionsSummary: string
+  hasOptions: boolean
+}
+
+/** Xây danh sách món cho UI "Chọn tem cần in", cùng set id được chọn sẵn theo
+ * mặc định — tôn trọng skipItemsWithoutOptions hiện tại của cấu hình máy in. */
+export function buildLabelPickerItems(
+  order: AdminOrder,
+  cfg: { skipItemsWithoutOptions?: boolean },
+): { items: LabelPickerItem[]; defaultSelectedIds: Set<string> } {
+  const items: LabelPickerItem[] = order.items.map(item => {
+    const opts = parseOptions(item.optionsJson)
+    const extras = parseExtras(item.extrasJson)
+    const optionsSummary = [
+      ...Object.entries(opts).map(([k, v]) => formatOptionDisplay(k, stripEmbeddedPrice(v))),
+      ...extras.map(e => e.name),
+    ].join(' · ')
+    return {
+      id: item.id,
+      name: item.product.name,
+      quantity: item.quantity,
+      optionsSummary,
+      hasOptions: itemHasPrintableOptions(item),
+    }
+  })
+  const defaultSelectedIds = new Set(
+    items.filter(i => !cfg.skipItemsWithoutOptions || i.hasOptions).map(i => i.id),
+  )
+  return { items, defaultSelectedIds }
 }

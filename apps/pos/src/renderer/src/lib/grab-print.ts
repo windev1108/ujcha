@@ -142,7 +142,10 @@ export async function printGrabBill(order: AdminOrder): Promise<{ ok: boolean; e
   }
 }
 
-export async function printGrabLabels(order: AdminOrder): Promise<{ ok: boolean; error?: string }> {
+export async function printGrabLabels(
+  order: AdminOrder,
+  selectedItemIds?: Set<string>,
+): Promise<{ ok: boolean; error?: string }> {
   const labelCfg = loadLocal<LabelConfig>(KEYS.label, DEFAULT_LABEL_CONFIG)
   const address = labelCfg.address || labelCfg.printerId?.replace('manual-', '')
   const printerName = labelCfg.printerName || address
@@ -160,7 +163,8 @@ export async function printGrabLabels(order: AdminOrder): Promise<{ ok: boolean;
       feedAfterCut: labelCfg.feedAfterCut,
       paddingTop: labelCfg.paddingTop,
       paddingBottom: labelCfg.paddingBottom,
-    }, fontBase64)
+      skipItemsWithoutOptions: labelCfg.skipItemsWithoutOptions ?? false,
+    }, fontBase64, selectedItemIds)
     return await printerBridge().printLabelsByAddress(address, printerName!, labels, labelCfg)
   } catch (e) {
     return { ok: false, error: String(e) }
