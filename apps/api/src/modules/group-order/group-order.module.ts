@@ -7,6 +7,7 @@ import { GroupOrderController } from './group-order.controller';
 import { GroupOrderGateway } from './group-order.gateway';
 import { GroupOrderService } from './group-order.service';
 import { MailService } from '../mail/mail.service';
+import { StoreModule } from '../store/store.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { MailService } from '../mail/mail.service';
     AuthModule,
     EventsModule,
     NotificationModule,
+    StoreModule
   ],
   controllers: [GroupOrderController],
   providers: [GroupOrderService, GroupOrderGateway, MailService],

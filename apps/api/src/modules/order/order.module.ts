@@ -12,9 +12,11 @@ import { NotificationModule } from '../notification/notification.module';
 import { OrderValidationService } from './order-validation.service';
 import { GroupOrderModule } from '../group-order/group-order.module';
 import { MailService } from '../mail/mail.service';
+import { InventoryModule } from '../admin/inventory/inventory.module';
+import { StoreModule } from '../store/store.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, EventsModule, PointModule, ReferralModule, NotificationModule, GroupOrderModule],
+  imports: [PrismaModule, AuthModule, EventsModule, PointModule, ReferralModule, NotificationModule, GroupOrderModule, InventoryModule, StoreModule],
   controllers: [OrderController],
   providers: [OrderService, OrderValidationService, OrderPointApplyService, OrderExpiryCronService, MailService],
   exports: [OrderService, OrderPointApplyService, MailService],

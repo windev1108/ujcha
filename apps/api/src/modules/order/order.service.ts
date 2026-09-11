@@ -28,6 +28,8 @@ import {
   computeFinalPrice,
   withGuestAddressFallback,
 } from '../../helper/utils';
+import { InventoryService } from '../admin/inventory/inventory.service';
+import { StoreStatusService } from '../store/store-status.service';
 
 export type OrderDetail = Prisma.OrderGetPayload<{
   include: {
@@ -182,6 +184,8 @@ export class OrderService {
     private readonly pointService: PointService,
     private readonly referralRewardProcessing: ReferralRewardProcessingService,
     private readonly notificationService: NotificationService,
+    private readonly inventoryService: InventoryService,
+    private readonly storeStatus: StoreStatusService
   ) { }
 
   calculateTotal(items: CreateOrderItemDto[]): Prisma.Decimal {
@@ -355,6 +359,7 @@ export class OrderService {
       initialPaymentStatus?: PaymentStatus;
       /** Bỏ qua validate option groups — dùng cho đơn external (GrabFood, ShopeeFood). */
       skipOptionValidation?: boolean;
+      skipStoreHoursCheck?: boolean;
     },
   ): Promise<OrderDetail> {
     if (!dto.items.length) {
@@ -363,7 +368,10 @@ export class OrderService {
         code: 'ORDER_ITEMS_EMPTY',
       });
     }
-
+    if (!options?.skipStoreHoursCheck) {
+      await this.storeStatus.assertOpenForOrders();
+    }
+    
     this.orderValidation.assertCreateOrderTypeRules(dto);
 
     const pickupDate =
@@ -810,6 +818,9 @@ export class OrderService {
     ).catch((err: unknown) => {
       this.logger.error(err);
     });
+    void this.inventoryService
+      .deductForOrder(orderId)
+      .catch((err: unknown) => this.logger.error(err));
   }
 
   private async rewardAndNotifyCompletion(

@@ -4,14 +4,22 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { skuFromProductName, slugify, uniqueSlugSuffix } from '../slug.util';
 import type { CreateProductDto } from './dto/create-product.dto';
 import type { ToggleProductAvailabilityDto } from './dto/toggle-product-availability.dto';
 import type { UpdateProductDto } from './dto/update-product.dto';
-import { clampDiscountPercent, computeFinalPrice, normalizeImageUrls, normalizeInlineOptionGroups, normalizeInlineToppings, normalizeTranslation } from '../../../helper/utils';
+import {
+  clampDiscountPercent,
+  computeFinalPrice,
+  normalizeImageUrls,
+  normalizeInlineOptionGroups,
+  normalizeInlineToppings,
+  normalizeTranslation,
+} from '../../../helper/utils';
 import { RedisService } from '../../redis/redis.service';
+import { SetProductRecipeDto } from '../ingredients/dto/set-product-recipe.dto';
+import { RecipeResolveItemDto } from './dto/resolve-recipe-batch.dto';
 
 const GLOBAL_DISCOUNT_KEY = 'ujcha:shop:globalDiscount';
 const GLOBAL_DISCOUNT_TTL = 60;
@@ -21,7 +29,7 @@ export class AdminProductService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
-  ) { }
+  ) {}
 
   async list(categoryId?: string, categorySlug?: string, q?: string) {
     const qx = q?.trim();
@@ -33,12 +41,12 @@ export class AdminProductService {
             categorySlug ? { category: { slug: categorySlug } } : {},
             qx
               ? {
-                OR: [
-                  { name: { contains: qx, mode: 'insensitive' } },
-                  { sku: { contains: qx, mode: 'insensitive' } },
-                  { description: { contains: qx, mode: 'insensitive' } },
-                ],
-              }
+                  OR: [
+                    { name: { contains: qx, mode: 'insensitive' } },
+                    { sku: { contains: qx, mode: 'insensitive' } },
+                    { description: { contains: qx, mode: 'insensitive' } },
+                  ],
+                }
               : {},
           ],
         },
@@ -80,14 +88,16 @@ export class AdminProductService {
 
     const nameTrim = dto.name.trim();
     const skuNorm = await this.resolveSkuForCreate(dto.sku, nameTrim);
-    let base = dto.slug?.trim() ? slugify(dto.slug) : slugify(nameTrim);
+    const base = dto.slug?.trim() ? slugify(dto.slug) : slugify(nameTrim);
     const slug = await this.allocProductSlug(base);
 
     const imageUrls = normalizeImageUrls(dto.imageUrls);
     const optionGroups = normalizeInlineOptionGroups(dto.optionGroups);
     const toppings = normalizeInlineToppings(dto.toppings);
     const nameTranslation = normalizeTranslation(dto.nameTranslation);
-    const descriptionTranslation = normalizeTranslation(dto.descriptionTranslation);
+    const descriptionTranslation = normalizeTranslation(
+      dto.descriptionTranslation,
+    );
 
     const created = await this.prisma.product.create({
       data: {
@@ -101,7 +111,8 @@ export class AdminProductService {
         optionGroups: optionGroups as unknown as Prisma.InputJsonValue,
         toppings: toppings as unknown as Prisma.InputJsonValue,
         nameTranslation: nameTranslation as unknown as Prisma.InputJsonValue,
-        descriptionTranslation: descriptionTranslation as unknown as Prisma.InputJsonValue,
+        descriptionTranslation:
+          descriptionTranslation as unknown as Prisma.InputJsonValue,
         isAvailable: dto.isAvailable ?? true,
         isSoldOut: dto.isSoldOut ?? false,
         isBestSeller: dto.isBestSeller ?? false,
@@ -165,25 +176,37 @@ export class AdminProductService {
         ...(dto.description !== undefined && {
           description: dto.description?.trim() ?? null,
         }),
-        ...(dto.price !== undefined && { price: new Prisma.Decimal(dto.price) }),
+        ...(dto.price !== undefined && {
+          price: new Prisma.Decimal(dto.price),
+        }),
         ...(dto.imageUrls !== undefined && {
           imageUrls: normalizeImageUrls(dto.imageUrls),
         }),
         ...(dto.optionGroups !== undefined && {
-          optionGroups: normalizeInlineOptionGroups(dto.optionGroups) as unknown as Prisma.InputJsonValue,
+          optionGroups: normalizeInlineOptionGroups(
+            dto.optionGroups,
+          ) as unknown as Prisma.InputJsonValue,
         }),
         ...(dto.toppings !== undefined && {
-          toppings: normalizeInlineToppings(dto.toppings) as unknown as Prisma.InputJsonValue,
+          toppings: normalizeInlineToppings(
+            dto.toppings,
+          ) as unknown as Prisma.InputJsonValue,
         }),
         ...(dto.nameTranslation !== undefined && {
-          nameTranslation: normalizeTranslation(dto.nameTranslation) as unknown as Prisma.InputJsonValue,
+          nameTranslation: normalizeTranslation(
+            dto.nameTranslation,
+          ) as unknown as Prisma.InputJsonValue,
         }),
         ...(dto.descriptionTranslation !== undefined && {
-          descriptionTranslation: normalizeTranslation(dto.descriptionTranslation) as unknown as Prisma.InputJsonValue,
+          descriptionTranslation: normalizeTranslation(
+            dto.descriptionTranslation,
+          ) as unknown as Prisma.InputJsonValue,
         }),
         ...(dto.isAvailable !== undefined && { isAvailable: dto.isAvailable }),
         ...(dto.isSoldOut !== undefined && { isSoldOut: dto.isSoldOut }),
-        ...(dto.isBestSeller !== undefined && { isBestSeller: dto.isBestSeller }),
+        ...(dto.isBestSeller !== undefined && {
+          isBestSeller: dto.isBestSeller,
+        }),
         ...(dto.discountPercent !== undefined && {
           discountPercent: clampDiscountPercent(dto.discountPercent),
         }),
@@ -219,8 +242,7 @@ export class AdminProductService {
         e?.code === 'P2003'
       ) {
         throw new BadRequestException({
-          message:
-            'Không xóa được sản phẩm đang nằm trong giỏ hoặc đơn hàng.',
+          message: 'Không xóa được sản phẩm đang nằm trong giỏ hoặc đơn hàng.',
           code: 'PRODUCT_REFERENCED',
         });
       }
@@ -274,7 +296,10 @@ export class AdminProductService {
     });
   }
 
-  private async allocProductSlug(base: string, excludeId?: string): Promise<string> {
+  private async allocProductSlug(
+    base: string,
+    excludeId?: string,
+  ): Promise<string> {
     let candidate = base;
     for (let i = 0; i < 12; i += 1) {
       const existing = await this.prisma.product.findFirst({
@@ -301,11 +326,385 @@ export class AdminProductService {
     await this.redis.set(GLOBAL_DISCOUNT_KEY, val, GLOBAL_DISCOUNT_TTL);
     return val;
   }
+  async getRecipe(productId: string) {
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+      select: { id: true, recipeNote: true },
+    });
+    if (!product) {
+      throw new NotFoundException({
+        message: 'Không tìm thấy sản phẩm.',
+        code: 'PRODUCT_NOT_FOUND',
+      });
+    }
+
+    const [items, toppingItems] = await Promise.all([
+      this.prisma.productRecipeItem.findMany({
+        where: { productId },
+        include: { ingredient: true },
+        orderBy: [{ optionGroupName: 'asc' }, { createdAt: 'asc' }],
+      }),
+      this.prisma.productToppingRecipeItem.findMany({
+        where: { productId },
+        include: { ingredient: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+    ]);
+
+    return { recipeNote: product.recipeNote, items, toppingItems };
+  }
+
+  async setRecipe(productId: string, dto: SetProductRecipeDto) {
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+    });
+    if (!product) {
+      throw new NotFoundException({
+        message: 'Không tìm thấy sản phẩm.',
+        code: 'PRODUCT_NOT_FOUND',
+      });
+    }
+
+    const optionGroups = (product.optionGroups as any[]) ?? [];
+    const toppings = (product.toppings as any[]) ?? [];
+
+    for (const it of dto.items) {
+      if (!!it.optionGroupName !== !!it.optionValueLabel) {
+        throw new BadRequestException({
+          message: 'optionGroupName và optionValueLabel phải đi cùng nhau.',
+          code: 'INVALID_RECIPE_VARIANT',
+        });
+      }
+      if (it.optionGroupName) {
+        const group = optionGroups.find((g) => g.name === it.optionGroupName);
+        const valueExists = group?.values?.some(
+          (v: any) => v.label === it.optionValueLabel,
+        );
+        if (!group || !valueExists) {
+          throw new BadRequestException({
+            message: `Biến thể "${it.optionGroupName} / ${it.optionValueLabel}" không tồn tại trên sản phẩm.`,
+            code: 'INVALID_RECIPE_VARIANT',
+          });
+        }
+      }
+    }
+
+    for (const t of dto.toppingItems ?? []) {
+      if (!toppings.some((tp: any) => tp.id === t.toppingId)) {
+        throw new BadRequestException({
+          message: 'Topping không tồn tại trên sản phẩm.',
+          code: 'INVALID_RECIPE_TOPPING',
+        });
+      }
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.product.update({
+        where: { id: productId },
+        data: { recipeNote: dto.recipeNote?.trim() || null },
+      });
+      await tx.productRecipeItem.deleteMany({ where: { productId } });
+      await tx.productToppingRecipeItem.deleteMany({ where: { productId } });
+
+      if (dto.items.length) {
+        await tx.productRecipeItem.createMany({
+          data: dto.items.map((i) => ({
+            productId,
+            ingredientId: i.ingredientId,
+            optionGroupName: i.optionGroupName ?? null,
+            optionValueLabel: i.optionValueLabel ?? null,
+            quantity: new Prisma.Decimal(i.quantity),
+          })),
+        });
+      }
+
+      if (dto.toppingItems?.length) {
+        await tx.productToppingRecipeItem.createMany({
+          data: dto.toppingItems.map((t) => ({
+            productId,
+            toppingId: t.toppingId,
+            ingredientId: t.ingredientId,
+            quantity: new Prisma.Decimal(t.quantity),
+          })),
+        });
+      }
+
+      return this.getRecipe(productId);
+    });
+  }
+
+  async getStats(params: { from?: string; to?: string; limit?: number }) {
+    const to = params.to ? new Date(params.to) : new Date();
+    const from = params.from
+      ? new Date(params.from)
+      : new Date(to.getTime() - 29 * 24 * 60 * 60 * 1000);
+    const limit = params.limit ?? 10;
+
+    const [items, totalOrders] = await Promise.all([
+      this.prisma.orderItem.findMany({
+        where: {
+          order: { paymentStatus: 'paid', createdAt: { gte: from, lte: to } },
+        },
+        select: {
+          quantity: true,
+          price: true,
+          product: {
+            select: {
+              id: true,
+              name: true,
+              imageUrls: true,
+              category: { select: { id: true, name: true } },
+            },
+          },
+        },
+      }),
+      this.prisma.order.count({
+        where: { paymentStatus: 'paid', createdAt: { gte: from, lte: to } },
+      }),
+    ]);
+
+    type ProductAgg = {
+      productId: string;
+      name: string;
+      imageUrl: string | null;
+      quantitySold: number;
+      revenue: number;
+      categoryId: string;
+      categoryName: string;
+    };
+    type CategoryAgg = {
+      categoryId: string;
+      categoryName: string;
+      revenue: number;
+      quantitySold: number;
+    };
+
+    const byProduct = new Map<string, ProductAgg>();
+    const byCategory = new Map<string, CategoryAgg>();
+    let totalRevenue = 0;
+    let totalQuantitySold = 0;
+
+    for (const it of items) {
+      if (!it.product) continue;
+      const lineRevenue = Number(it.price.toString()) * it.quantity;
+      totalRevenue += lineRevenue;
+      totalQuantitySold += it.quantity;
+
+      const imgs = Array.isArray(it.product.imageUrls)
+        ? (it.product.imageUrls as string[])
+        : [];
+      const p = byProduct.get(it.product.id);
+      if (p) {
+        p.quantitySold += it.quantity;
+        p.revenue += lineRevenue;
+      } else {
+        byProduct.set(it.product.id, {
+          productId: it.product.id,
+          name: it.product.name,
+          imageUrl: imgs[0] ?? null,
+          quantitySold: it.quantity,
+          revenue: lineRevenue,
+          categoryId: it.product.category.id,
+          categoryName: it.product.category.name,
+        });
+      }
+
+      const c = byCategory.get(it.product.category.id);
+      if (c) {
+        c.revenue += lineRevenue;
+        c.quantitySold += it.quantity;
+      } else {
+        byCategory.set(it.product.category.id, {
+          categoryId: it.product.category.id,
+          categoryName: it.product.category.name,
+          revenue: lineRevenue,
+          quantitySold: it.quantity,
+        });
+      }
+    }
+
+    const all = [...byProduct.values()];
+    return {
+      range: { from: from.toISOString(), to: to.toISOString() },
+      overview: {
+        totalRevenue,
+        totalQuantitySold,
+        totalOrders,
+        avgOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0,
+        distinctProductsSold: byProduct.size,
+      },
+      topByQuantity: [...all]
+        .sort((a, b) => b.quantitySold - a.quantitySold)
+        .slice(0, limit),
+      topByRevenue: [...all]
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, limit),
+      lowPerformers: [...all]
+        .sort((a, b) => a.quantitySold - b.quantitySold)
+        .slice(0, limit),
+      categoryBreakdown: [...byCategory.values()].sort(
+        (a, b) => b.revenue - a.revenue,
+      ),
+    };
+  }
+
+  async resolveRecipeBatch(items: RecipeResolveItemDto[]) {
+    const productIds = [
+      ...new Set(items.filter((i) => i.productId).map((i) => i.productId!)),
+    ];
+    const skus = [...new Set(items.filter((i) => i.sku).map((i) => i.sku!))];
+
+    const products =
+      productIds.length || skus.length
+        ? await this.prisma.product.findMany({
+            where: {
+              OR: [
+                ...(productIds.length ? [{ id: { in: productIds } }] : []),
+                ...(skus.length ? [{ sku: { in: skus } }] : []),
+              ],
+            },
+            select: {
+              id: true,
+              name: true,
+              sku: true,
+              toppings: true,
+              recipeNote: true,
+            },
+          })
+        : [];
+
+    const byId = new Map(products.map((p) => [p.id, p]));
+    const bySku = new Map(
+      products.filter((p) => p.sku).map((p) => [p.sku as string, p]),
+    );
+
+    const relevantProductIds = products.map((p) => p.id);
+    const [recipeItems, toppingRecipeItems] = relevantProductIds.length
+      ? await Promise.all([
+          this.prisma.productRecipeItem.findMany({
+            where: { productId: { in: relevantProductIds } },
+            include: { ingredient: true },
+          }),
+          this.prisma.productToppingRecipeItem.findMany({
+            where: { productId: { in: relevantProductIds } },
+            include: { ingredient: true },
+          }),
+        ])
+      : [[], []];
+
+    const normalize = (s: string) => s.trim().toLowerCase();
+    const matchLabel = (candidate: string, selectedNorm: string[]) => {
+      const c = normalize(candidate);
+      if (!c) return false;
+      return selectedNorm.some(
+        (s) => c === s || c.includes(s) || s.includes(c),
+      );
+    };
+
+    const result: Record<
+      string,
+      {
+        matched: boolean;
+        productId?: string;
+        productName?: string;
+        sku?: string | null;
+        recipeNote?: string | null;
+        items?: Array<{
+          id: string;
+          ingredientId: string;
+          ingredientName: string;
+          unit: string;
+          quantity: string;
+          optionGroupName: string | null;
+          optionValueLabel: string | null;
+        }>;
+        toppingItems?: Array<{
+          id: string;
+          ingredientId: string;
+          ingredientName: string;
+          unit: string;
+          quantity: string;
+          toppingId: string;
+          toppingName: string;
+        }>;
+      }
+    > = {};
+
+    for (const item of items) {
+      const product = item.productId
+        ? byId.get(item.productId)
+        : item.sku
+          ? bySku.get(item.sku)
+          : undefined;
+
+      if (!product) {
+        result[item.key] = { matched: false };
+        continue;
+      }
+
+      const selectedNorm = item.selectedLabels.map(normalize).filter(Boolean);
+
+      const matchedItems = recipeItems.filter(
+        (ri) =>
+          ri.productId === product.id &&
+          (ri.optionGroupName == null ||
+            matchLabel(ri.optionValueLabel ?? '', selectedNorm)),
+      );
+
+      const toppingsArr =
+        (product.toppings as Array<{ id: string; name: string }>) ?? [];
+      const matchedToppingItems = toppingRecipeItems.filter((tri) => {
+        if (tri.productId !== product.id) return false;
+        const topping = toppingsArr.find((t) => t.id === tri.toppingId);
+        if (!topping) return false;
+        return matchLabel(topping.name, selectedNorm);
+      });
+
+      result[item.key] = {
+        matched: true,
+        productId: product.id,
+        productName: product.name,
+        sku: product.sku,
+        recipeNote: product.recipeNote,
+        items: matchedItems.map((mi) => ({
+          id: mi.id,
+          ingredientId: mi.ingredientId,
+          ingredientName: mi.ingredient.name,
+          unit: mi.ingredient.unit,
+          quantity: mi.quantity.toString(),
+          optionGroupName: mi.optionGroupName,
+          optionValueLabel: mi.optionValueLabel,
+        })),
+        toppingItems: matchedToppingItems.map((mt) => ({
+          id: mt.id,
+          ingredientId: mt.ingredientId,
+          ingredientName: mt.ingredient.name,
+          unit: mt.ingredient.unit,
+          quantity: mt.quantity.toString(),
+          toppingId: mt.toppingId,
+          toppingName:
+            toppingsArr.find((t) => t.id === mt.toppingId)?.name ?? '',
+        })),
+      };
+    }
+
+    return result;
+  }
 }
 
-function normalizeProductRow<T extends { price: unknown; discountPercent: number; optionGroups: unknown; toppings: unknown; nameTranslation: unknown; descriptionTranslation: unknown }>(row: T, globalDiscount = 0) {
+function normalizeProductRow<
+  T extends {
+    price: unknown;
+    discountPercent: number;
+    optionGroups: unknown;
+    toppings: unknown;
+    nameTranslation: unknown;
+    descriptionTranslation: unknown;
+  },
+>(row: T, globalDiscount = 0) {
   // Product-specific discount takes priority; global is the fallback when product has none
-  const effectiveDiscount = row.discountPercent > 0 ? row.discountPercent : globalDiscount;
+  const effectiveDiscount =
+    row.discountPercent > 0 ? row.discountPercent : globalDiscount;
   return {
     ...row,
     // discountPercent stays as the RAW stored value so the admin editor can round-trip it without accumulation
@@ -314,8 +713,14 @@ function normalizeProductRow<T extends { price: unknown; discountPercent: number
     globalDiscountPercent: globalDiscount,
     optionGroups: normalizeInlineOptionGroups(row.optionGroups as any),
     toppings: normalizeInlineToppings(row.toppings as any),
-    nameTranslation: (row.nameTranslation && typeof row.nameTranslation === 'object' ? row.nameTranslation : {}) as Record<string, string>,
-    descriptionTranslation: (row.descriptionTranslation && typeof row.descriptionTranslation === 'object' ? row.descriptionTranslation : {}) as Record<string, string>,
+    nameTranslation: (row.nameTranslation &&
+    typeof row.nameTranslation === 'object'
+      ? row.nameTranslation
+      : {}) as Record<string, string>,
+    descriptionTranslation: (row.descriptionTranslation &&
+    typeof row.descriptionTranslation === 'object'
+      ? row.descriptionTranslation
+      : {}) as Record<string, string>,
     finalPrice: computeFinalPrice(row.price, effectiveDiscount),
   };
 }

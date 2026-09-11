@@ -25,7 +25,9 @@ export class AdminOrderListQueryDto {
   @IsEnum(OrderStatus)
   status?: OrderStatus;
 
-  @ApiPropertyOptional({ description: 'Tìm mã thanh toán, tên/SĐT/email khách, hoặc UUID đơn' })
+  @ApiPropertyOptional({
+    description: 'Tìm mã thanh toán, tên/SĐT/email khách, hoặc UUID đơn',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(200)
@@ -69,7 +71,9 @@ export class AdminOrderListQueryDto {
   @IsBoolean()
   unassignedShipper?: boolean;
 
-  @ApiPropertyOptional({ description: 'true = chỉ đơn nhóm; false = chỉ đơn thường' })
+  @ApiPropertyOptional({
+    description: 'true = chỉ đơn nhóm; false = chỉ đơn thường',
+  })
   @IsOptional()
   @Transform(({ value }) => {
     if (value === true || value === 'true') return true;

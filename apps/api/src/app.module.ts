@@ -36,6 +36,8 @@ import { MailModule } from './modules/mail/mail.module';
 import { PublicStoreModule } from './modules/public-store/public-store.module';
 import { PushModule } from './modules/push/push.module';
 import { LocationModule } from './modules/location/location.module';
+import { ToppingModule } from './modules/topping/topping.module';
+import { StoreModule } from './modules/store/store.module';
 
 @Module({
   imports: [
@@ -79,9 +81,11 @@ import { LocationModule } from './modules/location/location.module';
     MailModule,
     PublicStoreModule,
     PushModule,
-    LocationModule
+    LocationModule,
+    ToppingModule,
+    StoreModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule { }
+export class AppModule {}

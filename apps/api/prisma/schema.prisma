@@ -4,41 +4,41 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
 /// `phone`, `email`, `googleId`, `referralCode`: `@unique` → PostgreSQL tạo index phục vụ lookup (đủ cho truy vấn theo SĐT/email).
 model User {
-  id           String  @id @default(uuid()) @db.Uuid
-  phone        String? @unique
-  email        String? @unique
-  name         String
-  avatar       String?
-  googleId     String? @unique
-  referralCode String  @unique
+  id                         String                   @id @default(uuid()) @db.Uuid
+  phone                      String?                  @unique
+  email                      String?                  @unique
+  name                       String
+  avatar                     String?
+  googleId                   String?                  @unique
+  referralCode               String                   @unique
   /// Mã giới thiệu của người giới thiệu (quan hệ tới `User.referralCode`)
-  referredBy   String?
-  referrer     User?   @relation("Referrals", fields: [referredBy], references: [referralCode])
-  referrals    User[]  @relation("Referrals")
+  referredBy                 String?
+  referrer                   User?                    @relation("Referrals", fields: [referredBy], references: [referralCode])
+  referrals                  User[]                   @relation("Referrals")
   /// Phần thưởng giới thiệu nhận về (người được hưởng = referrer).
-  referralRewardsBeneficiary ReferralReward[] @relation("ReferralRewardBeneficiary")
+  referralRewardsBeneficiary ReferralReward[]         @relation("ReferralRewardBeneficiary")
   /// Phần thưởng gắn với tài khoản được mời (người kích hoạt điều kiện).
-  referralRewardsInvited     ReferralReward[] @relation("ReferralRewardInvited")
+  referralRewardsInvited     ReferralReward[]         @relation("ReferralRewardInvited")
   milestoneClaims            ReferralMilestoneClaim[]
-  sessions     Session[]
-  addresses    Address[]
-  cart         Cart?
-  orders       Order[]
-  groupOrdersHosted          GroupOrder[]               @relation("GroupOrderHost")
-  groupOrderParticipations   GroupOrderParticipant[]    @relation("GroupOrderParticipant")
-  pointBalance Int                  @default(0)
-  pointTransactions PointTransaction[]
-  userVouchers      UserVoucher[]
+  sessions                   Session[]
+  addresses                  Address[]
+  cart                       Cart?
+  orders                     Order[]
+  groupOrdersHosted          GroupOrder[]             @relation("GroupOrderHost")
+  groupOrderParticipations   GroupOrderParticipant[]  @relation("GroupOrderParticipant")
+  pointBalance               Int                      @default(0)
+  pointTransactions          PointTransaction[]
+  userVouchers               UserVoucher[]
 
   /// Hash bcrypt mật khẩu; null = chưa thiết lập (user cũ / đăng nhập Google).
-  password        String?
+  password String?
 
   /// Đặt khi xác minh OTP SĐT thành công (điều kiện thưởng referral).
   phoneVerifiedAt DateTime?
@@ -77,21 +77,21 @@ enum PointSource {
 
 /// Giao dịch điểm UjCha; earn có thể có expiresAt + remainingAmount (FIFO); spend/expire chỉ ghi nhận.
 model PointTransaction {
-  id          String               @id @default(uuid()) @db.Uuid
-  userId      String               @db.Uuid
-  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type        PointTransactionType
+  id              String               @id @default(uuid()) @db.Uuid
+  userId          String               @db.Uuid
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type            PointTransactionType
   /// Luôn > 0 (độ lớn giao dịch), số nguyên.
-  amount      Int
-  source      PointSource
-  referenceId String?              @db.Uuid
+  amount          Int
+  source          PointSource
+  referenceId     String?              @db.Uuid
   /// Chỉ type earn: thời điểm lô điểm hết hạn; null = không hết hạn.
-  expiresAt   DateTime?
+  expiresAt       DateTime?
   /// Chỉ type earn: đến thời điểm này mới được spend (FIFO); null = dùng ngay.
-  usableFrom  DateTime?
+  usableFrom      DateTime?
   /// Chỉ type earn: điểm còn lại trong lô (trừ dần khi spend FIFO), số nguyên.
   remainingAmount Int?
-  createdAt   DateTime             @default(now())
+  createdAt       DateTime             @default(now())
 
   @@index([userId, createdAt])
   @@index([type, expiresAt])
@@ -163,16 +163,16 @@ model Session {
 }
 
 model Address {
-  id          String   @id @default(uuid()) @db.Uuid
-  userId      String   @db.Uuid
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String       @id @default(uuid()) @db.Uuid
+  userId      String       @db.Uuid
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   fullAddress String
   lat         Float
   lng         Float
   note        String?
-  isDefault   Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  isDefault   Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
   orders      Order[]
   groupOrders GroupOrder[]
 
@@ -225,43 +225,130 @@ model Category {
 }
 
 model Product {
-  id          String   @id @default(uuid()) @db.Uuid
-  categoryId  String   @db.Uuid
-  category    Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  name        String
-  slug        String   @unique
+  id                     String   @id @default(uuid()) @db.Uuid
+  categoryId             String   @db.Uuid
+  category               Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  name                   String
+  slug                   String   @unique
   /// Mã SKU hiển thị (vd: Ujcha-MTC-001), duy nhất khi có giá trị.
-  sku         String?  @unique
-  description String?
-  price       Decimal  @db.Decimal(12, 2)
+  sku                    String?  @unique
+  description            String?
+  price                  Decimal  @db.Decimal(12, 2)
   /// Danh sách URL ảnh (CDN / link ngoài); ảnh đầu dùng làm đại diện.
-  imageUrls   Json     @default("[]")
+  imageUrls              Json     @default("[]")
   /// Nhóm biến thể per-product: [{ id, name, selectionMin, selectionMax, values: [{label, priceDelta}] }]
-  optionGroups    Json @default("[]")
+  optionGroups           Json     @default("[]")
   /// Topping per-product: [{ id, name, price, isActive }]
-  toppings        Json @default("[]")
+  toppings               Json     @default("[]")
   /// Bản dịch tên món: { "en": "...", "ko": "...", "zh": "..." }
-  nameTranslation Json @default("{}")
+  nameTranslation        Json     @default("{}")
   /// Bản dịch mô tả món: { "en": "...", "ko": "...", "zh": "..." }
-  descriptionTranslation Json @default("{}")
-  isAvailable Boolean  @default(true)
+  descriptionTranslation Json     @default("{}")
+  isAvailable            Boolean  @default(true)
   /// Đánh dấu hết hàng (hiển thị cho khách khi vẫn `isAvailable`).
-  isSoldOut   Boolean  @default(false)
+  isSoldOut              Boolean  @default(false)
   /// Gắn nhãn bán chạy — hiển thị badge "Best Seller" và ưu tiên trong danh sách nổi bật.
-  isBestSeller Boolean @default(false)
+  isBestSeller           Boolean  @default(false)
   /// Giảm giá theo sản phẩm (0–100%). Cộng với `ShopSettings.globalDiscountPercent`, tối đa 100%.
-  discountPercent Int @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
 
-  cartItems       CartItem[]
-  orderItems      OrderItem[]
-  groupOrderItems GroupOrderParticipantItem[]
-  feedbacks       Feedback[]
+  recipeNote      String?             @db.Text
+  recipeItems     ProductRecipeItem[]
+  discountPercent Int                 @default(0)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  cartItems          CartItem[]
+  orderItems         OrderItem[]
+  groupOrderItems    GroupOrderParticipantItem[]
+  feedbacks          Feedback[]
+  toppingRecipeItems ProductToppingRecipeItem[]
 
   @@index([categoryId])
   @@index([isAvailable])
   @@index([isSoldOut])
+}
+
+model Ingredient {
+  id                String   @id @default(uuid()) @db.Uuid
+  name              String
+  /// Đơn vị tính: g, ml, kg, l, cái...
+  unit              String
+  stockQty          Decimal  @default(0) @db.Decimal(12, 3)
+  lowStockThreshold Decimal? @db.Decimal(12, 3)
+  note              String?
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  recipeItems        ProductRecipeItem[]
+  transactions       InventoryTransaction[]
+  toppingRecipeItems ProductToppingRecipeItem[]
+
+  @@index([isActive])
+}
+
+model ProductRecipeItem {
+  id               String     @id @default(uuid()) @db.Uuid
+  productId        String     @db.Uuid
+  product          Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  ingredientId     String     @db.Uuid
+  ingredient       Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+  /// Tên nhóm option áp dụng (vd "Size"). null = dùng cho MỌI biến thể (không phụ thuộc size).
+  optionGroupName  String?
+  /// Nhãn giá trị option (vd "L"). Luôn đi cùng optionGroupName.
+  optionValueLabel String?
+  /// Định lượng cho 1 đơn vị sản phẩm ở biến thể này (theo unit của ingredient)
+  quantity         Decimal    @db.Decimal(12, 3)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  @@unique([productId, ingredientId, optionGroupName, optionValueLabel])
+  @@index([productId])
+  @@index([ingredientId])
+}
+
+/// Định lượng nguyên liệu hao thêm khi khách chọn 1 topping cụ thể của sản phẩm.
+model ProductToppingRecipeItem {
+  id           String     @id @default(uuid()) @db.Uuid
+  productId    String     @db.Uuid
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  /// id của topping trong Product.toppings (JSON) — không FK vì topping là embed.
+  toppingId    String
+  ingredientId String     @db.Uuid
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+  quantity     Decimal    @db.Decimal(12, 3)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([productId, toppingId, ingredientId])
+  @@index([productId])
+  @@index([toppingId])
+  @@index([ingredientId])
+}
+
+enum InventoryTransactionType {
+  order_deduct
+  manual_adjust
+  restock
+}
+
+/// Nhật ký biến động kho — audit.
+model InventoryTransaction {
+  id           String                   @id @default(uuid()) @db.Uuid
+  ingredientId String                   @db.Uuid
+  ingredient   Ingredient               @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  type         InventoryTransactionType
+  /// Âm = trừ kho, dương = nhập/cộng kho
+  changeQty    Decimal                  @db.Decimal(12, 3)
+  /// Tồn kho sau khi áp dụng transaction này (snapshot audit)
+  resultQty    Decimal                  @db.Decimal(12, 3)
+  orderId      String?                  @db.Uuid
+  order        Order?                   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  note         String?
+  createdAt    DateTime                 @default(now())
+
+  @@index([ingredientId, createdAt])
+  @@index([orderId])
 }
 
 /// Cấu hình chung cửa hàng (một dòng, id cố định `default`).
@@ -326,16 +413,16 @@ enum PaymentType {
 
 /// Bàn phục vụ qua QR.
 model Table {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String
+  id          String       @id @default(uuid()) @db.Uuid
+  name        String
   /// Khu vực / tầng (nhóm trên UI admin).
-  area      String   @default("Tầng 1")
-  qrCode    String   @unique
-  isActive  Boolean  @default(true)
-  orders    Order[]
+  area        String       @default("Tầng 1")
+  qrCode      String       @unique
+  isActive    Boolean      @default(true)
+  orders      Order[]
   groupOrders GroupOrder[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
   @@index([area])
 }
@@ -357,15 +444,15 @@ model Shipper {
 }
 
 model Order {
-  id             String        @id @default(uuid()) @db.Uuid
-  userId         String?       @db.Uuid
-  user           User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
-  type           OrderType
-  addressId      String?       @db.Uuid
-  address        Address?      @relation(fields: [addressId], references: [id], onDelete: SetNull)
-  tableId        String?       @db.Uuid
-  table          Table?        @relation(fields: [tableId], references: [id], onDelete: SetNull)
-  pickupTime     DateTime?
+  id                    String    @id @default(uuid()) @db.Uuid
+  userId                String?   @db.Uuid
+  user                  User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  type                  OrderType
+  addressId             String?   @db.Uuid
+  address               Address?  @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  tableId               String?   @db.Uuid
+  table                 Table?    @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  pickupTime            DateTime?
   scheduledDeliveryTime DateTime?
 
   /// Giao hàng không đăng nhập: địa chỉ đầy đủ (khi không dùng addressId).
@@ -375,56 +462,59 @@ model Order {
   guestDeliveryLat     Float?
   guestDeliveryLng     Float?
 
-  totalAmount    Decimal       @db.Decimal(12, 2)
-  discountAmount Decimal       @default(0) @db.Decimal(12, 2)
+  totalAmount         Decimal @db.Decimal(12, 2)
+  discountAmount      Decimal @default(0) @db.Decimal(12, 2)
   /// Giảm giá từ điểm UjCha (VND); chỉ trừ điểm khi thanh toán thành công.
-  pointDiscountAmount Decimal  @default(0) @db.Decimal(12, 2)
+  pointDiscountAmount Decimal @default(0) @db.Decimal(12, 2)
   /// Điểm đã chọn cho đơn (chờ trừ khi paid).
-  pointsReserved Int             @default(0)
+  pointsReserved      Int     @default(0)
   /// Điểm đã trừ sau khi thanh toán thành công.
-  pointsConsumed Int             @default(0)
+  pointsConsumed      Int     @default(0)
 
-  finalAmount    Decimal       @db.Decimal(12, 2)
-  shippingFee    Decimal       @default(0) @db.Decimal(12, 2)
+  finalAmount Decimal @db.Decimal(12, 2)
+  shippingFee Decimal @default(0) @db.Decimal(12, 2)
 
-  status         OrderStatus   @default(pending)
-  paymentStatus  PaymentStatus @default(pending)
-  paymentType    PaymentType   @default(cash)
+  status        OrderStatus   @default(pending)
+  paymentStatus PaymentStatus @default(pending)
+  paymentType   PaymentType   @default(cash)
 
-  paymentCode    String        @unique
+  paymentCode    String @unique
   /// Token duy nhất để khách quét QR bill tích điểm sau khi về nhà (single-use).
-  loyaltyQrToken String        @unique @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  loyaltyQrToken String @unique @default(dbgenerated("gen_random_uuid()")) @db.Uuid
 
-  shipperId      String?       @db.Uuid
-  shipper        Shipper?      @relation(fields: [shipperId], references: [id], onDelete: SetNull)
+  shipperId String?  @db.Uuid
+  shipper   Shipper? @relation(fields: [shipperId], references: [id], onDelete: SetNull)
 
-  vatConfigId    String?       @db.Uuid
-  vatConfig      VatConfig?    @relation(fields: [vatConfigId], references: [id], onDelete: SetNull)
+  vatConfigId String?    @db.Uuid
+  vatConfig   VatConfig? @relation(fields: [vatConfigId], references: [id], onDelete: SetNull)
   /// % VAT snapshot tại thời điểm tạo đơn (ví dụ 10.00).
-  vatRate        Decimal       @default(0) @db.Decimal(5, 2)
+  vatRate     Decimal    @default(0) @db.Decimal(5, 2)
   /// Tiền VAT (VND) = round(finalAmount × vatRate / 100).
-  vatAmount      Decimal       @default(0) @db.Decimal(12, 2)
+  vatAmount   Decimal    @default(0) @db.Decimal(12, 2)
 
-  items          OrderItem[]
-  payments       Payment[]
-  webhookLogs    PaymentWebhookLog[]
+  items           OrderItem[]
+  payments        Payment[]
+  webhookLogs     PaymentWebhookLog[]
   referralRewards ReferralReward[]
-  groupOrder     GroupOrder?
+  groupOrder      GroupOrder?
 
-  paidAt         DateTime?
+  paidAt DateTime?
 
   /// Timestamps for each status transition (set when status changes)
-  confirmedAt    DateTime?
-  preparingAt    DateTime?
-  readyAt        DateTime?
-  deliveringAt   DateTime?
-  pickedUpAt     DateTime?
-  arrivedAt      DateTime?
-  completedAt    DateTime?
-  cancelledAt    DateTime?
+  confirmedAt  DateTime?
+  preparingAt  DateTime?
+  readyAt      DateTime?
+  deliveringAt DateTime?
+  pickedUpAt   DateTime?
+  arrivedAt    DateTime?
+  completedAt  DateTime?
+  cancelledAt  DateTime?
 
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  inventoryDeductedAt   DateTime?
+  inventoryTransactions InventoryTransaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([userId, createdAt])
@@ -435,14 +525,14 @@ model Order {
 
 /// Giao dịch thanh toán (cổng / CK) — ghi nhận từ webhook hoặc đồng bộ sau.
 model Payment {
-  id              String   @id @default(uuid()) @db.Uuid
-  transactionId   String   @unique
-  amount          Decimal  @db.Decimal(12, 2)
+  id            String   @id @default(uuid()) @db.Uuid
+  transactionId String   @unique
+  amount        Decimal  @db.Decimal(12, 2)
   /// Nội dung chuyển khoản / mô tả giao dịch.
-  content         String
-  orderId         String   @db.Uuid
-  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  createdAt       DateTime @default(now())
+  content       String
+  orderId       String   @db.Uuid
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
 
   @@index([orderId])
   @@index([createdAt])
@@ -466,21 +556,21 @@ model PaymentWebhookLog {
 }
 
 model OrderItem {
-  id        String   @id @default(uuid()) @db.Uuid
-  orderId   String   @db.Uuid
-  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  productId String   @db.Uuid
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
-  quantity  Int
+  id                String  @id @default(uuid()) @db.Uuid
+  orderId           String  @db.Uuid
+  order             Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId         String  @db.Uuid
+  product           Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity          Int
   /// Đơn giá snapshot tại thời điểm đặt.
-  price     Decimal  @db.Decimal(12, 2)
+  price             Decimal @db.Decimal(12, 2)
   /// Snapshot topping: `[{ "toppingId", "name", "price" }]`
-  extrasJson Json    @default("[]")
+  extrasJson        Json    @default("[]")
   /// Tuỳ chọn nhóm (size, đường, đá…): `{ "Size": "L", "Đường": "70%" }`
-  optionsJson Json  @default("{}")
+  optionsJson       Json    @default("{}")
   /// Ghi chú món (ít đá, không bọc sẵn…)
   optionDetailsJson Json    @default("[]") // audit snapshot: [{ group, label, priceDelta }]
-  note      String?
+  note              String?
 
   @@index([orderId])
 }
@@ -518,23 +608,23 @@ model ReferralProgramConfig {
 
 /// Phần thưởng giới thiệu (ghi nhận khi đủ điều kiện business — tạo từ job/webhook sau).
 model ReferralReward {
-  id               String               @id @default(uuid()) @db.Uuid
-  beneficiaryId  String               @db.Uuid
-  beneficiary    User                 @relation("ReferralRewardBeneficiary", fields: [beneficiaryId], references: [id], onDelete: Cascade)
-  referredUserId String               @db.Uuid
-  referredUser   User                 @relation("ReferralRewardInvited", fields: [referredUserId], references: [id], onDelete: Cascade)
-  amount         Decimal              @db.Decimal(12, 2)
-  status         ReferralRewardStatus @default(pending)
-  orderId        String?              @db.Uuid
-  order          Order?               @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  note           String?
+  id                    String               @id @default(uuid()) @db.Uuid
+  beneficiaryId         String               @db.Uuid
+  beneficiary           User                 @relation("ReferralRewardBeneficiary", fields: [beneficiaryId], references: [id], onDelete: Cascade)
+  referredUserId        String               @db.Uuid
+  referredUser          User                 @relation("ReferralRewardInvited", fields: [referredUserId], references: [id], onDelete: Cascade)
+  amount                Decimal              @db.Decimal(12, 2)
+  status                ReferralRewardStatus @default(pending)
+  orderId               String?              @db.Uuid
+  order                 Order?               @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  note                  String?
   /// Điểm đã cộng cho referrer (A).
   referrerPointsGranted Int?
   /// Voucher đã tạo cho người được mời (B).
   refereeVoucherId      String?              @db.Uuid
   refereeVoucher        Voucher?             @relation(fields: [refereeVoucherId], references: [id], onDelete: SetNull)
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
 
   @@index([beneficiaryId])
   @@index([referredUserId])
@@ -570,31 +660,31 @@ enum UserVoucherSource {
 
 /// Mã giảm giá (quy tắc áp dụng khi checkout).
 model Voucher {
-  id                String               @id @default(uuid()) @db.Uuid
-  code              String               @unique
+  id                String              @id @default(uuid()) @db.Uuid
+  code              String              @unique
   name              String
   discountType      VoucherDiscountType
-  discountValue     Decimal              @db.Decimal(12, 2)
-  minOrderAmount    Decimal              @default(0) @db.Decimal(12, 2)
-  maxDiscountAmount Decimal?             @db.Decimal(12, 2)
+  discountValue     Decimal             @db.Decimal(12, 2)
+  minOrderAmount    Decimal             @default(0) @db.Decimal(12, 2)
+  maxDiscountAmount Decimal?            @db.Decimal(12, 2)
   startsAt          DateTime?
   endsAt            DateTime?
   usageLimit        Int?
-  perUserLimit      Int                  @default(1)
-  isActive          Boolean              @default(true)
+  perUserLimit      Int                 @default(1)
+  isActive          Boolean             @default(true)
   /// Voucher chào mừng user mới — hệ thống tự cấp khi đăng ký.
-  isWelcome         Boolean              @default(false)
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
+  isWelcome         Boolean             @default(false)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  referralRewards        ReferralReward[]
+  userVouchers           UserVoucher[]
+  referralProgramConfigs ReferralProgramConfig[]
+  pointRewardCatalogs    PointRewardCatalog[]
 
   @@index([isActive])
   @@index([isWelcome])
   @@index([startsAt, endsAt])
-
-  referralRewards      ReferralReward[]
-  userVouchers         UserVoucher[]
-  referralProgramConfigs ReferralProgramConfig[]
-  pointRewardCatalogs  PointRewardCatalog[]
 }
 
 /// Danh mục phần thưởng đổi điểm: X điểm → cấp voucher Y cho user.
@@ -642,20 +732,20 @@ enum AdminRole {
 }
 
 model Admin {
-  id          String    @id @default(uuid()) @db.Uuid
+  id          String            @id @default(uuid()) @db.Uuid
   /// Số điện thoại — định danh đăng nhập chính.
-  phone       String?   @unique
+  phone       String?           @unique
   /// Email tuỳ chọn (thông báo, phục hồi tài khoản).
-  email       String?   @unique
+  email       String?           @unique
   /// bcrypt hash của mật khẩu.
   password    String?
   name        String?
   role        AdminRole
   address     String?
-  isActive    Boolean   @default(true)
+  isActive    Boolean           @default(true)
   /// Danh sách quyền trang được cấp cho staff (bỏ qua với super_admin).
-  permissions String[]  @default([])
-  createdAt   DateTime  @default(now())
+  permissions String[]          @default([])
+  createdAt   DateTime          @default(now())
   posts       Post[]
   actionLogs  AdminActionLog[]
   attendance  StaffAttendance[]
@@ -675,6 +765,18 @@ model ShiftConfig {
   updatedAt        DateTime @updatedAt
 }
 
+/// Cấu hình global: tên topping đang hết hàng — áp dụng cho MỌI sản phẩm có topping trùng tên,
+/// thay vì phải tắt isActive từng topping trong từng sản phẩm.
+model GlobalOutOfStockTopping {
+  id        String   @id @default(uuid()) @db.Uuid
+  /// Tên chuẩn hoá (trim + lowercase) dùng để so khớp không phân biệt hoa/thường
+  nameKey   String   @unique
+  name      String
+  createdAt DateTime @default(now())
+
+  @@index([nameKey])
+}
+
 /// Cấu hình vị trí cửa hàng (một dòng cố định id = "default").
 model StoreLocation {
   id           String   @id @default("default")
@@ -687,6 +789,25 @@ model StoreLocation {
   /// Số điện thoại liên hệ cửa hàng.
   phone        String?
   updatedAt    DateTime @updatedAt
+}
+
+// schema.prisma — thêm model mới, tách hoàn toàn khỏi ShiftConfig của HRM
+model StoreHoursConfig {
+  id           String               @id @default("default")
+  openMinutes  Int                  @default(420)
+  closeMinutes Int                  @default(1320)
+  /// Trạng thái vận hành do admin cấu hình. opening = chạy theo giờ tự động;
+  /// closed = chặn đặt hàng ngay lập tức; busy = vẫn nhận đơn nhưng cảnh báo khách.
+  status       StoreOperationStatus @default(opening)
+  /// Lý do hiển thị cho khách khi status = closed hoặc busy (VD: "Đông khách, giao chậm ~30p").
+  statusReason String?
+  updatedAt    DateTime             @updatedAt
+}
+
+enum StoreOperationStatus {
+  opening
+  closed
+  busy
 }
 
 /// Nền tảng giao đồ ăn đối tác (ShopeeFood, GrabFood, …).
@@ -739,7 +860,6 @@ model StaffAttendance {
   @@index([adminId, createdAt])
   @@index([createdAt])
 }
-
 
 /// Cấu hình thanh toán SePay QR — một dòng cố định id = "default".
 model PaymentConfig {
@@ -806,8 +926,8 @@ model Post {
 /// Tổng hợp doanh thu từng ngày theo nền tảng (Grab, Shopee…)
 model PlatformRevenueSummary {
   id              String   @id @default(uuid()) @db.Uuid
-  platform        String   // 'grab' | 'shopee'
-  date            String   // 'YYYY-MM-DD' (giờ VN)
+  platform        String // 'grab' | 'shopee'
+  date            String // 'YYYY-MM-DD' (giờ VN)
   totalEarnings   Int      @default(0) // thu nhập shop (minor unit = VNĐ)
   revenue         Int      @default(0) // doanh thu gross
   completedOrders Int      @default(0)
@@ -831,18 +951,18 @@ model PosRelease {
 
 /// Phản hồi từ khách hàng — chỉ admin xem và xóa, không chỉnh sửa.
 model Feedback {
-  id              String    @id @default(uuid()) @db.Uuid
+  id              String   @id @default(uuid()) @db.Uuid
   name            String?
   email           String?
   phone           String?
-  content         String    @db.Text
+  content         String   @db.Text
   rating          Int?
   ip              String?
-  externalId      String?   @unique
-  isPinned        Boolean   @default(false)
-  linkedProductId String?   @db.Uuid
-  linkedProduct   Product?  @relation(fields: [linkedProductId], references: [id], onDelete: SetNull)
-  createdAt       DateTime  @default(now())
+  externalId      String?  @unique
+  isPinned        Boolean  @default(false)
+  linkedProductId String?  @db.Uuid
+  linkedProduct   Product? @relation(fields: [linkedProductId], references: [id], onDelete: SetNull)
+  createdAt       DateTime @default(now())
 
   @@index([createdAt])
   @@index([ip, createdAt])
@@ -851,32 +971,35 @@ model Feedback {
 
 /// Cấu hình phí vận chuyển — singleton id = "default".
 model ShippingConfig {
-  id            String   @id @default("default")
-  isActive      Boolean  @default(true)
+  id                     String   @id @default("default")
+  isActive               Boolean  @default(true)
   /// Phí cơ bản (VND) cho baseKm km đầu tiên.
-  baseFee       Int      @default(15000)
+  baseFee                Int      @default(15000)
   /// Số km miễn phí đầu tiên trong baseFee.
-  baseKm        Float    @default(2)
+  baseKm                 Float    @default(2)
   /// Phí mỗi km vượt quá baseKm (VND/km).
-  feePerKm      Int      @default(5000)
+  feePerKm               Int      @default(5000)
   /// Khoảng cách tối đa hỗ trợ giao hàng (km).
-  maxDistanceKm Float    @default(15)
+  maxDistanceKm          Float    @default(15)
   /// Giá trị đơn tối thiểu để miễn phí giao hàng (0 = không có). VND.
-  freeThreshold      Int      @default(200000)
+  freeThreshold          Int      @default(200000)
   /// Khoảng cách tối đa được miễn phí giao hàng (km). 0 = không có. Default 1km.
-  freeShipDistanceKm Float    @default(1)
-  updatedAt          DateTime @updatedAt
+  freeShipDistanceKm     Float    @default(1)
+  weatherSurchargeActive Boolean  @default(false)
+  /// Số tiền phụ phí thời tiết xấu (VND), cộng thẳng vào phí ship khi weatherSurchargeActive = true.
+  weatherSurchargeFee    Int      @default(0)
+  updatedAt              DateTime @updatedAt
 }
 
 /// Nhật ký SMS gửi qua TextBee — dùng để theo dõi và debug OTP.
 model SmsLog {
-  id         String   @id @default(uuid()) @db.Uuid
-  phone      String
-  message    String
-  textbeeId  String?
-  status     String   @default("pending")
-  error      String?
-  createdAt  DateTime @default(now())
+  id        String   @id @default(uuid()) @db.Uuid
+  phone     String
+  message   String
+  textbeeId String?
+  status    String   @default("pending")
+  error     String?
+  createdAt DateTime @default(now())
 
   @@index([phone, createdAt])
   @@index([createdAt])
@@ -924,32 +1047,32 @@ enum GroupParticipantPaymentType {
 }
 
 model GroupOrder {
-  id          String           @id @default(uuid()) @db.Uuid
-  token       String           @unique
-  hostUserId  String           @db.Uuid
-  host        User             @relation("GroupOrderHost", fields: [hostUserId], references: [id], onDelete: Cascade)
-  status      GroupOrderStatus @default(collecting)
-  paymentMode GroupPaymentMode
-  type        OrderType
-  addressId   String?          @db.Uuid
-  address     Address?         @relation(fields: [addressId], references: [id], onDelete: SetNull)
-  inlineFullAddress String?
-  inlineLat         Float?
-  inlineLng         Float?
-  tableId     String?          @db.Uuid
-  table       Table?           @relation(fields: [tableId], references: [id], onDelete: SetNull)
-  pickupTime  DateTime?
+  id                    String                      @id @default(uuid()) @db.Uuid
+  token                 String                      @unique
+  hostUserId            String                      @db.Uuid
+  host                  User                        @relation("GroupOrderHost", fields: [hostUserId], references: [id], onDelete: Cascade)
+  status                GroupOrderStatus            @default(collecting)
+  paymentMode           GroupPaymentMode
+  type                  OrderType
+  addressId             String?                     @db.Uuid
+  address               Address?                    @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  inlineFullAddress     String?
+  inlineLat             Float?
+  inlineLng             Float?
+  tableId               String?                     @db.Uuid
+  table                 Table?                      @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  pickupTime            DateTime?
   scheduledDeliveryTime DateTime?
-  paymentType      GroupParticipantPaymentType @default(cash)
-  shippingFee      Decimal          @default(0) @db.Decimal(12, 2)
-  shippingFeeMode  String           @default("split")
-  note             String?
-  expiresAt   DateTime
-  orderId     String?          @unique @db.Uuid
-  order       Order?           @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  participants GroupOrderParticipant[]
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  paymentType           GroupParticipantPaymentType @default(cash)
+  shippingFee           Decimal                     @default(0) @db.Decimal(12, 2)
+  shippingFeeMode       String                      @default("split")
+  note                  String?
+  expiresAt             DateTime
+  orderId               String?                     @unique @db.Uuid
+  order                 Order?                      @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  participants          GroupOrderParticipant[]
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
 
   @@index([token])
   @@index([hostUserId])
@@ -957,29 +1080,29 @@ model GroupOrder {
 }
 
 model GroupOrderParticipant {
-  id             String                        @id @default(uuid()) @db.Uuid
-  groupOrderId   String                        @db.Uuid
-  groupOrder     GroupOrder                    @relation(fields: [groupOrderId], references: [id], onDelete: Cascade)
-  userId         String?                       @db.Uuid
-  user           User?                         @relation("GroupOrderParticipant", fields: [userId], references: [id], onDelete: SetNull)
-  guestName      String?
-  sessionToken   String                        @unique
-  isHost         Boolean                       @default(false)
-  isReady        Boolean                       @default(false)
-  paymentStatus  GroupParticipantPaymentStatus @default(pending)
-  paymentType    GroupParticipantPaymentType?
-  paymentQrToken String?                       @unique
-  paidAt         DateTime?
-  joinedAt       DateTime                      @default(now())
+  id                String                        @id @default(uuid()) @db.Uuid
+  groupOrderId      String                        @db.Uuid
+  groupOrder        GroupOrder                    @relation(fields: [groupOrderId], references: [id], onDelete: Cascade)
+  userId            String?                       @db.Uuid
+  user              User?                         @relation("GroupOrderParticipant", fields: [userId], references: [id], onDelete: SetNull)
+  guestName         String?
+  sessionToken      String                        @unique
+  isHost            Boolean                       @default(false)
+  isReady           Boolean                       @default(false)
+  paymentStatus     GroupParticipantPaymentStatus @default(pending)
+  paymentType       GroupParticipantPaymentType?
+  paymentQrToken    String?                       @unique
+  paidAt            DateTime?
+  joinedAt          DateTime                      @default(now())
   /// Fingerprint thiết bị — chặn cùng device join nhiều lần để trục lợi discount.
-  deviceId       String?
-  items          GroupOrderParticipantItem[]
+  deviceId          String?
+  items             GroupOrderParticipantItem[]
   pushSubscriptions PushSubscription[]
+  // @@unique([groupOrderId, deviceId])
 
   @@index([groupOrderId])
   @@index([userId])
   @@index([sessionToken])
-  // @@unique([groupOrderId, deviceId])
 }
 
 model GroupOrderParticipantItem {
@@ -1001,7 +1124,7 @@ model GroupOrderParticipantItem {
 
 /// Cấu hình đơn nhóm & bậc giảm giá nhóm — singleton id = "default".
 model GroupOrderConfig {
-  id String @id @default("default")
+  id                String   @id @default("default")
   isEnabled         Boolean  @default(true)
   expiryMinutes     Int      @default(120)
   limitParticipants Int      @default(0)

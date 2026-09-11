@@ -22,20 +22,7 @@ export class TableController {
     private readonly prisma: PrismaService,
     private readonly orderService: OrderService,
     private readonly ordersGateway: OrdersGateway,
-  ) { }
-
-  @Get('store-location')
-  @ApiOperation({ summary: 'Cấu hình cửa hàng công khai (vị trí, SĐT, giờ mở cửa)' })
-  async getPublicStoreLocation() {
-    const [loc, shift] = await Promise.all([
-      this.prisma.storeLocation.findUnique({ where: { id: 'default' } }),
-      this.prisma.shiftConfig.findUnique({ where: { id: 'default' } }),
-    ]);
-    return {
-      ...(loc ?? { lat: 0, lng: 0, radiusMeters: 0, address: '', phone: null }),
-      shiftConfig: shift ?? { startMinutes: 420, endMinutes: 1320, toleranceMinutes: 0 },
-    };
-  }
+  ) {}
 
   @Get(':id')
   @ApiOperation({ summary: 'Thông tin bàn công khai (không cần auth)' })
@@ -45,7 +32,10 @@ export class TableController {
       select: { id: true, name: true, area: true, isActive: true },
     });
     if (!table) {
-      throw new NotFoundException({ message: 'Không tìm thấy bàn.', code: 'TABLE_NOT_FOUND' });
+      throw new NotFoundException({
+        message: 'Không tìm thấy bàn.',
+        code: 'TABLE_NOT_FOUND',
+      });
     }
     return table;
   }

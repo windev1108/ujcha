@@ -26,7 +26,12 @@ export type NormalizedTopping = {
 };
 
 interface OrderAddressFallbackSource {
-  address?: { lat: number | null; lng: number | null; fullAddress?: string;[key: string]: any } | null;
+  address?: {
+    lat: number | null;
+    lng: number | null;
+    fullAddress?: string;
+    [key: string]: any;
+  } | null;
   guestDeliveryAddress?: string | null;
   guestDeliveryLat?: number | null;
   guestDeliveryLng?: number | null;
@@ -54,13 +59,16 @@ export function withGuestAddressFallback<T extends OrderAddressFallbackSource>(
     },
   } as T;
 }
-export function normalizeOptionGroupValues(raw: unknown): NormalizedOptionValue[] {
+export function normalizeOptionGroupValues(
+  raw: unknown,
+): NormalizedOptionValue[] {
   if (!Array.isArray(raw)) return [];
   const byLabel = new Map<string, NormalizedOptionValue>();
   (raw as unknown[]).forEach((v) => {
     if (typeof v === 'string') {
       const label = v.trim();
-      if (label && !byLabel.has(label)) byLabel.set(label, { label, priceDelta: 0 });
+      if (label && !byLabel.has(label))
+        byLabel.set(label, { label, priceDelta: 0 });
     } else if (v && typeof v === 'object' && 'label' in v) {
       const label = String((v as { label: unknown }).label).trim();
       if (!label) return;
@@ -70,8 +78,18 @@ export function normalizeOptionGroupValues(raw: unknown): NormalizedOptionValue[
           ? Math.min(1e12, Math.max(0, Math.round(Number(rawPd) * 100) / 100))
           : 0;
       const rawNt = (v as { nameTranslation?: unknown }).nameTranslation;
-      const nameTranslation = rawNt && typeof rawNt === 'object' ? normalizeTranslation(rawNt as Record<string, string>) : undefined;
-      if (!byLabel.has(label)) byLabel.set(label, { label, priceDelta, ...(nameTranslation && Object.keys(nameTranslation).length ? { nameTranslation } : {}) });
+      const nameTranslation =
+        rawNt && typeof rawNt === 'object'
+          ? normalizeTranslation(rawNt as Record<string, string>)
+          : undefined;
+      if (!byLabel.has(label))
+        byLabel.set(label, {
+          label,
+          priceDelta,
+          ...(nameTranslation && Object.keys(nameTranslation).length
+            ? { nameTranslation }
+            : {}),
+        });
     }
   });
   return [...byLabel.values()];
@@ -88,13 +106,27 @@ export function normalizeInlineOptionGroups(
     const name = String(g.name ?? '').trim();
     if (!name) continue;
     const id = String(g.id ?? '').trim() || randomUUID();
-    const selectionMin = typeof g.selectionMin === 'number' ? Math.max(0, g.selectionMin) : 1;
-    const selectionMax = typeof g.selectionMax === 'number' ? Math.max(1, g.selectionMax) : 1;
+    const selectionMin =
+      typeof g.selectionMin === 'number' ? Math.max(0, g.selectionMin) : 1;
+    const selectionMax =
+      typeof g.selectionMax === 'number' ? Math.max(1, g.selectionMax) : 1;
     const values = normalizeOptionGroupValues(g.values);
     if (values.length === 0) continue;
     const rawNt = g.nameTranslation;
-    const nameTranslation = rawNt && typeof rawNt === 'object' ? normalizeTranslation(rawNt as Record<string, string>) : undefined;
-    out.push({ id, name, ...(nameTranslation && Object.keys(nameTranslation).length ? { nameTranslation } : {}), selectionMin, selectionMax, values });
+    const nameTranslation =
+      rawNt && typeof rawNt === 'object'
+        ? normalizeTranslation(rawNt as Record<string, string>)
+        : undefined;
+    out.push({
+      id,
+      name,
+      ...(nameTranslation && Object.keys(nameTranslation).length
+        ? { nameTranslation }
+        : {}),
+      selectionMin,
+      selectionMax,
+      values,
+    });
   }
   return out;
 }
@@ -108,17 +140,32 @@ export function normalizeInlineToppings(raw: unknown): NormalizedTopping[] {
     const name = String(t.name ?? '').trim();
     if (!name) continue;
     const id = String(t.id ?? '').trim() || randomUUID();
-    const price = Number.isFinite(Number(t.price)) ? Math.max(0, Number(t.price)) : 0;
+    const price = Number.isFinite(Number(t.price))
+      ? Math.max(0, Number(t.price))
+      : 0;
     const isActive = t.isActive !== false;
     const rawNt = t.nameTranslation;
-    const nameTranslation = rawNt && typeof rawNt === 'object' ? normalizeTranslation(rawNt as Record<string, string>) : undefined;
-    out.push({ id, name, ...(nameTranslation && Object.keys(nameTranslation).length ? { nameTranslation } : {}), price, isActive });
+    const nameTranslation =
+      rawNt && typeof rawNt === 'object'
+        ? normalizeTranslation(rawNt as Record<string, string>)
+        : undefined;
+    out.push({
+      id,
+      name,
+      ...(nameTranslation && Object.keys(nameTranslation).length
+        ? { nameTranslation }
+        : {}),
+      price,
+      isActive,
+    });
   }
   return out;
 }
 
 /** Normalize translation map — strip empty values, limit to known locales. */
-export function normalizeTranslation(raw: Record<string, string> | undefined): Record<string, string> {
+export function normalizeTranslation(
+  raw: Record<string, string> | undefined,
+): Record<string, string> {
   if (!raw || typeof raw !== 'object') return {};
   const out: Record<string, string> = {};
   for (const [locale, val] of Object.entries(raw)) {
@@ -142,19 +189,24 @@ export function normalizeImageUrls(urls: string[] | undefined): string[] {
   return out;
 }
 
-export function clampDiscountPercent(n: number | undefined, fallback = 0): number {
+export function clampDiscountPercent(
+  n: number | undefined,
+  fallback = 0,
+): number {
   if (n === undefined || Number.isNaN(n)) return fallback;
   return Math.min(100, Math.max(0, Math.round(n)));
 }
 
 /** Compute effective discounted price, rounded to nearest 1000 VND (≥500 rounds up). */
-export function computeFinalPrice(price: unknown, discountPercent: number): number {
+export function computeFinalPrice(
+  price: unknown,
+  discountPercent: number,
+): number {
   const base = parseFloat(String(price));
   if (!Number.isFinite(base)) return 0;
   if (!discountPercent) return base;
-  return Math.round(base * (1 - discountPercent / 100) / 1000) * 1000;
+  return Math.round((base * (1 - discountPercent / 100)) / 1000) * 1000;
 }
-
 
 const SOLD_COUNT_MIN = 10;
 const SOLD_COUNT_BOOST = 10;
@@ -169,10 +221,40 @@ export function withSoldCount<T extends { id: string }>(
 }
 
 /** Bán chạy nhất lên đầu; hoà lượt bán thì ưu tiên badge isBestSeller, sau đó tên A-Z. */
-export function sortBySales<T extends { soldCount: number; isBestSeller: boolean; name: string }>(products: T[]): T[] {
+export function sortBySales<
+  T extends { soldCount: number; isBestSeller: boolean; name: string },
+>(products: T[]): T[] {
   return [...products].sort((a, b) => {
     if (b.soldCount !== a.soldCount) return b.soldCount - a.soldCount;
     if (a.isBestSeller !== b.isBestSeller) return a.isBestSeller ? -1 : 1;
     return a.name.localeCompare(b.name);
   });
+}
+
+export function toppingNameKey(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+export function vnMinutesOfDay(date: Date): number {
+  const vn = new Date(date.getTime() + 7 * 3600_000);
+  return vn.getUTCHours() * 60 + vn.getUTCMinutes();
+}
+
+export function minutesToHHmm(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+/** Hỗ trợ khung giờ qua đêm (VD: mở 18:00, đóng 02:00). Bằng nhau = mở 24/24. */
+export function isWithinStoreHours(
+  openMinutes: number,
+  closeMinutes: number,
+  nowMinutes: number,
+): boolean {
+  if (openMinutes === closeMinutes) return true;
+  if (openMinutes < closeMinutes) {
+    return nowMinutes >= openMinutes && nowMinutes < closeMinutes;
+  }
+  return nowMinutes >= openMinutes || nowMinutes < closeMinutes;
 }

@@ -27,6 +27,8 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { ToggleProductAvailabilityDto } from './dto/toggle-product-availability.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductService } from '../../product/product.service';
+import { SetProductRecipeDto } from '../ingredients/dto/set-product-recipe.dto';
+import { ResolveRecipeBatchDto } from './dto/resolve-recipe-batch.dto';
 
 @ApiTags('admin-products')
 @ApiBearerAuth('admin-access-token')
@@ -36,7 +38,7 @@ import { ProductService } from '../../product/product.service';
 export class AdminProductController {
   constructor(
     private readonly adminProductService: AdminProductService,
-    private readonly productService: ProductService
+    private readonly productService: ProductService,
   ) { }
 
   @Get()
@@ -54,6 +56,23 @@ export class AdminProductController {
     @Query('q') q?: string,
   ) {
     return this.productService.list(categoryId, categorySlug, q);
+  }
+
+  @Get('stats/overview')
+  @ApiOperation({ summary: 'Thống kê bán chạy sản phẩm' })
+  @ApiQuery({ name: 'from', required: false })
+  @ApiQuery({ name: 'to', required: false })
+  @ApiQuery({ name: 'limit', required: false })
+  getStats(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.adminProductService.getStats({
+      from,
+      to,
+      limit: limit ? Number.parseInt(limit, 10) : undefined,
+    });
   }
 
   @Get(':id')
@@ -94,5 +113,29 @@ export class AdminProductController {
   @ApiResponse({ status: 204 })
   async remove(@Param('id', ParseUUIDPipe) id: string) {
     await this.adminProductService.remove(id);
+  }
+
+  @Get(':id/recipe')
+  @ApiOperation({ summary: 'Lấy công thức + ghi chú pha chế' })
+  getRecipe(@Param('id', ParseUUIDPipe) id: string) {
+    return this.adminProductService.getRecipe(id);
+  }
+
+  @Patch(':id/recipe')
+  @ApiOperation({ summary: 'Cập nhật công thức nguyên liệu + ghi chú pha chế' })
+  setRecipe(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SetProductRecipeDto,
+  ) {
+    return this.adminProductService.setRecipe(id, dto);
+  }
+
+  @Post('recipe/resolve-batch')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Resolve công thức cho nhiều item cùng lúc (POS) — dùng chung đơn Ujcha & Grab',
+  })
+  resolveRecipeBatch(@Body() dto: ResolveRecipeBatchDto) {
+    return this.adminProductService.resolveRecipeBatch(dto.items);
   }
 }

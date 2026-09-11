@@ -11,11 +11,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AdminRole } from '@prisma/client';
 import { UpdateOrderStatusDto } from '../../order/dto/update-order-status.dto';
 import { AdminJwtGuard } from '../auth/admin-jwt.guard';
@@ -39,7 +35,8 @@ export class AdminOrderController {
 
   @Get('stats')
   @ApiOperation({
-    summary: 'Thống kê KPI đơn (doanh thu đã thanh toán, đơn đang xử lý, TB giá trị, tỉ lệ hoàn thành)',
+    summary:
+      'Thống kê KPI đơn (doanh thu đã thanh toán, đơn đang xử lý, TB giá trị, tỉ lệ hoàn thành)',
   })
   stats(@Query() query: AdminOrderMetricsQueryDto) {
     return this.adminOrderService.getStats(query);
@@ -63,9 +60,15 @@ export class AdminOrderController {
 
   @Post('returning-check')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Kiểm tra khách quen — trả về phones/userIds đã có ít nhất 1 đơn completed' })
+  @ApiOperation({
+    summary:
+      'Kiểm tra khách quen — trả về phones/userIds đã có ít nhất 1 đơn completed',
+  })
   returningCheck(@Body() dto: ReturningCheckDto) {
-    return this.adminOrderService.checkReturning(dto.phones ?? [], dto.userIds ?? []);
+    return this.adminOrderService.checkReturning(
+      dto.phones ?? [],
+      dto.userIds ?? [],
+    );
   }
 
   @Get(':orderId')
@@ -108,7 +111,9 @@ export class AdminOrderController {
   }
 
   @Patch(':orderId/group-participants/:participantId/payment')
-  @ApiOperation({ summary: 'Admin xác nhận thủ công thanh toán của 1 thành viên nhóm' })
+  @ApiOperation({
+    summary: 'Admin xác nhận thủ công thanh toán của 1 thành viên nhóm',
+  })
   markParticipantPaid(
     @Param('orderId', ParseUUIDPipe) orderId: string,
     @Param('participantId', ParseUUIDPipe) participantId: string,

@@ -27,6 +27,8 @@ import { AdminShippingModule } from './shipping/admin-shipping.module';
 import { AdminPointRewardModule } from './point-reward/admin-point-reward.module';
 import { AdminGroupOrderModule } from './group-order/admin-group-order.module';
 import { AdminStoreModule } from './store/admin-store.module';
+import { AdminIngredientsModule } from './ingredients/admin-ingredients.module';
+import { AdminToppingModule } from './toppings/admin-topping.module';
 
 @Module({
   imports: [
@@ -58,6 +60,8 @@ import { AdminStoreModule } from './store/admin-store.module';
     AdminPointRewardModule,
     AdminGroupOrderModule,
     AdminStoreModule,
+    AdminIngredientsModule,
+    AdminToppingModule,
   ],
   exports: [
     AdminAuthModule,
@@ -79,4 +83,4 @@ import { AdminStoreModule } from './store/admin-store.module';
     AdminPaymentConfigModule,
   ],
 })
-export class AdminModule { }
+export class AdminModule {}

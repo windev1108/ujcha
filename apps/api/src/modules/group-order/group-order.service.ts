@@ -26,6 +26,7 @@ import type {
   JoinGroupOrderDto,
 } from './dto/group-order.dto';
 import { MailService } from '../mail/mail.service';
+import { StoreStatusService } from '../store/store-status.service';
 
 const GROUP_ORDER_CONFIG_KEY = 'ujcha:group-order:config';
 const GROUP_ORDER_CONFIG_TTL = 60; // 60 seconds
@@ -59,6 +60,7 @@ export class GroupOrderService {
     private readonly ordersGateway: OrdersGateway,
     private readonly notificationService: NotificationService,
     private readonly mailService: MailService,
+    private readonly storeStatus: StoreStatusService,
   ) { }
 
   private fullInclude() {
@@ -176,6 +178,7 @@ export class GroupOrderService {
         hostParticipantId: hostParticipant?.id ?? null,
       };
     }
+    await this.storeStatus.assertOpenForOrders();
 
     const token = generateShortToken();
     const sessionToken = randomUUID();
@@ -625,6 +628,7 @@ export class GroupOrderService {
     if (go.status !== 'collecting') {
       throw new BadRequestException('Don nhom khong o trang thai thu thap.');
     }
+    await this.storeStatus.assertOpenForOrders();
 
     if ((go as any).paymentType === 'bank_transfer') {
       const goFull = await this.prisma.groupOrder.findUnique({
@@ -702,6 +706,8 @@ export class GroupOrderService {
     if (go.paymentMode !== 'host_pays') {
       throw new BadRequestException('Don nhom nay khong phai che do host tra.');
     }
+
+    await this.storeStatus.assertOpenForOrders();
 
     const goFull = await this.prisma.groupOrder.findUnique({
       where: { token },
@@ -1374,7 +1380,7 @@ export class GroupOrderService {
     ) {
       throw new BadRequestException('Chi ap dung cho phuong thuc tien mat.');
     }
-
+    await this.storeStatus.assertOpenForOrders();
     const goFull = await this.prisma.groupOrder.findUnique({
       where: { token },
       include: { participants: { include: { items: true } } },

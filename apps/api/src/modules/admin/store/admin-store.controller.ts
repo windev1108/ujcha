@@ -18,6 +18,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { AdminStoreService } from './admin-store.service';
 import { CreatePlatformDto } from './dto/create-platform.dto';
 import { UpdatePlatformDto } from './dto/update-platform.dto';
+import { UpdateStoreStatusDto } from '../../store/dto/update-store-status.dto';
 
 @ApiTags('admin-store')
 @ApiBearerAuth('admin-access-token')
@@ -43,7 +44,10 @@ export class AdminStoreController {
   @Patch('platforms/:id')
   @Roles(AdminRole.super_admin)
   @ApiOperation({ summary: 'Cập nhật nền tảng giao đồ ăn' })
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdatePlatformDto) {
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdatePlatformDto,
+  ) {
     return this.service.updatePlatform(id, dto);
   }
 
@@ -53,5 +57,15 @@ export class AdminStoreController {
   @ApiOperation({ summary: 'Xóa nền tảng giao đồ ăn' })
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.service.deletePlatform(id);
+  }
+
+  @Get('status')
+  getStoreStatus() {
+    return this.service.getStoreStatus();
+  }
+
+  @Patch('status')
+  updateStoreStatus(@Body() dto: UpdateStoreStatusDto) {
+    return this.service.updateStoreStatus(dto);
   }
 }

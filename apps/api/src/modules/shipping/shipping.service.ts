@@ -9,6 +9,8 @@ export type ShippingEstimate = {
   isOutOfRange: boolean;
   isDisabled: boolean;
   freeShipDistanceKm: number;
+  weatherSurchargeActive: boolean;
+  weatherSurchargeFee: number;
 };
 
 export type PublicShippingConfig = {
@@ -19,11 +21,13 @@ export type PublicShippingConfig = {
   maxDistanceKm: number;
   freeThreshold: number;
   freeShipDistanceKm: number;
+  weatherSurchargeActive: boolean;
+  weatherSurchargeFee: number;
 };
 
 @Injectable()
 export class ShippingService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   async getConfig() {
     return this.prisma.shippingConfig.upsert({
@@ -43,6 +47,8 @@ export class ShippingService {
       maxDistanceKm: cfg.maxDistanceKm,
       freeThreshold: cfg.freeThreshold,
       freeShipDistanceKm: cfg.freeShipDistanceKm,
+      weatherSurchargeActive: cfg.weatherSurchargeActive,
+      weatherSurchargeFee: cfg.weatherSurchargeFee,
     };
   }
 
@@ -55,7 +61,12 @@ export class ShippingService {
   }
 
   /** Haversine distance in km between two coordinates. */
-  private haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  private haversineKm(
+    lat1: number,
+    lng1: number,
+    lat2: number,
+    lng2: number,
+  ): number {
     const R = 6371;
     const toRad = (d: number) => (d * Math.PI) / 180;
     const dLat = toRad(lat2 - lat1);
@@ -66,42 +77,88 @@ export class ShippingService {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
-  async estimateFee(lat: number, lng: number, orderAmount = 0): Promise<ShippingEstimate> {
+  async estimateFee(
+    lat: number,
+    lng: number,
+    orderAmount = 0,
+  ): Promise<ShippingEstimate> {
     const [cfg, store] = await Promise.all([
       this.getConfig(),
       this.prisma.storeLocation.findFirst(),
     ]);
 
+    // Phụ phí thời tiết xấu chỉ có ý nghĩa khi giao hàng thực sự diễn ra
+    // (không áp dụng khi isDisabled / isOutOfRange).
+    const weatherSurchargeFee = cfg.weatherSurchargeActive
+      ? cfg.weatherSurchargeFee
+      : 0;
+
     if (!cfg.isActive) {
-      return { distanceKm: 0, fee: 0, isFree: false, isOutOfRange: false, isDisabled: true, freeShipDistanceKm: cfg.freeShipDistanceKm };
+      return {
+        distanceKm: 0,
+        fee: 0,
+        isFree: false,
+        isOutOfRange: false,
+        isDisabled: true,
+        freeShipDistanceKm: cfg.freeShipDistanceKm,
+        weatherSurchargeActive: cfg.weatherSurchargeActive,
+        weatherSurchargeFee: 0,
+      };
     }
 
     const storeLat = store?.lat ?? 0;
     const storeLng = store?.lng ?? 0;
 
     if (storeLat === 0 && storeLng === 0) {
-      return { distanceKm: 0, fee: 0, isFree: false, isOutOfRange: false, isDisabled: true, freeShipDistanceKm: cfg.freeShipDistanceKm };
+      return {
+        distanceKm: 0,
+        fee: 0,
+        isFree: false,
+        isOutOfRange: false,
+        isDisabled: true,
+        freeShipDistanceKm: cfg.freeShipDistanceKm,
+        weatherSurchargeActive: cfg.weatherSurchargeActive,
+        weatherSurchargeFee: 0,
+      };
     }
 
     const distanceKm = this.haversineKm(lat, lng, storeLat, storeLng);
 
     if (distanceKm > cfg.maxDistanceKm) {
-      return { distanceKm, fee: 0, isFree: false, isOutOfRange: true, isDisabled: false, freeShipDistanceKm: cfg.freeShipDistanceKm };
+      return {
+        distanceKm,
+        fee: 0,
+        isFree: false,
+        isOutOfRange: true,
+        isDisabled: false,
+        freeShipDistanceKm: cfg.freeShipDistanceKm,
+        weatherSurchargeActive: cfg.weatherSurchargeActive,
+        weatherSurchargeFee: 0,
+      };
     }
 
     const extraKm = Math.max(0, distanceKm - cfg.baseKm);
     const rawFee = cfg.baseFee + Math.round(extraKm) * cfg.feePerKm;
-    const isFreeByAmount = cfg.freeThreshold > 0 && orderAmount >= cfg.freeThreshold;
-    const isFreeByDistance = cfg.freeShipDistanceKm > 0 && distanceKm <= cfg.freeShipDistanceKm;
+    const isFreeByAmount =
+      cfg.freeThreshold > 0 && orderAmount >= cfg.freeThreshold;
+    const isFreeByDistance =
+      cfg.freeShipDistanceKm > 0 && distanceKm <= cfg.freeShipDistanceKm;
     const isFree = isFreeByAmount || isFreeByDistance;
+
+    // Phụ phí thời tiết xấu cộng thêm bất kể đơn có được freeship hay không —
+    // đây là phụ phí do điều kiện giao hàng khó khăn, không phải phí theo khoảng cách/giá trị đơn.
+    // Nếu muốn freeship miễn luôn phụ phí này, đổi thành: isFree ? 0 : weatherSurchargeFee
+    const fee = (isFree ? 0 : rawFee) + weatherSurchargeFee;
 
     return {
       distanceKm,
-      fee: isFree ? 0 : rawFee,
+      fee,
       isFree,
       isOutOfRange: false,
       isDisabled: false,
       freeShipDistanceKm: cfg.freeShipDistanceKm,
+      weatherSurchargeActive: cfg.weatherSurchargeActive,
+      weatherSurchargeFee,
     };
   }
 }
