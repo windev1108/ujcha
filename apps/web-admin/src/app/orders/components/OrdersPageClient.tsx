@@ -27,14 +27,14 @@ import {
 } from "@/services/admin/orders-api";
 import type { AdminOrder, AdminOrderStatus } from "@/services/admin/types";
 
-import { AssignShipperModal } from "./AssignShipperModal";
 import { BulkStatusModal } from "./BulkStatusModal";
-import { OrderEditModal } from "./OrderEditModal";
+import { OrderEditModal } from "../[id]/components/OrderEditModal";
 import type { OrderFiltersValue } from "./OrderFilters";
 import { OrderFilters } from "./OrderFilters";
 import { OrderStats } from "./OrderStats";
 import { OrderTable } from "./OrderTable";
 import { customerDisplayName } from "./order-display";
+import { AssignShipperModal } from "../[id]/components/AssignShipperModal";
 
 const PAGE_SIZE = 10;
 
@@ -133,41 +133,36 @@ export function OrdersPageClient() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
 
-  const listKey = adminKeys.orders({
+  const commonFilters = {
     type: applied.type || undefined,
     status: applied.status || undefined,
     q: applied.q.trim() || undefined,
     from: applied.from || undefined,
     to: applied.to || undefined,
+    isGroupOrder: applied.isGroupOrder,
+  };
+
+  const listKey = adminKeys.orders({
+    ...commonFilters,
     page,
     pageSize: PAGE_SIZE,
-    isGroupOrder: applied.isGroupOrder,
   });
 
-  const statsKey = adminKeys.orderStats(applied.from, applied.to);
+  const statsKey = adminKeys.orderStats(commonFilters);
 
   const ordersQuery = useQuery({
     queryKey: listKey,
     queryFn: () =>
       fetchAdminOrders({
-        type: applied.type || undefined,
-        status: applied.status || undefined,
-        q: applied.q.trim() || undefined,
-        from: applied.from || undefined,
-        to: applied.to || undefined,
+        ...commonFilters,
         page,
         pageSize: PAGE_SIZE,
-        isGroupOrder: applied.isGroupOrder,
       }),
   });
 
   const statsQuery = useQuery({
     queryKey: statsKey,
-    queryFn: () =>
-      fetchAdminOrderStats({
-        from: applied.from || undefined,
-        to: applied.to || undefined,
-      }),
+    queryFn: () => fetchAdminOrderStats(commonFilters),
   });
 
   const items = ordersQuery.data?.items ?? [];

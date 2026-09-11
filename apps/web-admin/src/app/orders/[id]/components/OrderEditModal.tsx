@@ -19,7 +19,7 @@ import type {
   AdminPaymentStatus,
 } from "@/services/admin/types";
 
-import { formatOrderRef, orderStatusLabel } from "./order-display";
+import { formatOrderRef, orderStatusLabel } from "../../components/order-display";
 
 function axiosMessage(e: unknown): string {
   const err = e as AxiosError<{ message?: string | string[] }>;

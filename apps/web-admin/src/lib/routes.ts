@@ -36,4 +36,5 @@ export const ROUTES = {
     SMS: '/sms',
     SHIPPING: '/shipping',
     GROUP_ORDERS: '/group-orders',
+    INVENTORY: '/inventory',
 } as const

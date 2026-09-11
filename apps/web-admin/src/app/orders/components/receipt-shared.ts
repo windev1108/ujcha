@@ -6,7 +6,6 @@ import {
   type ReceiptElement,
 } from "@/lib/printer-config";
 import type { AdminOrder, AdminOrderItem, OrderItemExtraSnapshot, PaymentConfig } from "@/services/admin/types";
-import { env } from "@/config/env";
 
 export function buildVietQrUrl(
   cfg: PaymentConfig,

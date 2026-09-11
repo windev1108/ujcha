@@ -50,3 +50,20 @@ export function formatSoldCount(n: number) {
     }
     return String(n);
 }
+
+export function extractErrorCode(err: unknown): string | null {
+    return (
+        (err as { response?: { data?: { code?: string } } })?.response?.data?.code ?? null
+    );
+}
+
+export function extractErrorMessage(err: unknown): string | null {
+    const msg = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
+    if (typeof msg === "string") return msg;
+    if (Array.isArray(msg)) return msg.join(", ");
+    return null;
+}
+
+export function isStoreClosedErrorCode(code: string | null): code is "STORE_CLOSED_HOURS" | "STORE_CLOSED_MANUAL" {
+    return code === "STORE_CLOSED_HOURS" || code === "STORE_CLOSED_MANUAL";
+}

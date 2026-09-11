@@ -1,13 +1,16 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import dynamic from "next/dynamic";
 
 import { adminKeys } from "@/services/admin/keys";
 import { fetchAdminOverview } from "@/services/admin/overview-api";
 
-import dynamic from "next/dynamic";
 import { DashboardMetricCards } from "./DashboardMetricCards";
+import { DiscountAppliedCard } from "./DiscountAppliedCard";
+import { InventoryStatusCard } from "./InventoryStatusCard";
 import { RecentOrdersTable } from "./RecentOrdersTable";
+import { TopProductsCard } from "./TopProductsCard";
 
 const RevenueLineChart = dynamic(
   () => import("./RevenueLineChart").then((m) => ({ default: m.RevenueLineChart })),
@@ -33,12 +36,10 @@ export function DashboardView() {
         <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-[#5a8f7a]">
           Vận hành &amp; hiệu suất
         </p>
-        <h1 className="text-2xl font-bold tracking-tight text-[#1a3c34] sm:text-3xl">
-          Tổng quan
-        </h1>
+        <h1 className="text-2xl font-bold tracking-tight text-[#1a3c34] sm:text-3xl">Tổng quan</h1>
         <p className="text-sm text-foreground/55">
-          Số liệu 7 ngày gần nhất so với 7 ngày trước (UTC). Biểu đồ doanh thu theo
-          ngày chỉ tính đơn đã thanh toán.
+          Số liệu 7 ngày gần nhất so với 7 ngày trước (UTC). Biểu đồ doanh thu theo ngày chỉ tính đơn đã thanh
+          toán.
         </p>
       </header>
 
@@ -59,9 +60,13 @@ export function DashboardView() {
         </div>
       </div>
 
-      <RecentOrdersTable data={data} isLoading={q.isLoading} />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <TopProductsCard data={data} isLoading={q.isLoading} />
+        <InventoryStatusCard data={data} isLoading={q.isLoading} />
+        <DiscountAppliedCard data={data} isLoading={q.isLoading} />
+      </div>
 
-      {/* <DashboardFab /> */}
+      <RecentOrdersTable data={data} isLoading={q.isLoading} />
     </div>
   );
 }

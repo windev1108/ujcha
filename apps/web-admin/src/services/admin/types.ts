@@ -239,7 +239,41 @@ export type AdminOverviewDashboard = {
   }>;
   totalOrdersAllTime: number;
   platformRevenueSynced?: PlatformRevenueSummary[];
+  topProducts: AdminTopProductItem[];
+  inventoryStatus: AdminInventoryStatus;
+  discountsApplied: AdminDiscountsApplied;
 };
+
+export type AdminTopProductItem = {
+  productId: string;
+  name: string;
+  imageUrl: string | null;
+  quantitySold: number;
+  revenue: number;
+};
+
+export type AdminInventoryStatusItem = {
+  id: string;
+  name: string;
+  unit: string;
+  stockQty: number;
+  lowStockThreshold: number | null;
+};
+
+export type AdminInventoryStatus = {
+  totalActive: number;
+  outOfStockCount: number;
+  lowStockCount: number;
+  items: AdminInventoryStatusItem[];
+};
+
+export type AdminDiscountsApplied = {
+  pointDiscountTotal: number;
+  voucherDiscountTotal: number;
+  ordersWithPointDiscount: number;
+  paidOrdersInRange: number;
+};
+
 
 export type AdminOrderUser = {
   id: string;
@@ -274,11 +308,9 @@ export type AdminOrderItem = {
 };
 
 export type AdminTopping = {
-  id: string;
+  nameKey: string;
   name: string;
-  price: string;
-  isActive: boolean;
-  sortOrder: number;
+  isOutOfStock: boolean;
 };
 
 /** Đồng bộ Prisma `VoucherDiscountType` */
@@ -999,3 +1031,100 @@ export type StaffWithFaceProfile = Pick<AdminRow, "id" | "email" | "role" | "isA
   permissions: string[];
   faceProfile: Pick<StaffFaceProfile, "adminId" | "imageUrl" | "updatedAt"> | null;
 };
+
+
+export type Ingredient = {
+  id: string;
+  name: string;
+  unit: string;
+  stockQty: string;
+  lowStockThreshold: string | null;
+  note: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type InventoryTransaction = {
+  id: string;
+  ingredientId: string;
+  type: "order_deduct" | "manual_adjust" | "restock";
+  changeQty: string;
+  resultQty: string;
+  orderId: string | null;
+  note: string | null;
+  createdAt: string;
+};
+
+export type ProductRecipeItem = {
+  id: string;
+  productId: string;
+  ingredientId: string;
+  optionGroupName: string | null;
+  optionValueLabel: string | null;
+  quantity: string;
+  ingredient: Ingredient;
+};
+
+export type ProductToppingRecipeItem = {
+  id: string;
+  productId: string;
+  toppingId: string;
+  ingredientId: string;
+  quantity: string;
+  ingredient: Ingredient;
+};
+
+
+export type ProductRecipe = {
+  recipeNote: string | null;
+  items: ProductRecipeItem[];
+  toppingItems: ProductToppingRecipeItem[];
+};
+
+export type SetProductRecipeBody = {
+  recipeNote?: string;
+  items: {
+    ingredientId: string;
+    optionGroupName?: string;
+    optionValueLabel?: string;
+    quantity: number;
+  }[];
+  toppingItems?: { toppingId: string; ingredientId: string; quantity: number }[];
+};
+
+
+export type AdminProductStatItem = {
+  productId: string;
+  name: string;
+  imageUrl: string | null;
+  quantitySold: number;
+  revenue: number;
+  categoryId: string;
+  categoryName: string;
+};
+
+export type AdminProductCategoryStat = {
+  categoryId: string;
+  categoryName: string;
+  revenue: number;
+  quantitySold: number;
+};
+
+export type AdminProductStats = {
+  range: { from: string; to: string };
+  overview: {
+    totalRevenue: number;
+    totalQuantitySold: number;
+    totalOrders: number;
+    avgOrderValue: number;
+    distinctProductsSold: number;
+  };
+  topByQuantity: AdminProductStatItem[];
+  topByRevenue: AdminProductStatItem[];
+  lowPerformers: AdminProductStatItem[];
+  categoryBreakdown: AdminProductCategoryStat[];
+};
+
+export type FetchAdminProductStatsParams = { from?: string; to?: string; limit?: number };
+

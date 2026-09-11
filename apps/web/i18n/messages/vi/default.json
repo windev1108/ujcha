@@ -1209,5 +1209,14 @@
   "group_fulfillment_unsaved_warning": "Vui lòng xác nhận thông tin giao hàng trước khi chốt đơn",
   "GROUP_ORDER_FULL": "Đơn nhóm đã đủ số lượng thành viên tối đa, không thể tham gia thêm.",
   "GROUP_ORDER_GUEST_NAME_REQUIRED": "Vui lòng nhập tên để tham gia đơn nhóm.",
-  "session_expired_please_login": "Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại."
+  "session_expired_please_login": "Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại.",
+  "store_closed_title": "Cửa hàng tạm ngừng nhận đơn",
+  "store_closed_hours_default": "Cửa hàng hiện đang ngoài giờ mở cửa.",
+  "store_closed_manual_default": "Cửa hàng đang tạm ngừng nhận đơn. Vui lòng quay lại sau.",
+  "store_closed_ok": "Đã hiểu",
+  "store_continue_ok": "Tiếp tục đặt hàng",
+  "store_busy_tile": "Cửa hàng đang bận rộn",
+  "store_busy_manual_default": "Đơn hàng có thể được chuẩn bị chậm hơn bình thường. Bạn thông cảm giúp quán nhé!",
+  "weather_surcharge_note": "Phụ phí thời tiết xấu +{amount}",
+  "weather_surcharge_only_note": "Miễn phí ship theo khoảng cách/giá trị đơn — chỉ tính phụ phí thời tiết xấu +{amount}"
 }

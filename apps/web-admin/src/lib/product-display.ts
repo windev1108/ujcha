@@ -1,4 +1,4 @@
-import type { AdminProduct } from "@/services/admin/types";
+import type { AdminOrder, AdminProduct } from "@/services/admin/types";
 
 export type ProductDisplayStatus = "active" | "sold_out" | "disabled";
 
@@ -52,4 +52,7 @@ export function categoryBadgeClass(slug: string): string {
     if (key.includes(k)) return badgePalette[k] ?? badgePalette.default;
   }
   return badgePalette.default;
+}
+export function paymentTypeLabel(t: AdminOrder["paymentType"]): string {
+  return t === "cash" ? "Tiền mặt" : "Chuyển khoản";
 }

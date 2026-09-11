@@ -18,6 +18,8 @@ import {
 import type { ApiCartItem } from "@/services/cart/types";
 import { useTranslations, useLocale } from "next-intl";
 import { getDisplayName, getValueLabel, getDisplayDescription } from "@/lib/product-name";
+import { useOutOfStockToppingNames } from "@/services/topping/hooks";
+import { toppingNameKey } from "@/services/topping/api";
 
 
 const PLACEHOLDER_BG = [
@@ -68,7 +70,19 @@ export function ProductQuickAddModal({ product, productIndex = 0, open, onClose,
   const accessToken = useAuthStore((s) => s.accessToken);
 
   const resolvedProduct: ModalProduct | null = product ?? editItem?.product ?? null;
-  const toppings = (resolvedProduct?.toppings ?? []).filter((top) => top.isActive !== false);
+  const { data: oosNameKeys = [] } = useOutOfStockToppingNames();
+  const oosSet = useMemo(() => new Set(oosNameKeys), [oosNameKeys]);
+  const toppings = (resolvedProduct?.toppings ?? [])
+    .filter((top) => top.isActive !== false)
+    .filter((top) => !oosSet.has(toppingNameKey(top.name)));
+
+  useEffect(() => {
+    setSelectedToppings((prev) => {
+      const allowedIds = new Set(toppings.map((t) => t.id));
+      const next = new Set([...prev].filter((id) => allowedIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [oosSet]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const optionGroups = useMemo(
     () => (resolvedProduct ? normalizeOptionGroups(resolvedProduct.optionGroups) : []),

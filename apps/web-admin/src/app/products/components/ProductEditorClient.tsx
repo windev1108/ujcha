@@ -31,9 +31,12 @@ import { fetchAdminCategories } from "@/services/admin/categories-api";
 import {
   createAdminProduct,
   fetchAdminProduct,
+  fetchAdminProductRecipe,
+  setAdminProductRecipe,
   updateAdminProduct,
 } from "@/services/admin/products-api";
-import type { AdminProduct, ProductOptionGroup, ProductTopping } from "@/services/admin/types";
+import type { AdminProduct, ProductOptionGroup, ProductRecipe, ProductTopping } from "@/services/admin/types";
+import { fetchAdminIngredients } from "@/services/admin/ingredients-api";
 
 function parseApiMessage(err: unknown): string {
   if (err && typeof err === "object" && "response" in err) {
@@ -126,6 +129,17 @@ export function ProductEditorClient({ mode, productId }: Props) {
     enabled: mode === "edit" && !!productId,
   });
 
+  const { data: ingredients = [] } = useQuery({
+    queryKey: ["admin", "ingredients"],
+    queryFn: () => fetchAdminIngredients(),
+  });
+
+  const { data: recipe } = useQuery({
+    queryKey: ["admin", "products", productId, "recipe"],
+    queryFn: () => fetchAdminProductRecipe(productId!),
+    enabled: mode === "edit" && !!productId,
+  });
+
   const [sku, setSku] = useState("");
   const [name, setName] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -140,7 +154,60 @@ export function ProductEditorClient({ mode, productId }: Props) {
   const [isBestSeller, setIsBestSeller] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [baselineSnapshot, setBaselineSnapshot] = useState<string | null>(null);
+  type RecipeItemForm = { ingredientId: string; quantity: number; scopeKey: string }; // "ALL" | "Group::Label"
+  type ToppingRecipeItemForm = { toppingId: string; ingredientId: string; quantity: number };
+
+  const [recipeNote, setRecipeNote] = useState("");
+  const [recipeItems, setRecipeItems] = useState<RecipeItemForm[]>([]);
+  const [toppingRecipeItems, setToppingRecipeItems] = useState<ToppingRecipeItemForm[]>([]);
+  const [loadedRecipe, setLoadedRecipe] = useState<ProductRecipe | null>(null);
   const createBaselineReadyRef = useRef(false);
+
+  if (recipe && loadedRecipe !== recipe) {
+    setLoadedRecipe(recipe);
+    setRecipeNote(recipe.recipeNote ?? "");
+    setRecipeItems(
+      recipe.items.map((i) => ({
+        ingredientId: i.ingredientId,
+        quantity: Number(i.quantity) || 0,
+        scopeKey:
+          i.optionGroupName && i.optionValueLabel
+            ? `${i.optionGroupName}::${i.optionValueLabel}`
+            : "ALL",
+      })),
+    );
+    setToppingRecipeItems(
+      recipe.toppingItems.map((t) => ({
+        toppingId: t.toppingId,
+        ingredientId: t.ingredientId,
+        quantity: Number(t.quantity) || 0,
+      })),
+    );
+  }
+
+  const scopeOptions = useMemo(() => {
+    const opts: { key: string; label: string }[] = [{ key: "ALL", label: "Tất cả biến thể" }];
+    for (const g of optionGroups) {
+      for (const v of g.values) {
+        if (!v.label.trim()) continue;
+        opts.push({ key: `${g.name}::${v.label}`, label: `${g.name || "Nhóm"}: ${v.label}` });
+      }
+    }
+    return opts;
+  }, [optionGroups]);
+
+  const saveRecipeMut = useMutation({
+    mutationFn: () =>
+      setAdminProductRecipe(productId!, {
+        recipeNote: recipeNote.trim() || undefined,
+        items: recipeItems.map((i) => {
+          const [g, l] =
+            i.scopeKey === "ALL" ? [undefined, undefined] : (i.scopeKey.split("::") as [string, string]);
+          return { ingredientId: i.ingredientId, quantity: i.quantity, optionGroupName: g, optionValueLabel: l };
+        }),
+        toppingItems: toppingRecipeItems,
+      }),
+  });
 
   useEffect(() => {
     if (mode === "edit" && existing) {
@@ -414,11 +481,10 @@ export function ProductEditorClient({ mode, productId }: Props) {
             Hủy
           </Button>
           <Button
-            className={`rounded-full font-semibold text-white transition-all ${
-              isDirty && !pending
-                ? "bg-[#1a3c34] shadow-[0_0_0_3px_rgba(26,60,52,0.15)]"
-                : "bg-[#1a3c34]"
-            }`}
+            className={`rounded-full font-semibold text-white transition-all ${isDirty && !pending
+              ? "bg-[#1a3c34] shadow-[0_0_0_3px_rgba(26,60,52,0.15)]"
+              : "bg-[#1a3c34]"
+              }`}
             onPress={() => {
               setError(null);
               saveMut.mutate();
@@ -794,6 +860,110 @@ export function ProductEditorClient({ mode, productId }: Props) {
               )}
             </CardContent>
           </Card>
+
+          {/* UI card (đặt cạnh các Card khác trong cột trái) */}
+          <Card className="rounded-2xl border border-black/6 shadow-sm">
+            <CardContent className="flex flex-col gap-5 p-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-bold uppercase tracking-wide text-[#1a3c34]">Công thức pha chế</h2>
+                {mode === "edit" && (
+                  <Button variant="ghost" size="sm" className="rounded-xl" onPress={() => saveRecipeMut.mutate()} isDisabled={saveRecipeMut.isPending}>
+                    {saveRecipeMut.isPending ? "Đang lưu…" : "Lưu công thức"}
+                  </Button>
+                )}
+              </div>
+
+              <div className={adminFieldStack}>
+                <Label className={adminLabelClassProduct}>Ghi chú cách pha chế</Label>
+                <TextArea fullWidth value={recipeNote} onChange={(e) => setRecipeNote(e.target.value)}
+                  placeholder="Ví dụ: Lắc đều 15s, rót từ từ theo lớp…" className="min-h-[100px] w-full rounded-xl" />
+              </div>
+
+              {/* Định lượng theo biến thể */}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <Label className={adminLabelClassProduct}>Định lượng nguyên liệu (theo size / biến thể)</Label>
+                </div>
+                <p className="text-xs text-foreground/50">
+                  Chọn “Tất cả biến thể” cho nguyên liệu không đổi theo size (ly, ống hút…). Chọn size cụ thể
+                  cho nguyên liệu hao khác nhau theo size (sữa, trân châu…).
+                </p>
+                {recipeItems.map((it, idx) => (
+                  <div key={idx} className="flex flex-wrap items-center gap-2 rounded-xl border border-black/8 p-2">
+                    <Select className="min-w-[160px] flex-1" value={it.ingredientId}
+                      onChange={(k) => setRecipeItems((prev) => prev.map((r, i) => (i === idx ? { ...r, ingredientId: String(k) } : r)))}>
+                      <Select.Trigger className={adminSelectTriggerClass}><Select.Value className={adminSelectValueClass} /><Select.Indicator /></Select.Trigger>
+                      <Select.Popover placement="bottom start">
+                        <ListBox>{ingredients.map((ing) => <ListBox.Item key={ing.id} id={ing.id} textValue={ing.name}>{ing.name} ({ing.unit})</ListBox.Item>)}</ListBox>
+                      </Select.Popover>
+                    </Select>
+
+                    <Select className="min-w-[160px] flex-1" value={it.scopeKey}
+                      onChange={(k) => setRecipeItems((prev) => prev.map((r, i) => (i === idx ? { ...r, scopeKey: String(k) } : r)))}>
+                      <Select.Trigger className={adminSelectTriggerClass}><Select.Value className={adminSelectValueClass} /><Select.Indicator /></Select.Trigger>
+                      <Select.Popover placement="bottom start">
+                        <ListBox>{scopeOptions.map((o) => <ListBox.Item key={o.key} id={o.key} textValue={o.label}>{o.label}</ListBox.Item>)}</ListBox>
+                      </Select.Popover>
+                    </Select>
+
+                    <Input type="number" min={0} step={0.01} value={String(it.quantity)}
+                      onChange={(e) => setRecipeItems((prev) => prev.map((r, i) => (i === idx ? { ...r, quantity: Number(e.target.value) || 0 } : r)))}
+                      className={`w-28 ${adminInputClass}`} placeholder="Định lượng" />
+
+                    <Button isIconOnly variant="ghost" size="sm" onPress={() => setRecipeItems((prev) => prev.filter((_, i) => i !== idx))}>
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
+                ))}
+                <Button variant="ghost" size="sm" className="w-fit rounded-xl"
+                  onPress={() => setRecipeItems((prev) => [...prev, { ingredientId: ingredients[0]?.id ?? "", quantity: 0, scopeKey: "ALL" }])}>
+                  <Plus className="mr-1.5 size-3.5" /> Thêm nguyên liệu
+                </Button>
+              </div>
+
+              {/* Định lượng theo topping */}
+              <div className="flex flex-col gap-2 border-t border-black/6 pt-4">
+                <Label className={adminLabelClassProduct}>Định lượng nguyên liệu hao thêm theo topping</Label>
+                {toppings.length === 0 ? (
+                  <p className="text-sm text-foreground/40">Sản phẩm chưa có topping nào.</p>
+                ) : (
+                  <>
+                    {toppingRecipeItems.map((it, idx) => (
+                      <div key={idx} className="flex flex-wrap items-center gap-2 rounded-xl border border-black/8 p-2">
+                        <Select className="min-w-[140px] flex-1" value={it.toppingId}
+                          onChange={(k) => setToppingRecipeItems((prev) => prev.map((r, i) => (i === idx ? { ...r, toppingId: String(k) } : r)))}>
+                          <Select.Trigger className={adminSelectTriggerClass}><Select.Value className={adminSelectValueClass} /><Select.Indicator /></Select.Trigger>
+                          <Select.Popover placement="bottom start">
+                            <ListBox>{toppings.map((t) => <ListBox.Item key={t.id} id={t.id} textValue={t.name}>{t.name || "(chưa đặt tên)"}</ListBox.Item>)}</ListBox>
+                          </Select.Popover>
+                        </Select>
+
+                        <Select className="min-w-[160px] flex-1" value={it.ingredientId}
+                          onChange={(k) => setToppingRecipeItems((prev) => prev.map((r, i) => (i === idx ? { ...r, ingredientId: String(k) } : r)))}>
+                          <Select.Trigger className={adminSelectTriggerClass}><Select.Value className={adminSelectValueClass} /><Select.Indicator /></Select.Trigger>
+                          <Select.Popover placement="bottom start">
+                            <ListBox>{ingredients.map((ing) => <ListBox.Item key={ing.id} id={ing.id} textValue={ing.name}>{ing.name} ({ing.unit})</ListBox.Item>)}</ListBox>
+                          </Select.Popover>
+                        </Select>
+
+                        <Input type="number" min={0} step={0.01} value={String(it.quantity)}
+                          onChange={(e) => setToppingRecipeItems((prev) => prev.map((r, i) => (i === idx ? { ...r, quantity: Number(e.target.value) || 0 } : r)))}
+                          className={`w-28 ${adminInputClass}`} placeholder="Định lượng" />
+
+                        <Button isIconOnly variant="ghost" size="sm" onPress={() => setToppingRecipeItems((prev) => prev.filter((_, i) => i !== idx))}>
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button variant="ghost" size="sm" className="w-fit rounded-xl"
+                      onPress={() => setToppingRecipeItems((prev) => [...prev, { toppingId: toppings[0]?.id ?? "", ingredientId: ingredients[0]?.id ?? "", quantity: 0 }])}>
+                      <Plus className="mr-1.5 size-3.5" /> Thêm định lượng topping
+                    </Button>
+                  </>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <div className="flex min-w-0 flex-col gap-6">
@@ -905,9 +1075,8 @@ export function ProductEditorClient({ mode, productId }: Props) {
                   <p className="text-xs text-foreground/50">Khách hàng có thể xem và đặt món</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2.5">
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                    isAvailable ? "bg-emerald-50 text-emerald-700" : "bg-zinc-100 text-zinc-500"
-                  }`}>
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${isAvailable ? "bg-emerald-50 text-emerald-700" : "bg-zinc-100 text-zinc-500"
+                    }`}>
                     {isAvailable ? "Đang hiển thị" : "Đang ẩn"}
                   </span>
                   <Switch
@@ -928,9 +1097,8 @@ export function ProductEditorClient({ mode, productId }: Props) {
                   <p className="text-xs text-foreground/50">Khách thấy nhưng không đặt được</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2.5">
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                    isSoldOut ? "bg-amber-50 text-amber-700" : "bg-zinc-100 text-zinc-500"
-                  }`}>
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${isSoldOut ? "bg-amber-50 text-amber-700" : "bg-zinc-100 text-zinc-500"
+                    }`}>
                     {isSoldOut ? "Hết hàng" : "Còn hàng"}
                   </span>
                   <Switch
@@ -951,9 +1119,8 @@ export function ProductEditorClient({ mode, productId }: Props) {
                   <p className="text-xs text-foreground/50">Badge nổi bật, ưu tiên đề xuất trang chủ</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2.5">
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                    isBestSeller ? "bg-amber-50 text-amber-700 ring-1 ring-amber-200/80" : "bg-zinc-100 text-zinc-500"
-                  }`}>
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${isBestSeller ? "bg-amber-50 text-amber-700 ring-1 ring-amber-200/80" : "bg-zinc-100 text-zinc-500"
+                    }`}>
                     {isBestSeller ? "Best Seller" : "Thường"}
                   </span>
                   <Switch

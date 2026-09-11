@@ -24,8 +24,8 @@ import { adminKeys } from "@/services/admin/keys";
 import { assignOrderShipper } from "@/services/admin/orders-api";
 import { fetchAdminShippers } from "@/services/admin/shippers-api";
 import type { AdminOrder } from "@/services/admin/types";
+import { formatOrderRef } from "../../components/order-display";
 
-import { formatOrderRef } from "./order-display";
 
 function axiosMessage(e: unknown): string {
   const err = e as AxiosError<{ message?: string | string[] }>;

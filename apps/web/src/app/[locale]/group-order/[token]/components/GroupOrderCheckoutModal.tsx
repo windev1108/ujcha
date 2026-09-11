@@ -317,7 +317,7 @@ export function GroupOrderCheckoutModal({
                     </div>
                     {!shippingFetching && !shippingIsOutOfRange && (
                       <span className="font-bold tabular-nums">
-                        {shippingIsFree ? t("group_shipping_free") : fmtVnd(shippingFee)}
+                        {shippingFee === 0 ? t("group_shipping_free") : fmtVnd(shippingFee)}
                       </span>
                     )}
                   </div>
@@ -325,6 +325,14 @@ export function GroupOrderCheckoutModal({
                     <p className="mt-1.5 flex items-center gap-1 px-1 text-[11px] text-kun-products-forest">
                       <Bike className="size-3 shrink-0" />
                       {t("free_ship_within_km", { km: shippingEstimate.freeShipDistanceKm })}
+                    </p>
+                  )}
+                  {!shippingFetching && shippingEstimate?.weatherSurchargeActive && shippingEstimate.weatherSurchargeFee > 0 && (
+                    <p className="mt-1.5 flex items-center gap-1 px-1 text-[11px] text-sky-700">
+                      <Bike className="size-3 shrink-0" />
+                      {shippingIsFree
+                        ? t("weather_surcharge_only_note", { amount: fmtVnd(shippingEstimate.weatherSurchargeFee) })
+                        : t("weather_surcharge_note", { amount: fmtVnd(shippingEstimate.weatherSurchargeFee) })}
                     </p>
                   )}
                 </motion.div>
@@ -354,7 +362,7 @@ export function GroupOrderCheckoutModal({
                       <span className="text-xs text-muted">{t("group_calculating_ship")}</span>
                     ) : shippingIsOutOfRange ? (
                       <span className="text-xs font-medium text-danger">{t("out_of_delivery_range")}</span>
-                    ) : shippingIsFree ? (
+                    ) : shippingFee === 0 ? (
                       <span className="text-xs font-semibold uppercase text-kun-products-forest">{t("free")}</span>
                     ) : (
                       <span className="tabular-nums font-medium text-foreground">{fmtVnd(shippingFee)}</span>

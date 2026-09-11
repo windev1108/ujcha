@@ -10,9 +10,9 @@ import { adminKeys } from "@/services/admin/keys";
 import { fetchAdminOrders } from "@/services/admin/orders-api";
 import type { AdminOrder } from "@/services/admin/types";
 
-import { AssignShipperModal } from "@/app/orders/components/AssignShipperModal";
 import { formatOrderRef } from "@/app/orders/components/order-display";
 import { formatRelativeVi } from "./shipper-display";
+import { AssignShipperModal } from "@/app/orders/[id]/components/AssignShipperModal";
 
 export function PendingDeliveryPanel() {
   const [assignTarget, setAssignTarget] = useState<AdminOrder | null>(null);

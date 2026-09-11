@@ -27,6 +27,8 @@ import { VoucherSection } from "./VoucherSection";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { minutesToTime } from "@/components/layout/Footer";
+import { extractErrorCode, extractErrorMessage } from "@/lib/utils";
+import { StoreClosedDialog } from "@/components/common/StoreClosedDialog";
 
 function formatVnd(amount: number) {
   return new Intl.NumberFormat("vi-VN").format(Math.round(amount)) + "đ";
@@ -51,13 +53,6 @@ function CheckoutSkeleton() {
         </div>
       </div>
     </div>
-  );
-}
-
-/** Trích mã lỗi từ axios error response. */
-function extractErrorCode(err: unknown): string | null {
-  return (
-    (err as { response?: { data?: { code?: string } } })?.response?.data?.code ?? null
   );
 }
 
@@ -155,6 +150,7 @@ export function CheckoutPageShell() {
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [orderError, setOrderError] = useState<string | null>(null);
+  const [storeClosedInfo, setStoreClosedInfo] = useState<{ code: string; message: string | null } | null>(null);
   const [appliedVoucher, setAppliedVoucher] = useState<VoucherPreviewResult | null>(null);
 
   // Source of truth: guest = local Zustand, member = server cart
@@ -220,27 +216,6 @@ export function CheckoutPageShell() {
 
   async function handleSubmitOrder() {
     setOrderError(null);
-    const dateNow = Date.now();
-    const endTime = minutesToTime(storeLocation?.shiftConfig?.endMinutes ?? 0);
-    const startTime = minutesToTime(storeLocation?.shiftConfig?.startMinutes ?? 0);
-
-    if (storeLocation?.shiftConfig) {
-      const [endH, endM] = endTime.split(":").map((s) => parseInt(s, 10));
-      const endDate = new Date(dateNow);
-      endDate.setHours(endH, endM, 0, 0);
-      if (dateNow > endDate.getTime()) {
-        setOrderError(t("error_store_closed"));
-        return;
-      }
-
-      const [startH, startM] = startTime.split(":").map((s) => parseInt(s, 10));
-      const startDate = new Date(dateNow);
-      startDate.setHours(startH, startM, 0, 0);
-      if (dateNow < startDate.getTime()) {
-        setOrderError(t("error_store_not_open"));
-        return;
-      }
-    }
 
     if (items.length === 0) {
       setOrderError(t("error_cart_empty"));
@@ -452,12 +427,12 @@ export function CheckoutPageShell() {
       router.push(ROUTES.ORDER_DETAIL(order.paymentCode));
     } catch (err: unknown) {
       const code = extractErrorCode(err);
+      if (code?.startsWith("STORE_")) {
+        setStoreClosedInfo({ code, message: extractErrorMessage(err) });
+        return;
+      }
       const hasI18nKey = code && code in (t as unknown as Record<string, unknown>);
-      setOrderError(
-        hasI18nKey
-          ? t(code as Parameters<typeof t>[0])
-          : t("order_failed"),
-      );
+      setOrderError(hasI18nKey ? t(code as Parameters<typeof t>[0]) : t("order_failed"));
     }
   }
 
@@ -536,6 +511,8 @@ export function CheckoutPageShell() {
               shippingIsDisabled={shippingIsDisabled}
               distanceKm={shippingEstimate?.distanceKm}
               freeShipDistanceKm={shippingEstimate?.freeShipDistanceKm}
+              weatherSurchargeActive={shippingEstimate?.weatherSurchargeActive}
+              weatherSurchargeFee={shippingEstimate?.weatherSurchargeFee}
               total={total}
               isDelivery={isDelivery}
               isSubmitting={isSubmitting}
@@ -585,6 +562,12 @@ export function CheckoutPageShell() {
           </button>
         </div>
       </div>
+      <StoreClosedDialog
+        open={!!storeClosedInfo}
+        code={storeClosedInfo?.code ?? null}
+        message={storeClosedInfo?.message}
+        onClose={() => setStoreClosedInfo(null)}
+      />
     </div>
   );
 }

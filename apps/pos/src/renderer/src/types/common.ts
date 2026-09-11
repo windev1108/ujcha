@@ -360,3 +360,45 @@ export type OrderItemExtraSnapshot = {
 };
 
 export type QuickDate = 'today' | 'week' | 'all'
+
+
+// ─── Recipe resolve (POS) ──────────────────────────────────────────────────────
+
+export interface ResolvedRecipeIngredient {
+  id: string
+  ingredientId: string
+  ingredientName: string
+  unit: string
+  quantity: string
+  optionGroupName: string | null
+  optionValueLabel: string | null
+}
+
+export interface ResolvedRecipeTopping {
+  id: string
+  ingredientId: string
+  ingredientName: string
+  unit: string
+  quantity: string
+  toppingId: string
+  toppingName: string
+}
+
+export interface ResolvedRecipe {
+  matched: boolean
+  productId?: string
+  productName?: string
+  sku?: string | null
+  recipeNote?: string | null
+  items?: ResolvedRecipeIngredient[]
+  toppingItems?: ResolvedRecipeTopping[]
+}
+
+export type ResolvedRecipeMap = Record<string, ResolvedRecipe>
+
+export interface RecipeResolveRequestItem {
+  key: string
+  productId?: string
+  sku?: string
+  selectedLabels: string[]
+}

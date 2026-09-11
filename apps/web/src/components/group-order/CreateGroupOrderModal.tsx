@@ -20,6 +20,7 @@ import { ROUTES } from "@/lib/routes";
 import { useAuthStore } from "@/store/auth-store";
 import { createGroupOrder, setGroupOrderFulfillment } from "@/services/group-order/api";
 import { getDeviceId } from "@/hooks/useDeviceId";
+import { extractErrorCode, extractErrorMessage } from "@/lib/utils";
 
 export type GroupOrderAfterCreatePayload = {
   token: string;
@@ -33,9 +34,11 @@ type PaymentModeOpt = "host_pays" | "split";
 export function CreateGroupOrderModal({
   onClose,
   hasActiveSession,
+  onStoreClosed,
   onAfterCreate,
 }: {
   onClose: () => void;
+  onStoreClosed: (payload: { code: string; message: string | null }) => void;
   hasActiveSession: boolean;
   onAfterCreate?: (payload: GroupOrderAfterCreatePayload) => Promise<void>;
 }) {
@@ -149,6 +152,14 @@ export function CreateGroupOrderModal({
         toast.error(t("session_expired_please_login"));
         onClose();
         router.push(ROUTES.LOGIN);
+        return;
+      }
+      const code = extractErrorCode(e);
+      if (code?.startsWith("STORE_")) {
+        // gọi callback lên parent để mở StoreClosedDialog, hoặc tự import và render dialog ngay trong modal này
+        onStoreClosed?.({ code, message: extractErrorMessage(e) });
+        onClose()
+        setCreating(false);
         return;
       }
       toast.error(t("create_group_order_error"));

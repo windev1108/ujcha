@@ -27,6 +27,7 @@ import {
   MapPin,
   UsersRound,
   type LucideIcon,
+  StoreIcon,
 } from "lucide-react";
 
 import { useAuthStore } from "@/store/auth-store";
@@ -61,6 +62,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { href: ROUTES.PAYMENT_CONFIG, label: "Thanh toán", icon: CreditCard, permission: "payment" },
   { href: ROUTES.PRINTER, label: "Máy in", icon: Printer, permission: "printer" },
   { href: ROUTES.PRODUCTS, label: "Sản phẩm", icon: Package, permission: "products" },
+  { href: ROUTES.INVENTORY, label: "Kho hàng", icon: StoreIcon, permission: "inventory" },
   { href: ROUTES.TABLES, label: "Bàn", icon: Armchair, permission: "tables" },
   { href: ROUTES.SHIPPERS, label: "Shippers", icon: Truck, permission: "shippers" },
   { href: ROUTES.VOUCHERS, label: "Vouchers", icon: TicketPercent, permission: "vouchers" },

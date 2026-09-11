@@ -2,6 +2,17 @@ import { api } from "@/config/server";
 
 export type DisplayMode = 'logo_and_text' | 'logo_only';
 
+export type StoreOperationStatus = "opening" | "closed" | "busy";
+
+export interface StoreStatusConfig {
+  id: string;
+  openMinutes: number;
+  closeMinutes: number;
+  status: StoreOperationStatus;
+  statusReason: string | null;
+  updatedAt: string;
+}
+
 export type DeliveryPlatform = {
   id: string;
   name: string;
@@ -47,4 +58,19 @@ export async function updateDeliveryPlatform(
 
 export async function deleteDeliveryPlatform(id: string): Promise<void> {
   await api.delete(`/admin/store/platforms/${id}`);
+}
+
+export async function fetchStoreStatusConfig(): Promise<StoreStatusConfig> {
+  const { data } = await api.get("/admin/store/status");
+  return data;
+}
+
+export async function updateStoreStatusConfig(payload: {
+  openMinutes?: number;
+  closeMinutes?: number;
+  status?: StoreOperationStatus;
+  statusReason?: string;
+}): Promise<StoreStatusConfig> {
+  const { data } = await api.patch("/admin/store/status", payload);
+  return data;
 }

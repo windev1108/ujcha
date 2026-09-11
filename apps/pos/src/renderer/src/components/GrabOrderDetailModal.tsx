@@ -1,14 +1,16 @@
 import { GRAB_STATUS_COLOR, GRAB_STATUS_DOT, GRAB_STATUS_LABEL } from "@/lib/constants";
 import { GrabFull, grabFullToAdminOrder, printGrabBill, printGrabLabels } from "@/lib/grab-print"
 import { KEYS, loadLocal } from "@/lib/local-storage";
-import { DEFAULT_BILL_CONFIG, DEFAULT_LABEL_CONFIG } from "@/types/common";
+import { DEFAULT_BILL_CONFIG, DEFAULT_LABEL_CONFIG, ResolvedRecipeMap } from "@/types/common";
 import { AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Loader2, PackageCheck, Phone, Printer, Receipt, Tag, User, X } from "lucide-react";
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { BillConfig, LabelConfig } from "src/preload";
 import grabFoodLogo from '../assets/grab-food.png'
 import { fmt, formatDate } from "@/lib/utils";
 import { buildLabelPickerItems } from "@/lib/receipt-shared";
 import { LabelPickerModal } from "./LabelPickerModal";
+import { resolveRecipeBatch } from "@/api";
+import { RecipeChecklist } from "./RecipeChecklist";
 
 function Row({ label, value, green, bold }: { label: string; value: string; green?: boolean; bold?: boolean }) {
     return (
@@ -76,7 +78,18 @@ export default function GrabOrderDetailModal({
     const labelCfg = loadLocal<LabelConfig>(KEYS.label, DEFAULT_LABEL_CONFIG)
     const hasBillPrinter = billCfg.enabled && !!(billCfg.address || billCfg.printerId)
     const hasLabelPrinter = labelCfg.enabled && !!(labelCfg.address || labelCfg.printerId)
+    const [recipeMap, setRecipeMap] = useState<ResolvedRecipeMap>({})
 
+    useEffect(() => {
+        if (!data) return
+        const requestItems = data.itemInfo.items.map((item, i) => ({
+            key: item.itemKey ?? `${item.itemID}-${i}`,
+            sku: `GRAB-${item.itemID}`,
+            selectedLabels: (item.modifierGroups ?? []).flatMap((g) => g.modifiers.map((m) => m.modifierName)),
+        }))
+        if (requestItems.length === 0) return
+        void resolveRecipeBatch(requestItems).then(setRecipeMap).catch(() => { })
+    }, [data])
     const billDisabledReason = !billCfg.enabled
         ? 'Chưa bật in hóa đơn trong Cài đặt'
         : !(billCfg.address || billCfg.printerId)
@@ -190,40 +203,47 @@ export default function GrabOrderDetailModal({
                                     Món ({data.itemInfo.count})
                                 </p>
                                 <div className="space-y-4">
-                                    {data.itemInfo.items.map((item, i) => (
-                                        <div key={item.itemID ?? i}>
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div className="flex items-start gap-2.5 flex-1 min-w-0">
-                                                    <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-lg bg-green-100 text-xs font-black text-green-700">
-                                                        {item.quantity}×
+                                    {data.itemInfo.items.map((item, i) => {
+                                        const key = item.itemKey ?? `${item.itemID}-${i}`
+                                        const sizeLabel = item.modifierGroups
+                                            ?.find((g) => /size/i.test(g.modifierGroupName))
+                                            ?.modifiers[0]?.modifierName
+                                        return (
+                                            <div key={key}>
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                                                        <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-lg bg-green-100 text-xs font-black text-green-700">
+                                                            {item.quantity}×
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-sm font-semibold text-gray-800 leading-snug">{item.name}</p>
+                                                            {/* Modifier groups — each group shows its modifiers */}
+                                                            {item.modifierGroups?.map((grp, gi) => (
+                                                                <div key={gi} className="mt-1 flex flex-wrap gap-1">
+                                                                    {grp.modifiers.map((mod, mi) => (
+                                                                        <span
+                                                                            key={mi}
+                                                                            className="inline-block rounded-md bg-gray-100 px-1.5 py-0.5 text-[11px] text-gray-600"
+                                                                        >
+                                                                            {mod.modifierName}
+                                                                            {mod.priceDisplay !== '0' && ` +${mod.priceDisplay}đ`}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            ))}
+                                                            {item.comment && (
+                                                                <p className="mt-1 text-[11px] italic text-amber-600">{item.comment}</p>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="text-sm font-semibold text-gray-800 leading-snug">{item.name}</p>
-                                                        {/* Modifier groups — each group shows its modifiers */}
-                                                        {item.modifierGroups?.map((grp, gi) => (
-                                                            <div key={gi} className="mt-1 flex flex-wrap gap-1">
-                                                                {grp.modifiers.map((mod, mi) => (
-                                                                    <span
-                                                                        key={mi}
-                                                                        className="inline-block rounded-md bg-gray-100 px-1.5 py-0.5 text-[11px] text-gray-600"
-                                                                    >
-                                                                        {mod.modifierName}
-                                                                        {mod.priceDisplay !== '0' && ` +${mod.priceDisplay}đ`}
-                                                                    </span>
-                                                                ))}
-                                                            </div>
-                                                        ))}
-                                                        {item.comment && (
-                                                            <p className="mt-1 text-[11px] italic text-amber-600">{item.comment}</p>
-                                                        )}
-                                                    </div>
+                                                    <span className="shrink-0 text-sm font-bold text-gray-700 tabular-nums">
+                                                        {fmt(item.fare.priceFloat * item.quantity)}
+                                                    </span>
                                                 </div>
-                                                <span className="shrink-0 text-sm font-bold text-gray-700 tabular-nums">
-                                                    {fmt(item.fare.priceFloat * item.quantity)}
-                                                </span>
+                                                <RecipeChecklist recipe={recipeMap[key]} quantity={item.quantity} sizeLabel={sizeLabel} />
                                             </div>
-                                        </div>
-                                    ))}
+                                        )
+                                    })}
                                 </div>
                             </div>
 

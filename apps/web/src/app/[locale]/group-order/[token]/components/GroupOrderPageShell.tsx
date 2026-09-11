@@ -14,6 +14,7 @@ import {
   Check,
   CheckCircle2,
   Clock,
+  CloudRainWindIcon,
   Copy,
   Crown,
   FlameIcon,
@@ -22,6 +23,7 @@ import {
   Lock,
   LogOut,
   Minus,
+  Navigation,
   Pencil,
   Plus,
   QrCode,
@@ -78,6 +80,8 @@ import { useLocale, useTranslations } from "next-intl";
 import { getDisplayName } from "@/lib/product-name";
 import { getDeviceId } from "@/hooks/useDeviceId";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
+import { extractErrorCode, extractErrorMessage } from "@/lib/utils";
+import { StoreClosedDialog } from "@/components/common/StoreClosedDialog";
 
 const SESSION_KEY = (token: string) => `group_order_session_${token}`;
 const PARTICIPANT_KEY = (token: string) => `group_order_participant_${token}`;
@@ -141,304 +145,304 @@ type ToppingDraft = { toppingId: string; name: string; price: number; nameTransl
 type DraftValue = { quantity: number; selectedOptions: Record<string, string>; toppings: ToppingDraft[]; note?: string };
 type DraftItem = DraftValue & { productId: string };
 
-function ProductCustomizeSheet({
-  product,
-  initial,
-  onConfirm,
-  onClose,
-}: {
-  product: ApiProduct;
-  initial?: DraftValue;
-  onConfirm: (value: DraftValue) => void;
-  onClose: () => void;
-}) {
-  const locale = useLocale();
-  const t = useTranslations();
-  const optionGroups = normalizeOptionGroups(product.optionGroups);
-  const toppings = (product.toppings ?? []).filter((t) => t.isActive !== false);
-  const basePrice = product.finalPrice ?? parseFloat(product.price);
+// function ProductCustomizeSheet({
+//   product,
+//   initial,
+//   onConfirm,
+//   onClose,
+// }: {
+//   product: ApiProduct;
+//   initial?: DraftValue;
+//   onConfirm: (value: DraftValue) => void;
+//   onClose: () => void;
+// }) {
+//   const locale = useLocale();
+//   const t = useTranslations();
+//   const optionGroups = normalizeOptionGroups(product.optionGroups);
+//   const toppings = (product.toppings ?? []).filter((t) => t.isActive !== false);
+//   const basePrice = product.finalPrice ?? parseFloat(product.price);
 
-  const [quantity, setQuantity] = useState(initial?.quantity ?? 1);
-  const [note, setNote] = useState(initial?.note ?? "");
-  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>(() => {
-    const opts: Record<string, string> = {};
-    for (const grp of optionGroups) {
-      opts[grp.name] = initial?.selectedOptions?.[grp.name] ?? grp.values[0]?.label ?? "";
-    }
-    return opts;
-  });
-  const [selectedToppings, setSelectedToppings] = useState<Set<string>>(
-    () => new Set(initial?.toppings?.map((t) => t.toppingId) ?? []),
-  );
+//   const [quantity, setQuantity] = useState(initial?.quantity ?? 1);
+//   const [note, setNote] = useState(initial?.note ?? "");
+//   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>(() => {
+//     const opts: Record<string, string> = {};
+//     for (const grp of optionGroups) {
+//       opts[grp.name] = initial?.selectedOptions?.[grp.name] ?? grp.values[0]?.label ?? "";
+//     }
+//     return opts;
+//   });
+//   const [selectedToppings, setSelectedToppings] = useState<Set<string>>(
+//     () => new Set(initial?.toppings?.map((t) => t.toppingId) ?? []),
+//   );
 
-  const optionSurcharge = computeOptionSurcharge(optionGroups, selectedOptions);
-  const toppingTotal = toppings
-    .filter((t) => selectedToppings.has(t.id))
-    .reduce((s, t) => s + t.price, 0);
-  const unitPrice = basePrice + optionSurcharge + toppingTotal;
+//   const optionSurcharge = computeOptionSurcharge(optionGroups, selectedOptions);
+//   const toppingTotal = toppings
+//     .filter((t) => selectedToppings.has(t.id))
+//     .reduce((s, t) => s + t.price, 0);
+//   const unitPrice = basePrice + optionSurcharge + toppingTotal;
 
-  const toggleTopping = (id: string, checked: boolean) => {
-    setSelectedToppings((prev) => {
-      const next = new Set(prev);
-      if (checked) {
-        if (next.size >= 3) {
-          const oldest = next.values().next().value;
-          next.delete(oldest!);
-        }
-        next.add(id);
-      } else {
-        next.delete(id);
-      }
-      return next;
-    });
-  };
+//   const toggleTopping = (id: string, checked: boolean) => {
+//     setSelectedToppings((prev) => {
+//       const next = new Set(prev);
+//       if (checked) {
+//         if (next.size >= 3) {
+//           const oldest = next.values().next().value;
+//           next.delete(oldest!);
+//         }
+//         next.add(id);
+//       } else {
+//         next.delete(id);
+//       }
+//       return next;
+//     });
+//   };
 
-  const handleConfirm = () => {
-    onConfirm({
-      quantity,
-      selectedOptions,
-      toppings: toppings
-        .filter((t) => selectedToppings.has(t.id))
-        .map((t) => ({ toppingId: t.id, name: t.name, price: t.price, nameTranslation: t.nameTranslation })),
-      note: note.trim() || undefined,
-    });
-  };
+//   const handleConfirm = () => {
+//     onConfirm({
+//       quantity,
+//       selectedOptions,
+//       toppings: toppings
+//         .filter((t) => selectedToppings.has(t.id))
+//         .map((t) => ({ toppingId: t.id, name: t.name, price: t.price, nameTranslation: t.nameTranslation })),
+//       note: note.trim() || undefined,
+//     });
+//   };
 
-  const imageUrl = product.imageUrls[0] ?? null;
-  const hasDiscount = product.discountPercent > 0;
-  const displayName = getDisplayName(product, locale);
+//   const imageUrl = product.imageUrls[0] ?? null;
+//   const hasDiscount = product.discountPercent > 0;
+//   const displayName = getDisplayName(product, locale);
 
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="absolute inset-0 z-10 flex flex-col overflow-hidden rounded-t-3xl bg-white sm:flex-row sm:rounded-3xl"
-    >
-      {/* Desktop image panel */}
-      <div
-        className="hidden sm:block sm:w-[42%] sm:shrink-0 sm:rounded-l-3xl sm:overflow-hidden"
-        style={{ backgroundColor: imageUrl ? undefined : "#1a3c34" }}
-      >
-        <div className="relative h-full">
-          {imageUrl ? (
-            <Image src={imageUrl} alt={displayName} fill className="object-cover" sizes="320px" />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="select-none text-7xl font-black text-white/15">
-                {displayName.charAt(0).toUpperCase()}
-              </span>
-            </div>
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/10" />
-          {hasDiscount && (
-            <span className="absolute left-4 top-4 rounded-full bg-red-500 px-2.5 py-1 text-[11px] font-bold text-white shadow">
-              -{product.discountPercent}%
-            </span>
-          )}
-        </div>
-      </div>
+//   return (
+//     <motion.div
+//       initial={{ opacity: 0 }}
+//       animate={{ opacity: 1 }}
+//       exit={{ opacity: 0 }}
+//       className="absolute inset-0 z-10 flex flex-col overflow-hidden rounded-t-3xl bg-white sm:flex-row sm:rounded-3xl"
+//     >
+//       {/* Desktop image panel */}
+//       <div
+//         className="hidden sm:block sm:w-[42%] sm:shrink-0 sm:rounded-l-3xl sm:overflow-hidden"
+//         style={{ backgroundColor: imageUrl ? undefined : "#1a3c34" }}
+//       >
+//         <div className="relative h-full">
+//           {imageUrl ? (
+//             <Image src={imageUrl} alt={displayName} fill className="object-cover" sizes="320px" />
+//           ) : (
+//             <div className="absolute inset-0 flex items-center justify-center">
+//               <span className="select-none text-7xl font-black text-white/15">
+//                 {displayName.charAt(0).toUpperCase()}
+//               </span>
+//             </div>
+//           )}
+//           <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/10" />
+//           {hasDiscount && (
+//             <span className="absolute left-4 top-4 rounded-full bg-red-500 px-2.5 py-1 text-[11px] font-bold text-white shadow">
+//               -{product.discountPercent}%
+//             </span>
+//           )}
+//         </div>
+//       </div>
 
-      {/* Content panel */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {/* Mobile image strip */}
-        <div
-          className="relative h-44 w-full shrink-0 overflow-hidden sm:hidden"
-          style={{ backgroundColor: imageUrl ? undefined : "#1a3c34" }}
-        >
-          {imageUrl ? (
-            <Image src={imageUrl} alt={displayName} fill className="object-cover" sizes="100vw" />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="select-none text-6xl font-black text-white/15">
-                {displayName.charAt(0).toUpperCase()}
-              </span>
-            </div>
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" />
-          {hasDiscount && (
-            <span className="absolute left-4 top-4 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white shadow">
-              -{product.discountPercent}%
-            </span>
-          )}
-        </div>
+//       {/* Content panel */}
+//       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+//         {/* Mobile image strip */}
+//         <div
+//           className="relative h-44 w-full shrink-0 overflow-hidden sm:hidden"
+//           style={{ backgroundColor: imageUrl ? undefined : "#1a3c34" }}
+//         >
+//           {imageUrl ? (
+//             <Image src={imageUrl} alt={displayName} fill className="object-cover" sizes="100vw" />
+//           ) : (
+//             <div className="absolute inset-0 flex items-center justify-center">
+//               <span className="select-none text-6xl font-black text-white/15">
+//                 {displayName.charAt(0).toUpperCase()}
+//               </span>
+//             </div>
+//           )}
+//           <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" />
+//           {hasDiscount && (
+//             <span className="absolute left-4 top-4 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white shadow">
+//               -{product.discountPercent}%
+//             </span>
+//           )}
+//         </div>
 
-        {/* Close button */}
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute right-4 top-4 z-10 flex size-8 items-center justify-center rounded-full bg-black/20 text-white backdrop-blur-sm transition-colors hover:bg-black/35 sm:bg-white/90 sm:text-foreground sm:shadow-sm"
-        >
-          <X className="size-4" />
-        </button>
+//         {/* Close button */}
+//         <button
+//           type="button"
+//           onClick={onClose}
+//           className="absolute right-4 top-4 z-10 flex size-8 items-center justify-center rounded-full bg-black/20 text-white backdrop-blur-sm transition-colors hover:bg-black/35 sm:bg-white/90 sm:text-foreground sm:shadow-sm"
+//         >
+//           <X className="size-4" />
+//         </button>
 
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-4 pt-5">
-          {/* Product header */}
-          <div className="space-y-1">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted">
-              {getDisplayName(product.category, locale)}
-            </p>
-            <h3 className="text-base font-semibold leading-snug text-foreground sm:text-lg">
-              {displayName}
-            </h3>
-            <div className="flex items-baseline gap-2">
-              <span className="text-lg font-black tabular-nums text-kun-products-forest">
-                {fmtVnd(unitPrice)}
-              </span>
-              {hasDiscount && (
-                <span className="text-xs tabular-nums text-muted line-through">
-                  {fmtVnd(parseFloat(product.price))}
-                </span>
-              )}
-            </div>
-          </div>
+//         {/* Scrollable body */}
+//         <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-4 pt-5">
+//           {/* Product header */}
+//           <div className="space-y-1">
+//             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted">
+//               {getDisplayName(product.category, locale)}
+//             </p>
+//             <h3 className="text-base font-semibold leading-snug text-foreground sm:text-lg">
+//               {displayName}
+//             </h3>
+//             <div className="flex items-baseline gap-2">
+//               <span className="text-lg font-black tabular-nums text-kun-products-forest">
+//                 {fmtVnd(unitPrice)}
+//               </span>
+//               {hasDiscount && (
+//                 <span className="text-xs tabular-nums text-muted line-through">
+//                   {fmtVnd(parseFloat(product.price))}
+//                 </span>
+//               )}
+//             </div>
+//           </div>
 
-          <div className="my-4 h-px bg-black/[0.06]" />
+//           <div className="my-4 h-px bg-black/[0.06]" />
 
-          {/* Options */}
-          {optionGroups.length > 0 && (
-            <div className="space-y-4">
-              {optionGroups.map((grp) => (
-                <div key={grp.id} className="space-y-2">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted">
-                    {grp.nameTranslation?.[locale] ?? grp.name}
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {grp.values.map((v) => {
-                      const active = selectedOptions[grp.name] === v.label;
-                      const displayLabel = v.nameTranslation?.[locale] ?? v.label;
-                      return (
-                        <button
-                          key={v.label}
-                          type="button"
-                          onClick={() => setSelectedOptions((prev) => ({ ...prev, [grp.name]: v.label }))}
-                          className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition-all ${active
-                            ? "border-[#26634d]/40 bg-[#26634d]/10 text-[#26634d]"
-                            : "border-black/10 bg-white text-foreground hover:border-black/20"
-                            }`}
-                        >
-                          {displayLabel}
-                          {v.priceDelta > 0 && (
-                            <span className={`text-xs tabular-nums ${active ? "text-[#26634d]/70" : "text-muted"}`}>
-                              +{formatVnd(v.priceDelta)}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-              <div className="my-3 h-px bg-black/[0.06]" />
-            </div>
-          )}
+//           {/* Options */}
+//           {optionGroups.length > 0 && (
+//             <div className="space-y-4">
+//               {optionGroups.map((grp) => (
+//                 <div key={grp.id} className="space-y-2">
+//                   <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted">
+//                     {grp.nameTranslation?.[locale] ?? grp.name}
+//                   </p>
+//                   <div className="flex flex-wrap gap-2">
+//                     {grp.values.map((v) => {
+//                       const active = selectedOptions[grp.name] === v.label;
+//                       const displayLabel = v.nameTranslation?.[locale] ?? v.label;
+//                       return (
+//                         <button
+//                           key={v.label}
+//                           type="button"
+//                           onClick={() => setSelectedOptions((prev) => ({ ...prev, [grp.name]: v.label }))}
+//                           className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition-all ${active
+//                             ? "border-[#26634d]/40 bg-[#26634d]/10 text-[#26634d]"
+//                             : "border-black/10 bg-white text-foreground hover:border-black/20"
+//                             }`}
+//                         >
+//                           {displayLabel}
+//                           {v.priceDelta > 0 && (
+//                             <span className={`text-xs tabular-nums ${active ? "text-[#26634d]/70" : "text-muted"}`}>
+//                               +{formatVnd(v.priceDelta)}
+//                             </span>
+//                           )}
+//                         </button>
+//                       );
+//                     })}
+//                   </div>
+//                 </div>
+//               ))}
+//               <div className="my-3 h-px bg-black/[0.06]" />
+//             </div>
+//           )}
 
-          {/* Toppings */}
-          {toppings.length > 0 && (
-            <div className="space-y-2.5">
-              <div className="flex items-baseline justify-between">
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted">
-                  {t("extra_toppings")}
-                </p>
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-semibold tabular-nums text-muted">
-                    {selectedToppings.size}/2
-                  </span>
-                  {selectedToppings.size > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedToppings(new Set())}
-                      className="text-[11px] font-medium text-muted transition-colors hover:text-foreground"
-                    >
-                      {t("remove")}
-                    </button>
-                  )}
-                </div>
-              </div>
-              <div className="grid grid-cols-1 gap-1.5 overscroll-contain rounded-xl">
-                {toppings.map((top) => {
-                  const active = selectedToppings.has(top.id);
-                  return (
-                    <button
-                      key={top.id}
-                      type="button"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => toggleTopping(top.id, !active)}
-                      className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left transition-all ${active
-                        ? "border-[#26634d]/40 bg-[#26634d]/8 text-[#26634d]"
-                        : "border-black/[0.07] bg-surface-card/40 text-foreground hover:border-black/15"
-                        }`}
-                    >
-                      <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
-                        {top.nameTranslation?.[locale] ?? top.name}
-                      </span>
-                      <span className={`shrink-0 text-[12px] tabular-nums font-semibold ${active ? "text-[#26634d]" : "text-muted"}`}>
-                        +{formatVnd(top.price)}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+//           {/* Toppings */}
+//           {toppings.length > 0 && (
+//             <div className="space-y-2.5">
+//               <div className="flex items-baseline justify-between">
+//                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted">
+//                   {t("extra_toppings")}
+//                 </p>
+//                 <div className="flex items-center gap-2">
+//                   <span className="text-[11px] font-semibold tabular-nums text-muted">
+//                     {selectedToppings.size}/2
+//                   </span>
+//                   {selectedToppings.size > 0 && (
+//                     <button
+//                       type="button"
+//                       onClick={() => setSelectedToppings(new Set())}
+//                       className="text-[11px] font-medium text-muted transition-colors hover:text-foreground"
+//                     >
+//                       {t("remove")}
+//                     </button>
+//                   )}
+//                 </div>
+//               </div>
+//               <div className="grid grid-cols-1 gap-1.5 overscroll-contain rounded-xl">
+//                 {toppings.map((top) => {
+//                   const active = selectedToppings.has(top.id);
+//                   return (
+//                     <button
+//                       key={top.id}
+//                       type="button"
+//                       onMouseDown={(e) => e.preventDefault()}
+//                       onClick={() => toggleTopping(top.id, !active)}
+//                       className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left transition-all ${active
+//                         ? "border-[#26634d]/40 bg-[#26634d]/8 text-[#26634d]"
+//                         : "border-black/[0.07] bg-surface-card/40 text-foreground hover:border-black/15"
+//                         }`}
+//                     >
+//                       <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
+//                         {top.nameTranslation?.[locale] ?? top.name}
+//                       </span>
+//                       <span className={`shrink-0 text-[12px] tabular-nums font-semibold ${active ? "text-[#26634d]" : "text-muted"}`}>
+//                         +{formatVnd(top.price)}
+//                       </span>
+//                     </button>
+//                   );
+//                 })}
+//               </div>
+//             </div>
+//           )}
 
-          {/* Note */}
-          <div className="mt-4 space-y-1.5">
-            <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-muted">
-              <StickyNote className="size-3" />
-              {t("group_note_label")}
-            </label>
-            <input
-              type="text"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder={t("group_note_placeholder")}
-              className="h-10 w-full rounded-xl border border-black/[0.09] bg-white px-3.5 text-[13px] text-foreground placeholder:text-muted/60 focus:border-[#1a3c34] focus:outline-none focus:ring-2 focus:ring-[#1a3c34]/20"
-            />
-          </div>
-        </div>
+//           {/* Note */}
+//           <div className="mt-4 space-y-1.5">
+//             <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-muted">
+//               <StickyNote className="size-3" />
+//               {t("group_note_label")}
+//             </label>
+//             <input
+//               type="text"
+//               value={note}
+//               onChange={(e) => setNote(e.target.value)}
+//               placeholder={t("group_note_placeholder")}
+//               className="h-10 w-full rounded-xl border border-black/[0.09] bg-white px-3.5 text-[13px] text-foreground placeholder:text-muted/60 focus:border-[#1a3c34] focus:outline-none focus:ring-2 focus:ring-[#1a3c34]/20"
+//             />
+//           </div>
+//         </div>
 
-        {/* Fixed bottom: qty + price + confirm */}
-        <div className="shrink-0 border-t border-black/6 bg-white px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3">
-          <div className="mb-3 flex items-center justify-between gap-4">
-            <div className="flex items-center rounded-full border border-black/[0.09] bg-surface-card/40">
-              <button
-                type="button"
-                onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                disabled={quantity <= 1}
-                className="flex size-9 items-center justify-center rounded-full text-foreground transition-colors hover:bg-black/[0.05] disabled:opacity-35"
-              >
-                <Minus className="size-3.5" />
-              </button>
-              <span className="w-8 text-center text-sm font-bold tabular-nums">{quantity}</span>
-              <button
-                type="button"
-                onClick={() => setQuantity((q) => q + 1)}
-                className="flex size-9 items-center justify-center rounded-full text-foreground transition-colors hover:bg-black/[0.05]"
-              >
-                <Plus className="size-3.5" />
-              </button>
-            </div>
-            <div className="text-right">
-              {quantity > 1 && (
-                <p className="text-[11px] text-muted tabular-nums">{quantity} × {fmtVnd(unitPrice)}</p>
-              )}
-              <p className="text-lg font-black tabular-nums text-[#26634d]">{fmtVnd(unitPrice * quantity)}</p>
-            </div>
-          </div>
-          <Button
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#1a3c34] text-[14px] font-semibold text-white shadow-lg shadow-[#1a3c34]/20 hover:opacity-90"
-            onPress={handleConfirm}
-          >
-            <Check className="size-4" />
-            {initial ? t("group_update_item_btn") : t("group_add_item_btn")}
-          </Button>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
+//         {/* Fixed bottom: qty + price + confirm */}
+//         <div className="shrink-0 border-t border-black/6 bg-white px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3">
+//           <div className="mb-3 flex items-center justify-between gap-4">
+//             <div className="flex items-center rounded-full border border-black/[0.09] bg-surface-card/40">
+//               <button
+//                 type="button"
+//                 onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+//                 disabled={quantity <= 1}
+//                 className="flex size-9 items-center justify-center rounded-full text-foreground transition-colors hover:bg-black/[0.05] disabled:opacity-35"
+//               >
+//                 <Minus className="size-3.5" />
+//               </button>
+//               <span className="w-8 text-center text-sm font-bold tabular-nums">{quantity}</span>
+//               <button
+//                 type="button"
+//                 onClick={() => setQuantity((q) => q + 1)}
+//                 className="flex size-9 items-center justify-center rounded-full text-foreground transition-colors hover:bg-black/[0.05]"
+//               >
+//                 <Plus className="size-3.5" />
+//               </button>
+//             </div>
+//             <div className="text-right">
+//               {quantity > 1 && (
+//                 <p className="text-[11px] text-muted tabular-nums">{quantity} × {fmtVnd(unitPrice)}</p>
+//               )}
+//               <p className="text-lg font-black tabular-nums text-[#26634d]">{fmtVnd(unitPrice * quantity)}</p>
+//             </div>
+//           </div>
+//           <Button
+//             className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#1a3c34] text-[14px] font-semibold text-white shadow-lg shadow-[#1a3c34]/20 hover:opacity-90"
+//             onPress={handleConfirm}
+//           >
+//             <Check className="size-4" />
+//             {initial ? t("group_update_item_btn") : t("group_add_item_btn")}
+//           </Button>
+//         </div>
+//       </div>
+//     </motion.div>
+//   );
+// }
 
 // ── ProductPickerDrawer ───────────────────────────────────────────────────────
 
@@ -1295,6 +1299,8 @@ export function GroupOrderPageShell() {
   const isLeavingRef = useRef(false);
   const [showLockConfirm, setShowLockConfirm] = useState(false);
   const [joining, setJoining] = useState(false);
+  const [storeClosedInfo, setStoreClosedInfo] = useState<{ code: string; message: string | null } | null>(null);
+
   useEffect(() => { myParticipantIdRef.current = myParticipantId; }, [myParticipantId]);
   useEffect(() => {
     if (!joinNotif) return;
@@ -1871,6 +1877,11 @@ export function GroupOrderPageShell() {
         router.push(ROUTES.ORDER_DETAIL(go.order.paymentCode));
       }
     } catch (e: unknown) {
+      const code = extractErrorCode(e);
+      if (code?.startsWith("STORE_")) {
+        setStoreClosedInfo({ code, message: extractErrorMessage(e) });
+        return;
+      }
       const err = e as { response?: { data?: { message?: string | string[] } } };
       const msg = err?.response?.data?.message ?? "Có lỗi xảy ra.";
       toast.error(typeof msg === "string" ? msg : msg.join(", "));
@@ -1890,6 +1901,11 @@ export function GroupOrderPageShell() {
         router.push(ROUTES.ORDER_DETAIL(go.order.paymentCode));
       }
     } catch (e: unknown) {
+      const code = extractErrorCode(e);
+      if (code?.startsWith("STORE_")) {
+        setStoreClosedInfo({ code, message: extractErrorMessage(e) });
+        return;
+      }
       const err = e as { response?: { data?: { message?: string | string[] } } };
       const msg = err?.response?.data?.message ?? "Có lỗi xảy ra.";
       toast.error(typeof msg === "string" ? msg : msg.join(", "));
@@ -1897,7 +1913,6 @@ export function GroupOrderPageShell() {
       setLockLoading(false);
     }
   }, [sessionToken, state, token, router]);
-
   const handleLockOrder = async () => {
     if (!sessionToken) return;
     setLockLoading(true);
@@ -1905,6 +1920,11 @@ export function GroupOrderPageShell() {
       const go = await lockGroupOrder(token, sessionToken);
       setState(go);
     } catch (e: unknown) {
+      const code = extractErrorCode(e);
+      if (code?.startsWith("STORE_")) {
+        setStoreClosedInfo({ code, message: extractErrorMessage(e) });
+        return;
+      }
       const err = e as { response?: { data?: { message?: string | string[] } } };
       const msg = err?.response?.data?.message ?? "Có lỗi xảy ra.";
       toast.error(typeof msg === "string" ? msg : msg.join(", "));
@@ -2463,11 +2483,26 @@ export function GroupOrderPageShell() {
                               <span className="text-xs text-muted">{t("group_calculating_ship")}</span>
                             ) : isHost && state.status === "collecting" && localShippingIsOutOfRange ? (
                               <span className="text-xs font-medium text-danger">{t("out_of_delivery_range")}</span>
-                            ) : isHost && state.status === "collecting" && localShippingIsFree ? (
+                            ) : displayShippingFee === 0 ? (
                               <span className="text-xs font-semibold uppercase text-kun-products-forest">{t("free")}</span>
                             ) : (
                               <span className="tabular-nums font-medium">{fmtVnd(displayShippingFee)}</span>
                             )}
+                          </div>
+                        )}
+                        {!(isHost && state.status === "collecting" && (localShippingFetching || localShippingIsOutOfRange)) &&
+                          shippingConfig?.freeShipDistanceKm !== undefined && shippingConfig.freeShipDistanceKm > 0 && (
+                            <div className="flex items-center justify-end gap-1 text-[11px] text-kun-products-forest">
+                              <Navigation className="size-3 shrink-0" />
+                              {t("free_ship_within_km", { km: shippingConfig.freeShipDistanceKm })}
+                            </div>
+                          )}
+                        {displayShippingFee > 0 && shippingConfig?.weatherSurchargeActive && shippingConfig.weatherSurchargeFee > 0 && (
+                          <div className="flex justify-end">
+                            <p className="flex items-center gap-1 text-[11px] text-sky-700">
+                              <CloudRainWindIcon className="size-3 shrink-0" />
+                              {t("weather_surcharge_note", { amount: fmtVnd(shippingConfig.weatherSurchargeFee) })}
+                            </p>
                           </div>
                         )}
                       </div>
@@ -2812,6 +2847,13 @@ export function GroupOrderPageShell() {
           </motion.div>
         </div>
       )}
+
+      <StoreClosedDialog
+        open={!!storeClosedInfo}
+        code={storeClosedInfo?.code ?? null}
+        message={storeClosedInfo?.message}
+        onClose={() => setStoreClosedInfo(null)}
+      />
     </>
   );
 }

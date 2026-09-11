@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { MapPin, Clock, Phone } from "lucide-react";
 import { ROUTES } from "@/lib/routes";
-import { usePublicStoreLocationQuery, usePublicDeliveryPlatformsQuery } from "@/services/store/hooks";
+import { usePublicStoreLocationQuery, usePublicDeliveryPlatformsQuery, useStoreStatusQuery } from "@/services/store/hooks";
 import { Logo } from "../common/Logo";
 import { useTranslations } from "next-intl";
 
@@ -25,12 +25,13 @@ export function minutesToTime(minutes: number) {
 
 export default function Footer() {
   const { data: location } = usePublicStoreLocationQuery();
+  const { data: status } = useStoreStatusQuery()
   const { data: platforms = [] } = usePublicDeliveryPlatformsQuery();
   const hasCoords = location && location.lat !== 0 && location.lng !== 0;
   const t = useTranslations();
   const phone = location?.phone ?? null;
-  const hours = location?.shiftConfig
-    ? `${minutesToTime(location.shiftConfig.startMinutes)} – ${minutesToTime(location.shiftConfig.endMinutes)}`
+  const hours = status
+    ? `${minutesToTime(status.openMinutes)} – ${minutesToTime(status.closeMinutes)}`
     : null;
   const NAV_LINKS = [
     { href: ROUTES.PRODUCTS, label: t('menu') },

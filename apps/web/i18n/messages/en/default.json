@@ -1210,5 +1210,14 @@
   "group_fulfillment_unsaved_warning": "Please confirm delivery information before checking out",
   "GROUP_ORDER_FULL": "The group has reached its maximum number of members and cannot accept any more participants.",
   "GROUP_ORDER_GUEST_NAME_REQUIRED": "Please enter a name to join the group order.",
-  "session_expired_please_login": "Your session has expired. Please log in again."
+  "session_expired_please_login": "Your session has expired. Please log in again.",
+  "store_closed_title": "Store temporarily closed",
+  "store_closed_hours_default": "The store is currently outside opening hours.",
+  "store_closed_manual_default": "The store is not accepting orders right now. Please check back later.",
+  "store_closed_ok": "Got it",
+  "store_continue_ok": "Continue ordering",
+  "store_busy_tile": "The shop is busy with customers.",
+  "store_busy_manual_default": "Orders may take longer than usual to prepare. We appreciate your understanding!",
+  "weather_surcharge_note": "Includes a bad weather surcharge of +{amount}",
+  "weather_surcharge_only_note": "Free shipping by distance/order value — only the bad weather surcharge of +{amount} applies"
 }

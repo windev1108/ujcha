@@ -41,7 +41,7 @@ import { useEffect, useState } from "react";
 import { useAppDialog } from "@/components/common/app-dialog-provider";
 import type { OrderPaidPayload } from "@/hooks/useOrderSocket";
 import { useOrderSocket } from "@/hooks/useOrderSocket";
-import { formatVnd } from "@/lib/product-display";
+import { formatVnd, paymentTypeLabel } from "@/lib/product-display";
 import { ROUTES } from "@/lib/routes";
 import { adminKeys } from "@/services/admin/keys";
 import {
@@ -51,20 +51,21 @@ import {
 } from "@/services/admin/orders-api";
 import type { AdminOrder, AdminOrderStatus } from "@/services/admin/types";
 
-import { AssignShipperModal } from "./AssignShipperModal";
 import {
   canAssignShipper,
   customerDisplayName,
   formatOrderRef,
   orderStatusChipClass,
   orderStatusLabel,
-} from "./order-display";
-import { groupOrderItems } from "./receipt-shared";
+} from "../../components/order-display";
+import { groupOrderItems } from "../../components/receipt-shared";
 import {
   parseOrderItemExtras,
   parseOrderItemOptions,
-} from "./order-line-format";
+} from "../../components/order-line-format";
 import { OrderEditModal } from "./OrderEditModal";
+import { AssignShipperModal } from "./AssignShipperModal";
+import OrderAmountSummary from "./OrderAmountSummary";
 
 const LeafletMap = dynamic(
   () => import("@/components/common/LeafletMapInner"),
@@ -352,7 +353,7 @@ export function OrderDetailClient({ orderId }: Props) {
   const deliveryAddress = o.address?.fullAddress ?? o.guestDeliveryAddress ?? null;
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-6 pb-16">
+    <div className="mx-auto flex flex-col gap-6 pb-16">
       {/* Back nav */}
       <button
         type="button"
@@ -443,11 +444,6 @@ export function OrderDetailClient({ orderId }: Props) {
               <p className="mt-0.5 text-2xl font-bold tabular-nums text-[#1a3c34]">
                 {formatVnd(orderTotal)}
               </p>
-              {Number(o.discountAmount) > 0 && (
-                <p className="mt-0.5 text-xs text-foreground/50">
-                  Giảm <span className="font-medium text-red-500">-{formatVnd(o.discountAmount)}</span>
-                </p>
-              )}
               <p className="mt-1.5 text-[11px] text-foreground/40">
                 Mã: <span className="font-mono font-medium text-foreground/60">{o.paymentCode}</span>
               </p>
@@ -508,7 +504,26 @@ export function OrderDetailClient({ orderId }: Props) {
 
       {/* Status timeline */}
       <StatusTimeline order={o} />
-
+      <Card className="rounded-2xl border border-black/6">
+        <CardContent className="p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/45">
+              Chi tiết thanh toán
+            </p>
+            <span className="inline-flex items-center gap-1 rounded-full bg-black/[0.04] px-2.5 py-1 text-[11px] font-semibold text-foreground/60">
+              {paymentTypeLabel(o.paymentType)}
+            </span>
+          </div>
+          <OrderAmountSummary
+            subtotal={Number(o.totalAmount)}
+            discount={Number(o.discountAmount)}
+            pointDiscount={Number(o.pointDiscountAmount)}
+            shipping={o.type === "delivery" ? Number(o.shippingFee) : 0}
+            total={orderTotal}
+            isDelivery={o.type === "delivery"}
+          />
+        </CardContent>
+      </Card>
 
       {/* Service + recipient combined card */}
       <Card className="rounded-2xl border border-black/6">
@@ -548,6 +563,19 @@ export function OrderDetailClient({ orderId }: Props) {
                 <div className="min-w-0">
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-foreground/40">Dịch vụ</p>
                   <p className="truncate text-sm font-medium">Mang đi</p>
+                </div>
+              </div>
+            )}
+            {o.type === "pickup" && o.pickupTime && (
+              <div className="flex items-center gap-2.5 rounded-xl border border-black/6 px-3 py-2.5">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-violet-50">
+                  <Clock className="size-4 text-violet-700" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-foreground/40">Giờ lấy hàng</p>
+                  <p className="truncate text-sm font-medium">
+                    {new Date(o.pickupTime).toLocaleString("vi-VN")}
+                  </p>
                 </div>
               </div>
             )}
@@ -863,49 +891,6 @@ export function OrderDetailClient({ orderId }: Props) {
               </Table.Content>
             </Table.ScrollContainer>
           </Table.Root>
-
-          {/* Payment summary */}
-          {(() => {
-            const subtotal = Number(o.totalAmount);
-            const discount = Number(o.discountAmount);
-            const pointDiscount = Number(o.pointDiscountAmount);
-            const shipping = o.type === "delivery" ? Number(o.shippingFee) : 0;
-            const total = subtotal - discount - pointDiscount + shipping;
-            return (
-              <div className="border-t border-black/6 px-5 py-4 space-y-2">
-                <div className="flex justify-between text-sm text-foreground/60">
-                  <span>Tạm tính</span>
-                  <span className="tabular-nums font-medium text-foreground">{formatVnd(subtotal)}</span>
-                </div>
-                {discount > 0 && (
-                  <div className="flex justify-between text-sm text-foreground/60">
-                    <span>Giảm giá</span>
-                    <span className="tabular-nums font-medium text-red-600">-{formatVnd(discount)}</span>
-                  </div>
-                )}
-                {pointDiscount > 0 && (
-                  <div className="flex justify-between text-sm text-foreground/60">
-                    <span>Điểm tích lũy</span>
-                    <span className="tabular-nums font-medium text-violet-600">-{formatVnd(pointDiscount)}</span>
-                  </div>
-                )}
-                {o.type === "delivery" && (
-                  <div className="flex justify-between text-sm text-foreground/60">
-                    <span>Phí vận chuyển</span>
-                    {shipping > 0 ? (
-                      <span className="tabular-nums font-medium text-foreground">{formatVnd(shipping)}</span>
-                    ) : (
-                      <span className="font-semibold uppercase text-[#26634d]">Miễn phí</span>
-                    )}
-                  </div>
-                )}
-                <div className="flex items-baseline justify-between border-t border-black/6 pt-3">
-                  <span className="font-semibold text-foreground/70">Tổng cộng</span>
-                  <span className="text-xl font-bold tabular-nums text-[#1a3c34]">{formatVnd(total)}</span>
-                </div>
-              </div>
-            );
-          })()}
         </CardContent>
       </Card>}
 

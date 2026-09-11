@@ -2,7 +2,7 @@
 
 import { Button, Card, CardContent, Input, Switch } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bike, CheckCircle2, MapPin, RefreshCw, Truck } from "lucide-react";
+import { Bike, CheckCircle2, CloudRain, MapPin, RefreshCw, Truck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { adminFieldStack, adminInputClass, adminLabelClass } from "@/lib/admin-form-classes";
 import { adminKeys } from "@/services/admin/keys";
@@ -26,6 +26,8 @@ export function ShippingConfigClient() {
   const [maxDistanceKm, setMaxDistanceKm] = useState("15");
   const [freeThreshold, setFreeThreshold] = useState("200000");
   const [freeShipDistanceKm, setFreeShipDistanceKm] = useState("1");
+  const [weatherSurchargeActive, setWeatherSurchargeActive] = useState(false);
+  const [weatherSurchargeFee, setWeatherSurchargeFee] = useState("0");
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -37,6 +39,8 @@ export function ShippingConfigClient() {
       setMaxDistanceKm(String(data.maxDistanceKm));
       setFreeThreshold(String(data.freeThreshold));
       setFreeShipDistanceKm(String(data.freeShipDistanceKm ?? 1));
+      setWeatherSurchargeActive(data.weatherSurchargeActive ?? false);
+      setWeatherSurchargeFee(String(data.weatherSurchargeFee ?? 0));
     }
   }, [data]);
 
@@ -58,15 +62,18 @@ export function ShippingConfigClient() {
       maxDistanceKm: parseFloat(maxDistanceKm) || 1,
       freeThreshold: parseInt(freeThreshold) || 0,
       freeShipDistanceKm: parseFloat(freeShipDistanceKm) || 0,
+      weatherSurchargeActive,
+      weatherSurchargeFee: parseInt(weatherSurchargeFee) || 0,
     });
   }
 
   const previewFeeBase = parseInt(baseFee) || 0;
   const previewFeePerKm = parseInt(feePerKm) || 0;
   const previewBaseKm = parseFloat(baseKm) || 0;
-  const previewFeeAt5km = previewFeeBase + Math.ceil(Math.max(0, 5 - previewBaseKm)) * previewFeePerKm;
-  const previewFeeAt10km = previewFeeBase + Math.ceil(Math.max(0, 10 - previewBaseKm)) * previewFeePerKm;
-  const previewFeeAt15km = previewFeeBase + Math.ceil(Math.max(0, 15 - previewBaseKm)) * previewFeePerKm;
+  const previewWeatherFee = weatherSurchargeActive ? parseInt(weatherSurchargeFee) || 0 : 0;
+  const previewFeeAt5km = previewFeeBase + Math.ceil(Math.max(0, 5 - previewBaseKm)) * previewFeePerKm + previewWeatherFee;
+  const previewFeeAt10km = previewFeeBase + Math.ceil(Math.max(0, 10 - previewBaseKm)) * previewFeePerKm + previewWeatherFee;
+  const previewFeeAt15km = previewFeeBase + Math.ceil(Math.max(0, 15 - previewBaseKm)) * previewFeePerKm + previewWeatherFee;
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 px-4 py-8 sm:px-6">
@@ -195,6 +202,45 @@ export function ShippingConfigClient() {
             </div>
           </div>
 
+          {/* Weather surcharge */}
+          <div className="space-y-4 rounded-2xl border border-sky-600/12 bg-sky-50/50 p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-start gap-2.5">
+                <CloudRain className="mt-0.5 size-4 shrink-0 text-sky-700" />
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Phụ phí thời tiết xấu</p>
+                  <p className="text-xs text-foreground/55">
+                    Cộng thêm vào mọi đơn giao hàng khi bật, kể cả đơn được miễn phí ship
+                  </p>
+                </div>
+              </div>
+              <Switch
+                isSelected={weatherSurchargeActive}
+                onChange={setWeatherSurchargeActive}
+                isDisabled={isLoading || mutation.isPending}
+              >
+                <Switch.Control>
+                  <Switch.Thumb />
+                </Switch.Control>
+              </Switch>
+            </div>
+
+            {weatherSurchargeActive && (
+              <div className={adminFieldStack}>
+                <label className={adminLabelClass}>Số tiền phụ phí (đ)</label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={weatherSurchargeFee}
+                  onChange={(e) => setWeatherSurchargeFee(e.target.value)}
+                  placeholder="10000"
+                  className={adminInputClass}
+                  disabled={isLoading || mutation.isPending}
+                />
+              </div>
+            )}
+          </div>
+
           {/* Live preview */}
           <div className="rounded-2xl border border-dashed border-black/10 bg-neutral-50 p-4 space-y-2">
             <p className="flex items-center gap-1.5 text-xs font-semibold text-foreground/55 uppercase tracking-wide">
@@ -223,6 +269,12 @@ export function ShippingConfigClient() {
               {parseInt(freeThreshold) > 0 && (
                 <p className="text-[11px] text-foreground/55">
                   Freeship với đơn ≥ {formatVnd(parseInt(freeThreshold) || 0)}
+                </p>
+              )}
+              {weatherSurchargeActive && previewWeatherFee > 0 && (
+                <p className="flex items-center gap-1 text-[11px] text-sky-700">
+                  <CloudRain className="size-3 shrink-0" />
+                  Đã bao gồm phụ phí thời tiết xấu +{formatVnd(previewWeatherFee)}
                 </p>
               )}
             </div>

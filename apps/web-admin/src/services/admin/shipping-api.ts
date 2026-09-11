@@ -9,6 +9,8 @@ export interface ShippingConfig {
   maxDistanceKm: number;
   freeThreshold: number;
   freeShipDistanceKm: number;
+  weatherSurchargeActive: boolean;
+  weatherSurchargeFee: number;
   updatedAt: string;
 }
 
@@ -20,6 +22,8 @@ export interface UpdateShippingConfigBody {
   maxDistanceKm?: number;
   freeThreshold?: number;
   freeShipDistanceKm?: number;
+  weatherSurchargeActive?: boolean;
+  weatherSurchargeFee?: number;
 }
 
 export async function fetchShippingConfig(): Promise<ShippingConfig> {

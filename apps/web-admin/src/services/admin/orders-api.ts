@@ -40,13 +40,23 @@ export async function fetchAdminOrders(params?: {
 }
 
 export async function fetchAdminOrderStats(params?: {
+  type?: AdminOrderType;
+  status?: AdminOrderStatus;
+  q?: string;
   from?: string;
   to?: string;
+  isGroupOrder?: boolean;
 }): Promise<AdminOrderStats> {
   const { data } = await api.get<AdminOrderStats>("/admin/orders/stats", {
     params: {
+      ...(params?.type ? { type: params.type } : {}),
+      ...(params?.status ? { status: params.status } : {}),
+      ...(params?.q?.trim() ? { q: params.q.trim() } : {}),
       ...(params?.from ? { from: params.from } : {}),
       ...(params?.to ? { to: params.to } : {}),
+      ...(params?.isGroupOrder !== undefined
+        ? { isGroupOrder: params.isGroupOrder }
+        : {}),
     },
   });
   return data;

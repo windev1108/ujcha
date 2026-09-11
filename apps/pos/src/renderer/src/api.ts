@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { usePosStore } from './store/pos-store'
+import { RecipeResolveRequestItem, ResolvedRecipeMap } from './types/common'
 
 export const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:5000'
 
@@ -126,3 +127,8 @@ export interface GroupOrderLive {
 
 export const fetchGroupOrderLive = (token: string) =>
   api.get<GroupOrderLive>(`/group-orders/${token}`).then((r) => r.data)
+
+export const resolveRecipeBatch = (items: RecipeResolveRequestItem[]) =>
+  api
+    .post<ResolvedRecipeMap>('/admin/products/recipe/resolve-batch', { items })
+    .then((r) => r.data)

@@ -28,8 +28,14 @@ export const adminKeys = {
       filters?.isGroupOrder === true ? "group" : filters?.isGroupOrder === false ? "normal" : "all",
     ] as const,
   order: (id: string) => ["admin", "orders", id] as const,
-  orderStats: (from?: string, to?: string) =>
-    ["admin", "orders", "stats", from ?? "", to ?? ""] as const,
+  orderStats: (params: {
+    type?: string;
+    status?: string;
+    q?: string;
+    from?: string;
+    to?: string;
+    isGroupOrder?: boolean;
+  }) => ["admin", "orders", "stats", params] as const,
   tables: ["admin", "tables"] as const,
   table: (id: string) => ["admin", "tables", id] as const,
   tableStats: ["admin", "tables", "stats"] as const,
@@ -158,4 +164,5 @@ export const adminKeys = {
   deliveryPlatforms: ["admin", "store", "platforms"] as const,
   activeGroupOrders: ["admin", "group-orders", "active"] as const,
   groupOrderDetail: (token: string) => ["admin", "group-orders", token] as const,
+  ingredients: ["admin", "ingredients"] as const,
 };

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { OrderDetailClient } from "../components/OrderDetailClient";
+import { OrderDetailClient } from "./components/OrderDetailClient";
 
 type Props = { params: Promise<{ id: string }> };
 

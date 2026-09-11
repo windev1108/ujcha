@@ -5,8 +5,8 @@ import {
     Bike, UtensilsCrossed, Package, Truck, UserPlus, Users, Crown, XCircle, UserCheck, Sparkles,
 } from 'lucide-react'
 import { Fragment, useState, useEffect, useRef } from 'react'
-import { DEFAULT_BILL_CONFIG, DEFAULT_LABEL_CONFIG, type AdminOrder, type OrderStatus } from '../types/common'
-import { fetchShippers, assignShipper, updateOrderStatus, fetchShippingEstimate, fetchGroupOrderLive, type GroupOrderLive, API_URL } from '../api'
+import { DEFAULT_BILL_CONFIG, DEFAULT_LABEL_CONFIG, RecipeResolveRequestItem, ResolvedRecipe, ResolvedRecipeMap, type AdminOrder, type OrderStatus } from '../types/common'
+import { fetchShippers, assignShipper, updateOrderStatus, fetchShippingEstimate, fetchGroupOrderLive, type GroupOrderLive, API_URL, resolveRecipeBatch } from '../api'
 import { io, type Socket } from 'socket.io-client'
 import { buildOrderLabels, buildReceiptDocumentHtml, buildKunLoyaltyQrUrl, formatOptionDisplay, buildLabelPickerItems } from '@/lib/receipt-shared'
 import { KEYS, loadLocal } from '@/lib/local-storage'
@@ -15,6 +15,9 @@ import { BillConfig, LabelConfig } from '../../../preload'
 import { getFontBase64 } from '@/lib/font-cache'
 import { LeafletMap } from './LeafletMap'
 import { LabelPickerModal } from './LabelPickerModal'
+import { RecipeChecklist } from './RecipeChecklist'
+import { useShowRecipe } from '@/hooks/useShowRecipe'
+import { RecipeToggleButton } from './RecipeToggleButton'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const eAPI = (window as any).electronAPI as import('../../../preload').ElectronAPI | undefined
@@ -153,56 +156,60 @@ function StatusTimeline({ order }: { order: AdminOrder }) {
 
 // ── Item row ───────────────────────────────────────────────────────────────────
 
-function ItemRow({ item }: { item: AdminOrder['items'][number] }) {
+function ItemRow({ item, recipe, showRecipe }: { item: AdminOrder['items'][number]; recipe?: ResolvedRecipe; showRecipe: boolean }) {
     const optsStr = parseOptionsStr(item.optionsJson)
     const extras = parseExtras(item.extrasJson)
     const lineTotal = Number(item.price) * item.quantity
+    const sizeLabel = optsStr.split(' · ').find((s) => /size/i.test(s)) ?? optsStr.split(' · ')[0]
 
     return (
-        <div className="flex items-start gap-3 px-4 py-3">
-            <div className="relative shrink-0 size-11">
-                {item.product.imageUrls?.[0] ? (
-                    <img src={item.product.imageUrls[0]} alt={item.product.name} className="size-11 rounded-xl object-cover ring-1 ring-black/6" />
-                ) : (
-                    <div className="size-11 rounded-xl bg-gray-100 flex items-center justify-center ring-1 ring-black/6">
-                        <ShoppingBag className="size-4 text-gray-300" />
-                    </div>
-                )}
-                <span className="absolute -bottom-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full bg-brand text-[10px] font-black text-white ring-2 ring-white shadow-sm">
-                    {item.quantity}
-                </span>
-            </div>
-
-            <div className="min-w-0 flex-1">
-                <div className="flex items-start justify-between gap-2">
-                    <p className="font-semibold text-gray-900 leading-snug">{item.product?.name}</p>
-                    <div className="shrink-0 text-right">
-                        <p className="font-semibold text-gray-800 tabular-nums">{fmt(lineTotal)}</p>
-                        {item.quantity > 1 && (
-                            <p className="text-[11px] text-gray-400 tabular-nums">{fmt(item.price)} / cái</p>
-                        )}
-                    </div>
+        <div className="flex flex-col gap-0 px-4 py-3">
+            <div className="flex items-start gap-3">
+                <div className="relative shrink-0 size-11">
+                    {item.product.imageUrls?.[0] ? (
+                        <img src={item.product.imageUrls[0]} alt={item.product.name} className="size-11 rounded-xl object-cover ring-1 ring-black/6" />
+                    ) : (
+                        <div className="size-11 rounded-xl bg-gray-100 flex items-center justify-center ring-1 ring-black/6">
+                            <ShoppingBag className="size-4 text-gray-300" />
+                        </div>
+                    )}
+                    <span className="absolute -bottom-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full bg-brand text-[10px] font-black text-white ring-2 ring-white shadow-sm">
+                        {item.quantity}
+                    </span>
                 </div>
 
-                {(optsStr || extras.length > 0) && (
-                    <div className="mt-1.5 flex flex-wrap gap-1">
-                        {optsStr && optsStr.split(' · ').map((opt, i) => (
-                            <span key={i} className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
-                                {opt}
-                            </span>
-                        ))}
-                        {extras.map((ex, i) => (
-                            <span key={i} className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
-                                + {ex.name}
-                                {ex.price > 0 && <span className="text-emerald-500">+{fmt(ex.price)}</span>}
-                            </span>
-                        ))}
+                <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                        <p className="font-semibold text-gray-900 leading-snug">{item.product?.name}</p>
+                        <div className="shrink-0 text-right">
+                            <p className="font-semibold text-gray-800 tabular-nums">{fmt(lineTotal)}</p>
+                            {item.quantity > 1 && (
+                                <p className="text-[11px] text-gray-400 tabular-nums">{fmt(item.price)} / cái</p>
+                            )}
+                        </div>
                     </div>
-                )}
-                {item.note && (
-                    <p className="mt-1.5 text-[11px] font-medium text-amber-700">Ghi chú: {item.note}</p>
-                )}
+
+                    {(optsStr || extras.length > 0) && (
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                            {optsStr && optsStr.split(' · ').map((opt, i) => (
+                                <span key={i} className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
+                                    {opt}
+                                </span>
+                            ))}
+                            {extras.map((ex, i) => (
+                                <span key={i} className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                                    + {ex.name}
+                                    {ex.price > 0 && <span className="text-emerald-500">+{fmt(ex.price)}</span>}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                    {item.note && (
+                        <p className="mt-1.5 text-[11px] font-medium text-amber-700">Ghi chú: {item.note}</p>
+                    )}
+                </div>
             </div>
+            {showRecipe && <RecipeChecklist recipe={recipe} quantity={item.quantity} sizeLabel={sizeLabel} />}
         </div>
     )
 }
@@ -241,7 +248,36 @@ export function OrderDetailModal({
     const [localStatus, setLocalStatus] = useState<OrderStatus>(order.status)
     const [groupLive, setGroupLive] = useState<GroupOrderLive | null>(null)
     const groupSocketRef = useRef<Socket | null>(null)
+    const [recipeMap, setRecipeMap] = useState<ResolvedRecipeMap>({})
+    const { showRecipe, toggle: toggleRecipe } = useShowRecipe()
 
+    useEffect(() => {
+        const requestItems: RecipeResolveRequestItem[] = order.groupOrder
+            ? order.groupOrder.participants.flatMap((p) =>
+                p.items.map((it) => ({
+                    key: it.id,
+                    productId: it.product.id,
+                    selectedLabels: [
+                        ...Object.values(it.selectedOptions ?? {}).filter((v): v is string => !!v),
+                        ...(Array.isArray(it.toppingsJson)
+                            ? (it.toppingsJson as Array<{ name?: string }>).map((t) => t.name).filter((n): n is string => !!n)
+                            : []),
+                    ],
+                })),
+            )
+            : order.items.map((it) => ({
+                key: it.id,
+                productId: it.product.id,
+                selectedLabels: [
+                    ...Object.values((it.optionsJson as Record<string, string>) ?? {}).filter(Boolean),
+                    ...parseExtras(it.extrasJson).map((e) => e.name),
+                ],
+            }))
+
+        if (requestItems.length === 0) return
+        void resolveRecipeBatch(requestItems).then(setRecipeMap).catch(() => { })
+
+    }, [order.id, order.groupOrder, order.items])
     useEffect(() => {
         setBillCfg(loadLocal<BillConfig>(KEYS.bill, DEFAULT_BILL_CONFIG))
         setLabelCfg(loadLocal<LabelConfig>(KEYS.label, DEFAULT_LABEL_CONFIG))
@@ -471,9 +507,12 @@ export function OrderDetailModal({
                             <span className="text-xs text-gray-400">{formatDate(order.createdAt)}</span>
                         </div>
                     </div>
-                    <button onClick={onClose} className="ml-3 shrink-0 rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors">
-                        <X className="size-5" />
-                    </button>
+                    <div className="flex shrink-0 items-center gap-2">
+                        <RecipeToggleButton show={showRecipe} onToggle={toggleRecipe} />
+                        <button onClick={onClose} className="ml-3 shrink-0 rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors">
+                            <X className="size-5" />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Body — 2-column on sm+ */}
@@ -562,7 +601,13 @@ export function OrderDetailModal({
 
                         {/* Items */}
                         {order.groupOrder ? (
-                            <GroupOrderItemsSection go={order.groupOrder} totalQty={totalQty} liveParticipants={groupLive?.participants} />
+                            <GroupOrderItemsSection
+                                go={order.groupOrder}
+                                totalQty={totalQty}
+                                liveParticipants={groupLive?.participants}
+                                recipeMap={recipeMap}
+                                showRecipe={showRecipe}
+                            />
                         ) : (
                             <div className="rounded-2xl border border-gray-100 overflow-hidden">
                                 <p className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
@@ -570,7 +615,7 @@ export function OrderDetailModal({
                                 </p>
                                 <div className="divide-y divide-gray-50">
                                     {order.items.map((item) => (
-                                        <ItemRow key={item.id} item={item} />
+                                        <ItemRow key={item.id} item={item} recipe={recipeMap[item.id]} showRecipe={showRecipe} />
                                     ))}
                                 </div>
                             </div>
@@ -783,10 +828,13 @@ function GroupOrderItemsSection({
     go,
     totalQty,
     liveParticipants,
+    recipeMap, showRecipe
 }: {
     go: NonNullable<AdminOrder['groupOrder']>
     totalQty: number
     liveParticipants?: Array<{ id: string; paymentStatus: 'pending' | 'paid' }>
+    recipeMap: ResolvedRecipeMap
+    showRecipe: boolean
 }) {
     const withItems = go.participants.filter((p) => p.items.length > 0)
     const paidCount = liveParticipants
@@ -865,36 +913,41 @@ function GroupOrderItemsSection({
                                         : 0
                                     const lineTotal = (Number(item.unitPrice) + toppingSum) * item.quantity
                                     return (
-                                        <div key={item.id} className="flex items-start gap-3 pl-12 pr-4 py-2.5">
-                                            {item.product.imageUrls?.[0] ? (
-                                                <img src={item.product.imageUrls[0]} alt={item.product.name} className="size-9 shrink-0 rounded-lg object-cover ring-1 ring-black/6" />
-                                            ) : (
-                                                <div className="size-9 shrink-0 rounded-lg bg-gray-100 flex items-center justify-center ring-1 ring-black/6">
-                                                    <ShoppingBag className="size-3.5 text-gray-300" />
-                                                </div>
-                                            )}
-                                            <div className="min-w-0 flex-1">
-                                                <div className="flex items-start justify-between gap-2">
-                                                    <p className="text-xs font-semibold text-gray-800 leading-snug">{item.product.name}</p>
-                                                    <div className="shrink-0 text-right">
-                                                        <p className="text-xs font-semibold text-gray-700 tabular-nums">{fmt(lineTotal)}</p>
-                                                        <span className="text-[10px] font-bold text-gray-400">×{item.quantity}</span>
-                                                    </div>
-                                                </div>
-                                                {(opts || toppings || item.note) && (
-                                                    <div className="mt-1 flex flex-wrap gap-1">
-                                                        {opts && opts.split(' · ').map((o, i) => (
-                                                            <span key={i} className="rounded-full bg-gray-100 px-2 py-px text-[10px] text-gray-500">{o}</span>
-                                                        ))}
-                                                        {toppings && (
-                                                            <span className="rounded-full bg-emerald-50 px-2 py-px text-[10px] text-emerald-700">+{toppings}</span>
-                                                        )}
-                                                        {item.note && (
-                                                            <span className="rounded-full bg-amber-50 px-2 py-px text-[10px] italic text-amber-700">&ldquo;{item.note}&rdquo;</span>
-                                                        )}
+                                        <div key={item.id} className="flex flex-col pl-12 pr-4 py-2.5">
+                                            <div className="flex items-start gap-3">
+                                                {item.product.imageUrls?.[0] ? (
+                                                    <img src={item.product.imageUrls[0]} alt={item.product.name} className="size-9 shrink-0 rounded-lg object-cover ring-1 ring-black/6" />
+                                                ) : (
+                                                    <div className="size-9 shrink-0 rounded-lg bg-gray-100 flex items-center justify-center ring-1 ring-black/6">
+                                                        <ShoppingBag className="size-3.5 text-gray-300" />
                                                     </div>
                                                 )}
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <p className="text-xs font-semibold text-gray-800 leading-snug">{item.product.name}</p>
+                                                        <div className="shrink-0 text-right">
+                                                            <p className="text-xs font-semibold text-gray-700 tabular-nums">{fmt(lineTotal)}</p>
+                                                            <span className="text-[10px] font-bold text-gray-400">×{item.quantity}</span>
+                                                        </div>
+                                                    </div>
+                                                    {(opts || toppings || item.note) && (
+                                                        <div className="mt-1 flex flex-wrap gap-1">
+                                                            {opts && opts.split(' · ').map((o, i) => (
+                                                                <span key={i} className="rounded-full bg-gray-100 px-2 py-px text-[10px] text-gray-500">{o}</span>
+                                                            ))}
+                                                            {toppings && (
+                                                                <span className="rounded-full bg-emerald-50 px-2 py-px text-[10px] text-emerald-700">+{toppings}</span>
+                                                            )}
+                                                            {item.note && (
+                                                                <span className="rounded-full bg-amber-50 px-2 py-px text-[10px] italic text-amber-700">&ldquo;{item.note}&rdquo;</span>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
+                                            {showRecipe && (
+                                                <RecipeChecklist recipe={recipeMap[item.id]} quantity={item.quantity} />
+                                            )}
                                         </div>
                                     )
                                 })}

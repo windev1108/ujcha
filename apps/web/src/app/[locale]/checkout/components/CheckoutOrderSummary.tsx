@@ -2,7 +2,7 @@
 
 import { Button, Card, CardContent } from "@heroui/react";
 import { motion } from "motion/react";
-import { AlertCircle, ArrowRight, CheckCircle2, Loader2, Navigation, Printer } from "lucide-react";
+import { AlertCircle, ArrowRight, CheckCircle2, CloudRainWindIcon, Loader2, Navigation, Printer } from "lucide-react";
 import { ShippingFeeTooltip } from "@/components/common/ShippingFeeTooltip";
 import { usePublicShippingConfigQuery } from "@/services/shipping/hooks";
 import Image from "next/image";
@@ -31,6 +31,8 @@ type Props = {
   shippingIsDisabled: boolean;
   distanceKm?: number;
   freeShipDistanceKm?: number;
+  weatherSurchargeActive?: boolean;
+  weatherSurchargeFee?: number;
   total: number;
   isDelivery: boolean;
   isSubmitting: boolean;
@@ -63,6 +65,8 @@ export function CheckoutOrderSummary({
   shippingIsDisabled,
   distanceKm,
   freeShipDistanceKm,
+  weatherSurchargeActive,
+  weatherSurchargeFee,
   total,
   isDelivery,
   isSubmitting,
@@ -190,22 +194,22 @@ export function CheckoutOrderSummary({
                     <span className="text-xs font-medium text-muted">{t("shipping_undetermined")}</span>
                   ) : shippingIsOutOfRange ? (
                     <span className="text-xs font-medium text-danger">{t("out_of_delivery_range")}</span>
-                  ) : shippingIsFree || shippingFee === 0 ? (
+                  ) : shippingFee === 0 ? (
                     <span className="font-medium uppercase text-kun-products-forest">{t("free")}</span>
                   ) : (
                     <span className="tabular-nums font-medium text-foreground">{formatVnd(shippingFee)}</span>
                   )}
                 </div>
-                {!shippingIsDisabled && distanceKm !== undefined && distanceKm > 0 && (
-                  <div className="flex items-center justify-end gap-1 text-[11px] tabular-nums text-muted">
-                    <Navigation className="size-3 shrink-0" />
-                    {t("distance_from_store", { distance: distanceKm.toFixed(1) })}
-                  </div>
-                )}
                 {!shippingIsDisabled && freeShipDistanceKm !== undefined && freeShipDistanceKm > 0 && (
                   <div className="flex items-center justify-end gap-1 text-[11px] text-kun-products-forest">
                     <Navigation className="size-3 shrink-0" />
                     {t("free_ship_within_km", { km: freeShipDistanceKm })}
+                  </div>
+                )}
+                {!shippingIsDisabled && weatherSurchargeActive && (weatherSurchargeFee ?? 0) > 0 && (
+                  <div className="flex items-center justify-end gap-1 text-[11px] text-sky-700">
+                    <CloudRainWindIcon className="size-3 shrink-0" />
+                    {t("weather_surcharge_note", { amount: formatVnd(weatherSurchargeFee ?? 0) })}
                   </div>
                 )}
               </div>

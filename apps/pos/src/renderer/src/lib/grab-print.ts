@@ -19,6 +19,7 @@ export type GrabItemFull = {
   comment: string
   modifierGroups: GrabItemModGroup[]
   itemID?: string
+  itemKey: string
 }
 
 export type GrabFull = {

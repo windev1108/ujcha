@@ -7,6 +7,8 @@ export interface ShippingEstimate {
   isOutOfRange: boolean
   isDisabled: boolean
   freeShipDistanceKm: number
+  weatherSurchargeActive: boolean
+  weatherSurchargeFee: number
 }
 
 export interface PublicShippingConfig {
@@ -17,6 +19,8 @@ export interface PublicShippingConfig {
   maxDistanceKm: number
   freeThreshold: number
   freeShipDistanceKm: number
+  weatherSurchargeActive: boolean
+  weatherSurchargeFee: number
 }
 
 export async function fetchShippingEstimate(
