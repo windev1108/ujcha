@@ -36,10 +36,10 @@ const POLL_INTERVAL_MS = 5_000
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let lastKnownOrderIds = new Set<string>()
-// Giá trị times.acceptedAt gần nhất đã ghi nhận cho mỗi đơn — null nghĩa là
-// đơn chưa được xác nhận (accept), có timestamp nghĩa là đã được xác nhận
-// (ở bất kỳ đâu: nhóm Grab, app đối tác, auto-accept, hay trong POS).
-let orderAcceptedAtMap = new Map<string, string | null>()
+// Giá trị preparationTaskpoolStatus gần nhất đã ghi nhận cho mỗi đơn — dùng để
+// phát hiện thời điểm đơn chuyển sang "ACCEPTED" (xác nhận ở bất kỳ đâu: nhóm
+// Grab, app đối tác, auto-accept, hay trong POS).
+let orderPrepStatusMap = new Map<string, string | null>()
 let lastPollTime: string | null = null
 let lastPollStatus: 'ok' | 'auth_error' | 'error' | 'idle' = 'idle'
 let cachedHeaders: Record<string, string> | null = null
@@ -477,28 +477,35 @@ async function runPoll() {
     for (const order of orders) {
       const id = order.orderID
       if (!id) continue
-      const currAcceptedAt = order.times?.acceptedAt ?? null
 
       if (!lastKnownOrderIds.has(id)) {
         // Đơn mới xuất hiện lần đầu
         lastKnownOrderIds.add(id)
-        orderAcceptedAtMap.set(id, currAcceptedAt)
-        console.log('[GrabFood] New preparing order:', id, order.displayID)
+        const currPrepStatus = order.preparationTaskpoolStatus ?? null
+        orderPrepStatusMap.set(id, currPrepStatus)
+        console.log('[GrabFood] New preparing order:', id, order.displayID, 'prepStatus:', currPrepStatus)
         _onNewOrderCb?.(id)
 
-        // KHÔNG bắn "accepted" ở đây dù currAcceptedAt đã có sẵn (auto-accept
-        // qua AA) — làm vậy sẽ tắt còi ngay sau khi vừa bật, khiến còi im
-        // lặng hoàn toàn cho merchant bật Auto-Accept. Còi phải tiếp tục kêu
-        // để báo staff biết có đơn cần chuẩn bị; chỉ dừng khi đơn thực sự
-        // rời khỏi "Đang chuẩn bị" (xem đoạn dọn dẹp bên dưới) hoặc khi có
-        // một chuyển trạng thái null→có-giá-trị thật sự ở lần poll sau.
+        // KHÔNG bắn "accepted" ở đây dù currPrepStatus đã là "ACCEPTED" sẵn
+        // (auto-accept qua AA) — làm vậy sẽ tắt còi ngay sau khi vừa bật, khiến
+        // còi im lặng hoàn toàn cho merchant bật Auto-Accept. Còi phải tiếp tục
+        // kêu để báo staff biết có đơn cần chuẩn bị; chỉ dừng khi
+        // preparationTaskpoolStatus THỰC SỰ chuyển sang "ACCEPTED" ở lần poll
+        // sau (nhánh else bên dưới), hoặc khi đơn rời khỏi "Đang chuẩn bị" hẳn
+        // (xem đoạn dọn dẹp bên dưới).
       } else {
-        // Đơn đã biết trước đó — kiểm tra acceptedAt có vừa được set không
-        const prevAcceptedAt = orderAcceptedAtMap.get(id) ?? null
-        if (!prevAcceptedAt && currAcceptedAt) {
-          orderAcceptedAtMap.set(id, currAcceptedAt)
-          console.log('[GrabFood] Order accepted (times.acceptedAt set):', id, currAcceptedAt)
+        // Đơn đã biết trước đó — kiểm tra preparationTaskpoolStatus có vừa
+        // chuyển sang "ACCEPTED" không
+        const currPrepStatus = order.preparationTaskpoolStatus ?? null
+        const prevPrepStatus = orderPrepStatusMap.get(id) ?? null
+        if (prevPrepStatus !== 'ACCEPTED' && currPrepStatus === 'ACCEPTED') {
+          orderPrepStatusMap.set(id, currPrepStatus)
+          console.log('[GrabFood] Order accepted (preparationTaskpoolStatus → ACCEPTED):', id)
           _onOrderAcceptedCb?.(id)
+        } else if (prevPrepStatus !== currPrepStatus) {
+          // Ghi nhận trạng thái mới (kể cả khi chưa phải ACCEPTED) để lần poll
+          // sau so sánh đúng
+          orderPrepStatusMap.set(id, currPrepStatus)
         }
       }
     }
@@ -510,7 +517,7 @@ async function runPoll() {
     for (const id of [...lastKnownOrderIds]) {
       if (!currentIds.has(id)) {
         lastKnownOrderIds.delete(id)
-        orderAcceptedAtMap.delete(id)
+        orderPrepStatusMap.delete(id)
         console.log('[GrabFood] Order left PreparingV2 — treating as accepted/handled:', id)
         _onOrderAcceptedCb?.(id)
       }
@@ -785,7 +792,7 @@ export function resetGrabSession() {
   cachedMerchantDisplayRole = null
   nextSearchToken = ''
   lastKnownOrderIds.clear()
-  orderAcceptedAtMap.clear()
+  orderPrepStatusMap.clear()
   lastPollTime = null
   lastPollStatus = 'idle'
   writeSubConfig('grabSetting', {})
