@@ -1693,7 +1693,6 @@ export function GroupOrderPageShell() {
   const localShippingFee = localType === "delivery" ? (localShippingEstimate?.fee ?? 0) : 0;
   const localShippingIsFree = localType === "delivery" && (localShippingEstimate?.isFree ?? false);
   const localShippingIsOutOfRange = localType === "delivery" && (localShippingEstimate?.isOutOfRange ?? false);
-  const localShippingDistance = localType === "delivery" ? (localShippingEstimate?.distanceKm ?? 0) : 0
 
   // Mark auto-save pending whenever the user changes type, address, or payment
   // useEffect(() => {
@@ -1862,7 +1861,6 @@ export function GroupOrderPageShell() {
       total: Math.round(me.subtotal - discountAmt + shippingShare),
     };
   }, [state, me, config, shippingFeeMode, isHost]);
-  const myAmount = myAmountBreakdown?.total ?? 0;
 
   const handleHostCheckout = useCallback(async () => {
     if (!sessionToken || !state) return;
@@ -2094,14 +2092,12 @@ export function GroupOrderPageShell() {
   const activeParticipants = state.participants.filter((p) => p.items.length > 0);
   const discountPercent = resolveDiscount(activeParticipants.length, config);
   const discountAmount = Math.round((totalAmount * discountPercent) / 100);
-  const finalAmount = totalAmount - discountAmount + state.shippingFee;
 
   const allReady =
     state.participants.length > 1 && state.participants.every((p) => p.isReady);
 
   const FulfillmentIcon =
     state.type === "delivery" ? Truck : state.type === "table" ? Utensils : ShoppingBag;
-  const needsAddress = state.type === "delivery" && !state.address;
   const fulfillmentLabel = t(
     state.type === "delivery" ? "type_delivery" :
       state.type === "table" ? "type_table" : "type_pickup"
@@ -2492,13 +2488,24 @@ export function GroupOrderPageShell() {
                             )}
                           </div>
                         )}
-                        {!(isHost && state.status === "collecting") &&
-                          localShippingDistance !== undefined && localShippingDistance > 0 && (
-                            <div className="flex items-center justify-end gap-1 text-[11px] tabular-nums text-muted">
-                              <Navigation className="size-3 shrink-0" />
-                              {t("distance_from_store", { distance: localShippingDistance.toFixed(1) })}
-                            </div>
-                          )}
+                        {(() => {
+                          const isDeliveryContext = isHost && state.status === "collecting"
+                            ? localType === "delivery"
+                            : state.type === "delivery";
+                          const isCalculating = isHost && state.status === "collecting" && (localShippingFetching || localShippingIsOutOfRange);
+
+                          return (
+                            isDeliveryContext &&
+                            !isCalculating &&
+                            shippingConfig?.freeShipDistanceKm !== undefined &&
+                            shippingConfig.freeShipDistanceKm > 0 && (
+                              <div className="flex items-center justify-end gap-1 text-[11px] text-kun-products-forest">
+                                <BikeIcon className="size-3 shrink-0" />
+                                {t("free_ship_within_km", { km: shippingConfig.freeShipDistanceKm })}
+                              </div>
+                            )
+                          );
+                        })()}
                         {!(isHost && state.status === "collecting" && (localShippingFetching || localShippingIsOutOfRange)) &&
                           shippingConfig?.freeShipDistanceKm !== undefined && shippingConfig.freeShipDistanceKm > 0 && (
                             <div className="flex items-center justify-end gap-1 text-[11px] text-kun-products-forest">
