@@ -107,6 +107,7 @@ export function GroupOrderCheckoutModal({
       note: "",
       lat: null,
       lng: null,
+      mode: 'asap',
     });
     setPickupForm({
       mode: "asap",

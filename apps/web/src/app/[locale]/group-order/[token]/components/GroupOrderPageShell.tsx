@@ -11,6 +11,7 @@ import Image from "next/image";
 import {
   Banknote,
   Bike,
+  BikeIcon,
   Check,
   CheckCircle2,
   Clock,
@@ -1692,6 +1693,7 @@ export function GroupOrderPageShell() {
   const localShippingFee = localType === "delivery" ? (localShippingEstimate?.fee ?? 0) : 0;
   const localShippingIsFree = localType === "delivery" && (localShippingEstimate?.isFree ?? false);
   const localShippingIsOutOfRange = localType === "delivery" && (localShippingEstimate?.isOutOfRange ?? false);
+  const localShippingDistance = localType === "delivery" ? (localShippingEstimate?.distanceKm ?? 0) : 0
 
   // Mark auto-save pending whenever the user changes type, address, or payment
   // useEffect(() => {
@@ -2490,10 +2492,17 @@ export function GroupOrderPageShell() {
                             )}
                           </div>
                         )}
+                        {!(isHost && state.status === "collecting" && (localShippingFetching || localShippingDistance)) &&
+                          localShippingDistance !== 0 && localShippingDistance > 0 && (
+                            <div className="flex items-center justify-end gap-1 text-[11px] tabular-nums text-muted">
+                              <Navigation className="size-3 shrink-0" />
+                              {t("distance_from_store", { distance: localShippingDistance.toFixed(1) })}
+                            </div>
+                          )}
                         {!(isHost && state.status === "collecting" && (localShippingFetching || localShippingIsOutOfRange)) &&
                           shippingConfig?.freeShipDistanceKm !== undefined && shippingConfig.freeShipDistanceKm > 0 && (
                             <div className="flex items-center justify-end gap-1 text-[11px] text-kun-products-forest">
-                              <Navigation className="size-3 shrink-0" />
+                              <BikeIcon className="size-3 shrink-0" />
                               {t("free_ship_within_km", { km: shippingConfig.freeShipDistanceKm })}
                             </div>
                           )}

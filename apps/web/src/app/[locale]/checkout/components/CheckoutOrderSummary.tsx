@@ -2,7 +2,7 @@
 
 import { Button, Card, CardContent } from "@heroui/react";
 import { motion } from "motion/react";
-import { AlertCircle, ArrowRight, CheckCircle2, CloudRainWindIcon, Loader2, Navigation, Printer } from "lucide-react";
+import { AlertCircle, ArrowRight, BikeIcon, CheckCircle2, CloudRainWindIcon, Loader2, Navigation, Printer } from "lucide-react";
 import { ShippingFeeTooltip } from "@/components/common/ShippingFeeTooltip";
 import { usePublicShippingConfigQuery } from "@/services/shipping/hooks";
 import Image from "next/image";
@@ -208,7 +208,7 @@ export function CheckoutOrderSummary({
                 )}
                 {!shippingIsDisabled && freeShipDistanceKm !== undefined && freeShipDistanceKm > 0 && (
                   <div className="flex items-center justify-end gap-1 text-[11px] text-kun-products-forest">
-                    <Navigation className="size-3 shrink-0" />
+                    <BikeIcon className="size-3 shrink-0" />
                     {t("free_ship_within_km", { km: freeShipDistanceKm })}
                   </div>
                 )}
