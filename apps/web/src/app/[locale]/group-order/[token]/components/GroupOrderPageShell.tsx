@@ -2492,8 +2492,8 @@ export function GroupOrderPageShell() {
                             )}
                           </div>
                         )}
-                        {!(isHost && state.status === "collecting" && (localShippingFetching || localShippingDistance)) &&
-                          localShippingDistance !== 0 && localShippingDistance > 0 && (
+                        {!(isHost && state.status === "collecting") &&
+                          localShippingDistance !== undefined && localShippingDistance > 0 && (
                             <div className="flex items-center justify-end gap-1 text-[11px] tabular-nums text-muted">
                               <Navigation className="size-3 shrink-0" />
                               {t("distance_from_store", { distance: localShippingDistance.toFixed(1) })}
