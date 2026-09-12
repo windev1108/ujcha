@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   AlertCircle,
@@ -30,7 +30,6 @@ import { useRouter } from "@/i18n/navigation";
 import { useTranslations, useLocale } from "next-intl";
 import { api } from "@/config/server";
 import { fetchPublicTable, type CreatedOrder, type PublicTableInfo } from "@/services/order/api";
-import { fetchProducts } from "@/services/product/api";
 import { fetchCategories } from "@/services/category/api";
 import type { ApiProduct } from "@/services/product/types";
 import type { ApiCategory } from "@/services/category/types";
@@ -41,6 +40,8 @@ import { getDisplayName, getValueLabel } from "@/lib/product-name";
 import { ProductCard } from "@/components/product/ProductCard";
 import { easeOutSmooth } from "../../(landing)/components/RevealSection";
 import { useProductsQuery } from "@/services/product/hooks";
+import { useOutOfStockToppingNames } from "@/services/topping/hooks";
+import { toppingNameKey } from "@/services/topping/api";
 
 const TABLE_STORAGE_KEY = "ujcha_table_id";
 const PAGE_SIZE = 12;
@@ -75,7 +76,7 @@ function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number)
 }
 
 async function fetchStoreLocation(): Promise<StoreLocationConfig> {
-  const { data } = await api.get<StoreLocationConfig>("/tables/store-location");
+  const { data } = await api.get<StoreLocationConfig>("/store/location");
   return data;
 }
 
@@ -452,8 +453,13 @@ function ProductPickModal({
   const t = useTranslations();
   const locale = useLocale();
   const groups = normalizeOptionGroups(product.optionGroups);
-  const productToppings = (product.toppings ?? []).filter((tp) => tp.isActive !== false);
-  const disc = product.discountPercent > 0;
+  // const productToppings = (product.toppings ?? []).filter((tp) => tp.isActive !== false);
+  const { data: oosNameKeys = [] } = useOutOfStockToppingNames();
+  const oosSet = useMemo(() => new Set(oosNameKeys), [oosNameKeys]);
+  const productToppings = (product?.toppings ?? [])
+    .filter((top) => top.isActive !== false)
+    .filter((top) => !oosSet.has(toppingNameKey(top.name)));
+
   const baseEffective = product.finalPrice;
 
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>(() => {

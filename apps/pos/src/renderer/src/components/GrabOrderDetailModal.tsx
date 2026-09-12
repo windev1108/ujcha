@@ -11,6 +11,8 @@ import { buildLabelPickerItems } from "@/lib/receipt-shared";
 import { LabelPickerModal } from "./LabelPickerModal";
 import { resolveRecipeBatch } from "@/api";
 import { RecipeChecklist } from "./RecipeChecklist";
+import { useShowRecipe } from "@/hooks/useShowRecipe";
+import { RecipeToggleButton } from "./RecipeToggleButton";
 
 function Row({ label, value, green, bold }: { label: string; value: string; green?: boolean; bold?: boolean }) {
     return (
@@ -78,6 +80,7 @@ export default function GrabOrderDetailModal({
     const labelCfg = loadLocal<LabelConfig>(KEYS.label, DEFAULT_LABEL_CONFIG)
     const hasBillPrinter = billCfg.enabled && !!(billCfg.address || billCfg.printerId)
     const hasLabelPrinter = labelCfg.enabled && !!(labelCfg.address || labelCfg.printerId)
+    const { showRecipe, toggle: toggleRecipe } = useShowRecipe()
     const [recipeMap, setRecipeMap] = useState<ResolvedRecipeMap>({})
 
     useEffect(() => {
@@ -90,6 +93,7 @@ export default function GrabOrderDetailModal({
         if (requestItems.length === 0) return
         void resolveRecipeBatch(requestItems).then(setRecipeMap).catch(() => { })
     }, [data])
+
     const billDisabledReason = !billCfg.enabled
         ? 'Chưa bật in hóa đơn trong Cài đặt'
         : !(billCfg.address || billCfg.printerId)
@@ -143,26 +147,30 @@ export default function GrabOrderDetailModal({
                         {data && (
                             <p className="text-lg font-bold">{data.displayID}</p>
                         )}
-                    </div>
-                    <div className="flex items-center gap-2">
                         {data && (
                             <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold ${color}`}>
                                 <span className={`size-1.5 rounded-full ${dot}`} />
                                 {label}
                             </span>
                         )}
-                        {onDismissAlert && hasActiveAlert && (
-                            <button
-                                onClick={onDismissAlert}
-                                title="Xác nhận đã xem — tắt chuông báo đơn mới"
-                                className="flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-1.5 text-xs font-bold text-green-700 hover:bg-green-100 transition-colors"
-                            >
-                                🔕 Xác nhận
+                    </div>
+                    <div className="flex items-center gap-2">
+
+                        <div className="flex items-center gap-2">
+                            <RecipeToggleButton show={showRecipe} onToggle={toggleRecipe} />
+                            {onDismissAlert && hasActiveAlert && (
+                                <button
+                                    onClick={onDismissAlert}
+                                    title="Xác nhận đã xem — tắt chuông báo đơn mới"
+                                    className="flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-1.5 text-xs font-bold text-green-700 hover:bg-green-100 transition-colors"
+                                >
+                                    🔕 Xác nhận
+                                </button>
+                            )}
+                            <button onClick={onClose} className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700">
+                                <X className="size-5" />
                             </button>
-                        )}
-                        <button onClick={onClose} className="rounded-xl p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700">
-                            <X className="size-5" />
-                        </button>
+                        </div>
                     </div>
                 </div>
 
@@ -240,7 +248,7 @@ export default function GrabOrderDetailModal({
                                                         {fmt(item.fare.priceFloat * item.quantity)}
                                                     </span>
                                                 </div>
-                                                <RecipeChecklist recipe={recipeMap[key]} quantity={item.quantity} sizeLabel={sizeLabel} />
+                                                {showRecipe && <RecipeChecklist recipe={recipeMap[key]} quantity={item.quantity} sizeLabel={sizeLabel} />}
                                             </div>
                                         )
                                     })}

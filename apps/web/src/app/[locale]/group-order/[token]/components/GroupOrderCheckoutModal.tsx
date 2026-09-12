@@ -7,6 +7,7 @@ import {
   Bike,
   Check,
   Loader2,
+  Navigation,
   ShoppingBag,
   Truck,
   X,
@@ -321,6 +322,12 @@ export function GroupOrderCheckoutModal({
                       </span>
                     )}
                   </div>
+                  {!shippingFetching && shippingEstimate?.distanceKm !== undefined && shippingEstimate.distanceKm > 0 && (
+                    <div className="flex items-center justify-end gap-1 text-[11px] tabular-nums text-muted">
+                      <Navigation className="size-3 shrink-0" />
+                      {t("distance_from_store", { distance: shippingEstimate.distanceKm.toFixed(1) })}
+                    </div>
+                  )}
                   {!shippingFetching && !shippingIsOutOfRange && shippingEstimate && shippingEstimate.freeShipDistanceKm > 0 && (
                     <p className="mt-1.5 flex items-center gap-1 px-1 text-[11px] text-kun-products-forest">
                       <Bike className="size-3 shrink-0" />

@@ -200,6 +200,12 @@ export function CheckoutOrderSummary({
                     <span className="tabular-nums font-medium text-foreground">{formatVnd(shippingFee)}</span>
                   )}
                 </div>
+                {!shippingIsDisabled && distanceKm !== undefined && distanceKm > 0 && (
+                  <div className="flex items-center justify-end gap-1 text-[11px] tabular-nums text-muted">
+                    <Navigation className="size-3 shrink-0" />
+                    {t("distance_from_store", { distance: distanceKm.toFixed(1) })}
+                  </div>
+                )}
                 {!shippingIsDisabled && freeShipDistanceKm !== undefined && freeShipDistanceKm > 0 && (
                   <div className="flex items-center justify-end gap-1 text-[11px] text-kun-products-forest">
                     <Navigation className="size-3 shrink-0" />
