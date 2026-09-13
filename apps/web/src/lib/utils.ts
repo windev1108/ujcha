@@ -67,3 +67,9 @@ export function extractErrorMessage(err: unknown): string | null {
 export function isStoreClosedErrorCode(code: string | null): code is "STORE_CLOSED_HOURS" | "STORE_CLOSED_MANUAL" {
     return code === "STORE_CLOSED_HOURS" || code === "STORE_CLOSED_MANUAL";
 }
+
+export function minutesToHHmm(minutes: number): string {
+    const h = Math.floor(minutes / 60) % 24;
+    const m = minutes % 60;
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}

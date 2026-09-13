@@ -124,7 +124,7 @@ export function GroupOrderLandingShell() {
   const [expiryMinutes, setExpiryMinutes] = useState(120);
   const [configLoaded, setConfigLoaded] = useState(false);
   const [isEnabled, setIsEnabled] = useState(true);
-  const [storeClosedInfo, setStoreClosedInfo] = useState<{ code: string; message: string | null } | null>(null);
+  const [storeClosedInfo, setStoreClosedInfo] = useState<{ code: string } | null>(null);
 
   useEffect(() => {
     fetchGroupOrderConfig()
@@ -165,7 +165,6 @@ export function GroupOrderLandingShell() {
       <StoreClosedDialog
         open={!!storeClosedInfo}
         code={storeClosedInfo?.code ?? null}
-        message={storeClosedInfo?.message}
         onClose={() => setStoreClosedInfo(null)}
       />
       <AnimatePresence>

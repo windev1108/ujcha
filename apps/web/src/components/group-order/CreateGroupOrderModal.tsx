@@ -38,7 +38,7 @@ export function CreateGroupOrderModal({
   onAfterCreate,
 }: {
   onClose: () => void;
-  onStoreClosed: (payload: { code: string; message: string | null }) => void;
+  onStoreClosed: (payload: { code: string }) => void;
   hasActiveSession: boolean;
   onAfterCreate?: (payload: GroupOrderAfterCreatePayload) => Promise<void>;
 }) {
@@ -157,7 +157,7 @@ export function CreateGroupOrderModal({
       const code = extractErrorCode(e);
       if (code?.startsWith("STORE_")) {
         // gọi callback lên parent để mở StoreClosedDialog, hoặc tự import và render dialog ngay trong modal này
-        onStoreClosed?.({ code, message: extractErrorMessage(e) });
+        onStoreClosed?.({ code });
         onClose()
         setCreating(false);
         return;

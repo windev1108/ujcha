@@ -4,21 +4,26 @@
 import { AnimatePresence, motion } from "motion/react";
 import { Ban, Clock } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { useStoreStatusQuery } from "@/services/store/hooks";
+import { minutesToHHmm } from "@/lib/utils";
 
 interface StoreClosedDialogProps {
     open: boolean;
     code: string | null;
-    message?: string | null;
     onClose: () => void;
 }
 
-export function StoreClosedDialog({ open, code, message, onClose }: StoreClosedDialogProps) {
+export function StoreClosedDialog({ open, code, onClose }: StoreClosedDialogProps) {
     const t = useTranslations();
-    const isManual = code === "STORE_CLOSED_MANUAL";
+    const { data } = useStoreStatusQuery();
+    const isClosedHours = code === "STORE_CLOSED_HOURS"
 
-    const fallbackMessage = isManual
-        ? t("store_closed_manual_default")
-        : t("store_closed_hours_default");
+    const message = isClosedHours ?
+        t("store_closed_hours_default", {
+            open: minutesToHHmm(data?.openMinutes ?? 0),
+            close: minutesToHHmm(data?.closeMinutes ?? 0),
+        })
+        : t("store_closed_manual_default")
 
     return (
         <AnimatePresence>
@@ -39,18 +44,18 @@ export function StoreClosedDialog({ open, code, message, onClose }: StoreClosedD
                         className="w-full max-w-sm rounded-3xl border border-black/6 bg-white p-7 text-center shadow-[0_12px_48px_-12px_rgba(0,0,0,0.25)]"
                     >
                         <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-red-50 ring-1 ring-red-200">
-                            {isManual ? (
-                                <Ban className="size-8 text-red-500" />
-                            ) : (
+                            {isClosedHours ? (
                                 <Clock className="size-8 text-red-500" />
+                            ) : (
+                                <Ban className="size-8 text-red-500" />
                             )}
                         </div>
 
                         <h3 className="text-lg font-bold text-foreground">
                             {t("store_closed_title")}
                         </h3>
-                        <p className="mt-2 text-sm leading-relaxed text-foreground/60">
-                            {message?.trim() || fallbackMessage}
+                        <p className="mt-2 text-sm leading-relaxed text-foreground/60 whitespace-pre-line">
+                            {message}
                         </p>
 
                         <button

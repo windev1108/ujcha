@@ -4,6 +4,8 @@ import {
     Star, Box, Circle, Ban, ExternalLink, Phone, User, MoreHorizontal,
     Bike, UtensilsCrossed, Package, Truck, UserPlus, Users, Crown, XCircle, UserCheck, Sparkles,
     Maximize2,
+    BanknoteIcon,
+    CreditCardIcon,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { DEFAULT_BILL_CONFIG, DEFAULT_LABEL_CONFIG, RecipeResolveRequestItem, ResolvedRecipe, ResolvedRecipeMap, type AdminOrder, type OrderStatus } from '../types/common'
@@ -584,32 +586,9 @@ export function OrderDetailModal({
                 </div>
             </div>
 
-            {/* ── Badges row ── */}
-            <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-gray-100 bg-white px-4 sm:px-6 py-2.5">
-                {order.type === 'delivery' && (
-                    <Badge tone="sky" icon={<Bike className="size-3" />}>
-                        Giao hàng{order.shipper ? ` - ${order.shipper.name}` : ''}
-                    </Badge>
-                )}
-                {order.type === 'table' && (
-                    <Badge tone="amber" icon={<UtensilsCrossed className="size-3" />}>
-                        {order.table?.name ? `Bàn ${order.table.name}` : 'Tại bàn'}
-                    </Badge>
-                )}
-                {order.type === 'pickup' && (
-                    <Badge tone="violet" icon={<Package className="size-3" />}>Mang về</Badge>
-                )}
-                <PaymentBadge status={effectivePaymentStatus} />
-                {isReturning === true && <Badge tone="emerald" icon={<UserCheck className="size-3" />}>Khách quen</Badge>}
-                {isReturning === false && <Badge tone="violet" icon={<Sparkles className="size-3" />}>Khách mới</Badge>}
-                {order.groupOrder && <Badge tone="purple" icon={<Users className="size-3" />}>Đơn nhóm</Badge>}
-                {order.paidAt && <Badge tone="emerald" icon={<CheckCircle2 className="size-3" />}>Đã TT · {formatDate(order.paidAt)}</Badge>}
-                <span className="ml-1 text-xs text-gray-400">{formatDate(order.createdAt)}</span>
-            </div>
-
             {/* ── Body: 3-column layout ── */}
-            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5">
-                <div className="mx-auto grid max-w-[1400px] grid-cols-1 gap-5 lg:grid-cols-[300px_1fr_320px]">
+            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 scrollbar-thin">
+                <div className="mx-auto grid max-w-[1400px] grid-cols-1 gap-5 lg:grid-cols-[300px_1fr_320px] lg:items-start">
 
                     {/* Left column */}
                     <div className="space-y-4 lg:order-1">
@@ -762,7 +741,7 @@ export function OrderDetailModal({
                     </div>
 
                     {/* Right column: summary */}
-                    <div className="space-y-4 lg:order-3">
+                    <div className="space-y-4 lg:order-3 lg:sticky lg:top-0 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:pb-2 scrollbar-thin">
                         <div className="rounded-2xl border border-gray-100 bg-white p-4">
                             <p className="mb-3 text-xs font-bold uppercase tracking-widest text-gray-400">Tổng kết đơn hàng</p>
                             <div className="space-y-2.5">
@@ -802,7 +781,7 @@ export function OrderDetailModal({
                                         Đã thanh toán{order.paidAt ? ` · ${formatStepTime(order.paidAt)}` : ''}
                                     </p>
                                     <p className="text-xs text-emerald-600">
-                                        Thanh toán qua {PAYMENT_TYPE_LABEL[order.paymentType] ?? order.paymentType}
+                                        Thanh toán {order?.paymentType === 'cash' ? "bằng": "qua"} {PAYMENT_TYPE_LABEL[order.paymentType] ?? order.paymentType}
                                         {channel.tone !== 'direct' ? ` · ${channel.label}` : ''}
                                     </p>
                                 </div>
@@ -816,7 +795,23 @@ export function OrderDetailModal({
                                     <span className={`font-bold ${CHANNEL_TONE_CLS[channel.tone]}`}>{channel.label}</span>
                                 </InfoRow>
                                 <InfoRow label="Loại đơn">
-                                    {ORDER_TYPE_LABEL[order.type] ?? order.type}{order.type === 'delivery' && order.shipper ? ` - ${order.shipper.name}` : ''}
+                                    {ORDER_TYPE_LABEL[order.type] ?? order.type}
+                                    {order.type === 'delivery' && order.shipper ? ` - ${order.shipper.name}` : ''}
+                                    {order.type === 'table' && order.table?.name ? ` - Bàn ${order.table.name}` : ''}
+                                </InfoRow>
+                                {order.groupOrder && (
+                                    <InfoRow label="Đơn nhóm">
+                                        {order.groupOrder.paymentMode === 'split' ? 'Chia tiền' : 'Chủ nhóm trả'}
+                                    </InfoRow>
+                                )}
+                                <InfoRow label="Trạng thái thanh toán">
+                                    <PaymentBadge status={effectivePaymentStatus} />
+                                </InfoRow>
+                                <InfoRow label="Hình thức thanh toán">
+                                    <div className="flex items-center gap-2">
+                                        {order.paymentType === 'cash' ? <BanknoteIcon className='size-4 text-emerald-500'/> : <CreditCardIcon className='size-4 text-emerald-500'/>}
+                                        {PAYMENT_TYPE_LABEL[order.paymentType] ?? order.paymentType}
+                                    </div>
                                 </InfoRow>
                                 <InfoRow label="Mã đơn hàng">
                                     <button

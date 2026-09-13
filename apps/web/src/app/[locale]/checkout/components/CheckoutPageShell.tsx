@@ -26,8 +26,7 @@ import { useAuthStore } from "@/store/auth-store";
 import { VoucherSection } from "./VoucherSection";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
-import { minutesToTime } from "@/components/layout/Footer";
-import { extractErrorCode, extractErrorMessage } from "@/lib/utils";
+import { extractErrorCode } from "@/lib/utils";
 import { StoreClosedDialog } from "@/components/common/StoreClosedDialog";
 
 function formatVnd(amount: number) {
@@ -150,7 +149,7 @@ export function CheckoutPageShell() {
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [orderError, setOrderError] = useState<string | null>(null);
-  const [storeClosedInfo, setStoreClosedInfo] = useState<{ code: string; message: string | null } | null>(null);
+  const [storeClosedInfo, setStoreClosedInfo] = useState<{ code: string } | null>(null);
   const [appliedVoucher, setAppliedVoucher] = useState<VoucherPreviewResult | null>(null);
 
   // Source of truth: guest = local Zustand, member = server cart
@@ -428,7 +427,7 @@ export function CheckoutPageShell() {
     } catch (err: unknown) {
       const code = extractErrorCode(err);
       if (code?.startsWith("STORE_")) {
-        setStoreClosedInfo({ code, message: extractErrorMessage(err) });
+        setStoreClosedInfo({ code });
         return;
       }
       const hasI18nKey = code && code in (t as unknown as Record<string, unknown>);
@@ -565,7 +564,6 @@ export function CheckoutPageShell() {
       <StoreClosedDialog
         open={!!storeClosedInfo}
         code={storeClosedInfo?.code ?? null}
-        message={storeClosedInfo?.message}
         onClose={() => setStoreClosedInfo(null)}
       />
     </div>

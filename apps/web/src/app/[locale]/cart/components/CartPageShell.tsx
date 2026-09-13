@@ -21,9 +21,9 @@ import type { ApiCartItem } from "@/services/cart/types";
 import { normalizeOptionGroups, computeOptionSurcharge } from "@/lib/product-options";
 import { fetchGroupOrderConfig, fetchMyGroupOrderSessions, updateGroupOrderItems } from "@/services/group-order/api";
 import { ROUTES } from "@/lib/routes";
-import { usePublicStoreLocationQuery } from "@/services/store/hooks";
 import { useTranslations } from "next-intl";
 import { StoreClosedDialog } from "@/components/common/StoreClosedDialog";
+import { toast } from "sonner";
 
 function CartSkeleton() {
   return (
@@ -74,7 +74,7 @@ export function CartPageShell() {
   const [showGroupOrderModal, setShowGroupOrderModal] = useState(false);
   const [hasActiveSession, setHasActiveSession] = useState(false);
   const [groupOrderEnabled, setGroupOrderEnabled] = useState(true);
-  const [storeClosedInfo, setStoreClosedInfo] = useState<{ code: string; message: string | null } | null>(null);
+  const [storeClosedInfo, setStoreClosedInfo] = useState<{ code: string } | null>(null);
 
   useEffect(() => {
     fetchGroupOrderConfig()
@@ -260,7 +260,6 @@ export function CartPageShell() {
       <StoreClosedDialog
         open={!!storeClosedInfo}
         code={storeClosedInfo?.code ?? null}
-        message={storeClosedInfo?.message}
         onClose={() => setStoreClosedInfo(null)}
       />
     </>

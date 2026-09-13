@@ -1300,7 +1300,7 @@ export function GroupOrderPageShell() {
   const isLeavingRef = useRef(false);
   const [showLockConfirm, setShowLockConfirm] = useState(false);
   const [joining, setJoining] = useState(false);
-  const [storeClosedInfo, setStoreClosedInfo] = useState<{ code: string; message: string | null } | null>(null);
+  const [storeClosedInfo, setStoreClosedInfo] = useState<{ code: string } | null>(null);
 
   useEffect(() => { myParticipantIdRef.current = myParticipantId; }, [myParticipantId]);
   useEffect(() => {
@@ -1905,7 +1905,7 @@ export function GroupOrderPageShell() {
     } catch (e: unknown) {
       const code = extractErrorCode(e);
       if (code?.startsWith("STORE_")) {
-        setStoreClosedInfo({ code, message: extractErrorMessage(e) });
+        setStoreClosedInfo({ code });
         return;
       }
       const err = e as { response?: { data?: { message?: string | string[] } } };
@@ -1924,7 +1924,7 @@ export function GroupOrderPageShell() {
     } catch (e: unknown) {
       const code = extractErrorCode(e);
       if (code?.startsWith("STORE_")) {
-        setStoreClosedInfo({ code, message: extractErrorMessage(e) });
+        setStoreClosedInfo({ code });
         return;
       }
       const err = e as { response?: { data?: { message?: string | string[] } } };
@@ -2860,7 +2860,6 @@ export function GroupOrderPageShell() {
       <StoreClosedDialog
         open={!!storeClosedInfo}
         code={storeClosedInfo?.code ?? null}
-        message={storeClosedInfo?.message}
         onClose={() => setStoreClosedInfo(null)}
       />
     </>
