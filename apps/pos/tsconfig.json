@@ -18,5 +18,5 @@
     "src/main/**/*",
     "src/preload/**/*",
     "src/renderer/src/**/*"
-  ]
+, "src/shared/grab-net-cache.ts", "src/shared/grab-fees.ts"  ]
 }

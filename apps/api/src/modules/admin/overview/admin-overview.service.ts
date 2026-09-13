@@ -116,12 +116,9 @@ export class AdminOverviewService {
     const platformByDate = new Map<string, number>();
     const platformBreakdown: Record<string, number> = {};
     for (const r of platformRevenue) {
-      platformByDate.set(
-        r.date,
-        (platformByDate.get(r.date) ?? 0) + r.totalEarnings,
-      );
+      platformByDate.set(r.date, (platformByDate.get(r.date) ?? 0) + r.revenue);
       platformBreakdown[r.platform] =
-        (platformBreakdown[r.platform] ?? 0) + r.totalEarnings;
+        (platformBreakdown[r.platform] ?? 0) + r.revenue;
     }
     const platformTotal = Object.values(platformBreakdown).reduce(
       (s, v) => s + v,

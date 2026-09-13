@@ -3,6 +3,7 @@ import { app } from 'electron'
 import { join } from 'path'
 import { readFileSync } from 'fs'
 import { readSubConfig, writeSubConfig } from '../renderer/src/store/config-store'
+import { parseVNDDisplay } from '../shared/grab-fees'
 
 // Analy partner API
 const ANALY_API = 'https://api.analy.co'
@@ -39,7 +40,6 @@ let lastKnownOrderIds = new Set<string>()
 // Giá trị preparationTaskpoolStatus gần nhất đã ghi nhận cho mỗi đơn — dùng để
 // phát hiện thời điểm đơn chuyển sang "ACCEPTED" (xác nhận ở bất kỳ đâu: nhóm
 // Grab, app đối tác, auto-accept, hay trong POS).
-let orderPrepStatusMap = new Map<string, string | null>()
 let lastPollTime: string | null = null
 let lastPollStatus: 'ok' | 'auth_error' | 'error' | 'idle' = 'idle'
 let cachedHeaders: Record<string, string> | null = null
@@ -477,49 +477,16 @@ async function runPoll() {
     for (const order of orders) {
       const id = order.orderID
       if (!id) continue
-
       if (!lastKnownOrderIds.has(id)) {
-        // Đơn mới xuất hiện lần đầu
         lastKnownOrderIds.add(id)
-        const currPrepStatus = order.preparationTaskpoolStatus ?? null
-        orderPrepStatusMap.set(id, currPrepStatus)
-        console.log('[GrabFood] New preparing order:', id, order.displayID, 'prepStatus:', currPrepStatus)
+        console.log('[GrabFood] New preparing order:', id, order.displayID)
         _onNewOrderCb?.(id)
-
-        // KHÔNG bắn "accepted" ở đây dù currPrepStatus đã là "ACCEPTED" sẵn
-        // (auto-accept qua AA) — làm vậy sẽ tắt còi ngay sau khi vừa bật, khiến
-        // còi im lặng hoàn toàn cho merchant bật Auto-Accept. Còi phải tiếp tục
-        // kêu để báo staff biết có đơn cần chuẩn bị; chỉ dừng khi
-        // preparationTaskpoolStatus THỰC SỰ chuyển sang "ACCEPTED" ở lần poll
-        // sau (nhánh else bên dưới), hoặc khi đơn rời khỏi "Đang chuẩn bị" hẳn
-        // (xem đoạn dọn dẹp bên dưới).
-      } else {
-        // Đơn đã biết trước đó — kiểm tra preparationTaskpoolStatus có vừa
-        // chuyển sang "ACCEPTED" không
-        const currPrepStatus = order.preparationTaskpoolStatus ?? null
-        const prevPrepStatus = orderPrepStatusMap.get(id) ?? null
-        if (prevPrepStatus !== 'ACCEPTED' && currPrepStatus === 'ACCEPTED') {
-          orderPrepStatusMap.set(id, currPrepStatus)
-          console.log('[GrabFood] Order accepted (preparationTaskpoolStatus → ACCEPTED):', id)
-          _onOrderAcceptedCb?.(id)
-        } else if (prevPrepStatus !== currPrepStatus) {
-          // Ghi nhận trạng thái mới (kể cả khi chưa phải ACCEPTED) để lần poll
-          // sau so sánh đúng
-          orderPrepStatusMap.set(id, currPrepStatus)
-        }
       }
     }
-    // Dọn dẹp: đơn rời khỏi PreparingV2 hẳn (đã "Sẵn sàng"/huỷ/hoàn thành).
-    // LUÔN bắn "accepted" ở đây bất kể acceptedAt trước đó thế nào — đây là
-    // điểm dừng còi/badge cho các đơn auto-accept (acceptedAt có sẵn từ đầu
-    // nên nhánh transition ở trên không bao giờ bắt được), đồng thời vẫn là
-    // lưới an toàn cho các đơn accept thủ công lỡ bị miss transition.
+
     for (const id of [...lastKnownOrderIds]) {
       if (!currentIds.has(id)) {
         lastKnownOrderIds.delete(id)
-        orderPrepStatusMap.delete(id)
-        console.log('[GrabFood] Order left PreparingV2 — treating as accepted/handled:', id)
-        _onOrderAcceptedCb?.(id)
       }
     }
   } else {
@@ -552,15 +519,6 @@ let _onNewOrderCb: ((id: string) => void) | null = null
 
 export function setOnNewOrderCallback(cb: (id: string) => void) {
   _onNewOrderCb = cb
-}
-
-// Bắn khi 1 đơn RỜI KHỎI danh sách "Đang chuẩn bị" (PreparingV2) — nghĩa là
-// đã được xác nhận/chuyển trạng thái, kể cả xác nhận ngoài app (trên nhóm Grab,
-// app đối tác...) chứ không chỉ khi bấm "Sẵn sàng" trong POS.
-let _onOrderAcceptedCb: ((id: string) => void) | null = null
-
-export function setOnOrderAcceptedCallback(cb: (id: string) => void) {
-  _onOrderAcceptedCb = cb
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -792,7 +750,6 @@ export function resetGrabSession() {
   cachedMerchantDisplayRole = null
   nextSearchToken = ''
   lastKnownOrderIds.clear()
-  orderPrepStatusMap.clear()
   lastPollTime = null
   lastPollStatus = 'idle'
   writeSubConfig('grabSetting', {})
@@ -985,42 +942,50 @@ export async function fetchGrabRevenueSummary(date: string): Promise<{
   }
 }
 
-export async function syncGrabRevenueSummary(date: string): Promise<{
-  ok: boolean
-  data?: GrabRevenueSummaryResponse
-  error?: string
-}> {
-  const result = await fetchGrabRevenueSummary(date)
-  if (!result.ok || !result.data) return result
+export async function syncGrabRevenueSummary(date: string) {
+  const { ok, orders, error } = await fetchGrabOrderList(date, date, 0)
+  if (!ok) return { ok: false, error }
 
-  const d = result.data
-  const apiUrl = _savedIngestUrl
-    ? _savedIngestUrl.replace('/ingest', '/grab-revenue')
+  let netTotal = 0, grossTotal = 0, completed = 0, cancelled = 0
+
+  for (const o of orders) {
+    const id = extractOrderId(o)
+    const status = (o.deliveryStatus ?? '').toUpperCase()
+    if (status === 'CANCELLED' || status === 'CANCELED') { cancelled++; continue }
+    if (status !== 'COMPLETED' || !id) continue
+    completed++
+    const detail = await fetchOrderDetail(id)
+    if (!detail) continue
+    const fare = (detail.fare ?? {}) as Record<string, unknown>
+    const base = (fare.originalPriceInMin as number) ?? parseVNDDisplay(fare.subTotalDisplay as string)
+    const commission = parseVNDDisplay(fare.mexCommissionDisplay as string)
+    const vat = parseVNDDisplay(fare.mexVatAmountDisplay as string)
+    const pit = parseVNDDisplay(fare.mexPitAmountDisplay as string)
+    const withhold = parseVNDDisplay(fare.onBehalfWithholdTaxDisplay as string)
+    const discount = ((detail.orderLevelDiscounts as { discountAmountValueInMin?: number }[]) ?? [])
+      .reduce((s, d) => s + (d.discountAmountValueInMin ?? 0), 0)
+    grossTotal += base
+    netTotal += base - discount - commission - vat - pit - withhold
+    await new Promise(r => setTimeout(r, 150)) // né rate-limit Grab
+  }
+
+  const apiUrl = _savedIngestUrl ? _savedIngestUrl.replace('/ingest', '/grab-revenue')
     : `${process.env['VITE_API_URL'] || 'http://localhost:5000'}/admin/external/grab-revenue`
   const key = _savedInternalKey || process.env['VITE_INTERNAL_ANALY_KEY'] || ''
-
   try {
     const resp = await fetch(apiUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(key ? { 'x-internal-key': key } : {}),
-      },
+      headers: { 'Content-Type': 'application/json', ...(key ? { 'x-internal-key': key } : {}) },
       body: JSON.stringify({
-        platform: 'grab',
-        date,
-        totalEarnings: d.totalEarningsInMinorUnit ?? 0,
-        revenue: d.revenueInMinorUnit ?? 0,
-        completedOrders: d.completedOrders ?? 0,
-        cancelledOrders: d.cancelledOrders ?? 0,
-        rawJson: d,
+        platform: 'grab', date,
+        totalEarnings: grossTotal,
+        revenue: netTotal, // ⚠️ giờ là thực nhận sau phí, không còn là gross — nếu backend/dashboard đang đọc field này như gross thì cần đổi tên field hoặc báo bên backend
+        completedOrders: completed, cancelledOrders: cancelled,
       }),
     })
     if (!resp.ok) return { ok: false, error: `Backend HTTP ${resp.status}` }
-    return { ok: true, data: d }
-  } catch (err) {
-    return { ok: false, error: String(err) }
-  }
+    return { ok: true, data: { grossTotal, netTotal, completed, cancelled } }
+  } catch (err) { return { ok: false, error: String(err) } }
 }
 
 // ─── Daily end-of-day auto-sync ───────────────────────────────────────────────

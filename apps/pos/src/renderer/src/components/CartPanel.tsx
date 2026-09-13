@@ -1,8 +1,16 @@
-import { Minus, Plus, Trash2, ChevronDown, Utensils, CreditCard, Trash2Icon } from 'lucide-react'
+import { Minus, Plus, Trash2, ChevronDown, Utensils, CreditCard } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { usePosStore } from '../store/pos-store'
+import {
+  Select, Label, ListBox,
+  Button, TextField, Input,
+  Separator, ScrollShadow, Chip,
+  NumberField,
+} from '@heroui/react'
 
 function fmt(n: number) { return n.toLocaleString('vi-VN') + 'đ' }
+
+const PICKUP_KEY = '__pickup__'
 
 export function CartPanel({ onCheckout }: { onCheckout: () => void }) {
   const cart = usePosStore((s) => s.cart)
@@ -17,6 +25,7 @@ export function CartPanel({ onCheckout }: { onCheckout: () => void }) {
 
   const total = cartTotal()
   const selectedTable = tables.find((t) => t.id === selectedTableId)
+  const totalQty = cart.reduce((s, i) => s + i.quantity, 0)
 
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -48,39 +57,56 @@ export function CartPanel({ onCheckout }: { onCheckout: () => void }) {
   }, [cart])
 
   return (
-    <div className="flex h-full w-[340px] shrink-0 flex-col border-l border-gray-100 bg-white">
+    <div className="flex h-full w-[300px] shrink-0 flex-col border-l border-gray-100 bg-white">
       {/* Header */}
-      <div className="border-b border-gray-100 px-4 py-3">
+      <div className="px-4 py-3">
         <div className="flex items-center justify-between">
           <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Đơn hàng</p>
           {cart.length > 0 && (
-            <button
-              onClick={() => usePosStore.getState().clearCart()}
-              className="text-xs text-red-400 hover:text-red-600"
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 min-w-0 px-2 text-xs text-red-400 hover:text-red-600"
+              onPress={() => usePosStore.getState().clearCart()}
             >
               Xóa tất cả
-            </button>
+            </Button>
           )}
         </div>
 
         {/* Table selector */}
-        <div className="mt-2 flex items-center gap-2">
-          <Utensils className="size-4 shrink-0 text-gray-400" />
-          <select
-            value={selectedTableId ?? ''}
-            onChange={(e) => setSelectedTable(e.target.value || null)}
-            className="h-8 flex-1 rounded-lg border border-gray-200 bg-gray-50 px-2 text-sm focus:outline-none"
-          >
-            <option value="">Mang về / Pickup</option>
-            {tables.filter((t) => t.isActive).map((t) => (
-              <option key={t.id} value={t.id}>{`Bàn ${t.name}`}</option>
-            ))}
-          </select>
-        </div>
+        <Select
+          className="mt-3 w-full"
+          variant="secondary"
+          value={selectedTableId ?? PICKUP_KEY}
+          onChange={(key) => setSelectedTable(key === PICKUP_KEY ? null : (key as string))}
+        >
+          <Select.Trigger>
+            <Utensils className="size-4 shrink-0 text-gray-400" />
+            <Select.Value className="ml-2" />
+            <Select.Indicator />
+          </Select.Trigger>
+          <Select.Popover>
+            <ListBox>
+              <ListBox.Item id={PICKUP_KEY} textValue="Mang về / Pickup">
+                Mang về / Pickup
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
+              {tables.filter((t) => t.isActive).map((t) => (
+                <ListBox.Item key={t.id} id={t.id} textValue={`Bàn ${t.name}`}>
+                  {`Bàn ${t.name}`}
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+              ))}
+            </ListBox>
+          </Select.Popover>
+        </Select>
       </div>
 
+      <Separator />
+
       {/* Items */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin">
+      <ScrollShadow className="flex-1" hideScrollBar={false}>
         {cart.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-gray-300">
             <CreditCard className="size-10" />
@@ -115,49 +141,60 @@ export function CartPanel({ onCheckout }: { onCheckout: () => void }) {
                       )}
 
                       {item.extras && item.extras.length > 0 && (
-                        <div className="mt-0.5 flex flex-wrap gap-x-1.5 gap-y-0.5">
+                        <div className="mt-1 flex flex-wrap gap-1">
                           {item.extras.map(e => (
-                            <span key={e.id} className="text-xs text-brand/80">
+                            <Chip key={e.id} variant="secondary" className="h-5 px-1.5 text-[11px]">
                               + {e.name}{e.price > 0 ? ` ${e.price.toLocaleString('vi-VN')}đ` : ''}
-                            </span>
+                            </Chip>
                           ))}
                         </div>
                       )}
-                      <p className="mt-1 text-sm font-bold text-brand">{fmt(unit * item.quantity)}</p>
+                      <p className="mt-1.5 text-sm font-bold text-brand">{fmt(unit * item.quantity)}</p>
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                      <button onClick={() => removeFromCart(item.cartId)} className="text-gray-300 hover:text-red-500">
+                      <Button
+                        isIconOnly
+                        variant="ghost"
+                        size="sm"
+                        className="size-6 min-w-0 text-gray-300 hover:text-red-500"
+                        onPress={() => removeFromCart(item.cartId)}
+                      >
                         <Trash2 className="size-3.5" />
-                      </button>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => updateQty(item.cartId, item.quantity - 1)}
-                          className="flex size-6 items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:border-brand hover:text-brand"
-                        >
-                          <Minus className="size-3" />
-                        </button>
-                        <span className="w-7 text-center text-sm font-bold text-gray-800">{item.quantity}</span>
-                        <button
-                          onClick={() => updateQty(item.cartId, item.quantity + 1)}
-                          className="flex size-6 items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:border-brand hover:text-brand"
-                        >
-                          <Plus className="size-3" />
-                        </button>
-                      </div>
+                      </Button>
+                      <NumberField
+                        value={item.quantity}
+                        onChange={(v) => updateQty(item.cartId, v)}
+                        minValue={0}
+                        className="w-fit"
+                      >
+                        <NumberField.Group className="h-7 items-center gap-1">
+                          <NumberField.DecrementButton className="size-6 min-w-0 shrink-0">
+                            <Minus className="size-3" />
+                          </NumberField.DecrementButton>
+                          <NumberField.Input className="w-5 shrink-0 border-0 bg-transparent p-0 text-center text-sm font-bold leading-none outline-none" />
+                          <NumberField.IncrementButton className="size-6 min-w-0 shrink-0">
+                            <Plus className="size-3" />
+                          </NumberField.IncrementButton>
+                        </NumberField.Group>
+                      </NumberField>
                     </div>
                   </div>
 
                   {/* Note toggle */}
                   <div className="mt-1.5">
                     {noteId === item.cartId ? (
-                      <input
-                        autoFocus
+                      <TextField
                         value={item.note}
-                        onChange={(e) => updateNote(item.cartId, e.target.value)}
-                        onBlur={() => setNoteId(null)}
-                        placeholder="Ghi chú món…"
-                        className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs focus:outline-none focus:border-brand"
-                      />
+                        onChange={(v) => updateNote(item.cartId, v)}
+                        className="w-full"
+                      >
+                        <Input
+                          autoFocus
+                          placeholder="Ghi chú món…"
+                          onBlur={() => setNoteId(null)}
+                          className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs focus:outline-none focus:border-brand"
+                        />
+                      </TextField>
                     ) : (
                       <button
                         onClick={() => setNoteId(item.cartId)}
@@ -173,33 +210,37 @@ export function CartPanel({ onCheckout }: { onCheckout: () => void }) {
             })}
           </ul>
         )}
-      </div>
+      </ScrollShadow>
 
       {/* Footer / Total */}
-      <div className="border-t border-gray-100 p-4 space-y-3">
+      <Separator />
+      <div className="p-4 space-y-3">
         <div className="flex items-center justify-between text-sm text-gray-500">
-          <span>Tạm tính ({cart.reduce((s, i) => s + i.quantity, 0)} món)</span>
+          <span>Tạm tính ({totalQty} món)</span>
           <span className="font-semibold text-gray-800">{fmt(total)}</span>
         </div>
         {selectedTable && (
           <div className="flex items-center justify-between text-sm text-gray-500">
             <span>Bàn</span>
-            <span className="font-semibold text-gray-800">{selectedTable.name}</span>
+            <Chip variant="secondary">{selectedTable.name}</Chip>
           </div>
         )}
-        <div className="flex items-center justify-between border-t border-gray-100 pt-3">
+        <Separator />
+        <div className="flex items-center justify-between">
           <span className="text-base font-bold text-gray-900">Tổng cộng</span>
           <span className="text-xl font-black text-brand">{fmt(total)}</span>
         </div>
 
-        <button
-          onClick={onCheckout}
-          disabled={cart.length === 0}
-          className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand font-bold text-white shadow-md shadow-brand/30 transition hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-40"
+        <Button
+          onPress={onCheckout}
+          isDisabled={cart.length === 0}
+          variant="primary"
+          size="lg"
+          className="w-full font-bold shadow-md shadow-brand/30 bg-brand !rounded-xl"
         >
           <CreditCard className="size-5" />
           Thanh toán
-        </button>
+        </Button>
       </div>
     </div>
   )

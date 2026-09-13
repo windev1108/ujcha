@@ -24,7 +24,7 @@ import { CartPanel } from '../components/CartPanel'
 import { CheckoutModal } from '../components/CheckoutModal'
 import { OrdersModal } from '../components/OrdersModal'
 import { ExternalOrdersModal } from '../components/ExternalOrdersModal'
-import { SettingsPage } from '../components/SettingPage'
+import { SettingsPage, type Section as SettingsSection } from '../components/SettingPage'
 import { AIOrderPanel } from '../components/AIOrderPanel'
 import { UpdateModal, type UpdateInfo } from '../components/UpdateModal'
 
@@ -87,11 +87,6 @@ export function StaffApp() {
 
   // ── Auto-print dedup: track order IDs already printed this session ─────────
   const autoPrintedIdsRef = useRef<Set<string>>(new Set())
-  // Track Grab order IDs waiting for confirmation — dùng để tự tắt còi khi
-  // đơn được xác nhận Ở ĐÂU CŨNG ĐƯỢC (nhóm Grab, app đối tác, hay trong POS)
-  const pendingGrabOrderIdsRef = useRef<Set<string>>(new Set())
-
-  // Auto-print for web orders — ref pattern avoids stale closure in socket handler
   const autoPrintWebOrderRef = useRef<() => Promise<void>>(async () => { })
   autoPrintWebOrderRef.current = async () => {
     const labelCfg = loadLocal<LabelConfig>(KEYS.label, DEFAULT_LABEL_CONFIG)
@@ -148,7 +143,16 @@ export function StaffApp() {
   const alertIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const alertUrlRef = useRef<string>('')
   const currentAudioRef = useRef<HTMLAudioElement | null>(null)
+  const grabAlertIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const grabAlertPlayCountRef = useRef(0)
 
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>('account')
+
+  const openGrabReconnectSettings = useCallback(() => {
+    setExternalOpen(false)
+    setSettingsSection('partners')
+    setSettingsOpen(true)
+  }, [])
   const playMp3 = useCallback((url: string) => {
     try {
       currentAudioRef.current?.pause()
@@ -164,16 +168,37 @@ export function StaffApp() {
     currentAudioRef.current = null
   }, [])
 
-  // Keep as alias so existing call-sites (stopAlertInterval) still work
-  const stopAlertInterval = stopAlert
+
+  const stopGrabAudioOnly = useCallback(() => {
+    if (grabAlertIntervalRef.current) {
+      clearInterval(grabAlertIntervalRef.current)
+      grabAlertIntervalRef.current = null
+    }
+    grabAlertPlayCountRef.current = 0
+  }, [])
+
+  const startGrabAlert = useCallback(() => {
+    stopGrabAudioOnly()
+    grabAlertPlayCountRef.current = 1
+    playMp3(grfVoiceUrl) // lần 1 — phát ngay
+    grabAlertIntervalRef.current = setInterval(() => {
+      grabAlertPlayCountRef.current += 1
+      playMp3(grfVoiceUrl)
+      if (grabAlertPlayCountRef.current >= 3) {
+        if (grabAlertIntervalRef.current) {
+          clearInterval(grabAlertIntervalRef.current)
+          grabAlertIntervalRef.current = null
+        }
+      }
+    }, 8_000)
+  }, [stopGrabAudioOnly, playMp3])
 
   // ── Dismiss handlers: dùng để tắt chuông NGAY TRONG modal đang mở,
   // không cần đóng/mở lại modal như trước ─────────────────────────────────
   const stopGrabAlert = useCallback(() => {
-    stopAlert()
+    stopGrabAudioOnly()
     setNewGrabBadge(0)
-    pendingGrabOrderIdsRef.current.clear()
-  }, [stopAlert])
+  }, [stopGrabAudioOnly])
 
   const stopShopeeAlert = useCallback(() => {
     stopAlert()
@@ -190,8 +215,12 @@ export function StaffApp() {
   // Alert handler ref — lets the socket closure always call the latest logic
   const alertHandlerRef = useRef<(p: string) => void>(() => { })
   alertHandlerRef.current = (platform: string) => {
-    const url = platform.includes('GRAB') ? grfVoiceUrl : platform.includes('SHOPEE') ? spfVoiceUrl : grfVoiceUrl
-    startAlert(url)
+    if (platform.includes('GRAB')) {
+      startGrabAlert()
+    } else {
+      const url = platform.includes('SHOPEE') ? spfVoiceUrl : grfVoiceUrl
+      startAlert(url)
+    }
   }
 
   // New-order handler ref: badge + audio only when the orders modal is closed
@@ -220,11 +249,11 @@ export function StaffApp() {
   useEffect(() => {
     if (!isLoggedIn) {
       stopAlert()
-      // Reset customer display fully: disable AI mode then go idle
+      stopGrabAudioOnly()
       eAPI?.customer.update({ type: 'ai-mode', enabled: false, name: 'UjCha' })
       eAPI?.customer.update({ type: 'idle' })
     }
-    return () => stopAlert()
+    return () => { stopAlert(); stopGrabAudioOnly() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoggedIn])
 
@@ -233,7 +262,6 @@ export function StaffApp() {
     if (!isLoggedIn) return
     const unsub = eAPI?.grab?.onNewOrder?.((id: string) => {
       setNewGrabBadge(n => n + 1)
-      if (id) pendingGrabOrderIdsRef.current.add(id)
       alertHandlerRef.current('GRAB')
 
       // Auto-print bill/label if configured and this order hasn't been printed yet
@@ -272,23 +300,6 @@ export function StaffApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoggedIn])
 
-  // ── Grab order accepted elsewhere (nhóm Grab, app đối tác, hoặc trong POS) ──
-  // Poller phát hiện qua so sánh PreparingV2 mỗi lần poll — không phụ thuộc
-  // việc admin có mở app POS lên xác nhận hay không.
-  useEffect(() => {
-    if (!isLoggedIn) return
-    const unsub = eAPI?.grab?.onOrderAccepted?.((id: string) => {
-      if (!pendingGrabOrderIdsRef.current.delete(id)) return
-      setNewGrabBadge(n => Math.max(0, n - 1))
-      // Chỉ tắt còi nếu không còn đơn Grab nào đang chờ VÀ còi hiện tại đang
-      // phát cho Grab (tránh tắt nhầm còi đang báo ShopeeFood)
-      if (pendingGrabOrderIdsRef.current.size === 0 && alertUrlRef.current === grfVoiceUrl) {
-        stopAlert()
-      }
-    })
-    return () => unsub?.()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoggedIn])
 
   // ── Load data when logged in ────────────────────────────────────────────────
   useEffect(() => {
@@ -535,7 +546,7 @@ export function StaffApp() {
         </button>
 
         <button
-          onClick={() => setSettingsOpen(true)}
+          onClick={() => { setSettingsSection('account'); setSettingsOpen(true) }}
           className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-800"
         >
           <Settings className="size-4" />
@@ -580,6 +591,7 @@ export function StaffApp() {
           onStopShopeeAlert={stopShopeeAlert}
           hasActiveGrabAlert={newGrabBadge > 0}
           hasActiveShopeeAlert={newShopeeBadge > 0}
+          onReconnectGrab={openGrabReconnectSettings}
         />
       )}
       {settingsOpen && (
@@ -587,6 +599,7 @@ export function StaffApp() {
           onClose={() => setSettingsOpen(false)}
           config={posConfig}
           onSave={handleSaveSettings}
+          initialSection={settingsSection}
         />
       )}
       {isLoggedIn && (

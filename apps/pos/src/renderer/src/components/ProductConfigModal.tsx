@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
 import { X, Plus, Minus, Check } from 'lucide-react'
+import { Switch, Label } from '@heroui/react'
 import type { Product, CartItem } from '../types/common'
+import type { RecipeResolveRequestItem, ResolvedRecipeMap } from '../types/common'
 import { applyProductDiscount } from '../lib/utils'
-
+import { resolveRecipeBatch } from '../api'
+import { RecipeChecklist } from './RecipeChecklist'
 
 function fmt(n: number) { return n.toLocaleString('vi-VN') + 'đ' }
 
@@ -22,12 +25,15 @@ export function ProductConfigModal({ product, onClose, onConfirm }: Props) {
     const [selectedToppingIds, setSelectedToppingIds] = useState<string[]>([])
     const [note, setNote] = useState('')
     const [quantity, setQuantity] = useState(1)
+    const [showRecipe, setShowRecipe] = useState(false)
+    const [recipeMap, setRecipeMap] = useState<ResolvedRecipeMap>({})
 
     useEffect(() => {
         if (!product) return
         setNote('')
         setQuantity(1)
         setSelectedToppingIds([])
+        setShowRecipe(false)
         // Auto-select the "medium/normal" option per group, falling back to first free option
         const next: Record<string, string> = {}
         for (const g of product.optionGroups) {
@@ -38,6 +44,25 @@ export function ProductConfigModal({ product, onClose, onConfirm }: Props) {
         }
         setOptions(next)
     }, [product])
+
+    // Re-resolve recipe whenever selected size/options/toppings change — the
+    // checklist (which ingredients, in what amount) can differ per size or topping.
+    useEffect(() => {
+        if (!product) { setRecipeMap({}); return }
+        const availableToppingsForRecipe = (product.toppings ?? []).filter(t => t.isActive !== false)
+        const selectedLabels = [
+            ...Object.values(options).filter(Boolean),
+            ...selectedToppingIds
+                .map((id) => availableToppingsForRecipe.find((t) => t.id === id)?.name)
+                .filter((n): n is string => !!n),
+        ]
+        const requestItems: RecipeResolveRequestItem[] = [{
+            key: product.id,
+            productId: product.id,
+            selectedLabels,
+        }]
+        void resolveRecipeBatch(requestItems).then(setRecipeMap).catch(() => setRecipeMap({}))
+    }, [product, options, selectedToppingIds])
 
     if (!product) return null
 
@@ -58,6 +83,10 @@ export function ProductConfigModal({ product, onClose, onConfirm }: Props) {
     }, 0)
 
     const unitPrice = discountedBase + optionDelta + toppingDelta
+
+    const sizeGroup = product.optionGroups.find((g) => /size/i.test(g.name))
+    const sizeLabel = sizeGroup ? options[sizeGroup.name] : undefined
+    const recipe = recipeMap[product.id]
 
     const MAX_TOPPINGS = 3
 
@@ -110,7 +139,7 @@ export function ProductConfigModal({ product, onClose, onConfirm }: Props) {
             className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4"
             onClick={(e) => e.target === e.currentTarget && onClose()}
         >
-            <div className="w-full sm:max-w-md bg-white sm:rounded-2xl rounded-t-2xl shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="w-full sm:max-w-2xl bg-white sm:rounded-2xl rounded-t-2xl shadow-2xl flex flex-col max-h-[95vh]">
                 {/* Header */}
                 <div className="flex items-start justify-between px-5 pt-5 pb-4 border-b border-gray-100">
                     <div className="min-w-0 pr-3">
@@ -206,6 +235,23 @@ export function ProductConfigModal({ product, onClose, onConfirm }: Props) {
                                     )
                                 })}
                             </div>
+                        </div>
+                    )}
+
+                    {/* Recipe / công thức pha chế */}
+                    {recipe && (
+                        <div className="space-y-2 rounded-xl border border-gray-100 bg-gray-50/60 p-3">
+                            <Switch isSelected={showRecipe} onChange={setShowRecipe} className="justify-between">
+                                <Label className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                                    Xem công thức pha chế
+                                </Label>
+                                <Switch.Control>
+                                    <Switch.Thumb />
+                                </Switch.Control>
+                            </Switch>
+                            {showRecipe && (
+                                <RecipeChecklist recipe={recipe} quantity={quantity} sizeLabel={sizeLabel} />
+                            )}
                         </div>
                     )}
 

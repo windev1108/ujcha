@@ -2,8 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import {
   ArrowLeft, RefreshCw, Clock, CheckCircle2, XCircle,
   ShoppingBag, MapPin, Phone, User, Loader2, ChevronRight,
-  TrendingUp, X, ChevronDown, ChevronUp, PackageCheck,
-  Printer, Tag, AlertCircle, Receipt,
+  TrendingUp, PackageCheck,
 } from 'lucide-react'
 import { fetchExternalOrders, updateOrderStatus } from '../api'
 import type { AdminOrder, OrderStatus, QuickDate } from '../types/common'
@@ -19,6 +18,9 @@ import SpfOrderDetailModal, { SpfOrderFull, statusInfo } from './SpfOrderDetailM
 import { DateField, DateRangePicker, Label, RangeCalendar } from '@heroui/react'
 import { parseDate, type DateValue } from '@internationalized/date'
 import { I18nProvider } from '@react-aria/i18n'
+import { GrabOrderContext, grabOrderLabel } from '@/lib/grab-status'
+import { getCachedNet, getLearnedCommissionRate } from '../../../shared/grab-net-cache'
+import { DEFAULT_GRAB_COMMISSION_RATE, estimateGrabNetReceived } from '../../../shared/grab-fees'
 
 // ─── Vietnam timezone helpers ─────────────────────────────────────────────────
 
@@ -76,6 +78,7 @@ function grabAPI() {
         getOrder(id: string): Promise<{ ok: boolean; order?: GrabFull; error?: string }>
         syncRevenue(date?: string): Promise<{ ok: boolean; data?: unknown; error?: string }>
         markOrderReady(orderID: string, preparationTaskID?: string): Promise<{ ok: boolean; error?: string }>
+        onNewOrder(cb: (id: string) => void): () => void
       }
       spfPartner: {
         getStatus(): Promise<{ connected: boolean; restaurantId: string | null; restaurantName: string | null }>
@@ -84,6 +87,7 @@ function grabAPI() {
           data?: { total_amount: { value: number; text: string; unit: string }; transactions: SpfPartnerTransaction[] }
           error?: string
         }>
+        getOrder: (code: string) => Promise<{ ok: boolean, order: SpfOrderFull }>
       }
       printer: {
         printBillByAddress(address: string, printerName: string, html: string, copies: number, cfg?: BillConfig): Promise<{ ok: boolean; error?: string }>
@@ -150,6 +154,7 @@ export function ExternalOrdersModal({
   onStopShopeeAlert,
   hasActiveGrabAlert = false,
   hasActiveShopeeAlert = false,
+  onReconnectGrab,
 }: {
   onClose: () => void
   initialTab?: PlatformFilter
@@ -159,6 +164,7 @@ export function ExternalOrdersModal({
   onStopShopeeAlert?: () => void
   hasActiveGrabAlert?: boolean
   hasActiveShopeeAlert?: boolean
+  onReconnectGrab?: () => void
 }) {
   // ── DB-based orders (all / shopeefood / other tabs) ────────────────────────
   const [orders, setOrders] = useState<AdminOrder[]>([])
@@ -177,7 +183,7 @@ export function ExternalOrdersModal({
   const [grabFrom, setGrabFrom] = useState(() => vnDateStr(0))
   const [grabTo, setGrabTo] = useState(() => vnDateStr(0))
   const [grabQuick, setGrabQuick] = useState<'today' | 'yesterday' | 'week' | 'custom'>('today')
-  const [grabDetail, setGrabDetail] = useState<{ id: string; data: GrabFull | null; loading: boolean; preparationTaskID?: string } | null>(null)
+  const [grabDetail, setGrabDetail] = useState<{ id: string; data: GrabFull | null; loading: boolean; preparationTaskID?: string; context: GrabOrderContext } | null>(null)
   const [revenueSyncing, setRevenueSyncing] = useState(false)
   const [revenueResult, setRevenueResult] = useState<{ ok: boolean; msg: string } | null>(null)
   // ── GrabFood sub-tabs ──────────────────────────────────────────────────────
@@ -298,7 +304,7 @@ export function ExternalOrdersModal({
     setReadyError(null)
     try {
       const result = await grabAPI().grab.listLiveOrders('Ready')
-      if (result.ok) setReadyOrders(result.orders)
+      if (result.ok) setReadyOrders(prev => grabOrdersEqual(prev, result.orders) ? prev : result.orders)
       else setReadyError(result.error ?? 'Lỗi không xác định')
     } catch (e) { setReadyError(String(e)) }
     finally { setReadyLoading(false) }
@@ -310,7 +316,7 @@ export function ExternalOrdersModal({
     setLiveError(null)
     try {
       const result = await grabAPI().grab.listLiveOrders('PreparingV2')
-      if (result.ok) setLiveOrders(result.orders)
+      if (result.ok) setLiveOrders(prev => grabOrdersEqual(prev, result.orders) ? prev : result.orders)
       else setLiveError(result.error ?? 'Lỗi không xác định')
     } catch (e) { setLiveError(String(e)) }
     finally { setLiveLoading(false) }
@@ -322,7 +328,7 @@ export function ExternalOrdersModal({
     setUpcomingError(null)
     try {
       const result = await grabAPI().grab.listLiveOrders('UpcomingV2')
-      if (result.ok) setUpcomingOrders(result.orders)
+      if (result.ok) setUpcomingOrders(prev => grabOrdersEqual(prev, result.orders) ? prev : result.orders)
       else setUpcomingError(result.error ?? 'Lỗi không xác định')
     } catch (e) { setUpcomingError(String(e)) }
     finally { setUpcomingLoading(false) }
@@ -370,6 +376,13 @@ export function ExternalOrdersModal({
     }
   }, [])
 
+  function grabOrdersEqual(a: GrabPreparingOrder[], b: GrabPreparingOrder[]) {
+    if (a.length !== b.length) return false
+    for (let i = 0; i < a.length; i++) {
+      if (a[i].orderID !== b[i].orderID || a[i].state !== b[i].state) return false
+    }
+    return true
+  }
   const applyGrabFilter = useCallback((from: string, to: string) => {
     setGrabFrom(from); setGrabTo(to)
     void loadGrabOrders(from, to, 0)
@@ -380,12 +393,24 @@ export function ExternalOrdersModal({
       void loadLiveOrders()
       void loadReadyOrders()
       void loadUpcomingOrders()
+      onStopGrabAlert?.()
       const today = vnDateStr(0)
       setGrabFrom(today); setGrabTo(today); setGrabQuick('today')
       void loadGrabOrders(today, today, 0)
       setGrabSubTab('preparing')
     }
   }, [platformFilter, loadLiveOrders, loadReadyOrders, loadUpcomingOrders, loadGrabOrders])
+
+  useEffect(() => {
+    if (platformFilter !== 'grabfood') return
+    const unsub = grabAPI().grab.onNewOrder(() => {
+      void loadLiveOrders()
+      void loadReadyOrders()
+      void loadUpcomingOrders()
+      onStopGrabAlert?.()
+    })
+    return () => unsub()
+  }, [platformFilter, loadLiveOrders, loadReadyOrders, loadUpcomingOrders, onStopGrabAlert])
 
   useEffect(() => {
     if (platformFilter === 'shopeefood' && shopeePartnerConnected) {
@@ -424,14 +449,10 @@ export function ExternalOrdersModal({
   }
 
   // ── GrabFood: open detail ──────────────────────────────────────────────────
-  const openGrabDetail = useCallback(async (id: string, preparationTaskID?: string) => {
-    setGrabDetail({ id, data: null, loading: true, preparationTaskID })
-    try {
-      const result = await grabAPI().grab.getOrder(id)
-      setGrabDetail({ id, data: result.ok ? (result.order as GrabFull ?? null) : null, loading: false, preparationTaskID })
-    } catch {
-      setGrabDetail({ id, data: null, loading: false, preparationTaskID })
-    }
+  const openGrabDetail = useCallback(async (id: string, preparationTaskID?: string, context: GrabOrderContext = 'history') => {
+    setGrabDetail({ id, data: null, loading: true, preparationTaskID, context })
+    const result = await grabAPI().grab.getOrder(id)
+    setGrabDetail({ id, data: result.ok ? (result.order as GrabFull ?? null) : null, loading: false, preparationTaskID, context })
   }, [])
 
   // ── GrabFood: sync revenue summary ────────────────────────────────────────
@@ -492,22 +513,6 @@ export function ExternalOrdersModal({
             </span>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            {isGrabTab && onStopGrabAlert && hasActiveGrabAlert && (
-              <button
-                onClick={onStopGrabAlert}
-                className="flex items-center gap-1.5 rounded-xl bg-green-50 px-3 py-1.5 text-sm font-bold text-green-700 hover:bg-green-100 transition-colors"
-              >
-                🔕 Xác nhận đơn
-              </button>
-            )}
-            {isSpfPartnerTab && onStopShopeeAlert && hasActiveShopeeAlert && (
-              <button
-                onClick={onStopShopeeAlert}
-                className="flex items-center gap-1.5 rounded-xl bg-orange-50 px-3 py-1.5 text-sm font-bold text-orange-700 hover:bg-orange-100 transition-colors"
-              >
-                🔕 Xác nhận đơn
-              </button>
-            )}
             <button
               onClick={() => {
                 if (isGrabTab) {
@@ -578,22 +583,37 @@ export function ExternalOrdersModal({
           {isGrabTab ? (
             <>
               {/* ── Tổng doanh thu (theo khoảng ngày đang xem ở Lịch sử) ── */}
+              {/* ── Tổng doanh thu + Sync (theo khoảng ngày đang xem) ── */}
               {(() => {
-                const totalRevenue = grabOrders.reduce((s, o) => s + (o.orderEarningsInMinorUnit || 0), 0)
+                const rate = getLearnedCommissionRate(DEFAULT_GRAB_COMMISSION_RATE)
+                const totalRevenue = grabOrders.reduce((s, o) =>
+                  s + (getCachedNet(o.displayID) ?? estimateGrabNetReceived(o.orderEarningsInMinorUnit, rate)), 0)
                 return (
-                  <div className="mb-4 flex items-center gap-3 rounded-2xl border border-green-100 bg-gradient-to-r from-green-50 to-emerald-50 px-4 py-3.5">
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-green-100">
-                      <TrendingUp className="size-5 text-green-600" />
+                  <div className="mb-4 rounded-2xl border border-green-100 bg-gradient-to-r from-green-50 to-emerald-50 px-4 py-3.5">
+                    <div className="flex items-center gap-3">
+                      <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-green-100">
+                        <TrendingUp className="size-5 text-green-600" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-green-600">
+                          Tổng doanh thu {grabFrom === grabTo ? grabFrom : `${grabFrom} → ${grabTo}`}
+                        </p>
+                        <p className="text-lg font-black text-green-800 tabular-nums">{fmt(totalRevenue)}</p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-bold text-green-700 ring-1 ring-green-200">
+                        {grabOrders.length} đơn{grabHasMore ? '+' : ''}
+                      </span>
+                      <button onClick={() => void syncRevenue()} disabled={revenueSyncing}
+                        className="shrink-0 flex items-center gap-1.5 rounded-xl bg-green-600 px-3 py-2 text-xs font-bold text-white hover:bg-green-700 disabled:opacity-60 transition-colors">
+                        {revenueSyncing ? <Loader2 className="size-3.5 animate-spin" /> : <TrendingUp className="size-3.5" />}
+                        {revenueSyncing ? 'Đang sync…' : 'Sync doanh thu'}
+                      </button>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-green-600">
-                        Tổng doanh thu {grabFrom === grabTo ? grabFrom : `${grabFrom} → ${grabTo}`}
+                    {revenueResult && (
+                      <p className={`mt-2 text-xs font-medium ${revenueResult.ok ? 'text-teal-700' : 'text-red-600'}`}>
+                        {revenueResult.ok ? '✓ ' : '✗ '}{revenueResult.msg}
                       </p>
-                      <p className="text-lg font-black text-green-800 tabular-nums">{fmt(totalRevenue)}</p>
-                    </div>
-                    <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-bold text-green-700 ring-1 ring-green-200">
-                      {grabOrders.length} đơn{grabHasMore ? '' : ''}
-                    </span>
+                    )}
                   </div>
                 )
               })()}
@@ -637,13 +657,7 @@ export function ExternalOrdersModal({
                           <Loader2 className="size-4 animate-spin" /> Đang tải từ GrabFood…
                         </div>
                       ) : liveError ? (
-                        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-red-100 bg-red-50 px-6 py-8 text-center">
-                          <p className="text-sm font-medium text-red-600">{liveError}</p>
-                          {liveError.toLowerCase().includes('merchant') && (
-                            <p className="text-xs text-gray-500">Vào <b>Cài đặt → GrabFood</b> và bấm "Sync session" để tự lấy Merchant ID</p>
-                          )}
-                          <button onClick={() => void loadLiveOrders()} className="text-xs text-green-600 underline">Thử lại</button>
-                        </div>
+                        <GrabErrorState error={liveError} onRetry={() => void loadLiveOrders()} onReconnect={onReconnectGrab} />
                       ) : preparingList.length === 0 ? (
                         <div className="flex h-48 flex-col items-center justify-center gap-2 text-gray-400">
                           <PackageCheck className="size-8 opacity-30" />
@@ -655,6 +669,7 @@ export function ExternalOrdersModal({
                             <GrabPreparingOrderCard
                               key={order.orderID}
                               order={order}
+                              context="preparing"
                               showMarkReady={true}
                               marking={markingReadyIds.has(order.orderID)}
                               result={markReadyResults[order.orderID]}
@@ -673,10 +688,7 @@ export function ExternalOrdersModal({
                           <Loader2 className="size-4 animate-spin" /> Đang tải…
                         </div>
                       ) : readyError ? (
-                        <div className="flex h-48 flex-col items-center justify-center gap-2">
-                          <p className="text-sm text-red-500">{readyError}</p>
-                          <button onClick={() => void loadReadyOrders()} className="text-xs text-green-600 underline">Thử lại</button>
-                        </div>
+                        <GrabErrorState error={readyError} onRetry={() => void loadReadyOrders()} onReconnect={onReconnectGrab} />
                       ) : readyOrders.length === 0 ? (
                         <div className="flex h-48 flex-col items-center justify-center gap-2 text-gray-400">
                           <CheckCircle2 className="size-8 opacity-30" />
@@ -688,6 +700,7 @@ export function ExternalOrdersModal({
                             <GrabPreparingOrderCard
                               key={order.orderID}
                               order={order}
+                              context="ready"
                               showMarkReady={false}
                               marking={false}
                               result={undefined}
@@ -706,10 +719,7 @@ export function ExternalOrdersModal({
                           <Loader2 className="size-4 animate-spin" /> Đang tải…
                         </div>
                       ) : upcomingError ? (
-                        <div className="flex h-48 flex-col items-center justify-center gap-2">
-                          <p className="text-sm text-red-500">{upcomingError}</p>
-                          <button onClick={() => void loadUpcomingOrders()} className="text-xs text-green-600 underline">Thử lại</button>
-                        </div>
+                        <GrabErrorState error={upcomingError} onRetry={() => void loadUpcomingOrders()} onReconnect={onReconnectGrab} />
                       ) : upcomingOrders.length === 0 ? (
                         <div className="flex h-48 flex-col items-center justify-center gap-2 text-gray-400">
                           <Clock className="size-8 opacity-30" />
@@ -721,6 +731,7 @@ export function ExternalOrdersModal({
                             <GrabPreparingOrderCard
                               key={order.orderID}
                               order={order}
+                              context="upcoming"
                               showMarkReady={false}
                               marking={false}
                               result={undefined}
@@ -810,34 +821,12 @@ export function ExternalOrdersModal({
                           </DateRangePicker>
                         </div>
 
-                        {/* Sync revenue bar */}
-                        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-green-100 bg-green-50 px-4 py-3">
-                          <TrendingUp className="size-4 text-green-600 shrink-0" />
-                          <span className="text-sm font-semibold text-green-800 flex-1">
-                            Sync doanh thu {grabFrom}{grabFrom !== grabTo ? ` → ${grabTo}` : ''} vào hệ thống
-                          </span>
-                          {revenueResult && (
-                            <span className={`text-xs font-medium ${revenueResult.ok ? 'text-teal-700' : 'text-red-600'}`}>
-                              {revenueResult.ok ? <CheckCircle2 className="size-3 inline mr-0.5" /> : null}
-                              {revenueResult.msg}
-                            </span>
-                          )}
-                          <button onClick={() => void syncRevenue()} disabled={revenueSyncing}
-                            className="flex items-center gap-1.5 rounded-xl bg-green-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-green-700 disabled:opacity-60 transition-colors">
-                            {revenueSyncing ? <Loader2 className="size-3.5 animate-spin" /> : <TrendingUp className="size-3.5" />}
-                            {revenueSyncing ? 'Đang sync…' : 'Sync doanh thu'}
-                          </button>
-                        </div>
-
                         {grabLoading ? (
                           <div className="flex h-48 items-center justify-center gap-2 text-sm text-gray-400">
                             <Loader2 className="size-4 animate-spin" /> Đang tải từ GrabFood…
                           </div>
                         ) : grabError ? (
-                          <div className="flex h-48 flex-col items-center justify-center gap-2">
-                            <p className="text-sm text-red-500">{grabError}</p>
-                            <button onClick={() => void loadGrabOrders(grabFrom, grabTo, 0)} className="text-xs text-green-600 underline">Thử lại</button>
-                          </div>
+                          <GrabErrorState error={grabError} onRetry={() => void loadGrabOrders(grabFrom, grabTo, 0)} onReconnect={onReconnectGrab} />
                         ) : grabOrders.length === 0 ? (
                           <div className="flex h-48 flex-col items-center justify-center gap-2 text-gray-400">
                             <ShoppingBag className="size-8 opacity-30" />
@@ -848,7 +837,7 @@ export function ExternalOrdersModal({
                             <div className="mb-2 text-xs text-gray-400">({grabOrders.length} đơn{grabHasMore ? '+' : ''})</div>
                             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                               {grabOrders.map(order => (
-                                <GrabOrderCard key={order.ID} order={order} onOpen={() => void openGrabDetail(order.ID)} />
+                                <GrabOrderCard key={order.ID} order={order} onOpen={() => void openGrabDetail(order.ID, undefined, 'history')} />
                               ))}
                             </div>
                             {grabHasMore && (
@@ -933,26 +922,45 @@ export function ExternalOrdersModal({
   )
 }
 
+
+function GrabErrorState({ error, onRetry, onReconnect }: {
+  error: string
+  onRetry: () => void
+  onReconnect?: () => void
+}) {
+  // Cả 2 trường hợp này chỉ sửa được bằng cách đăng nhập lại ở Cài đặt
+  const needsReconnect = error.includes('hết hạn') || error.toLowerCase().includes('merchant id')
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-red-100 bg-red-50 px-6 py-8 text-center">
+      <p className="text-sm font-medium text-red-600">{error}</p>
+      {needsReconnect && onReconnect && (
+        <button
+          onClick={onReconnect}
+          className="flex items-center gap-1.5 rounded-xl bg-green-600 px-4 py-2 text-xs font-bold text-white hover:bg-green-700 transition-colors"
+        >
+          Mở Cài đặt · Kết nối đối tác
+        </button>
+      )}
+      <button onClick={onRetry} className="text-xs text-green-600 underline">Thử lại</button>
+    </div>
+  )
+}
+
 // ─── GrabFood Preparing Order Card (NO print buttons — print only in detail modal) ──
 
 function GrabPreparingOrderCard({
-  order, showMarkReady, marking, result, onMarkReady, onOpen,
+  order, context, showMarkReady, marking, result, onMarkReady, onOpen,
 }: {
   order: GrabPreparingOrder
   showMarkReady: boolean
+  context: GrabOrderContext
   marking: boolean
   result?: { ok: boolean; msg: string }
   onMarkReady: () => void
   onOpen: () => void
 }) {
-  const stateLabel: Record<string, string> = {
-    ORDER_IN_PREPARE: showMarkReady ? 'Đang chuẩn bị' : 'Sẵn sàng',
-    ACCEPTED: 'Đã nhận',
-    PLACED: 'Mới đặt',
-    ORDER_EXECUTING: 'Đang giao',
-    DRIVER_AT_STORE: 'Tài xế đến',
-  }
-  const label = stateLabel[order.state] ?? order.state
+
+  const label = grabOrderLabel(order.state, context)
   const amount = order.orderValue ? Number(order.orderValue) : 0
   return (
     <div
@@ -1064,7 +1072,9 @@ function GrabOrderCard({
   const label = GRAB_STATUS_LABEL[status] ?? status
   const color = GRAB_STATUS_COLOR[status] ?? 'bg-gray-100 text-gray-600 border-gray-200'
   const dot = GRAB_STATUS_DOT[status] ?? 'bg-gray-400'
-  const amount = order.orderEarningsInMinorUnit
+  const rate = getLearnedCommissionRate(DEFAULT_GRAB_COMMISSION_RATE)
+  const cached = getCachedNet(order.displayID)
+  const amount = cached ?? estimateGrabNetReceived(order.orderEarningsInMinorUnit, rate)
 
   return (
     <div className="relative flex flex-col rounded-2xl border border-gray-100 bg-white shadow-sm transition-all hover:shadow-md">
@@ -1094,7 +1104,7 @@ function GrabOrderCard({
           </div>
           <div className="shrink-0 text-right">
             <p className="text-base font-black text-brand">{fmt(amount)}</p>
-            <p className="text-[10px] text-gray-400">Thu nhập</p>
+            <p className="text-[10px] text-gray-400">{cached ? 'Thực nhận' : 'Ước tính'}</p>
           </div>
         </div>
       </button>

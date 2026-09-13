@@ -1,10 +1,11 @@
 import {
-    X, Printer, Tag, CheckCircle2, Loader2, AlertCircle,
-    MapPin, CreditCard, Clock, ShoppingBag, Percent,
-    Star, Receipt, Box, Circle, Ban, ExternalLink, Phone, User,
+    ArrowLeft, X, Printer, Tag, CheckCircle2, Loader2, AlertCircle,
+    MapPin, Clock, ShoppingBag, Copy, Check as CheckIcon,
+    Star, Box, Circle, Ban, ExternalLink, Phone, User, MoreHorizontal,
     Bike, UtensilsCrossed, Package, Truck, UserPlus, Users, Crown, XCircle, UserCheck, Sparkles,
+    Maximize2,
 } from 'lucide-react'
-import { Fragment, useState, useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { DEFAULT_BILL_CONFIG, DEFAULT_LABEL_CONFIG, RecipeResolveRequestItem, ResolvedRecipe, ResolvedRecipeMap, type AdminOrder, type OrderStatus } from '../types/common'
 import { fetchShippers, assignShipper, updateOrderStatus, fetchShippingEstimate, fetchGroupOrderLive, type GroupOrderLive, API_URL, resolveRecipeBatch } from '../api'
 import { io, type Socket } from 'socket.io-client'
@@ -13,7 +14,6 @@ import { KEYS, loadLocal } from '@/lib/local-storage'
 import { formatDate } from '@/lib/utils'
 import { BillConfig, LabelConfig } from '../../../preload'
 import { getFontBase64 } from '@/lib/font-cache'
-import { LeafletMap } from './LeafletMap'
 import { LabelPickerModal } from './LabelPickerModal'
 import { RecipeChecklist } from './RecipeChecklist'
 import { useShowRecipe } from '@/hooks/useShowRecipe'
@@ -50,24 +50,52 @@ function parseExtras(raw: unknown): { name: string; price: number }[] {
         .map(x => ({ name: x.name, price: Number(x.price ?? 0) }))
 }
 
+// Detect ordering channel from the "[PLATFORM] name" convention used for
+// orders synced in from delivery partners. Falls through to "direct" order.
+function detectChannel(order: AdminOrder): { label: string; tone: 'grab' | 'shopee' | 'direct' } {
+    const raw = order.guestDeliveryName ?? ''
+    const m = raw.match(/^\[([^\]]+)\]/)
+    const tag = (m?.[1] ?? '').toUpperCase()
+    if (tag.includes('GRAB')) return { label: 'GrabFood', tone: 'grab' }
+    if (tag.includes('SHOPEE')) return { label: 'ShopeeFood', tone: 'shopee' }
+    return { label: 'Ujcha', tone: 'direct' }
+}
+
+const CHANNEL_TONE_CLS: Record<'grab' | 'shopee' | 'direct', string> = {
+    grab: 'text-green-600',
+    shopee: 'text-orange-600',
+    direct: 'text-gray-700',
+}
+
+/** Build a keyless Google Maps embed URL — works via the public `output=embed` form. */
+function buildMapEmbedUrl(lat?: number | null, lng?: number | null, address?: string | null): string | null {
+    if (typeof lat === 'number' && typeof lng === 'number') {
+        return `https://maps.google.com/maps?q=${lat},${lng}&z=16&output=embed`
+    }
+    if (address) {
+        return `https://maps.google.com/maps?q=${encodeURIComponent(address)}&z=15&output=embed`
+    }
+    return null
+}
+
 type PrintStatus = 'idle' | 'printing' | 'done' | 'error'
 
-// ── Status timeline ────────────────────────────────────────────────────────────
+// ── Status timeline (vertical) ──────────────────────────────────────────────
 
 const TIMELINE_STEPS_DELIVERY: OrderStatus[] = ['pending', 'confirmed', 'preparing', 'ready', 'delivering', 'arrived', 'completed']
 const TIMELINE_STEPS_OTHER: OrderStatus[] = ['pending', 'confirmed', 'preparing', 'ready', 'completed']
 
-const STEP_META: Record<OrderStatus, { label: string; icon: React.ElementType }> = {
-    pending: { label: 'Chờ xử lý', icon: Clock },
-    confirmed: { label: 'Đã xác nhận', icon: CheckCircle2 },
-    preparing: { label: 'Đang làm', icon: Box },
-    ready: { label: 'Sẵn sàng', icon: CheckCircle2 },
-    delivering: { label: 'Đang giao', icon: Truck },
-    arrived: { label: 'Đã đến nơi', icon: MapPin },
-    completed: { label: 'Hoàn thành', icon: CheckCircle2 },
-    cancelled: { label: 'Đã huỷ', icon: Ban },
+const STEP_META: Record<OrderStatus, { label: string; desc: string; icon: React.ElementType }> = {
+    pending: { label: 'Đặt hàng', desc: 'Đơn hàng đã được tạo', icon: Clock },
+    confirmed: { label: 'Đã xác nhận', desc: 'Quán đã xác nhận đơn', icon: CheckCircle2 },
+    preparing: { label: 'Đang làm', desc: 'Đang pha chế', icon: Box },
+    ready: { label: 'Sẵn sàng', desc: 'Đơn đã sẵn sàng', icon: CheckCircle2 },
+    delivering: { label: 'Đang giao', desc: 'Đơn đang được giao', icon: Truck },
+    arrived: { label: 'Đã đến nơi', desc: 'Đơn đã đến địa điểm', icon: MapPin },
+    completed: { label: 'Hoàn thành', desc: 'Đơn hàng thành công', icon: CheckCircle2 },
+    cancelled: { label: 'Đã huỷ', desc: 'Đơn hàng đã bị huỷ', icon: Ban },
 }
-// Map mỗi step tới field timestamp tương ứng trong AdminOrder.
+
 const STEP_TIME_FIELD: Partial<Record<OrderStatus, keyof AdminOrder>> = {
     pending: 'createdAt',
     confirmed: 'confirmedAt',
@@ -82,20 +110,22 @@ function formatStepTime(iso: string): string {
     return new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
 }
 
-function StatusTimeline({ order }: { order: AdminOrder }) {
+function StatusTimelineCard({ order }: { order: AdminOrder }) {
     const status = order.status
+
     if (status === 'cancelled') {
         return (
-            <div className="flex items-center justify-between gap-2.5 rounded-2xl border border-red-100 bg-red-50 px-4 py-3">
-                <div className="flex items-center gap-2.5">
-                    <Ban className="size-4 shrink-0 text-red-500" />
-                    <p className="text-sm font-semibold text-red-700">Đơn hàng đã bị huỷ</p>
+            <div className="rounded-2xl border border-red-100 bg-white p-4">
+                <p className="mb-3 text-xs font-bold uppercase tracking-widest text-gray-400">Trạng thái đơn hàng</p>
+                <div className="flex items-center justify-between gap-2.5 rounded-xl border border-red-100 bg-red-50 px-3.5 py-3">
+                    <div className="flex items-center gap-2.5">
+                        <Ban className="size-4 shrink-0 text-red-500" />
+                        <p className="text-sm font-semibold text-red-700">Đơn hàng đã bị huỷ</p>
+                    </div>
+                    {order.cancelledAt && (
+                        <span className="text-xs font-medium text-red-500 tabular-nums">{formatStepTime(order.cancelledAt)}</span>
+                    )}
                 </div>
-                {order.cancelledAt && (
-                    <span className="text-xs font-medium text-red-500 tabular-nums">
-                        {formatStepTime(order.cancelledAt)}
-                    </span>
-                )}
             </div>
         )
     }
@@ -104,49 +134,45 @@ function StatusTimeline({ order }: { order: AdminOrder }) {
     const activeIdx = steps.indexOf(steps.includes(status) ? status : 'pending')
 
     return (
-        <div className="rounded-2xl border border-gray-100 bg-gray-50/70 px-4 py-4">
-            <div className="flex items-start">
+        <div className="rounded-2xl border border-gray-100 bg-white p-4">
+            <p className="mb-3 text-xs font-bold uppercase tracking-widest text-gray-400">Trạng thái đơn hàng</p>
+            <div>
                 {steps.map((step, i) => {
                     const done = i <= activeIdx
                     const active = i === activeIdx
                     const isLast = i === steps.length - 1
-                    const StepIcon = STEP_META[step].icon
                     const timeField = STEP_TIME_FIELD[step]
                     const timeValue = timeField ? (order[timeField] as string | null | undefined) : undefined
 
                     return (
-                        <Fragment key={step}>
-                            <div className="flex flex-1 flex-col items-center gap-2">
-                                <div className={`relative flex size-9 items-center justify-center rounded-full transition-all duration-300 ${active
-                                    ? 'bg-brand text-white shadow-lg shadow-brand/30 ring-4 ring-brand/15'
+                        <div key={step} className="flex gap-3">
+                            <div className="flex flex-col items-center">
+                                <div className={`flex size-6 shrink-0 items-center justify-center rounded-full transition-colors ${active
+                                    ? 'bg-brand text-white ring-4 ring-brand/15'
                                     : done
-                                        ? 'bg-brand/12 text-brand'
-                                        : 'border-2 border-gray-200 bg-white text-gray-300'
+                                        ? 'bg-brand text-white'
+                                        : 'border-2 border-gray-200 bg-white'
                                     }`}>
-                                    {active && (
-                                        <span className="absolute inset-0 rounded-full bg-brand animate-ping opacity-20" />
-                                    )}
-                                    {done
-                                        ? active
-                                            ? <StepIcon className="size-4" />
-                                            : <CheckCircle2 className="size-4" />
-                                        : <Circle className="size-3.5 opacity-50" />
-                                    }
+                                    {done ? <CheckIcon className="size-3" /> : <Circle className="size-1.5 fill-gray-300 text-gray-300" />}
                                 </div>
-                                <p className={`text-center text-[10px] font-semibold leading-tight ${active ? 'text-brand' : done ? 'text-gray-500' : 'text-gray-300'
-                                    }`}>
-                                    {STEP_META[step].label}
-                                </p>
-                                <p className={`text-center text-[9px] leading-tight tabular-nums ${done ? 'text-gray-400' : 'text-transparent'
-                                    }`}>
-                                    {timeValue ? formatStepTime(timeValue) : '\u00A0'}
-                                </p>
+                                {!isLast && (
+                                    <div className={`w-0.5 flex-1 min-h-[26px] rounded-full ${i < activeIdx ? 'bg-brand/30' : 'bg-gray-150'}`} />
+                                )}
                             </div>
-                            {!isLast && (
-                                <div className={`mt-[18px] h-0.5 flex-1 rounded-full transition-all duration-500 ${i < activeIdx ? 'bg-brand/30' : 'bg-gray-200'
-                                    }`} />
-                            )}
-                        </Fragment>
+                            <div className="flex flex-1 items-start justify-between gap-2 pb-4">
+                                <div>
+                                    <p className={`text-sm font-bold leading-tight ${done ? 'text-gray-900' : 'text-gray-300'}`}>
+                                        {STEP_META[step].label}
+                                    </p>
+                                    <p className={`text-xs leading-snug ${done ? 'text-gray-400' : 'text-gray-300'}`}>
+                                        {STEP_META[step].desc}
+                                    </p>
+                                </div>
+                                {timeValue && (
+                                    <span className="shrink-0 text-xs font-medium text-gray-400 tabular-nums">{formatStepTime(timeValue)}</span>
+                                )}
+                            </div>
+                        </div>
                     )
                 })}
             </div>
@@ -165,14 +191,14 @@ function ItemRow({ item, recipe, showRecipe }: { item: AdminOrder['items'][numbe
     return (
         <div className="flex flex-col gap-0 px-4 py-3">
             <div className="flex items-start gap-3">
-                <div className="relative shrink-0 size-11">
-                    {item.product.imageUrls?.[0] ? (
-                        <img src={item.product.imageUrls[0]} alt={item.product.name} className="size-11 rounded-xl object-cover ring-1 ring-black/6" />
-                    ) : (
-                        <div className="size-11 rounded-xl bg-gray-100 flex items-center justify-center ring-1 ring-black/6">
+                <div className="relative shrink-0">
+                    <div className="flex size-11 items-center justify-center rounded-xl bg-gray-100 ring-1 ring-black/6 overflow-hidden">
+                        {item.product?.imageUrls?.[0] ? (
+                            <img src={item.product.imageUrls[0]} alt={item.product.name} className="size-full object-cover" />
+                        ) : (
                             <ShoppingBag className="size-4 text-gray-300" />
-                        </div>
-                    )}
+                        )}
+                    </div>
                     <span className="absolute -bottom-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full bg-brand text-[10px] font-black text-white ring-2 ring-white shadow-sm">
                         {item.quantity}
                     </span>
@@ -228,11 +254,14 @@ export function OrderDetailModal({
     isReturning,
     onClose,
     onStatusChange,
+    onEdit,
 }: {
     order: AdminOrder
     isReturning?: boolean
     onClose: () => void
     onStatusChange?: (id: string, status: OrderStatus) => Promise<void>
+    /** Optional — shows the "Chỉnh sửa" header button when provided. */
+    onEdit?: (order: AdminOrder) => void
 }) {
     const [billCfg, setBillCfg] = useState<BillConfig>(DEFAULT_BILL_CONFIG)
     const [labelCfg, setLabelCfg] = useState<LabelConfig>(DEFAULT_LABEL_CONFIG)
@@ -250,6 +279,13 @@ export function OrderDetailModal({
     const groupSocketRef = useRef<Socket | null>(null)
     const [recipeMap, setRecipeMap] = useState<ResolvedRecipeMap>({})
     const { showRecipe, toggle: toggleRecipe } = useShowRecipe()
+
+    // ── New for the redesign: print dropdown / "more" menu / fullscreen map ──
+    const [printMenuOpen, setPrintMenuOpen] = useState(false)
+    const [moreMenuOpen, setMoreMenuOpen] = useState(false)
+    const [mapFullscreen, setMapFullscreen] = useState(false)
+    const [codeCopied, setCodeCopied] = useState(false)
+    const headerMenuRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
         const requestItems: RecipeResolveRequestItem[] = order.groupOrder
@@ -276,8 +312,8 @@ export function OrderDetailModal({
 
         if (requestItems.length === 0) return
         void resolveRecipeBatch(requestItems).then(setRecipeMap).catch(() => { })
-
     }, [order.id, order.groupOrder, order.items])
+
     useEffect(() => {
         setBillCfg(loadLocal<BillConfig>(KEYS.bill, DEFAULT_BILL_CONFIG))
         setLabelCfg(loadLocal<LabelConfig>(KEYS.label, DEFAULT_LABEL_CONFIG))
@@ -317,6 +353,29 @@ export function OrderDetailModal({
             .catch(() => { })
     }, [order.type, order.address?.lat, order.address?.lng])
 
+    // Close header dropdowns on outside click / Escape
+    useEffect(() => {
+        if (!printMenuOpen && !moreMenuOpen) return
+        const onDocClick = (e: MouseEvent) => {
+            if (headerMenuRef.current && !headerMenuRef.current.contains(e.target as Node)) {
+                setPrintMenuOpen(false)
+                setMoreMenuOpen(false)
+            }
+        }
+        document.addEventListener('mousedown', onDocClick)
+        return () => document.removeEventListener('mousedown', onDocClick)
+    }, [printMenuOpen, moreMenuOpen])
+
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (e.key !== 'Escape') return
+            if (mapFullscreen) { setMapFullscreen(false); return }
+            onClose()
+        }
+        window.addEventListener('keydown', handler)
+        return () => window.removeEventListener('keydown', handler)
+    }, [onClose, mapFullscreen])
+
     const handleAssignShipper = async () => {
         if (!selectedShipperId) return
         setAssignBusy(true)
@@ -331,6 +390,7 @@ export function OrderDetailModal({
     }
 
     async function handlePrintBill() {
+        setPrintMenuOpen(false)
         setBillStatus('printing')
         const address = billCfg.address || billCfg.printerId?.replace('manual-', '')
         const printerName = billCfg.printerName || address
@@ -370,11 +430,6 @@ export function OrderDetailModal({
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const result = await (eAPI?.printer as any)?.printLabelsByAddress(address, printerName, allLabels, labelCfg) ?? { ok: true }
             setLabelStatus(result?.ok === false ? 'error' : 'done')
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            // const r = result as any
-            // if (r?.ms !== undefined) {
-            //     alert(`In ${r.count ?? allLabels.length} tem — chế độ: ${r.mode} — mất ${r.ms}ms (${(r.ms / 1000).toFixed(1)}s)`)
-            // }
         } catch {
             setLabelStatus('error')
         }
@@ -391,6 +446,16 @@ export function OrderDetailModal({
         }
     }
 
+    async function handleCopyCode() {
+        const code = order.paymentCode ?? order.orderRef ?? order.id
+        try {
+            await navigator.clipboard.writeText(code)
+            setCodeCopied(true)
+            setTimeout(() => setCodeCopied(false), 1500)
+        } catch { /* ignore */ }
+        setMoreMenuOpen(false)
+    }
+
     const orderRef = order.orderRef ?? order.id
     const subtotal = computeSubtotal(order.items)
     const discount = Number(order.discountAmount) || 0
@@ -401,23 +466,17 @@ export function OrderDetailModal({
     const finalAmount = subtotal - discount - pointDiscount + shippingFee + vatAmount
     const totalQty = order.items.reduce((s, i) => s + i.quantity, 0)
 
-    // Derive effective payment status from groupLive for real-time badge update:
-    // when all split-pay participants show paid in the /group socket, reflect that immediately
-    // without waiting for the order prop to refresh from the parent.
     const isSplitPay = order.groupOrder?.paymentMode === 'split'
     const activeParticipants = order.groupOrder?.participants.filter(p => p.items.length > 0) ?? []
     const allParticipantsPaid = isSplitPay && groupLive !== null && activeParticipants.length > 0
         && activeParticipants.every(p => groupLive.participants.find(lp => lp.id === p.id)?.paymentStatus === 'paid')
     const effectivePaymentStatus = (allParticipantsPaid && order.paymentStatus !== 'paid') ? 'paid' : order.paymentStatus
-
     const isPaid = effectivePaymentStatus === 'paid'
 
     const hasBillPrinter = billCfg.enabled && !!(billCfg.address || billCfg.printerId)
     const hasLabelPrinter = labelCfg.enabled && !!(labelCfg.address || labelCfg.printerId)
-
     const billDisabledReason = !billCfg.enabled ? 'Chưa bật in hóa đơn trong Cài đặt'
         : !(billCfg.address || billCfg.printerId) ? 'Chưa chọn máy in trong Cài đặt' : undefined
-
     const labelDisabledReason = !labelCfg.enabled ? 'Chưa bật in tem nhãn trong Cài đặt'
         : !(labelCfg.address || labelCfg.printerId) ? 'Chưa chọn máy in nhãn trong Cài đặt' : undefined
 
@@ -434,197 +493,207 @@ export function OrderDetailModal({
             ? `https://www.google.com/maps?q=${mapLat},${mapLng}`
             : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(deliveryAddr)}`
         : null
+    const mapEmbedUrl = buildMapEmbedUrl(mapLat, mapLng, deliveryAddr)
+
+    const channel = detectChannel(order)
+    const cancellable = (['pending', 'confirmed', 'preparing'] as OrderStatus[]).includes(localStatus)
+    const staffName = (order as unknown as { confirmedByName?: string; staffName?: string }).staffName
+        ?? (order as unknown as { confirmedByName?: string }).confirmedByName
 
     return (
-        <div
-            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4"
-            onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-        >
-            <div className="relative flex w-full sm:max-w-3xl flex-col rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl max-h-[94vh] sm:max-h-[92vh] overflow-hidden">
+        <div className="fixed inset-0 z-50 flex flex-col bg-gray-50 animate-in fade-in duration-200">
 
-                {/* Drag handle (mobile) */}
-                <div className="flex justify-center pt-3 pb-1 sm:hidden">
-                    <div className="h-1 w-10 rounded-full bg-gray-200" />
+            {/* ── Header ── */}
+            <div className="flex h-16 shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-4 sm:px-6 shadow-sm">
+                <button
+                    onClick={onClose}
+                    className="flex items-center justify-center rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                >
+                    <ArrowLeft className="size-5" />
+                </button>
+                <div className="hidden h-6 w-px bg-gray-200 sm:block" />
+                <div className="min-w-0 flex-1">
+                    <p className="truncate font-mono text-base sm:text-lg font-black text-gray-900">
+                        Đơn hàng {order.paymentCode ?? orderRef}
+                    </p>
+                    <p className="truncate text-xs text-gray-400">
+                        {formatDate(order.createdAt)} · Mã đơn: {order.paymentCode ?? orderRef}
+                    </p>
                 </div>
 
-                {/* Header */}
-                <div className="flex items-start justify-between border-b border-gray-100 px-6 py-4 shrink-0">
-                    <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2.5 flex-wrap">
-                            <p className="font-mono text-lg font-black text-brand leading-tight">{order.paymentCode ?? orderRef}</p>
-                            {order.groupOrder && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-1 text-[10px] font-bold text-violet-700 ring-1 ring-violet-200">
-                                    <Users className="size-3" /> Đơn nhóm
-                                </span>
-                            )}
-                            <PaymentBadge status={effectivePaymentStatus} />
-                            {isReturning === true && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-200">
-                                    <UserCheck className="size-3" /> Khách quen
-                                </span>
-                            )}
-                            {isReturning === false && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-1 text-[10px] font-bold text-violet-600 ring-1 ring-violet-200">
-                                    <Sparkles className="size-3" /> Khách mới
-                                </span>
-                            )}
-                        </div>
-                        <div className="mt-1.5 flex items-center gap-2 flex-wrap">
-                            {order.type === 'delivery' && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700 ring-1 ring-sky-200">
-                                    <Bike className="size-3" />
-                                    Giao hàng{order.shipper ? ` · ${order.shipper.name}` : ''}
-                                </span>
-                            )}
-                            {order.type === 'delivery' && order.scheduledDeliveryTime && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-200">
-                                    <Clock className="size-3" />
-                                    Hẹn giờ giao · {formatDate(order.scheduledDeliveryTime)}
-                                </span>
-                            )}
-                            {order.type === 'table' && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 ring-1 ring-amber-200">
-                                    <UtensilsCrossed className="size-3" />
-                                    {order.table?.name ? `Bàn ${order.table.name}` : 'Tại bàn'}
-                                </span>
-                            )}
-                            {order.type === 'pickup' && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700 ring-1 ring-violet-200">
-                                    <Package className="size-3" />
-                                    Mang về{order.pickupTime ? ` · ${formatDate(order.pickupTime)}` : ''}
-                                </span>
-                            )}
-                            <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">
-                                <CreditCard className="size-3" />
-                                {PAYMENT_TYPE_LABEL[order.paymentType] ?? order.paymentType}
-                            </span>
-                            {order.paidAt && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
-                                    <CheckCircle2 className="size-3" />
-                                    Đã TT · {formatDate(order.paidAt)}
-                                </span>
-                            )}
-                            <span className="text-xs text-gray-400">{formatDate(order.createdAt)}</span>
-                        </div>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                        <RecipeToggleButton show={showRecipe} onToggle={toggleRecipe} />
-                        <button onClick={onClose} className="ml-3 shrink-0 rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors">
-                            <X className="size-5" />
+                <div ref={headerMenuRef} className="flex shrink-0 items-center gap-2">
+                    {/* "..." more menu */}
+                    <div className="relative">
+                        <button
+                            onClick={() => { setMoreMenuOpen(v => !v); setPrintMenuOpen(false) }}
+                            className="flex items-center justify-center rounded-full p-2.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                        >
+                            <MoreHorizontal className="size-4" />
                         </button>
+                        {moreMenuOpen && (
+                            <div className="absolute right-0 top-full z-10 mt-1.5 w-48 rounded-2xl border border-gray-100 bg-white py-1.5 shadow-xl">
+                                <button
+                                    onClick={() => void handleCopyCode()}
+                                    className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                >
+                                    {codeCopied ? <CheckIcon className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5 text-gray-400" />}
+                                    {codeCopied ? 'Đã sao chép' : 'Sao chép mã đơn'}
+                                </button>
+                            </div>
+                        )}
                     </div>
+
+                    {/* "In đơn" print dropdown */}
+                    <div className="relative">
+                        <button
+                            onClick={() => { setPrintMenuOpen(v => !v); setMoreMenuOpen(false) }}
+                            className="flex items-center gap-1.5 rounded-full border border-gray-200 px-3.5 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+                        >
+                            <Printer className="size-4" /> In đơn
+                        </button>
+                        {printMenuOpen && (
+                            <div className="absolute right-0 top-full z-10 mt-1.5 w-56 rounded-2xl border border-gray-100 bg-white p-1.5 shadow-xl">
+                                <PrintMenuItem
+                                    icon={<Printer className="size-3.5" />}
+                                    label="In hóa đơn"
+                                    disabled={!hasBillPrinter}
+                                    disabledReason={billDisabledReason}
+                                    status={billStatus}
+                                    onClick={() => void handlePrintBill()}
+                                />
+                                <PrintMenuItem
+                                    icon={<Tag className="size-3.5" />}
+                                    label="In tem nhãn"
+                                    disabled={!hasLabelPrinter}
+                                    disabledReason={labelDisabledReason}
+                                    status={labelStatus}
+                                    onClick={() => { setPrintMenuOpen(false); setLabelPickerOpen(true) }}
+                                />
+                            </div>
+                        )}
+                    </div>
+
+                    {onEdit && (
+                        <button
+                            onClick={() => onEdit(order)}
+                            className="flex items-center gap-1.5 rounded-full bg-brand px-4 py-2 text-sm font-bold text-white hover:opacity-90 transition-opacity"
+                        >
+                            Chỉnh sửa
+                        </button>
+                    )}
                 </div>
+            </div>
 
-                {/* Body — 2-column on sm+ */}
-                <div className="flex-1 overflow-y-auto overscroll-contain min-h-0">
+            {/* ── Badges row ── */}
+            <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-gray-100 bg-white px-4 sm:px-6 py-2.5">
+                {order.type === 'delivery' && (
+                    <Badge tone="sky" icon={<Bike className="size-3" />}>
+                        Giao hàng{order.shipper ? ` - ${order.shipper.name}` : ''}
+                    </Badge>
+                )}
+                {order.type === 'table' && (
+                    <Badge tone="amber" icon={<UtensilsCrossed className="size-3" />}>
+                        {order.table?.name ? `Bàn ${order.table.name}` : 'Tại bàn'}
+                    </Badge>
+                )}
+                {order.type === 'pickup' && (
+                    <Badge tone="violet" icon={<Package className="size-3" />}>Mang về</Badge>
+                )}
+                <PaymentBadge status={effectivePaymentStatus} />
+                {isReturning === true && <Badge tone="emerald" icon={<UserCheck className="size-3" />}>Khách quen</Badge>}
+                {isReturning === false && <Badge tone="violet" icon={<Sparkles className="size-3" />}>Khách mới</Badge>}
+                {order.groupOrder && <Badge tone="purple" icon={<Users className="size-3" />}>Đơn nhóm</Badge>}
+                {order.paidAt && <Badge tone="emerald" icon={<CheckCircle2 className="size-3" />}>Đã TT · {formatDate(order.paidAt)}</Badge>}
+                <span className="ml-1 text-xs text-gray-400">{formatDate(order.createdAt)}</span>
+            </div>
 
-                    {/* Status timeline — full width at top */}
-                    <div className="px-6 pt-4 pb-3 border-b border-gray-100">
-                        <StatusTimeline order={order} />
-                    </div>
+            {/* ── Body: 3-column layout ── */}
+            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5">
+                <div className="mx-auto grid max-w-[1400px] grid-cols-1 gap-5 lg:grid-cols-[300px_1fr_320px]">
 
-                    <div className="px-6 py-4 space-y-4">
+                    {/* Left column */}
+                    <div className="space-y-4 lg:order-1">
+                        <StatusTimelineCard order={order} />
 
-                        {/* Delivery info */}
-                        {hasDelivery && (
-                            <div className="rounded-2xl border border-sky-200 bg-sky-50/50 overflow-hidden">
-                                <p className="px-4 pt-3 pb-2 text-[10px] font-bold uppercase tracking-widest text-sky-500">
-                                    Thông tin giao hàng
-                                </p>
-                                <div className="px-4 pb-3 space-y-2">
+                        {(hasDelivery || hasPickupContact) && (
+                            <div className="rounded-2xl border border-gray-100 bg-white p-4">
+                                <p className="mb-3 text-xs font-bold uppercase tracking-widest text-gray-400">Thông tin khách hàng</p>
+                                <div className="space-y-2.5">
                                     {deliveryName && (
-                                        <div className="flex items-center gap-2.5 text-sm">
-                                            <User className="size-4 shrink-0 text-sky-500" />
-                                            <span className="font-semibold text-gray-800">{deliveryName}</span>
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2.5 text-sm">
+                                                <User className="size-4 shrink-0 text-gray-400" />
+                                                <span className="font-semibold text-gray-800">{deliveryName}</span>
+                                            </div>
+                                            {isReturning === true && (
+                                                <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                                                    <UserCheck className="size-2.5" /> Khách quen
+                                                </span>
+                                            )}
                                         </div>
                                     )}
                                     {deliveryPhone && (
                                         <div className="flex items-center gap-2.5 text-sm">
-                                            <Phone className="size-4 shrink-0 text-sky-500" />
+                                            <Phone className="size-4 shrink-0 text-gray-400" />
                                             <span className="font-mono font-medium text-gray-800">{deliveryPhone}</span>
                                         </div>
                                     )}
-                                    {deliveryAddr && (
+                                    {order.type === 'delivery' && deliveryAddr && (
                                         <div className="flex items-start gap-2.5 text-sm">
-                                            <MapPin className="size-4 shrink-0 text-sky-500 mt-0.5" />
-                                            <span className="text-gray-700 leading-snug">{deliveryAddr}</span>
-                                        </div>
-                                    )}
-                                    {order.scheduledDeliveryTime && (
-                                        <div className="flex items-center gap-2.5 text-sm">
-                                            <Clock className="size-4 shrink-0 text-sky-500" />
-                                            <span className="text-gray-700">
-                                                Giao lúc: <strong>{formatDate(order.scheduledDeliveryTime)}</strong>
-                                            </span>
+                                            <MapPin className="size-4 shrink-0 text-gray-400 mt-0.5" />
+                                            <span className="leading-snug text-gray-600">{deliveryAddr}</span>
                                         </div>
                                     )}
                                 </div>
-                                {hasMap && (
-                                    <div className="h-44 mx-4 mb-3 overflow-hidden rounded-xl ring-1 ring-sky-200">
-                                        <LeafletMap lat={mapLat} lng={mapLng} address={deliveryAddr ?? undefined} />
-                                    </div>
+                            </div>
+                        )}
+
+                        {order.type === 'delivery' && hasMap && mapEmbedUrl && (
+                            <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
+                                <div className="flex items-center justify-between px-4 pt-3.5 pb-2">
+                                    <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Địa điểm giao hàng</p>
+                                    <button
+                                        onClick={() => setMapFullscreen(true)}
+                                        title="Xem toàn màn hình"
+                                        className="flex items-center justify-center rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                                    >
+                                        <Maximize2 className="size-3.5" />
+                                    </button>
+                                </div>
+                                <div className="relative mx-4 mb-3 h-40 overflow-hidden rounded-xl ring-1 ring-gray-200">
+                                    <iframe
+                                        title="Địa điểm giao hàng"
+                                        src={mapEmbedUrl}
+                                        className="size-full border-0"
+                                        loading="lazy"
+                                        referrerPolicy="no-referrer-when-downgrade"
+                                    />
+                                    <button
+                                        onClick={() => setMapFullscreen(true)}
+                                        className="absolute inset-0"
+                                        aria-label="Mở bản đồ toàn màn hình"
+                                    />
+                                </div>
+                                {deliveryAddr && (
+                                    <p className="px-4 pb-1 text-xs leading-snug text-gray-500">{deliveryAddr}</p>
+                                )}
+                                {distanceKm !== null && (
+                                    <p className="px-4 pb-1 text-xs font-medium text-gray-400">Khoảng cách: {distanceKm.toFixed(1)} km</p>
                                 )}
                                 {mapsUrl && (
-                                    <div className="px-4 pb-3">
+                                    <div className="px-4 pb-3.5 pt-1">
                                         <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
-                                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-sky-700 hover:underline">
-                                            <ExternalLink className="size-3.5" />
-                                            Xem trên Google Maps
+                                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand hover:underline">
+                                            <ExternalLink className="size-3.5" /> Xem trên Google Maps
                                         </a>
                                     </div>
                                 )}
                             </div>
                         )}
 
-                        {/* Pickup contact */}
-                        {hasPickupContact && (
-                            <div className="rounded-2xl border border-violet-200 bg-violet-50/50 overflow-hidden">
-                                <p className="px-4 pt-3 pb-2 text-[10px] font-bold uppercase tracking-widest text-violet-500">
-                                    Thông tin người nhận
-                                </p>
-                                <div className="px-4 pb-3 space-y-2">
-                                    {deliveryName && (
-                                        <div className="flex items-center gap-2.5 text-sm">
-                                            <User className="size-4 shrink-0 text-violet-500" />
-                                            <span className="font-semibold text-gray-800">{deliveryName}</span>
-                                        </div>
-                                    )}
-                                    {deliveryPhone && (
-                                        <div className="flex items-center gap-2.5 text-sm">
-                                            <Phone className="size-4 shrink-0 text-violet-500" />
-                                            <span className="font-mono font-medium text-gray-800">{deliveryPhone}</span>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Items */}
-                        {order.groupOrder ? (
-                            <GroupOrderItemsSection
-                                go={order.groupOrder}
-                                totalQty={totalQty}
-                                liveParticipants={groupLive?.participants}
-                                recipeMap={recipeMap}
-                                showRecipe={showRecipe}
-                            />
-                        ) : (
-                            <div className="rounded-2xl border border-gray-100 overflow-hidden">
-                                <p className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
-                                    Món đặt · {totalQty} món
-                                </p>
-                                <div className="divide-y divide-gray-50">
-                                    {order.items.map((item) => (
-                                        <ItemRow key={item.id} item={item} recipe={recipeMap[item.id]} showRecipe={showRecipe} />
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Shipper assignment */}
                         {order.type === 'delivery' && shippers.length > 0 && (
-                            <div className="rounded-2xl border border-gray-100 overflow-hidden">
-                                <p className="px-4 pt-3 pb-2 text-[10px] font-bold uppercase tracking-widest text-gray-400 flex items-center gap-1.5">
+                            <div className="rounded-2xl border border-gray-100 bg-white overflow-hidden">
+                                <p className="px-4 pt-3.5 pb-2 text-xs font-bold uppercase tracking-widest text-gray-400 flex items-center gap-1.5">
                                     <Bike className="size-3" /> Shipper
                                 </p>
                                 {order.shipper && (
@@ -635,7 +704,7 @@ export function OrderDetailModal({
                                         <span className="text-[10px] text-gray-400">đang phụ trách</span>
                                     </div>
                                 )}
-                                <div className="px-4 pb-3 flex gap-2">
+                                <div className="px-4 pb-3.5 flex gap-2">
                                     <select
                                         value={selectedShipperId}
                                         onChange={e => setSelectedShipperId(e.target.value)}
@@ -657,50 +726,65 @@ export function OrderDetailModal({
                                 </div>
                             </div>
                         )}
+                    </div>
 
-                        {/* Pricing */}
-                        <div className="rounded-2xl border border-gray-100 overflow-hidden">
-                            <div className="px-4 py-3.5 space-y-2.5 bg-gray-50/80">
-                                <div className="flex items-center justify-between">
-                                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Thanh toán</p>
-                                    {order.groupOrder?.paymentMode === 'split' && (() => {
-                                        const activeP = order.groupOrder.participants.filter((p) => p.items.length > 0)
-                                        const paidC = groupLive
-                                            ? groupLive.participants.filter((lp) => activeP.some((p) => p.id === lp.id) && lp.paymentStatus === 'paid').length
-                                            : activeP.filter((p) => p.paymentStatus === 'paid').length
-                                        return (
-                                            <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ${paidC === activeP.length ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-600'
-                                                }`}>
-                                                {paidC === activeP.length && <CheckCircle2 className="size-3" />}
-                                                {paidC}/{activeP.length} đã TT
-                                            </span>
-                                        )
-                                    })()}
+                    {/* Middle column: items */}
+                    <div className="space-y-4 lg:order-2">
+                        <div className="rounded-2xl border border-gray-100 bg-white overflow-hidden">
+                            <div className="flex items-center justify-between gap-3 border-b border-gray-50 px-4 py-3">
+                                <p className="text-sm font-bold text-gray-800">Chi tiết món ({totalQty})</p>
+                                <RecipeToggleButton show={showRecipe} onToggle={toggleRecipe} />
+                            </div>
+                            {order.groupOrder ? (
+                                <GroupOrderItemsSection
+                                    go={order.groupOrder}
+                                    totalQty={totalQty}
+                                    liveParticipants={groupLive?.participants}
+                                    recipeMap={recipeMap}
+                                    showRecipe={showRecipe}
+                                />
+                            ) : (
+                                <div className="divide-y divide-gray-50">
+                                    {order.items.map((item) => (
+                                        <ItemRow key={item.id} item={item} recipe={recipeMap[item.id]} showRecipe={showRecipe} />
+                                    ))}
                                 </div>
-                                <PriceRow label="Tạm tính" value={fmt(subtotal)} />
-                                {discount > 0 && (
-                                    <PriceRow label="Giảm giá" value={`-${fmt(discount)}`} valueClass="text-green-600" icon={<Percent className="size-3" />} />
-                                )}
-                                {pointDiscount > 0 && (
-                                    <PriceRow label="Giảm điểm" value={`-${fmt(pointDiscount)}`} valueClass="text-purple-600" icon={<Star className="size-3" />} />
-                                )}
-                                {order.type === 'delivery' && (
-                                    <PriceRow
-                                        label={distanceKm !== null ? `Phí giao · ${distanceKm.toFixed(1)} km` : 'Phí giao hàng'}
-                                        value={shippingFee > 0 ? fmt(shippingFee) : 'Miễn phí'}
-                                        valueClass={shippingFee > 0 ? 'text-gray-700' : 'text-brand font-semibold'}
-                                    />
-                                )}
-                                {vatAmount > 0 && (
-                                    <PriceRow label={`VAT (${vatRate}%)`} value={`+${fmt(vatAmount)}`} valueClass="text-gray-500" />
-                                )}
-                                <div className="flex items-baseline justify-between border-t border-gray-200 pt-2.5">
-                                    <span className="font-bold text-gray-900 text-sm">Tổng cộng</span>
+                            )}
+                        </div>
+
+                        {/* Note */}
+                        <div className="rounded-2xl border border-gray-100 bg-white p-4">
+                            <p className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-widest text-gray-400">
+                                Ghi chú
+                            </p>
+                            <p className="text-sm text-gray-400">{order.note || 'Không có ghi chú'}</p>
+                        </div>
+                    </div>
+
+                    {/* Right column: summary */}
+                    <div className="space-y-4 lg:order-3">
+                        <div className="rounded-2xl border border-gray-100 bg-white p-4">
+                            <p className="mb-3 text-xs font-bold uppercase tracking-widest text-gray-400">Tổng kết đơn hàng</p>
+                            <div className="space-y-2.5">
+                                <PriceRow label={`Tổng tiền món (${totalQty})`} value={fmt(subtotal)} />
+                                <PriceRow
+                                    label="Phí giao hàng"
+                                    value={order.type === 'delivery' ? (shippingFee > 0 ? fmt(shippingFee) : 'Miễn phí') : fmt(0)}
+                                    valueClass={order.type === 'delivery' && shippingFee === 0 ? 'text-brand font-semibold' : undefined}
+                                />
+                                <PriceRow
+                                    label="Giảm giá / Khuyến mãi"
+                                    value={discount + pointDiscount > 0 ? `-${fmt(discount + pointDiscount)}` : fmt(0)}
+                                    valueClass={discount + pointDiscount > 0 ? 'text-green-600' : undefined}
+                                />
+                                {vatAmount > 0 && <PriceRow label={`VAT (${vatRate}%)`} value={`+${fmt(vatAmount)}`} valueClass="text-gray-500" />}
+                                <div className="flex items-baseline justify-between border-t border-gray-100 pt-2.5">
+                                    <span className="text-sm font-bold text-gray-900">Tổng thanh toán</span>
                                     <span className="text-xl font-black text-brand tabular-nums">{fmt(finalAmount)}</span>
                                 </div>
                             </div>
                             {(order.pointsConsumed > 0 || order.pointsReserved > 0) && (
-                                <div className="border-t border-gray-100 bg-purple-50 px-4 py-2.5 flex items-center gap-2 text-xs text-purple-700">
+                                <div className="mt-3 flex items-center gap-2 rounded-xl bg-purple-50 px-3 py-2 text-xs text-purple-700">
                                     <Star className="size-3.5 shrink-0" />
                                     {order.pointsConsumed > 0 && <span>Đã dùng <strong>{order.pointsConsumed}</strong> điểm</span>}
                                     {order.pointsReserved > 0 && <span className="ml-1">· Giữ <strong>{order.pointsReserved}</strong></span>}
@@ -708,70 +792,133 @@ export function OrderDetailModal({
                             )}
                         </div>
 
-                    </div>
-                </div>
+                        {isPaid && (
+                            <div className="flex items-start gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+                                <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white">
+                                    <CheckCircle2 className="size-4" />
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="text-sm font-bold text-emerald-800">
+                                        Đã thanh toán{order.paidAt ? ` · ${formatStepTime(order.paidAt)}` : ''}
+                                    </p>
+                                    <p className="text-xs text-emerald-600">
+                                        Thanh toán qua {PAYMENT_TYPE_LABEL[order.paymentType] ?? order.paymentType}
+                                        {channel.tone !== 'direct' ? ` · ${channel.label}` : ''}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
 
-                {/* Footer: actions + print */}
-                <div className="border-t border-gray-100 bg-gray-50/60 px-6 py-4 shrink-0 space-y-3">
-                    {onStatusChange && (['pending', 'confirmed', 'preparing', 'ready', 'delivering', 'arrived'] as OrderStatus[]).includes(localStatus) && (
-                        <div>
-                            <p className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400">
-                                <Box className="size-3" /> Cập nhật trạng thái
-                            </p>
-                            <div className="flex flex-wrap gap-1.5">
-                                {localStatus === 'pending' && (
-                                    <ActionBtn color="blue" icon={<CheckCircle2 className="size-3.5" />} label="Xác nhận" busy={actionBusy} onClick={() => void handleModalStatus('confirmed')} />
+                        <div className="rounded-2xl border border-gray-100 bg-white p-4">
+                            <p className="mb-3 text-xs font-bold uppercase tracking-widest text-gray-400">Thông tin đơn hàng</p>
+                            <div className="space-y-2.5 text-sm">
+                                <InfoRow label="Kênh đặt">
+                                    <span className={`font-bold ${CHANNEL_TONE_CLS[channel.tone]}`}>{channel.label}</span>
+                                </InfoRow>
+                                <InfoRow label="Loại đơn">
+                                    {ORDER_TYPE_LABEL[order.type] ?? order.type}{order.type === 'delivery' && order.shipper ? ` - ${order.shipper.name}` : ''}
+                                </InfoRow>
+                                <InfoRow label="Mã đơn hàng">
+                                    <button
+                                        onClick={() => void handleCopyCode()}
+                                        className="flex items-center gap-1 font-mono font-semibold text-gray-800 hover:text-brand transition-colors"
+                                    >
+                                        {order.paymentCode ?? orderRef}
+                                        {codeCopied ? <CheckIcon className="size-3 text-emerald-500" /> : <Copy className="size-3 text-gray-300" />}
+                                    </button>
+                                </InfoRow>
+                                <InfoRow label="Thời gian đặt">{formatDate(order.createdAt)}</InfoRow>
+                                {order.completedAt && <InfoRow label="Thời gian hoàn thành">{formatDate(order.completedAt)}</InfoRow>}
+                                {order.completedAt && (
+                                    <InfoRow label="Thời gian làm món">
+                                        {Math.max(0, Math.round((new Date(order.readyAt).getTime() - new Date(order.preparingAt).getTime()) / 60000))} phút
+                                    </InfoRow>
                                 )}
-                                {localStatus === 'confirmed' && (
-                                    <ActionBtn color="violet" icon={<Clock className="size-3.5" />} label="Bắt đầu làm" busy={actionBusy} onClick={() => void handleModalStatus('preparing')} />
+                                {order.completedAt && (
+                                    <InfoRow label="Thời gian giao">
+                                        {Math.max(0, Math.round((new Date(order.completedAt).getTime() - new Date(order.deliveringAt).getTime()) / 60000))} phút
+                                    </InfoRow>
                                 )}
-                                {localStatus === 'preparing' && (
-                                    <ActionBtn color="teal" icon={<CheckCircle2 className="size-3.5" />} label="Xong" busy={actionBusy} onClick={() => void handleModalStatus('ready')} />
-                                )}
-                                {localStatus === 'ready' && order.type !== 'delivery' && (
-                                    <ActionBtn color="emerald" icon={<CheckCircle2 className="size-3.5" />} label="Hoàn thành" busy={actionBusy} onClick={() => void handleModalStatus('completed')} />
-                                )}
-                                {localStatus === 'ready' && order.type === 'delivery' && (
-                                    <ActionBtn color="sky" icon={<Bike className="size-3.5" />} label="Đang giao" busy={actionBusy} onClick={() => void handleModalStatus('delivering')} />
-                                )}
-                                {(localStatus === 'delivering' || localStatus === 'arrived') && (
-                                    <ActionBtn color="emerald" icon={<CheckCircle2 className="size-3.5" />} label="Hoàn thành" busy={actionBusy} onClick={() => void handleModalStatus('completed')} />
-                                )}
-                                {(['pending', 'confirmed', 'preparing'] as OrderStatus[]).includes(localStatus) && (
-                                    <ActionBtn color="red" icon={<XCircle className="size-3.5" />} label="Huỷ đơn" busy={actionBusy} onClick={() => void handleModalStatus('cancelled')} />
-                                )}
+
+                                {staffName && <InfoRow label="Nhân viên xử lý">{staffName}</InfoRow>}
                             </div>
                         </div>
-                    )}
-                    <div>
-                        <p className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400">
-                            <Receipt className="size-3" /> In ấn
-                        </p>
-                        <div className="grid grid-cols-2 gap-2">
-                            <PrintButton
-                                icon={<Printer className="size-4" />}
-                                label="In hóa đơn"
-                                subLabel={billCfg.copies > 1 ? `${billCfg.copies} bản` : undefined}
-                                status={billStatus}
-                                disabled={!hasBillPrinter}
-                                disabledReason={billDisabledReason}
-                                onPrint={() => void handlePrintBill()}
-                                onRetry={() => setBillStatus('idle')}
-                            />
-                            <PrintButton
-                                icon={<Tag className="size-4" />}
-                                label="In tem nhãn"
-                                subLabel={`${totalQty} tem`}
-                                status={labelStatus}
-                                disabled={!hasLabelPrinter}
-                                disabledReason={labelDisabledReason}
-                                onPrint={() => setLabelPickerOpen(true)}
-                                onRetry={() => setLabelStatus('idle')}
-                            />
-                        </div>
+
+                        {cancellable && onStatusChange && (
+                            <button
+                                onClick={() => void handleModalStatus('cancelled')}
+                                disabled={actionBusy}
+                                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 py-3 text-sm font-bold text-red-600 hover:bg-red-100 disabled:opacity-50 transition-colors"
+                            >
+                                {actionBusy ? <Loader2 className="size-4 animate-spin" /> : <XCircle className="size-4" />}
+                                Huỷ đơn hàng
+                            </button>
+                        )}
+
+                        {onStatusChange && (['pending', 'confirmed', 'preparing', 'ready', 'delivering', 'arrived'] as OrderStatus[]).includes(localStatus) && (
+                            <div className="rounded-2xl border border-gray-100 bg-white p-4">
+                                <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-gray-400">
+                                    <Box className="size-3" /> Cập nhật trạng thái
+                                </p>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {localStatus === 'pending' && (
+                                        <ActionBtn color="blue" icon={<CheckCircle2 className="size-3.5" />} label="Xác nhận" busy={actionBusy} onClick={() => void handleModalStatus('confirmed')} />
+                                    )}
+                                    {localStatus === 'confirmed' && (
+                                        <ActionBtn color="violet" icon={<Clock className="size-3.5" />} label="Bắt đầu làm" busy={actionBusy} onClick={() => void handleModalStatus('preparing')} />
+                                    )}
+                                    {localStatus === 'preparing' && (
+                                        <ActionBtn color="teal" icon={<CheckCircle2 className="size-3.5" />} label="Xong" busy={actionBusy} onClick={() => void handleModalStatus('ready')} />
+                                    )}
+                                    {localStatus === 'ready' && order.type !== 'delivery' && (
+                                        <ActionBtn color="emerald" icon={<CheckCircle2 className="size-3.5" />} label="Hoàn thành" busy={actionBusy} onClick={() => void handleModalStatus('completed')} />
+                                    )}
+                                    {localStatus === 'ready' && order.type === 'delivery' && (
+                                        <ActionBtn color="sky" icon={<Bike className="size-3.5" />} label="Đang giao" busy={actionBusy} onClick={() => void handleModalStatus('delivering')} />
+                                    )}
+                                    {(localStatus === 'delivering' || localStatus === 'arrived') && (
+                                        <ActionBtn color="emerald" icon={<CheckCircle2 className="size-3.5" />} label="Hoàn thành" busy={actionBusy} onClick={() => void handleModalStatus('completed')} />
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
+
+            {/* ── Fullscreen map overlay ── */}
+            {mapFullscreen && mapEmbedUrl && (
+                <div className="fixed inset-0 z-[70] flex flex-col bg-black/90 animate-in fade-in duration-150">
+                    <div className="flex h-14 shrink-0 items-center justify-between bg-white px-4">
+                        <div className="flex items-center gap-2">
+                            <MapPin className="size-4 text-brand" />
+                            <p className="text-sm font-semibold text-gray-800 truncate">{deliveryAddr ?? 'Địa điểm giao hàng'}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {mapsUrl && (
+                                <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
+                                    className="flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50">
+                                    <ExternalLink className="size-3.5" /> Mở Google Maps
+                                </a>
+                            )}
+                            <button
+                                onClick={() => setMapFullscreen(false)}
+                                className="flex items-center justify-center rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                            >
+                                <X className="size-5" />
+                            </button>
+                        </div>
+                    </div>
+                    <iframe
+                        title="Địa điểm giao hàng — toàn màn hình"
+                        src={mapEmbedUrl}
+                        className="flex-1 w-full border-0"
+                        loading="lazy"
+                        referrerPolicy="no-referrer-when-downgrade"
+                    />
+                </div>
+            )}
+
             {labelPickerOpen && (() => {
                 const { items, defaultSelectedIds } = buildLabelPickerItems(order, labelCfg)
                 return (
@@ -792,6 +939,15 @@ export function OrderDetailModal({
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
+function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+        <div className="flex items-center justify-between gap-3">
+            <span className="text-gray-400">{label}</span>
+            <span className="text-right text-gray-800">{children}</span>
+        </div>
+    )
+}
+
 function PriceRow({
     label, value, valueClass = 'text-gray-700', icon,
 }: {
@@ -807,6 +963,23 @@ function PriceRow({
     )
 }
 
+const BADGE_TONE_CLS: Record<string, string> = {
+    sky: 'bg-sky-50 text-sky-700 ring-sky-200',
+    amber: 'bg-amber-50 text-amber-700 ring-amber-200',
+    violet: 'bg-violet-50 text-violet-700 ring-violet-200',
+    emerald: 'bg-emerald-100 text-emerald-700 ring-emerald-200',
+    purple: 'bg-purple-100 text-purple-700 ring-purple-200',
+    gray: 'bg-gray-100 text-gray-600 ring-gray-200',
+}
+
+function Badge({ tone, icon, children }: { tone: keyof typeof BADGE_TONE_CLS; icon?: React.ReactNode; children: React.ReactNode }) {
+    return (
+        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${BADGE_TONE_CLS[tone]}`}>
+            {icon} {children}
+        </span>
+    )
+}
+
 function PaymentBadge({ status }: { status: string }) {
     const map: Record<string, { label: string; cls: string }> = {
         paid: { label: 'Đã thanh toán', cls: 'bg-emerald-100 text-emerald-700 ring-emerald-200' },
@@ -819,6 +992,24 @@ function PaymentBadge({ status }: { status: string }) {
         <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 ${s.cls}`}>
             {s.label}
         </span>
+    )
+}
+
+function PrintMenuItem({ icon, label, status, disabled, disabledReason, onClick }: {
+    icon: React.ReactNode; label: string; status: PrintStatus; disabled: boolean; disabledReason?: string; onClick: () => void
+}) {
+    return (
+        <button
+            onClick={onClick}
+            disabled={disabled}
+            title={disabledReason}
+            className="flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+            <span className="flex items-center gap-2">{icon} {label}</span>
+            {status === 'printing' && <Loader2 className="size-3.5 animate-spin text-amber-500" />}
+            {status === 'done' && <CheckCircle2 className="size-3.5 text-emerald-500" />}
+            {status === 'error' && <AlertCircle className="size-3.5 text-red-500" />}
+        </button>
     )
 }
 
@@ -842,11 +1033,11 @@ function GroupOrderItemsSection({
         : withItems.filter((p) => p.paymentStatus === 'paid').length
     const isSplit = go.paymentMode === 'split'
     return (
-        <div className="rounded-2xl border border-violet-100 overflow-hidden">
-            <div className="flex items-center gap-2 px-4 pt-3 pb-2 bg-violet-50/60">
+        <div>
+            <div className="flex items-center gap-2 px-4 py-2 bg-violet-50/60">
                 <Users className="size-3.5 text-violet-500 shrink-0" />
                 <p className="text-[10px] font-bold uppercase tracking-widest text-violet-500">
-                    Đơn nhóm · {withItems.length} thành viên · {totalQty} món
+                    {withItems.length} thành viên · {totalQty} món
                 </p>
                 <div className="ml-auto flex items-center gap-2">
                     {isSplit && (
@@ -877,7 +1068,6 @@ function GroupOrderItemsSection({
                         : p.paymentStatus === 'paid'
                     return (
                         <div key={p.id}>
-                            {/* Participant header */}
                             <div className="flex items-center gap-2 px-4 py-2 bg-gray-50/70">
                                 <div className={`flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${p.isHost ? 'bg-amber-100 text-amber-700' : 'bg-gray-200 text-gray-500'}`}>
                                     {p.isHost ? <Crown className="size-3.5" /> : <User className="size-3" />}
@@ -893,7 +1083,6 @@ function GroupOrderItemsSection({
                                 )}
                                 <span className="text-xs font-semibold text-gray-600 tabular-nums">{fmt(memberSubtotal)}</span>
                             </div>
-                            {/* Participant items */}
                             <div className="divide-y divide-gray-50">
                                 {p.items.map((item) => {
                                     const opts = item.selectedOptions && typeof item.selectedOptions === 'object'
@@ -984,37 +1173,6 @@ function ActionBtn({ color, icon, label, busy, onClick }: {
         >
             {busy ? <Loader2 className="size-3.5 animate-spin" /> : icon}
             {label}
-        </button>
-    )
-}
-
-function PrintButton({ icon, label, subLabel, status, disabled, disabledReason, onPrint, onRetry }: {
-    icon: React.ReactNode; label: string; subLabel?: string
-    status: PrintStatus; disabled: boolean; disabledReason?: string
-    onPrint: () => void; onRetry: () => void
-}) {
-    if (status === 'printing') return (
-        <div className="flex h-12 flex-col items-center justify-center gap-0.5 rounded-full border border-gray-100 bg-gray-50 text-xs text-amber-600">
-            <Loader2 className="size-4 animate-spin" /><span>Đang in…</span>
-        </div>
-    )
-    if (status === 'done') return (
-        <button onClick={onRetry} className="flex h-12 flex-col items-center justify-center gap-0.5 rounded-full border border-emerald-200 bg-emerald-50 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors">
-            <CheckCircle2 className="size-4" /><span>Đã in · In lại</span>
-        </button>
-    )
-    if (status === 'error') return (
-        <button onClick={onRetry} className="flex h-12 flex-col items-center justify-center gap-0.5 rounded-full border border-red-200 bg-red-50 text-xs font-semibold text-red-600 hover:bg-red-100 transition-colors">
-            <AlertCircle className="size-4" /><span>Lỗi · Thử lại</span>
-        </button>
-    )
-    return (
-        <button
-            onClick={onPrint} disabled={disabled} title={disabledReason}
-            className="flex h-12 flex-col items-center justify-center gap-0.5 rounded-full border border-gray-200 bg-white text-xs font-semibold text-gray-700 transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-gray-200 disabled:hover:bg-white disabled:hover:text-gray-700"
-        >
-            <span className="flex items-center gap-1.5">{icon} {label}</span>
-            {subLabel && <span className="text-[10px] font-normal text-gray-400">{subLabel}</span>}
         </button>
     )
 }

@@ -2,8 +2,11 @@ import { GRAB_STATUS_COLOR, GRAB_STATUS_DOT, GRAB_STATUS_LABEL } from "@/lib/con
 import { GrabFull, grabFullToAdminOrder, printGrabBill, printGrabLabels } from "@/lib/grab-print"
 import { KEYS, loadLocal } from "@/lib/local-storage";
 import { DEFAULT_BILL_CONFIG, DEFAULT_LABEL_CONFIG, ResolvedRecipeMap } from "@/types/common";
-import { AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Loader2, PackageCheck, Phone, Printer, Receipt, Tag, User, X } from "lucide-react";
-import { useEffect, useState } from "react"
+import {
+    ArrowLeft, AlertCircle, CheckCircle2, Loader2, MoreHorizontal,
+    PackageCheck, Phone, Printer, Tag, User, Copy, Check as CheckIcon,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react"
 import { BillConfig, LabelConfig } from "src/preload";
 import grabFoodLogo from '../assets/grab-food.png'
 import { fmt, formatDate } from "@/lib/utils";
@@ -13,56 +16,80 @@ import { resolveRecipeBatch } from "@/api";
 import { RecipeChecklist } from "./RecipeChecklist";
 import { useShowRecipe } from "@/hooks/useShowRecipe";
 import { RecipeToggleButton } from "./RecipeToggleButton";
+import { GrabOrderContext, grabOrderLabel } from "@/lib/grab-status";
+import { learnFromDetail } from "../../../shared/grab-net-cache";
 
-function Row({ label, value, green, bold }: { label: string; value: string; green?: boolean; bold?: boolean }) {
+function Row({ label, value, green, bold, showUnit = true }: { label: string; value: string; green?: boolean; bold?: boolean, showUnit?: boolean }) {
     return (
-        <div className={`flex justify-between ${bold ? 'font-bold text-gray-800' : ''}`}>
+        <div className={`flex justify-between text-sm ${bold ? 'font-bold text-gray-900' : 'text-gray-500'}`}>
             <span>{label}</span>
-            <span className={green ? 'text-green-600' : ''}>{value}đ</span>
+            <span className={green ? 'text-green-600' : bold ? 'text-gray-900' : 'text-gray-700'}>{value}{showUnit && "đ"}</span>
         </div>
     )
 }
 
-// ─── Print Button ─────────────────────────────────────────────────────────────
+/**
+ * Grab's order payload carries several merchant-settlement fields that aren't
+ * part of the strict `GrabFull['fare']` type yet (commission, taxes, BCRS
+ * packaging deposit, etc). We read them defensively via an extended shape so
+ * this keeps working even before the type declaration in `lib/grab-print.ts`
+ * is updated to include them.
+ */
+type FareWithSettlement = GrabFull['fare'] & {
+    mexCommissionDisplay?: string
+    onBehalfWithholdTaxDisplay?: string
+    mexVatAmountDisplay?: string
+    mexPitAmountDisplay?: string
+    originalPriceInMin?: number
+    bcrsDepositDisplay?: string
+    bcrsDepositInCent?: number
+    bcrsDepositItemCount?: number
+}
+
+type OrderWithDiscounts = GrabFull & {
+    orderLevelDiscounts?: {
+        discountType: string
+        discountName: string
+        discountAmountDisplay: string
+        discountAmountValueInMin: number
+        isNewPromotion: boolean
+    }[]
+}
+
+/** Parses Grab's Vietnamese-formatted display strings ("8.737" -> 8737). */
+function parseVNDDisplay(display?: string | null): number {
+    if (!display) return 0
+    const cleaned = display.replace(/\./g, '').trim()
+    const n = parseInt(cleaned, 10)
+    return Number.isNaN(n) ? 0 : n
+}
 
 type PrintStatus = 'idle' | 'printing' | 'done' | 'error'
 
-function PrintButton({ icon, label, subLabel, status, disabled, disabledReason, onPrint, onRetry }: {
-    icon: React.ReactNode; label: string; subLabel?: string
-    status: PrintStatus; disabled: boolean; disabledReason?: string
-    onPrint: () => void; onRetry: () => void
+function PrintMenuItem({ icon, label, status, disabled, disabledReason, onClick }: {
+    icon: React.ReactNode; label: string; status: PrintStatus; disabled: boolean; disabledReason?: string; onClick: () => void
 }) {
-    if (status === 'printing') return (
-        <div className="flex h-12 flex-col items-center justify-center gap-0.5 rounded-xl border border-gray-100 bg-gray-50 text-xs text-amber-600">
-            <Loader2 className="size-4 animate-spin" /><span>Đang in…</span>
-        </div>
-    )
-    if (status === 'done') return (
-        <button onClick={onRetry} className="flex h-12 flex-col items-center justify-center gap-0.5 rounded-xl border border-green-200 bg-green-50 text-xs font-semibold text-green-700 hover:bg-green-100">
-            <CheckCircle2 className="size-4" /><span>Đã in · In lại</span>
-        </button>
-    )
-    if (status === 'error') return (
-        <button onClick={onRetry} className="flex h-12 flex-col items-center justify-center gap-0.5 rounded-xl border border-red-200 bg-red-50 text-xs font-semibold text-red-600 hover:bg-red-100">
-            <AlertCircle className="size-4" /><span>Lỗi · Thử lại</span>
-        </button>
-    )
     return (
         <button
-            onClick={onPrint} disabled={disabled} title={disabledReason}
-            className="flex h-12 flex-col items-center justify-center gap-0.5 rounded-xl border border-gray-200 bg-white text-xs font-semibold text-gray-700 transition hover:border-brand hover:bg-brand/5 hover:text-brand disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-gray-200 disabled:hover:bg-white disabled:hover:text-gray-700"
+            onClick={onClick}
+            disabled={disabled}
+            title={disabledReason}
+            className="flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
         >
-            <span className="flex items-center gap-1.5">{icon} {label}</span>
-            {subLabel && <span className="text-[10px] font-normal text-gray-400">{subLabel}</span>}
+            <span className="flex items-center gap-2">{icon} {label}</span>
+            {status === 'printing' && <Loader2 className="size-3.5 animate-spin text-amber-500" />}
+            {status === 'done' && <CheckCircle2 className="size-3.5 text-emerald-500" />}
+            {status === 'error' && <AlertCircle className="size-3.5 text-red-500" />}
         </button>
     )
 }
 
 export default function GrabOrderDetailModal({
-    id, data, loading, preparationTaskID, markingReady, markReadyResult, onMarkReady, onClose, onDismissAlert, hasActiveAlert = false
+    id, context = 'history', data, loading, preparationTaskID, markingReady, markReadyResult, onMarkReady, onClose, onDismissAlert, hasActiveAlert = false
 }: {
     id: string
     data: GrabFull | null
+    context?: GrabOrderContext
     loading: boolean
     preparationTaskID?: string
     markingReady?: boolean
@@ -72,10 +99,13 @@ export default function GrabOrderDetailModal({
     onDismissAlert?: () => void
     hasActiveAlert?: boolean
 }) {
-    const [fareOpen, setFareOpen] = useState(false)
     const [billStatus, setBillStatus] = useState<PrintStatus>('idle')
     const [labelStatus, setLabelStatus] = useState<PrintStatus>('idle')
     const [labelPickerOpen, setLabelPickerOpen] = useState(false)
+    const [printMenuOpen, setPrintMenuOpen] = useState(false)
+    const [moreMenuOpen, setMoreMenuOpen] = useState(false)
+    const [codeCopied, setCodeCopied] = useState(false)
+    const headerMenuRef = useRef<HTMLDivElement>(null)
     const billCfg = loadLocal<BillConfig>(KEYS.bill, DEFAULT_BILL_CONFIG)
     const labelCfg = loadLocal<LabelConfig>(KEYS.label, DEFAULT_LABEL_CONFIG)
     const hasBillPrinter = billCfg.enabled && !!(billCfg.address || billCfg.printerId)
@@ -94,6 +124,38 @@ export default function GrabOrderDetailModal({
         void resolveRecipeBatch(requestItems).then(setRecipeMap).catch(() => { })
     }, [data])
 
+    useEffect(() => {
+        if (!data) return
+        const fare = data.fare as FareWithSettlement
+        const base = fare.originalPriceInMin ?? parseVNDDisplay(data.fare.subTotalDisplay)
+        const commission = parseVNDDisplay(fare.mexCommissionDisplay)
+        if (!base || !commission) return
+        const vat = parseVNDDisplay(fare.mexVatAmountDisplay)
+        const pit = parseVNDDisplay(fare.mexPitAmountDisplay)
+        const withhold = parseVNDDisplay(fare.onBehalfWithholdTaxDisplay)
+        const discount = ((data as OrderWithDiscounts).orderLevelDiscounts ?? [])
+            .reduce((s, d) => s + (d.discountAmountValueInMin ?? parseVNDDisplay(d.discountAmountDisplay)), 0)
+        learnFromDetail(data.displayID, base - discount - commission - vat - pit - withhold, commission / base)
+    }, [data])
+
+    useEffect(() => {
+        if (!printMenuOpen && !moreMenuOpen) return
+        const onDocClick = (e: MouseEvent) => {
+            if (headerMenuRef.current && !headerMenuRef.current.contains(e.target as Node)) {
+                setPrintMenuOpen(false)
+                setMoreMenuOpen(false)
+            }
+        }
+        document.addEventListener('mousedown', onDocClick)
+        return () => document.removeEventListener('mousedown', onDocClick)
+    }, [printMenuOpen, moreMenuOpen])
+
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+        window.addEventListener('keydown', handler)
+        return () => window.removeEventListener('keydown', handler)
+    }, [onClose])
+
     const billDisabledReason = !billCfg.enabled
         ? 'Chưa bật in hóa đơn trong Cài đặt'
         : !(billCfg.address || billCfg.printerId)
@@ -107,6 +169,7 @@ export default function GrabOrderDetailModal({
             : undefined
 
     async function handlePrintBill() {
+        setPrintMenuOpen(false)
         if (!data) return
         setBillStatus('printing')
         const adminOrder = grabFullToAdminOrder(data)
@@ -122,102 +185,150 @@ export default function GrabOrderDetailModal({
         setLabelStatus(res.ok ? 'done' : 'error')
     }
 
-    const totalQty = data?.itemInfo.items.reduce((s, i) => s + i.quantity, 0) ?? 0
+    async function handleCopyCode() {
+        if (!data) return
+        try {
+            await navigator.clipboard.writeText(data.displayID)
+            setCodeCopied(true)
+            setTimeout(() => setCodeCopied(false), 1500)
+        } catch { /* ignore */ }
+        setMoreMenuOpen(false)
+    }
+
+    // const totalQty = data?.itemInfo.items.reduce((s, i) => s + i.quantity, 0) ?? 0
 
     const status = data?.state?.toUpperCase() ?? ''
-    const label = status === 'ORDER_IN_PREPARE' && preparationTaskID ? 'Sẵn sàng' : GRAB_STATUS_LABEL[status] ?? status
+    const label = data ? grabOrderLabel(status, context) : ''
     const color = GRAB_STATUS_COLOR[status] ?? 'bg-gray-100 text-gray-600 border-gray-200'
     const dot = GRAB_STATUS_DOT[status] ?? 'bg-gray-400'
 
-    // Suppress unused var warning — id is used for key tracking in parent
+
     void id
-    void preparationTaskID
 
     return (
-        <div
-            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 animate-in fade-in duration-150"
-            onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-        >
-            <div className="relative flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl">
+        <div className="fixed inset-0 z-50 flex flex-col bg-gray-50 animate-in fade-in duration-200">
 
-                {/* Header */}
-                <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-                    <div className="flex items-center gap-2.5">
-                        <img src={grabFoodLogo} className="h-6 w-6 object-contain" alt="" />
-                        {data && (
-                            <p className="text-lg font-bold">{data.displayID}</p>
-                        )}
-                        {data && (
-                            <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold ${color}`}>
-                                <span className={`size-1.5 rounded-full ${dot}`} />
-                                {label}
-                            </span>
-                        )}
-                    </div>
-                    <div className="flex items-center gap-2">
-
-                        <div className="flex items-center gap-2">
-                            <RecipeToggleButton show={showRecipe} onToggle={toggleRecipe} />
-                            {onDismissAlert && hasActiveAlert && (
-                                <button
-                                    onClick={onDismissAlert}
-                                    title="Xác nhận đã xem — tắt chuông báo đơn mới"
-                                    className="flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-1.5 text-xs font-bold text-green-700 hover:bg-green-100 transition-colors"
-                                >
-                                    🔕 Xác nhận
-                                </button>
-                            )}
-                            <button onClick={onClose} className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700">
-                                <X className="size-5" />
-                            </button>
-                        </div>
-                    </div>
+            {/* ── Header ── */}
+            <div className="flex h-16 shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-4 sm:px-6 shadow-sm">
+                <button
+                    onClick={onClose}
+                    className="flex items-center justify-center rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                >
+                    <ArrowLeft className="size-5" />
+                </button>
+                <div className="hidden h-6 w-px bg-gray-200 sm:block" />
+                <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                    <img src={grabFoodLogo} className="h-5 w-5 shrink-0 object-contain" alt="" />
+                    {data && <p className="truncate font-mono text-base sm:text-lg font-black text-gray-900">Đơn hàng {data.displayID}</p>}
+                    {data && (
+                        <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold ${color}`}>
+                            <span className={`size-1.5 rounded-full ${dot}`} />
+                            {label}
+                        </span>
+                    )}
                 </div>
 
-                {/* Body */}
-                <div className="flex-1 overflow-y-auto">
-                    {loading ? (
-                        <div className="flex h-48 items-center justify-center gap-2 text-sm text-gray-400">
-                            <Loader2 className="size-5 animate-spin" /> Đang tải chi tiết…
+                <div ref={headerMenuRef} className="flex shrink-0 items-center gap-2">
+                    {data && (
+                        <div className="relative">
+                            <button
+                                onClick={() => { setMoreMenuOpen(v => !v); setPrintMenuOpen(false) }}
+                                className="flex items-center justify-center rounded-full p-2.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                            >
+                                <MoreHorizontal className="size-4" />
+                            </button>
+                            {moreMenuOpen && (
+                                <div className="absolute right-0 top-full z-10 mt-1.5 w-48 rounded-2xl border border-gray-100 bg-white py-1.5 shadow-xl">
+                                    <button
+                                        onClick={() => void handleCopyCode()}
+                                        className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                    >
+                                        {codeCopied ? <CheckIcon className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5 text-gray-400" />}
+                                        {codeCopied ? 'Đã sao chép' : 'Sao chép mã đơn'}
+                                    </button>
+                                </div>
+                            )}
                         </div>
-                    ) : !data ? (
-                        <div className="flex h-48 flex-col items-center justify-center gap-2 text-gray-400">
-                            <p className="text-sm">Không lấy được chi tiết đơn</p>
-                        </div>
-                    ) : (
-                        <div className="divide-y divide-gray-50">
+                    )}
 
-                            {/* Eater info */}
-                            {(data.eater.name || data.eater.comment) && (
-                                <div className="px-5 py-4 space-y-1.5">
+                    {data && (
+                        <div className="relative">
+                            <button
+                                onClick={() => { setPrintMenuOpen(v => !v); setMoreMenuOpen(false) }}
+                                className="flex items-center gap-1.5 rounded-full border border-gray-200 px-3.5 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+                            >
+                                <Printer className="size-4" /> In đơn
+                            </button>
+                            {printMenuOpen && (
+                                <div className="absolute right-0 top-full z-10 mt-1.5 w-56 rounded-2xl border border-gray-100 bg-white p-1.5 shadow-xl">
+                                    <PrintMenuItem
+                                        icon={<Printer className="size-3.5" />}
+                                        label="In hóa đơn"
+                                        disabled={!hasBillPrinter}
+                                        disabledReason={billDisabledReason}
+                                        status={billStatus}
+                                        onClick={() => void handlePrintBill()}
+                                    />
+                                    <PrintMenuItem
+                                        icon={<Tag className="size-3.5" />}
+                                        label="In tem nhãn"
+                                        disabled={!hasLabelPrinter}
+                                        disabledReason={labelDisabledReason}
+                                        status={labelStatus}
+                                        onClick={() => { setPrintMenuOpen(false); setLabelPickerOpen(true) }}
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* ── Body ── */}
+            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5">
+                {loading ? (
+                    <div className="flex h-64 items-center justify-center gap-2 text-sm text-gray-400">
+                        <Loader2 className="size-5 animate-spin" /> Đang tải chi tiết…
+                    </div>
+                ) : !data ? (
+                    <div className="flex h-64 flex-col items-center justify-center gap-2 text-gray-400">
+                        <p className="text-sm">Không lấy được chi tiết đơn</p>
+                    </div>
+                ) : (
+                    <div className="mx-auto grid max-w-[1100px] grid-cols-1 gap-5 lg:grid-cols-[1fr_320px]">
+
+                        {/* Left / main column */}
+                        <div className="space-y-4 lg:order-1">
+                            {(data.eater.name.length || data.eater.comment.length) && (
+                                <div className="rounded-2xl border border-gray-100 bg-white p-4 space-y-1.5">
+                                    <p className="mb-1 text-xs font-bold uppercase tracking-widest text-gray-400">Khách hàng</p>
                                     {data.eater.name && data.eater.name !== '***' && (
                                         <div className="flex items-center gap-2 text-sm text-gray-700">
-                                            <User className="size-4 shrink-0 text-gray-400" />
                                             <span className="font-semibold">{data.eater.name}</span>
                                         </div>
                                     )}
                                     {data.eater.comment && (
                                         <div className="flex items-start gap-2 text-sm text-amber-700">
-                                            <span className="mt-0.5 shrink-0 text-base">📝</span>
+                                            <span className="shrink-0 text-base">📝</span>
                                             <span className="italic">{data.eater.comment}</span>
                                         </div>
                                     )}
                                 </div>
                             )}
 
-                            {/* Items */}
-                            <div className="px-5 py-4">
-                                <p className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-400">
-                                    Món ({data.itemInfo.count})
-                                </p>
-                                <div className="space-y-4">
+                            <div className="rounded-2xl border border-gray-100 bg-white overflow-hidden">
+                                <div className="flex items-center justify-between border-b border-gray-50 px-4 py-3">
+                                    <p className="text-sm font-bold text-gray-800">Chi tiết món ({data.itemInfo.count})</p>
+                                    <RecipeToggleButton show={showRecipe} onToggle={toggleRecipe} />
+                                </div>
+                                <div className="divide-y divide-gray-50">
                                     {data.itemInfo.items.map((item, i) => {
                                         const key = item.itemKey ?? `${item.itemID}-${i}`
                                         const sizeLabel = item.modifierGroups
                                             ?.find((g) => /size/i.test(g.modifierGroupName))
                                             ?.modifiers[0]?.modifierName
                                         return (
-                                            <div key={key}>
+                                            <div key={key} className="px-4 py-3">
                                                 <div className="flex items-start justify-between gap-3">
                                                     <div className="flex items-start gap-2.5 flex-1 min-w-0">
                                                         <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-lg bg-green-100 text-xs font-black text-green-700">
@@ -225,7 +336,6 @@ export default function GrabOrderDetailModal({
                                                         </div>
                                                         <div className="flex-1 min-w-0">
                                                             <p className="text-sm font-semibold text-gray-800 leading-snug">{item.name}</p>
-                                                            {/* Modifier groups — each group shows its modifiers */}
                                                             {item.modifierGroups?.map((grp, gi) => (
                                                                 <div key={gi} className="mt-1 flex flex-wrap gap-1">
                                                                     {grp.modifiers.map((mod, mi) => (
@@ -255,70 +365,66 @@ export default function GrabOrderDetailModal({
                                 </div>
                             </div>
 
-                            {/* Fare breakdown (collapsible) */}
-                            <div className="px-5 py-3">
-                                <button
-                                    onClick={() => setFareOpen(v => !v)}
-                                    className="flex w-full items-center justify-between text-sm font-bold text-gray-700"
-                                >
-                                    <span>Tổng cộng</span>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-base font-black text-brand">{data.fare.subTotalDisplay}đ</span>
-                                        {fareOpen ? <ChevronUp className="size-4 text-gray-400" /> : <ChevronDown className="size-4 text-gray-400" />}
-                                    </div>
-                                </button>
-                                {fareOpen && (
-                                    <div className="mt-3 space-y-1.5 rounded-xl bg-gray-50 p-3 text-xs text-gray-600">
-                                        <Row label="Tiền món" value={data.fare.subTotalDisplay} />
-                                        {data.fare.deliveryFeeDisplay && <Row label="Phí giao hàng" value={data.fare.deliveryFeeDisplay} />}
-                                        {data.fare.promotionDisplay && data.fare.promotionDisplay !== '0' && (
-                                            <Row label="Khuyến mãi" value={`-${data.fare.promotionDisplay}`} green />
-                                        )}
-                                        {data.fare.smallOrderFeeDisplay && data.fare.smallOrderFeeDisplay !== '0' && (
-                                            <Row label="Phí đơn nhỏ" value={data.fare.smallOrderFeeDisplay} />
-                                        )}
-                                        <div className="border-t border-gray-200 pt-1.5">
-                                            <Row label="Khách trả" value={data.fare.passengerTotalDisplay} bold />
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Driver info */}
                             {data.driver?.name && (
-                                <div className="px-5 py-4 flex items-center gap-3">
-                                    <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-700 font-bold text-sm overflow-hidden">
-                                        {data.driver.avatar
-                                            ? <img src={data.driver.avatar} alt={data.driver.name} className="size-full rounded-full object-cover" />
-                                            : data.driver.name.charAt(0)
-                                        }
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-semibold text-gray-800">{data.driver.name}</p>
-                                        {data.driver.mobileNumber && (
-                                            <div className="flex items-center gap-1 text-xs text-gray-500">
-                                                <Phone className="size-3" /> {data.driver.mobileNumber}
+                                <div className="rounded-2xl border border-gray-100 bg-white p-4 flex items-center gap-3">
+                                    <div className="flex flex-col gap-2">
+                                        <p className="mb-1 text-xs font-bold uppercase tracking-widest text-gray-400">Tài xế</p>
+
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-700 font-bold text-sm overflow-hidden">
+                                                {data.driver.avatar
+                                                    ? <img src={data.driver.avatar} alt={data.driver.name} className="size-full rounded-full object-cover" />
+                                                    : data.driver.name.charAt(0)
+                                                }
                                             </div>
-                                        )}
+                                            <div>
+
+                                                <p className="text-sm font-semibold text-gray-800">{data.driver.name}</p>
+                                                {data.driver.mobileNumber && (
+                                                    <div className="flex items-center gap-1 text-xs text-gray-500">
+                                                        <Phone className="size-3" /> {data.driver.mobileNumber}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             )}
+                        </div>
 
-                            {/* Payment + time */}
-                            <div className="grid grid-cols-2 divide-x divide-gray-50 px-5 py-3">
-                                <div className="pr-4">
-                                    <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Thanh toán</p>
-                                    <p className="mt-0.5 text-sm font-semibold text-gray-700">{data.paymentMethod === 'Cash' ? 'Tiền mặt' : 'Chuyển khoản'}</p>
+                        {/* Right / summary column */}
+                        <div className="space-y-4 lg:order-2">
+                            <div className="rounded-2xl border border-gray-100 bg-white p-4">
+                                <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Tổng kết đơn hàng</p>
+                                <FareBreakdown data={data} />
+                                <MerchantSettlementBreakdown data={data} />
+                            </div>
+
+                            <div className="rounded-2xl border border-gray-100 bg-white p-4 space-y-2.5 text-sm">
+                                <p className="mb-1 text-xs font-bold uppercase tracking-widest text-gray-400">Thông tin đơn hàng</p>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-gray-400">Kênh đặt</span>
+                                    <span className="font-bold text-green-600">GrabFood</span>
                                 </div>
-                                <div className="pl-4">
-                                    <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Giờ đặt</p>
-                                    <p className="mt-0.5 text-sm font-semibold text-gray-700">{formatDate(data.times.createdAt)}</p>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-gray-400">Mã đơn hàng</span>
+                                    <button onClick={() => void handleCopyCode()} className="flex items-center gap-1 font-mono font-semibold text-gray-800 hover:text-brand transition-colors">
+                                        {data.displayID}
+                                        {codeCopied ? <CheckIcon className="size-3 text-emerald-500" /> : <Copy className="size-3 text-gray-300" />}
+                                    </button>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-gray-400">Thanh toán</span>
+                                    <span className="font-semibold text-gray-800">{data.paymentMethod === 'Cash' ? 'Tiền mặt' : 'Chuyển khoản'}</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-gray-400">Giờ đặt</span>
+                                    <span className="font-semibold text-gray-800">{formatDate(data.times.createdAt)}</span>
                                 </div>
                             </div>
 
-                            {/* Mark ready button — only for ORDER_IN_PREPARE */}
                             {preparationTaskID && (data?.state === 'ORDER_IN_PREPARE' || !data) && (
-                                <div className="px-5 py-4 flex flex-col gap-2">
+                                <div className="rounded-2xl border border-gray-100 bg-white p-4 flex flex-col gap-2">
                                     {markReadyResult && (
                                         <p className={`text-xs font-medium ${markReadyResult.ok ? 'text-teal-600' : 'text-red-500'}`}>
                                             {markReadyResult.ok ? '✓ ' : '✗ '}{markReadyResult.msg}
@@ -338,41 +444,10 @@ export default function GrabOrderDetailModal({
                                 </div>
                             )}
                         </div>
-                    )}
-                </div>
-
-                {/* ── Print footer ── */}
-                {data && (
-                    <div className="border-t border-gray-100 px-5 py-4 shrink-0">
-                        <p className="mb-2.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400">
-                            <Receipt className="size-3" /> In ấn
-                        </p>
-                        <div className="grid grid-cols-2 gap-2">
-                            <PrintButton
-                                icon={<Printer className="size-4" />}
-                                label="In hóa đơn"
-                                subLabel={billCfg.copies > 1 ? `${billCfg.copies} bản` : undefined}
-                                status={billStatus}
-                                disabled={!hasBillPrinter}
-                                disabledReason={billDisabledReason}
-                                onPrint={() => void handlePrintBill()}
-                                onRetry={() => setBillStatus('idle')}
-                            />
-                            <PrintButton
-                                icon={<Tag className="size-4" />}
-                                label="In tem nhãn"
-                                subLabel={totalQty > 0 ? `${totalQty} tem` : undefined}
-                                status={labelStatus}
-                                disabled={!hasLabelPrinter}
-                                disabledReason={labelDisabledReason}
-                                onPrint={() => setLabelPickerOpen(true)}
-                                onRetry={() => setLabelStatus('idle')}
-                            />
-                        </div>
                     </div>
                 )}
-
             </div>
+
             {labelPickerOpen && data && (() => {
                 const adminOrder = grabFullToAdminOrder(data)
                 const { items, defaultSelectedIds } = buildLabelPickerItems(adminOrder, labelCfg)
@@ -388,6 +463,95 @@ export default function GrabOrderDetailModal({
                     />
                 )
             })()}
+        </div>
+    )
+}
+
+function FareBreakdown({ data }: { data: GrabFull }) {
+    return (
+        <div className="mt-3 space-y-2">
+            <Row label="Tiền món" value={data.fare.subTotalDisplay} />
+            {data.fare.deliveryFeeDisplay && <Row label="Phí giao hàng" value={data.fare.deliveryFeeDisplay} />}
+            {data.fare.promotionDisplay && data.fare.promotionDisplay !== '0' && (
+                <Row label="Khuyến mãi" value={`-${data.fare.promotionDisplay}`} green />
+            )}
+            {data.fare.smallOrderFeeDisplay && data.fare.smallOrderFeeDisplay !== '0' && (
+                <Row label="Phí đơn nhỏ" value={data.fare.smallOrderFeeDisplay} />
+            )}
+            <div className="flex items-baseline justify-between border-t border-gray-100 pt-2.5">
+                <span className="text-sm font-bold text-gray-900">Khách trả</span>
+                <span className="text-xl font-black text-brand tabular-nums">{data.fare.passengerTotalDisplay}đ</span>
+            </div>
+        </div>
+    )
+}
+
+/**
+ * Breaks down what the merchant actually keeps after Grab's commission,
+ * taxes withheld on the merchant's behalf, and any order-level promo codes
+ * that were funded by the merchant rather than Grab.
+ *
+ * This is a best-effort estimate computed from the fields Grab returns on
+ * the order payload. Treat it as a quick reference in the UI — always
+ * reconcile against Grab's official merchant settlement statement for
+ * accounting purposes, since Grab may apply additional adjustments that
+ * don't appear on the per-order response (e.g. batched subsidies,
+ * rounding, or retroactive corrections).
+ */
+function MerchantSettlementBreakdown({ data }: { data: GrabFull }) {
+    const fare = data.fare as FareWithSettlement
+    const orderDiscounts = (data as OrderWithDiscounts).orderLevelDiscounts ?? []
+
+    const orderDiscountTotal = orderDiscounts.reduce(
+        (sum, d) => sum + (d.discountAmountValueInMin ?? parseVNDDisplay(d.discountAmountDisplay)),
+        0
+    )
+
+    const commission = parseVNDDisplay(fare.mexCommissionDisplay)
+    const vat = parseVNDDisplay(fare.mexVatAmountDisplay)
+    const pit = parseVNDDisplay(fare.mexPitAmountDisplay)
+    const withholdTax = parseVNDDisplay(fare.onBehalfWithholdTaxDisplay)
+    const originalPrice = fare.originalPriceInMin ?? parseVNDDisplay(data.fare.subTotalDisplay)
+    const hasBcrsDeposit = (fare.bcrsDepositItemCount ?? 0) > 0
+    const bcrsDepositAmount = fare.bcrsDepositInCent ?? parseVNDDisplay(fare.bcrsDepositDisplay)
+
+    const totalMerchantFees = commission + vat + pit + withholdTax
+
+    // Nothing meaningful to show for this order — skip the section entirely.
+    if (!totalMerchantFees && orderDiscountTotal === 0 && !hasBcrsDeposit) return null
+
+    const netReceived = originalPrice - orderDiscountTotal - totalMerchantFees
+
+    return (
+        <div className="mt-4 space-y-2 border-t border-dashed border-gray-200 pt-3">
+            <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Quán thực nhận (ước tính)</p>
+
+            <Row label="Giá gốc món" value={fmt(originalPrice)} showUnit={false} />
+
+            {orderDiscounts.map((d, i) => (
+                <Row
+                    key={`${d.discountName}-${i}`}
+                    label={d.discountName}
+                    value={fmt(`-${d.discountAmountValueInMin ?? parseVNDDisplay(d.discountAmountDisplay)}`)}
+                    showUnit={false}
+                    green
+                />
+            ))}
+
+            {commission > 0 && <Row label="Hoa hồng Grab" value={`-${fmt(commission)}`} showUnit={false} />}
+            {vat > 0 && <Row label="Thuế GTGT (VAT)" value={`-${fmt(vat)}`} showUnit={false} />}
+            {pit > 0 && <Row label="Thuế TNCN" value={`-${fmt(pit)}`} showUnit={false} />}
+            {withholdTax > 0 && <Row label="Khấu trừ hộ khác" value={`-${fmt(withholdTax)}`} showUnit={false} />}
+            {hasBcrsDeposit && <Row label="Cọc bao bì (BCRS)" value={fmt(bcrsDepositAmount)} showUnit={false} />}
+
+            <div className="flex items-baseline justify-between border-t border-gray-100 pt-2.5">
+                <span className="text-sm font-bold text-gray-900">Quán thực nhận</span>
+                <span className="text-lg font-black text-emerald-600 tabular-nums">{fmt(netReceived)}</span>
+            </div>
+
+            <p className="pt-0.5 text-[10px] leading-snug text-gray-400">
+                * Ước tính từ dữ liệu đơn hàng, có thể lệch nhẹ so với bảng sao kê chính thức của Grab.
+            </p>
         </div>
     )
 }

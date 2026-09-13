@@ -18,7 +18,7 @@ const eAPI = (window as unknown as {
 }).electronAPI
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Section = 'account' | 'printer-bill' | 'printer-label' | 'partners' | 'ai'
+export type Section = 'account' | 'printer-bill' | 'printer-label' | 'partners' | 'ai'
 
 type PrinterTypeId =
     | 'xprinter-bluetooth'
@@ -1397,12 +1397,14 @@ export function SettingsPage({
     onClose,
     config,
     onSave,
+    initialSection,
 }: {
     onClose: () => void
     config: PosConfig
     onSave: (cfg: PosConfig) => Promise<void>
+    initialSection?: Section
 }) {
-    const [section, setSection] = useState<Section>('account')
+    const [section, setSection] = useState<Section>(initialSection ?? 'account')
     const [saving, setSaving] = useState(false)
 
     const [billCfg, setBillCfg] = useState<ManualPrinterConfig>(() => {
