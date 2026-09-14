@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@/i18n/navigation";
 import { useAuthStore } from "@/store/auth-store";
 
-import { getMe, postSendOtp, postRegister, postLogin, postResetPassword, postGoogleAuth } from "./api";
+import { getMe, postSendOtp, postRegister, postLogin, postResetPassword, postGoogleAuth, changePassword, getSessions, deleteSession } from "./api";
 import { authKeys } from "./keys";
 import { getOrCreateDeviceId } from "@/lib/device-id";
 import { clearStoredRefCode, getStoredRefCode } from "@/components/common/RefCodeCapture";
@@ -82,7 +82,7 @@ export function useLoginMutation() {
       if (pendingToken) {
         sessionStorage.removeItem("pendingGroupOrderJoin");
         router.push(`/group-order/${pendingToken}`);
-      } else {
+      } else {  
         router.push("/");
       }
     },
@@ -122,6 +122,34 @@ export function useGoogleAuthMutation() {
       } else {
         router.push("/");
       }
+    },
+  });
+}
+
+export function useChangePasswordMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (params: { currentPassword?: string; newPassword: string }) => changePassword(params),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["auth", "sessions"] });
+    },
+  });
+}
+export function useSessionsQuery() {
+  const accessToken = useAuthStore((s) => s.accessToken);
+  return useQuery({
+    queryKey: ["auth", "sessions"],
+    queryFn: () => getSessions(getOrCreateDeviceId()),
+    enabled: !!accessToken,
+  });
+}
+
+export function useRevokeSessionMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteSession(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["auth", "sessions"] });
     },
   });
 }

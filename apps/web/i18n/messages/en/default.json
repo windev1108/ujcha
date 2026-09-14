@@ -1219,5 +1219,31 @@
   "store_busy_tile": "The shop is busy with customers.",
   "store_busy_manual_default": "Orders may take longer than usual to prepare. We appreciate your understanding!",
   "weather_surcharge_note": "Includes a bad weather surcharge of +{amount}",
-  "weather_surcharge_only_note": "Free shipping by distance/order value — only the bad weather surcharge of +{amount} applies"
+  "weather_surcharge_only_note": "Free shipping by distance/order value — only the bad weather surcharge of +{amount} applies",
+  "account_security": "Account security",
+  "account_security_subtitle": "Manage your password and protect your account",
+  "change_password_row_subtitle": "Update your password to boost security",
+  "logged_in_devices": "Logged-in devices",
+  "logged_in_devices_row_subtitle": "View and manage devices you're logged into",
+  "logged_in_devices_subtitle": "Devices currently signed in to your account",
+  "ref_code_subtitle": "Share your code with friends to earn rewards together",
+  "this_device": "This device",
+  "revoke": "Revoke",
+  "no_devices_found": "No devices found.",
+  "CHANGE_PASSWORD": {
+  "change_password": "Change password",
+  "change_password_subtitle": "For your account's security, please fill in all the details.",
+  "current_password": "Current password",
+  "new_password": "New password",
+  "cancel": "Cancel",
+  "confirm_new_password": "Confirm new password",
+  "pwd_rule_min_length": "At least 8 characters",
+  "pwd_rule_case": "Includes uppercase and lowercase letters",
+  "pwd_rule_number_or_special": "Includes a number or special character",
+  "passwords_match": "Passwords match",
+  "current_password_required": "Please enter your current password.",
+  "new_password_requirements_not_met": "New password doesn't meet all requirements.",
+  "change_password_success": "Password changed successfully!",
+  "generic_error":"Something went wrong. Please try again."
+}
 }

@@ -73,3 +73,13 @@ export function minutesToHHmm(minutes: number): string {
     const m = minutes % 60;
     return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
+
+export function sanitizeRedirect(raw: string | null) {
+  if (!raw) return null;
+
+  if (!raw.startsWith("/") || raw.startsWith("//")) {
+    return null;
+  }
+
+  return raw;
+}

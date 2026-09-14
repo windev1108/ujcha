@@ -1,5 +1,5 @@
 import { api } from "@/config/server";
-import type { AuthTokensResponse } from "./types";
+import type { AuthTokensResponse, SessionDevice } from "./types";
 
 export async function postSendOtp(body: { phone: string; purpose?: 'register' | 'reset' }): Promise<void> {
   await api.post("/auth/send-otp", body);
@@ -46,4 +46,19 @@ export async function postGoogleAuth(body: {
 export async function getMe(): Promise<{ user: AuthTokensResponse["user"] }> {
   const { data } = await api.get<{ user: AuthTokensResponse["user"] }>("/auth/me");
   return data;
+}
+
+export async function changePassword(body: { currentPassword?: string; newPassword: string }): Promise<void> {
+  await api.post("/auth/change-password", body);
+}
+
+export async function getSessions(deviceId: string): Promise<{ sessions: SessionDevice[] }> {
+  const { data } = await api.get<{ sessions: SessionDevice[] }>("/auth/sessions", {
+    params: { deviceId },
+  });
+  return data;
+}
+
+export async function deleteSession(id: string): Promise<void> {
+  await api.delete(`/auth/sessions/${id}`);
 }

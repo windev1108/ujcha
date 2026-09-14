@@ -18,4 +18,15 @@ export type AuthTokensResponse = {
 
 export type RefreshResponse = {
   accessToken: string;
+  refreshToken: string;
+};
+
+export type SessionDevice = {
+  id: string;
+  deviceId: string;
+  deviceName: string;
+  ipAddress: string | null;
+  lastActiveAt: string;
+  createdAt: string;
+  isCurrent: boolean;
 };

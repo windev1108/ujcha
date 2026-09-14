@@ -5,14 +5,17 @@ import { motion } from "motion/react";
 import { useRouter } from "@/i18n/navigation";
 import Image from "next/image";
 import {
-  Camera, Check, CheckCircle2, Coins, Copy, ImageOff, Link2,
-  LogOut, Mail, Pencil, Phone, X,
+  Camera, Check, CheckCircle2, ChevronRight, Coins, Copy, Gift, ImageOff, Link2,
+  Lock,
+  LogOut, Mail, MonitorSmartphone, Pencil, Phone, ShieldCheck, X,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { ROUTES } from "@/lib/routes";
 import { useAuthStore } from "@/store/auth-store";
 import { useProfileQuery, useUpdateProfileMutation, useUploadAvatarMutation, useCheckAvatarUploadAllowed } from "@/services/profile/hooks";
 import { env } from "@/config/env";
+import { ChangePasswordDialog } from "@/components/common/ChangePasswordDialog";
+import { DeviceSessionsSheet } from "./DeviceSessionsSheet";
 
 function formatPhone(phone: string | null | undefined, notUpdated: string): string {
   if (!phone?.trim()) return notUpdated;
@@ -120,7 +123,8 @@ export function ProfilePageShell() {
   const [editingEmail, setEditingEmail] = useState(false);
   const [emailInput, setEmailInput] = useState("");
   const emailRef = useRef<HTMLInputElement>(null);
-
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [devicesOpen, setDevicesOpen] = useState(false);
   const [referralUrl, setReferralUrl] = useState("");
   useEffect(() => {
     if (referralCode) setReferralUrl(`${window.location.origin}/register?ref=${referralCode}`);
@@ -373,20 +377,31 @@ export function ProfilePageShell() {
       {/* ── Content ── */}
       <div className="bg-white px-5 pb-16">
         <motion.div
-          className="mx-auto max-w-sm space-y-6 pt-8"
+          className="mx-auto max-w-sm space-y-5 pt-8"
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.15 }}
         >
-          {/* Contact info */}
-          <div className="space-y-2">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-              {t("contact_info")}
-            </p>
-            <div className="divide-y divide-black/[0.05] rounded-3xl border border-black/[0.06] bg-white">
-              {/* Phone — read-only */}
-              <div className="flex items-center gap-3 px-5 py-4">
-                <Phone className="size-4 shrink-0 text-kun-primary" />
+          {/* Contact info card */}
+          <div className="rounded-3xl border border-black/[0.06] bg-white">
+            <div className="flex items-center justify-between px-5 py-4">
+              <div className="flex items-center gap-2.5">
+                <Phone className="size-4 text-kun-primary" />
+                <span className="text-sm font-bold text-foreground">{t("contact_info")}</span>
+              </div>
+              <button
+                type="button"
+                onClick={startEditEmail}
+                className="flex items-center gap-1 rounded-full border border-black/10 px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-surface-soft"
+              >
+                <Pencil className="size-3" />
+                {t("edit")}
+              </button>
+            </div>
+
+            <div className="divide-y divide-black/[0.05] border-t border-black/[0.05]">
+              <div className="flex items-center gap-3 px-5 py-3.5">
+                <Phone className="size-4 shrink-0 text-muted" />
                 <div className="min-w-0 flex-1">
                   <p className="text-[10px] font-medium uppercase tracking-wider text-muted">
                     {t("phone_number")}
@@ -399,107 +414,146 @@ export function ProfilePageShell() {
                 </div>
               </div>
 
-              {/* Email — editable */}
-              <div className="flex items-start gap-3 px-5 py-4">
-                <Mail className="mt-1 size-4 shrink-0 text-kun-primary" />
-                <div className="min-w-0 flex-1 space-y-3">
-                  <div>
-                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted">Email</p>
-                    {editingEmail ? (
-                      <div className="mt-1 flex items-center gap-2">
-                        <input
-                          ref={emailRef}
-                          type="email"
-                          value={emailInput}
-                          onChange={(e) => setEmailInput(e.target.value)}
-                          placeholder="email@example.com"
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") void submitEmail();
-                            if (e.key === "Escape") setEditingEmail(false);
-                          }}
-                          className="h-8 w-full rounded-full border border-kun-primary/40 bg-white px-3 text-sm font-medium text-foreground outline-none ring-2 ring-kun-primary/15 focus:ring-kun-primary/30"
-                          maxLength={200}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => void submitEmail()}
-                          disabled={updateMutation.isPending}
-                          className="flex size-7 shrink-0 items-center justify-center rounded-full bg-kun-primary text-white hover:opacity-80 disabled:opacity-50"
-                        >
-                          <Check className="size-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditingEmail(false)}
-                          className="flex size-7 shrink-0 items-center justify-center rounded-full border border-black/10 bg-white text-foreground/60 hover:bg-surface-card"
-                        >
-                          <X className="size-3.5" />
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={startEditEmail}
-                        className="group flex items-center gap-1.5 text-left"
-                      >
-                        <p className="text-sm font-medium text-foreground">
-                          {email ?? <span className="text-muted">{t("add_email")}</span>}
-                        </p>
-                        <Pencil className="size-3 text-muted opacity-0 transition group-hover:opacity-100" />
-                      </button>
-                    )}
+              <div className="px-5 py-3.5">
+                {editingEmail ? (
+                  <div className="flex items-center gap-2">
+                    <Mail className="size-4 shrink-0 text-muted" />
+                    <input
+                      ref={emailRef}
+                      type="email"
+                      value={emailInput}
+                      onChange={(e) => setEmailInput(e.target.value)}
+                      placeholder="email@example.com"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void submitEmail();
+                        if (e.key === "Escape") setEditingEmail(false);
+                      }}
+                      className="h-8 w-full rounded-full border border-kun-primary/40 bg-white px-3 text-sm font-medium text-foreground outline-none ring-2 ring-kun-primary/15 focus:ring-kun-primary/30"
+                      maxLength={200}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void submitEmail()}
+                      disabled={updateMutation.isPending}
+                      className="flex size-7 shrink-0 items-center justify-center rounded-full bg-kun-primary text-white hover:opacity-80 disabled:opacity-50"
+                    >
+                      <Check className="size-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingEmail(false)}
+                      className="flex size-7 shrink-0 items-center justify-center rounded-full border border-black/10 bg-white text-foreground/60 hover:bg-surface-card"
+                    >
+                      <X className="size-3.5" />
+                    </button>
                   </div>
-
-                  {email && (
-                    <div className="flex items-center justify-between rounded-2xl bg-surface-soft px-3 py-2.5">
-                      <div>
-                        <p className="text-xs font-semibold text-foreground">{t("receive_email_offers")}</p>
-                        <p className="text-[11px] text-muted">{t("promotions_and_specials")}</p>
-                      </div>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={emailMarketingEnabled}
-                        onClick={toggleMarketing}
-                        disabled={updateMutation.isPending}
-                        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 ${emailMarketingEnabled ? "bg-kun-primary" : "bg-surface-tertiary"
-                          }`}
-                      >
-                        <span
-                          className={`inline-block size-5 rounded-full bg-white shadow-sm transition-transform ${emailMarketingEnabled ? "translate-x-[22px]" : "translate-x-[2px]"
-                            }`}
-                        />
-                      </button>
+                ) : (
+                  <button type="button" onClick={startEditEmail} className="flex w-full items-center gap-3">
+                    <Mail className="size-4 shrink-0 text-muted" />
+                    <div className="min-w-0 flex-1 text-left">
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted">Email</p>
+                      <p className="text-sm font-medium text-foreground">
+                        {email ?? <span className="text-muted">{t("not_updated")}</span>}
+                      </p>
                     </div>
-                  )}
-                </div>
+                    <ChevronRight className="size-4 shrink-0 text-muted/50" />
+                  </button>
+                )}
               </div>
+            </div>
+
+            {email && (
+              <div className="flex items-center justify-between border-t border-black/[0.05] px-5 py-3.5">
+                <div>
+                  <p className="text-xs font-semibold text-foreground">{t("receive_email_offers")}</p>
+                  <p className="text-[11px] text-muted">{t("promotions_and_specials")}</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={emailMarketingEnabled}
+                  onClick={toggleMarketing}
+                  disabled={updateMutation.isPending}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 ${emailMarketingEnabled ? "bg-kun-primary" : "bg-surface-tertiary"
+                    }`}
+                >
+                  <span
+                    className={`inline-block size-5 rounded-full bg-white shadow-sm transition-transform ${emailMarketingEnabled ? "translate-x-[22px]" : "translate-x-[2px]"
+                      }`}
+                  />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Account security card */}
+          <div className="rounded-3xl border border-black/[0.06] bg-white">
+            <div className="flex items-center gap-2.5 px-5 py-4">
+              <ShieldCheck className="size-4 text-kun-primary" />
+              <div>
+                <p className="text-sm font-bold text-foreground">{t("account_security")}</p>
+                <p className="text-[11px] text-muted">{t("account_security_subtitle")}</p>
+              </div>
+            </div>
+
+            <div className="divide-y divide-black/[0.05] border-t border-black/[0.05]">
+              <button
+                type="button"
+                onClick={() => setChangePasswordOpen(true)}
+                className="flex w-full items-center gap-3 px-5 py-4 text-left transition hover:bg-surface-soft"
+              >
+                <Lock className="size-4 shrink-0 text-muted" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-foreground">{t("CHANGE_PASSWORD.change_password")}</p>
+                  <p className="text-[11px] text-muted">{t("change_password_row_subtitle")}</p>
+                </div>
+                <ChevronRight className="size-4 shrink-0 text-muted/50" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDevicesOpen(true)}
+                className="flex w-full items-center gap-3 px-5 py-4 text-left transition hover:bg-surface-soft"
+              >
+                <MonitorSmartphone className="size-4 shrink-0 text-muted" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-foreground">{t("logged_in_devices")}</p>
+                  <p className="text-[11px] text-muted">{t("logged_in_devices_row_subtitle")}</p>
+                </div>
+                <ChevronRight className="size-4 shrink-0 text-muted/50" />
+              </button>
             </div>
           </div>
 
-          {/* Referral code */}
+          {/* Referral code card */}
           {referralCode && (
-            <div className="space-y-2">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-                {t("ref_code_label")}
-              </p>
-              <div className="space-y-3 rounded-3xl border border-black/[0.06] bg-white px-5 py-4">
-                <div className="flex items-center justify-between">
+            <div className="rounded-3xl border border-black/[0.06] bg-white">
+              <div className="flex items-center gap-2.5 px-5 py-4">
+                <Gift className="size-4 text-kun-primary" />
+                <div>
+                  <p className="text-sm font-bold text-foreground">{t("ref_code_label")}</p>
+                  <p className="text-[11px] text-muted">{t("ref_code_subtitle")}</p>
+                </div>
+              </div>
+              <div className="space-y-3 border-t border-black/[0.05] px-5 py-4">
+                <div className="flex items-center justify-between rounded-2xl bg-surface-soft px-3.5 py-3">
                   <div>
                     <p className="text-[10px] font-medium uppercase tracking-wider text-muted">
                       {t("your_code")}
                     </p>
-                    <p className="mt-0.5 font-mono text-lg font-bold tracking-widest text-kun-primary">
+                    <p className="mt-0.5 font-mono text-base font-bold tracking-widest text-kun-primary">
                       {referralCode}
                     </p>
                   </div>
                   <CopyButton text={referralCode} />
                 </div>
                 {referralUrl && (
-                  <div className="flex items-center justify-between border-t border-black/5 pt-3">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <Link2 className="size-3.5 shrink-0 text-muted" />
-                      <p className="truncate text-xs text-muted">{t("register_link_for_friends")}</p>
+                  <div className="flex items-center justify-between rounded-2xl bg-surface-soft px-3.5 py-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted">
+                        {t("register_link_for_friends")}
+                      </p>
+                      <p className="truncate text-xs text-kun-primary">{referralUrl}</p>
                     </div>
                     <CopyButton text={referralUrl} label={t("copy_link")} />
                   </div>
@@ -509,22 +563,27 @@ export function ProfilePageShell() {
           )}
 
           {/* Logout */}
-          <div className="flex justify-center pt-2">
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="flex items-center gap-2 rounded-full border border-red-100 bg-white px-6 py-2.5 text-sm font-medium text-red-500 transition hover:bg-red-50"
-            >
-              <LogOut className="size-4" />
-              {t("logout")}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="flex w-full items-center justify-center gap-2 rounded-full border border-red-100 bg-white px-6 py-3 text-sm font-semibold text-red-500 transition hover:bg-red-50"
+          >
+            <LogOut className="size-4" />
+            {t("logout")}
+          </button>
 
           <p className="text-center text-[10px] text-muted/60">
             v{process.env.NEXT_PUBLIC_APP_VERSION ?? "1.0.0"}
           </p>
         </motion.div>
       </div>
+
+      <ChangePasswordDialog
+        open={changePasswordOpen}
+        onClose={() => setChangePasswordOpen(false)}
+        hasExistingPassword={!!displayUser?.phone}
+      />
+      <DeviceSessionsSheet open={devicesOpen} onClose={() => setDevicesOpen(false)} />
     </div>
   );
 }

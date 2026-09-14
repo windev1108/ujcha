@@ -1218,5 +1218,31 @@
   "store_busy_tile": "Cửa hàng đang bận rộn",
   "store_busy_manual_default": "Đơn hàng có thể được chuẩn bị chậm hơn bình thường. Bạn thông cảm giúp quán nhé!",
   "weather_surcharge_note": "Phụ phí thời tiết xấu +{amount}",
-  "weather_surcharge_only_note": "Miễn phí ship theo khoảng cách/giá trị đơn — chỉ tính phụ phí thời tiết xấu +{amount}"
+  "weather_surcharge_only_note": "Miễn phí ship theo khoảng cách/giá trị đơn — chỉ tính phụ phí thời tiết xấu +{amount}",
+  "account_security": "Bảo mật tài khoản",
+  "account_security_subtitle": "Quản lý mật khẩu và bảo vệ tài khoản của bạn",
+  "change_password_row_subtitle": "Cập nhật mật khẩu để tăng cường bảo mật",
+  "logged_in_devices": "Thiết bị đăng nhập",
+  "logged_in_devices_row_subtitle": "Xem và quản lý các thiết bị đã đăng nhập",
+  "logged_in_devices_subtitle": "Danh sách thiết bị đang đăng nhập vào tài khoản của bạn",
+  "ref_code_subtitle": "Chia sẻ mã của bạn với bạn bè để cùng nhận ưu đãi",
+  "this_device": "Thiết bị này",
+  "revoke": "Thu hồi",
+  "no_devices_found": "Không tìm thấy thiết bị nào.",
+  "CHANGE_PASSWORD": {
+  "change_password": "Đổi mật khẩu",
+  "change_password_subtitle": "Vì sự an toàn của tài khoản, vui lòng nhập đầy đủ thông tin.",
+  "current_password": "Mật khẩu hiện tại",
+  "new_password": "Mật khẩu mới",
+  "cancel": "Hủy",
+  "confirm_new_password": "Xác nhận mật khẩu mới",
+  "pwd_rule_min_length": "Ít nhất 8 ký tự",
+  "pwd_rule_case": "Bao gồm chữ hoa, chữ thường",
+  "pwd_rule_number_or_special": "Bao gồm số hoặc ký tự đặc biệt",
+  "passwords_match": "Mật khẩu trùng khớp",
+  "current_password_required": "Vui lòng nhập mật khẩu hiện tại.",
+  "new_password_requirements_not_met": "Mật khẩu mới chưa đáp ứng đủ yêu cầu.",
+  "change_password_success": "Đổi mật khẩu thành công!",
+  "generic_error": "Đã có lỗi xảy ra. Vui lòng thử lại."
+}
 }

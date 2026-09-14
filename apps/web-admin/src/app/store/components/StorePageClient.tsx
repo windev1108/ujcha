@@ -10,13 +10,13 @@ type Tab = "location" | "platforms" | "hours";
 type TabItem = { id: Tab; label: string; icon: LucideIcon };
 
 const TABS: TabItem[] = [
+  { id: "hours", label: "Trạng thái cửa hàng", icon: AlarmClock },
   { id: "location", label: "Vị trí & địa chỉ", icon: MapPin },
-  { id: "hours", label: "Giờ mở cửa", icon: AlarmClock },
   { id: "platforms", label: "Nền tảng đối tác", icon: ExternalLink },
 ];
 
 export function StorePageClient() {
-  const [tab, setTab] = useState<Tab>("location");
+  const [tab, setTab] = useState<Tab>("hours");
 
   return (
     <div className="flex flex-col gap-6 pb-16">

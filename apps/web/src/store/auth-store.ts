@@ -16,6 +16,7 @@ export type AuthState = {
   setSession: (payload: { user: AuthUser } & Tokens) => void;
   patchUser: (patch: Partial<AuthUser>) => void;
   setAccessToken: (accessToken: string) => void;
+  setTokens: (accessToken: string, refreshToken: string) => void;
   setHydrated: (v: boolean) => void;
   clearSession: () => void;
 };
@@ -36,6 +37,7 @@ export const useAuthStore = create<AuthState>()(
       patchUser: (patch) =>
         set((s) => ({ user: s.user ? { ...s.user, ...patch } : s.user })),
       setAccessToken: (accessToken) => set({ accessToken }),
+      setTokens: (accessToken, refreshToken) => set({ accessToken, refreshToken }),
       setHydrated: (hydrated) => set({ hydrated }),
       clearSession: () => {
         if (typeof document !== "undefined") {
