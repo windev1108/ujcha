@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { LogOut, MonitorSmartphone, ShieldCheck, X } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSessionsQuery, useRevokeSessionMutation } from "@/services/auth/hooks";
+import { Button } from "@heroui/react";
 
 type Props = {
     open: boolean;
@@ -78,7 +79,7 @@ export function DeviceSessionsSheet({ open, onClose }: Props) {
                                         <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-surface-soft text-foreground/70">
                                             <MonitorSmartphone className="size-4" />
                                         </div>
-                                        <div className="min-w-0 flex-1">
+                                        <div className="min-w-0 flex-1 flex flex-col gap-2">
                                             <div className="flex items-center gap-1.5">
                                                 <p className="truncate text-sm font-semibold text-foreground">{s.deviceName}</p>
                                                 {s.isCurrent && (
@@ -87,22 +88,23 @@ export function DeviceSessionsSheet({ open, onClose }: Props) {
                                                     </span>
                                                 )}
                                             </div>
-                                            <p className="mt-0.5 text-xs text-muted">
+                                            <p className="mt-0.5 text-xs text-muted whitespace-pre-line">
                                                 {s.ipAddress ? `${s.ipAddress} · ` : ""}
-                                                 {formatRelativeTime(s.lastActiveAt, locale)}
+                                                {formatRelativeTime(s.lastActiveAt, locale)}
                                             </p>
+                                            {!s.isCurrent && (
+                                                <Button
+                                                    variant="danger-soft"
+                                                    type="button"
+                                                    size="sm"
+                                                    onClick={() => revokeMutation.mutate(s.id)}
+                                                    isDisabled={revokeMutation.isPending}
+                                                >
+                                                    <LogOut className="size-3.5" />
+                                                    {t("revoke")}
+                                                </Button>
+                                            )}
                                         </div>
-                                        {!s.isCurrent && (
-                                            <button
-                                                type="button"
-                                                onClick={() => revokeMutation.mutate(s.id)}
-                                                disabled={revokeMutation.isPending}
-                                                className="flex shrink-0 items-center gap-1 rounded-full border border-red-100 px-3 py-1.5 text-xs font-medium text-red-500 transition hover:bg-red-50 disabled:opacity-50"
-                                            >
-                                                <LogOut className="size-3.5" />
-                                                {t("revoke")}
-                                            </button>
-                                        )}
                                     </div>
                                 ))}
                                 {data?.sessions.length === 0 && (
