@@ -29,6 +29,8 @@ import { JwtAuthGuard } from './jwt.guard';
 import type { JwtValidatedUser } from './jwt.strategy';
 import { UserService } from '../user/user.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { CurrentUserId } from './decorators/current-user-id.decorator';
+import { CurrentSessionId } from './decorators/current-session-id.decorator';
 
 function getClientIp(req: Request): string {
   const xff = req.headers['x-forwarded-for'];
@@ -129,8 +131,8 @@ export class AuthController {
 
   @Post('refresh')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Làm mới access token' })
-  @ApiResponse({ status: 200, description: '{ accessToken }' })
+  @ApiOperation({ summary: 'Làm mới access token (rotate refresh token)' })
+  @ApiResponse({ status: 200, description: '{ accessToken, refreshToken }' })
   async refresh(@Body() dto: RefreshTokenDto) {
     return this.authService.refreshToken(dto.refreshToken);
   }
@@ -184,17 +186,17 @@ export class AuthController {
   @HttpCode(200)
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Đổi mật khẩu (yêu cầu đăng nhập)' })
-  @ApiResponse({ status: 200, description: '{ message }' })
-  @ApiResponse({ status: 401, description: 'Mật khẩu hiện tại không đúng' })
+  @ApiOperation({ summary: 'Đổi mật khẩu (revoke các phiên khác)' })
   async changePassword(
     @Body() dto: ChangePasswordDto,
-    @Req() req: Request & { user: JwtValidatedUser },
+    @CurrentUserId() userId: string,
+    @CurrentSessionId() sessionId: string,
   ) {
     await this.authService.changePassword(
-      req.user.userId,
+      userId,
       dto.currentPassword,
       dto.newPassword,
+      sessionId,
     );
     return { message: 'OK' };
   }

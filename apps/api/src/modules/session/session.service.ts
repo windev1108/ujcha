@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -29,6 +30,16 @@ export type SessionDeviceInfo = {
   isCurrent: boolean;
 };
 
+export type RevokeReason =
+  | 'logout'
+  | 'password_change'
+  | 'device_limit'
+  | 'reuse_detected'
+  | 'relogin_same_device'
+  | 'user_action';
+
+const MAX_SESSIONS_PER_USER = 5;
+
 function parseDeviceName(userAgent: string | null | undefined): string {
   if (!userAgent) return 'Thiết bị không xác định';
   const ua = userAgent.toLowerCase();
@@ -44,18 +55,26 @@ function parseDeviceName(userAgent: string | null | undefined): string {
   if (ua.includes('edg/')) browser = 'Edge';
   else if (ua.includes('chrome/') && !ua.includes('edg/')) browser = 'Chrome';
   else if (ua.includes('firefox/')) browser = 'Firefox';
-  else if (ua.includes('safari/') && !ua.includes('chrome/')) browser = 'Safari';
+  else if (ua.includes('safari/') && !ua.includes('chrome/'))
+    browser = 'Safari';
 
   return `${browser} trên ${os}`;
 }
 
 @Injectable()
 export class SessionService {
+  private readonly logger = new Logger(SessionService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
-  ) { }
+  ) {}
 
+  /**
+   * Tạo session mới khi login/register/google-login.
+   * - Revoke session active khác trên CÙNG deviceId (tránh rác khi user login lại).
+   * - Sau khi tạo, nếu vượt quá MAX_SESSIONS_PER_USER → evict session cũ nhất (LRU).
+   */
   async createSession(
     userId: string,
     refreshTokenPlain: string,
@@ -68,23 +87,61 @@ export class SessionService {
     const hashed = await bcrypt.hash(refreshTokenPlain, rounds);
     const expiredAt = this.expiredAtFromRefreshJwt(refreshTokenPlain);
 
-    return this.prisma.session.create({
-      data: {
-        id: sessionId,
-        userId,
-        refreshToken: hashed,
-        deviceId,
-        ipAddress,
-        expiredAt,
-        userAgent,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Dedupe: revoke session active cũ trên cùng device
+      await tx.session.updateMany({
+        where: { userId, deviceId, revokedAt: null },
+        data: { revokedAt: new Date(), revokedReason: 'relogin_same_device' },
+      });
+
+      // 2. Tạo session mới
+      const session = await tx.session.create({
+        data: {
+          id: sessionId,
+          userId,
+          refreshToken: hashed,
+          deviceId,
+          ipAddress,
+          expiredAt,
+          userAgent,
+        },
+      });
+
+      // 3. Enforce limit — evict session cũ nhất nếu vượt quá
+      const activeSessions = await tx.session.findMany({
+        where: { userId, revokedAt: null, expiredAt: { gt: new Date() } },
+        orderBy: { lastActiveAt: 'desc' },
+        select: { id: true },
+      });
+
+      if (activeSessions.length > MAX_SESSIONS_PER_USER) {
+        const toEvict = activeSessions
+          .slice(MAX_SESSIONS_PER_USER)
+          .map((s) => s.id);
+        await tx.session.updateMany({
+          where: { id: { in: toEvict } },
+          data: { revokedAt: new Date(), revokedReason: 'device_limit' },
+        });
+        this.logger.log(
+          `Evicted ${toEvict.length} old session(s) for user ${userId} (limit=${MAX_SESSIONS_PER_USER})`,
+        );
+      }
+
+      return session;
     });
   }
 
   /**
-   * Xác minh JWT refresh + khớp phiên trong DB (nhiều thiết bị: so khớp từng session).
+   * Verify refresh token + ROTATE: nếu hợp lệ, overwrite hash trong CÙNG session row
+   * và trả về session để caller issue token mới. Đây là chuẩn OAuth2 refresh rotation.
+   *
+   * Reuse detection: nếu refreshTokenPlain không khớp hash hiện tại của session còn active
+   * (nghĩa là token này đã bị rotate trước đó, hoặc đã bị revoke) → coi là dấu hiệu bị lộ,
+   * revoke toàn bộ session của user để chặn kẻ tấn công.
    */
-  async validateRefreshToken(refreshTokenPlain: string): Promise<ValidatedRefreshContext> {
+  async validateAndRotateRefreshToken(
+    refreshTokenPlain: string,
+  ): Promise<ValidatedRefreshContext & { newRefreshTokenPlain: string }> {
     const secret = this.config.getOrThrow<string>(JWT_ENV.REFRESH_SECRET);
     let payload: JwtRefreshPayload;
     try {
@@ -105,11 +162,24 @@ export class SessionService {
       });
     }
 
-    const session = await this.prisma.session.findFirst({
-      where: { id: sessionId, userId, expiredAt: { gt: new Date() }, revokedAt: null },
+    const session = await this.prisma.session.findUnique({
+      where: { id: sessionId },
     });
 
-    if (!session) {
+    // Session không tồn tại hoặc đã bị revoke trước đó nhưng token vẫn được gửi lên
+    // → khả năng cao là refresh token cũ bị đánh cắp và dùng lại sau khi đã rotate.
+    if (
+      !session ||
+      session.revokedAt ||
+      session.userId !== userId ||
+      session.expiredAt <= new Date()
+    ) {
+      if (session && session.userId === userId) {
+        this.logger.warn(
+          `Possible refresh token reuse detected for user ${userId}, session ${sessionId}`,
+        );
+        await this.revokeAllSessions(userId, 'reuse_detected');
+      }
       throw new UnauthorizedException({
         message: 'Phiên không tồn tại hoặc refresh token đã bị thu hồi.',
         code: 'REFRESH_SESSION_MISMATCH',
@@ -118,22 +188,45 @@ export class SessionService {
 
     const match = await bcrypt.compare(refreshTokenPlain, session.refreshToken);
     if (!match) {
+      // Hash không khớp dù session vẫn active → token đưa lên không phải bản mới nhất
+      // (đã bị rotate rồi) → đây chính là dấu hiệu reuse kinh điển.
+      this.logger.warn(
+        `Refresh token hash mismatch (reuse?) for user ${userId}, session ${sessionId}`,
+      );
+      await this.revokeAllSessions(userId, 'reuse_detected');
       throw new UnauthorizedException({
         message: 'Phiên không tồn tại hoặc refresh token đã bị thu hồi.',
         code: 'REFRESH_SESSION_MISMATCH',
       });
     }
 
+    // Hợp lệ → rotate: sinh refresh token mới, overwrite hash trong CÙNG row
+    const newRefreshTokenPlain = this.signRefreshToken(
+      userId,
+      sessionId,
+      secret,
+    );
+    const rounds = this.getBcryptRounds();
+    const newHashed = await bcrypt.hash(newRefreshTokenPlain, rounds);
+    const newExpiredAt = this.expiredAtFromRefreshJwt(newRefreshTokenPlain);
+
     await this.prisma.session.update({
       where: { id: session.id },
-      data: { lastActiveAt: new Date() },
+      data: {
+        refreshToken: newHashed,
+        expiredAt: newExpiredAt,
+        lastActiveAt: new Date(),
+      },
     });
 
-    return { sessionId: session.id, userId };
+    return { sessionId: session.id, userId, newRefreshTokenPlain };
   }
 
   /** Danh sách thiết bị đăng nhập còn hiệu lực của user, thiết bị hiện tại lên đầu. */
-  async listSessions(userId: string, currentDeviceId?: string): Promise<SessionDeviceInfo[]> {
+  async listSessions(
+    userId: string,
+    currentDeviceId?: string,
+  ): Promise<SessionDeviceInfo[]> {
     const sessions = await this.prisma.session.findMany({
       where: { userId, revokedAt: null, expiredAt: { gt: new Date() } },
       orderBy: { lastActiveAt: 'desc' },
@@ -152,8 +245,12 @@ export class SessionService {
       .sort((a, b) => (a.isCurrent === b.isCurrent ? 0 : a.isCurrent ? -1 : 1));
   }
 
-  /** Thu hồi (đăng xuất) một thiết bị — chỉ chủ sở hữu session mới revoke được. Soft-delete để giữ audit trail. */
-  async revokeSession(userId: string, sessionId: string): Promise<void> {
+  /** Thu hồi 1 session cụ thể — chỉ chủ sở hữu mới revoke được. */
+  async revokeSession(
+    userId: string,
+    sessionId: string,
+    reason: RevokeReason = 'user_action',
+  ): Promise<void> {
     const existing = await this.prisma.session.findUnique({
       where: { id: sessionId },
     });
@@ -171,8 +268,39 @@ export class SessionService {
     }
     await this.prisma.session.update({
       where: { id: sessionId },
-      data: { revokedAt: new Date() },
+      data: { revokedAt: new Date(), revokedReason: reason },
     });
+  }
+
+  /**
+   * Thu hồi tất cả session của user, tuỳ chọn giữ lại 1 session (thường là session hiện tại
+   * khi user chủ động đổi mật khẩu). Dùng cho: đổi mật khẩu, phát hiện reuse, admin force-logout.
+   */
+  async revokeAllSessions(
+    userId: string,
+    reason: RevokeReason,
+    exceptSessionId?: string,
+  ): Promise<number> {
+    const result = await this.prisma.session.updateMany({
+      where: {
+        userId,
+        revokedAt: null,
+        ...(exceptSessionId ? { id: { not: exceptSessionId } } : {}),
+      },
+      data: { revokedAt: new Date(), revokedReason: reason },
+    });
+    return result.count;
+  }
+
+  private signRefreshToken(
+    userId: string,
+    sessionId: string,
+    secret: string,
+  ): string {
+    const expiresIn = this.config.get<string>(JWT_ENV.REFRESH_EXPIRES) ?? '30d';
+    return jwt.sign({ sub: userId, sid: sessionId }, secret, {
+      expiresIn,
+    } as jwt.SignOptions);
   }
 
   private expiredAtFromRefreshJwt(token: string): Date {

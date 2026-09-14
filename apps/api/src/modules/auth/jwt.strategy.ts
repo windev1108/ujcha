@@ -5,9 +5,10 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { JWT_ENV } from './config/jwt.config';
 import type { JwtAccessPayload } from './jwt.types';
 
-/** Giá trị gắn vào `request` sau khi validate (tên field `userId` cho rõ) */
+/** Giá trị gắn vào `request` sau khi validate */
 export type JwtValidatedUser = {
   userId: string;
+  sessionId: string;
 };
 
 @Injectable()
@@ -27,6 +28,12 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
         code: 'JWT_INVALID_PAYLOAD',
       });
     }
-    return { userId: payload.sub };
+    if (!payload?.sid || typeof payload.sid !== 'string') {
+      throw new UnauthorizedException({
+        message: 'Token không hợp lệ: thiếu `sid`.',
+        code: 'JWT_INVALID_PAYLOAD',
+      });
+    }
+    return { userId: payload.sub, sessionId: payload.sid };
   }
 }

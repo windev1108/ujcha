@@ -158,6 +158,7 @@ model Session {
   userAgent    String?
   lastActiveAt DateTime  @default(now()) // MỚI
   revokedAt    DateTime?
+  revokedReason String?  
 
   @@index([userId])
   @@index([deviceId])

@@ -169,11 +169,12 @@ export class AuthService {
     await this.userService.updateUser(user.id, { password: passwordHash });
   }
 
-  /** Đổi mật khẩu khi đã đăng nhập. Nếu tài khoản chưa có mật khẩu (vd. login qua Google), bỏ qua bước xác minh currentPassword. */
+  /** Đổi mật khẩu khi đã đăng nhập. Sau khi đổi thành công, thu hồi mọi session khác để bảo vệ tài khoản. */
   async changePassword(
     userId: string,
     currentPassword: string | undefined,
     newPassword: string,
+    currentSessionId?: string,
   ): Promise<void> {
     const user = await this.userService.findById(userId);
     if (!user) {
@@ -201,16 +202,32 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
     await this.userService.updateUser(user.id, { password: passwordHash });
+
+    const revokedCount = await this.sessionService.revokeAllSessions(
+      userId,
+      'password_change',
+      currentSessionId,
+    );
+    if (revokedCount > 0) {
+      console.log(
+        `[ChangePassword] Revoked ${revokedCount} other session(s) for user ${userId}`,
+      );
+    }
   }
 
   /** Xác minh refresh token + phiên, cấp access token mới. */
-  async refreshToken(refreshToken: string): Promise<{ accessToken: string }> {
-    const { userId } =
-      await this.sessionService.validateRefreshToken(refreshToken);
-    const accessToken = await this.jwtTokensService.generateAccessToken(userId);
-    return { accessToken };
+  async refreshToken(refreshTokenPlain: string): Promise<AuthTokens> {
+    const { userId, sessionId, newRefreshTokenPlain } =
+      await this.sessionService.validateAndRotateRefreshToken(
+        refreshTokenPlain,
+      );
+    const accessToken = await this.jwtTokensService.generateAccessToken(
+      userId,
+      sessionId,
+    );
+    return { accessToken, refreshToken: newRefreshTokenPlain };
   }
-  
+
   async listSessions(userId: string, currentDeviceId?: string) {
     return this.sessionService.listSessions(userId, currentDeviceId);
   }
@@ -239,7 +256,7 @@ export class AuthService {
   ): Promise<AuthResult> {
     const sessionId = randomUUID();
     const [accessToken, refreshToken] = await Promise.all([
-      this.jwtTokensService.generateAccessToken(user.id),
+      this.jwtTokensService.generateAccessToken(user.id, sessionId),
       this.jwtTokensService.generateRefreshToken(user.id, sessionId),
     ]);
 

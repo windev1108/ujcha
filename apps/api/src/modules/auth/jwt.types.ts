@@ -1,6 +1,7 @@
 /** Payload access token sau khi verify (chuẩn JWT `sub`) */
 export type JwtAccessPayload = {
   sub: string;
+  sid: string;
 };
 
 /** Payload refresh token — `sid` trỏ thẳng đến Session.id để tránh full-table scan */

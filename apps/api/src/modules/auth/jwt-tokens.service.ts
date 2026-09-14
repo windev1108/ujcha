@@ -11,8 +11,8 @@ export class JwtTokensService {
     private readonly config: ConfigService,
   ) {}
 
-  generateAccessToken(userId: string): Promise<string> {
-    return this.jwt.signAsync({ sub: userId });
+  generateAccessToken(userId: string, sessionId: string): Promise<string> {
+    return this.jwt.signAsync({ sub: userId, sid: sessionId });
   }
 
   generateRefreshToken(userId: string, sessionId: string): Promise<string> {
