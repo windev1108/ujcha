@@ -28,6 +28,7 @@ export type AuthResult = {
 export type SessionContext = {
   deviceId: string;
   ipAddress: string;
+  userAgent?: string;
   refCode?: string;
 };
 
@@ -47,7 +48,11 @@ export class AuthService {
   ) { }
 
   /** Gửi OTP để đăng ký hoặc quên mật khẩu. */
-  async sendOtp(phone: string, requestIp: string, purpose?: 'register' | 'reset'): Promise<void> {
+  async sendOtp(
+    phone: string,
+    requestIp: string,
+    purpose?: 'register' | 'reset',
+  ): Promise<void> {
     if (purpose === 'reset') {
       const user = await this.userService.findByPhone(phone);
       if (!user) {
@@ -87,7 +92,9 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
     const referralCode = await this.userService.generateUniqueReferralCode();
-    const referredBy = ctx.refCode ? await this.resolveRefCode(ctx.refCode) : undefined;
+    const referredBy = ctx.refCode
+      ? await this.resolveRefCode(ctx.refCode)
+      : undefined;
 
     const user = await this.userService.createUser({
       phone,
@@ -125,7 +132,8 @@ export class AuthService {
 
     if (!user.password) {
       throw new UnauthorizedException({
-        message: 'Tài khoản này chưa thiết lập mật khẩu. Hãy dùng "Quên mật khẩu" để tạo mới.',
+        message:
+          'Tài khoản này chưa thiết lập mật khẩu. Hãy dùng "Quên mật khẩu" để tạo mới.',
         code: 'PASSWORD_NOT_SET',
       });
     }
@@ -142,7 +150,11 @@ export class AuthService {
   }
 
   /** Đặt lại mật khẩu qua OTP (quên mật khẩu). */
-  async resetPassword(phone: string, code: string, newPassword: string): Promise<void> {
+  async resetPassword(
+    phone: string,
+    code: string,
+    newPassword: string,
+  ): Promise<void> {
     const user = await this.userService.findByPhone(phone);
     if (!user) {
       throw new NotFoundException({
@@ -157,13 +169,55 @@ export class AuthService {
     await this.userService.updateUser(user.id, { password: passwordHash });
   }
 
+  /** Đổi mật khẩu khi đã đăng nhập. Nếu tài khoản chưa có mật khẩu (vd. login qua Google), bỏ qua bước xác minh currentPassword. */
+  async changePassword(
+    userId: string,
+    currentPassword: string | undefined,
+    newPassword: string,
+  ): Promise<void> {
+    const user = await this.userService.findById(userId);
+    if (!user) {
+      throw new NotFoundException({
+        message: 'Không tìm thấy user.',
+        code: 'USER_NOT_FOUND',
+      });
+    }
+
+    if (user.password) {
+      if (!currentPassword) {
+        throw new UnauthorizedException({
+          message: 'Vui lòng nhập mật khẩu hiện tại.',
+          code: 'CURRENT_PASSWORD_REQUIRED',
+        });
+      }
+      const matches = await bcrypt.compare(currentPassword, user.password);
+      if (!matches) {
+        throw new UnauthorizedException({
+          message: 'Mật khẩu hiện tại không đúng.',
+          code: 'INVALID_CURRENT_PASSWORD',
+        });
+      }
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    await this.userService.updateUser(user.id, { password: passwordHash });
+  }
+
   /** Xác minh refresh token + phiên, cấp access token mới. */
   async refreshToken(refreshToken: string): Promise<{ accessToken: string }> {
-    const { userId } = await this.sessionService.validateRefreshToken(refreshToken);
+    const { userId } =
+      await this.sessionService.validateRefreshToken(refreshToken);
     const accessToken = await this.jwtTokensService.generateAccessToken(userId);
     return { accessToken };
   }
+  
+  async listSessions(userId: string, currentDeviceId?: string) {
+    return this.sessionService.listSessions(userId, currentDeviceId);
+  }
 
+  async revokeSession(userId: string, sessionId: string): Promise<void> {
+    await this.sessionService.revokeSession(userId, sessionId);
+  }
   async loginWithGoogle(
     idToken: string,
     ctx: SessionContext,
@@ -173,7 +227,9 @@ export class AuthService {
   }
 
   private async resolveRefCode(refCode: string): Promise<string | undefined> {
-    const referrer = await this.userService.findByReferralCode(refCode.toUpperCase());
+    const referrer = await this.userService.findByReferralCode(
+      refCode.toUpperCase(),
+    );
     return referrer ? refCode.toUpperCase() : undefined;
   }
 
@@ -193,6 +249,7 @@ export class AuthService {
       ctx.deviceId,
       ctx.ipAddress,
       sessionId,
+      ctx.userAgent,
     );
 
     let next = await this.userService.ensureRegistrationMetadata(

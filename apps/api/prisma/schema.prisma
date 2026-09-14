@@ -147,14 +147,17 @@ model Otp {
 
 /// Phiên đăng nhập; `refreshToken` lưu hash để validate rotation / revoke.
 model Session {
-  id           String   @id @default(uuid()) @db.Uuid
-  userId       String   @db.Uuid
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @db.Uuid
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   refreshToken String
   deviceId     String
   ipAddress    String
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
   expiredAt    DateTime
+  userAgent    String?
+  lastActiveAt DateTime  @default(now()) // MỚI
+  revokedAt    DateTime?
 
   @@index([userId])
   @@index([deviceId])

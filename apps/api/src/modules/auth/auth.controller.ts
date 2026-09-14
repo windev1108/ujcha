@@ -2,10 +2,13 @@ import type { Request } from 'express';
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   NotFoundException,
+  Param,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -25,6 +28,7 @@ import { SendOtpDto } from './dto/send-otp.dto';
 import { JwtAuthGuard } from './jwt.guard';
 import type { JwtValidatedUser } from './jwt.strategy';
 import { UserService } from '../user/user.service';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 function getClientIp(req: Request): string {
   const xff = req.headers['x-forwarded-for'];
@@ -33,6 +37,11 @@ function getClientIp(req: Request): string {
   }
   const ip = req.socket?.remoteAddress ?? req.ip;
   return ip && ip.length > 0 ? ip : 'unknown';
+}
+
+function getUserAgent(req: Request): string | undefined {
+  const ua = req.headers['user-agent'];
+  return typeof ua === 'string' ? ua : undefined;
 }
 
 @ApiTags('auth')
@@ -56,24 +65,38 @@ export class AuthController {
   @Post('register')
   @HttpCode(200)
   @ApiOperation({ summary: 'Đăng ký tài khoản (xác minh OTP + tạo user)' })
-  @ApiResponse({ status: 200, description: '{ user, accessToken, refreshToken }' })
+  @ApiResponse({
+    status: 200,
+    description: '{ user, accessToken, refreshToken }',
+  })
   async register(@Body() dto: RegisterDto, @Req() req: Request) {
     const ip = getClientIp(req);
-    return this.authService.register(dto.phone, dto.name, dto.password, dto.code, {
-      deviceId: dto.deviceId,
-      ipAddress: ip,
-      refCode: dto.refCode,
-    });
+    return this.authService.register(
+      dto.phone,
+      dto.name,
+      dto.password,
+      dto.code,
+      {
+        deviceId: dto.deviceId,
+        ipAddress: ip,
+        userAgent: getUserAgent(req),
+        refCode: dto.refCode,
+      },
+    );
   }
 
   @Post('login')
   @HttpCode(200)
   @ApiOperation({ summary: 'Đăng nhập bằng số điện thoại + mật khẩu' })
-  @ApiResponse({ status: 200, description: '{ user, accessToken, refreshToken }' })
+  @ApiResponse({
+    status: 200,
+    description: '{ user, accessToken, refreshToken }',
+  })
   async login(@Body() dto: LoginDto, @Req() req: Request) {
     const ip = getClientIp(req);
     return this.authService.loginWithPassword(dto.phone, dto.password, {
       deviceId: dto.deviceId,
+      userAgent: getUserAgent(req),
       ipAddress: ip,
     });
   }
@@ -81,12 +104,16 @@ export class AuthController {
   @Post('google')
   @HttpCode(200)
   @ApiOperation({ summary: 'Đăng nhập / đăng ký bằng Google (idToken)' })
-  @ApiResponse({ status: 200, description: '{ user, accessToken, refreshToken }' })
+  @ApiResponse({
+    status: 200,
+    description: '{ user, accessToken, refreshToken }',
+  })
   async google(@Body() dto: GoogleLoginDto, @Req() req: Request) {
     const ip = getClientIp(req);
     return this.authService.loginWithGoogle(dto.idToken, {
       deviceId: dto.deviceId,
       ipAddress: ip,
+      userAgent: getUserAgent(req),
       refCode: dto.refCode,
     });
   }
@@ -108,6 +135,34 @@ export class AuthController {
     return this.authService.refreshToken(dto.refreshToken);
   }
 
+  @Get('sessions')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Danh sách thiết bị đăng nhập' })
+  async sessions(
+    @Req() req: Request & { user: JwtValidatedUser },
+    @Query('deviceId') deviceId?: string,
+  ) {
+    const sessions = await this.authService.listSessions(
+      req.user.userId,
+      deviceId,
+    );
+    return { sessions };
+  }
+
+  @Delete('sessions/:id')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Đăng xuất khỏi một thiết bị' })
+  async revokeSession(
+    @Param('id') id: string,
+    @Req() req: Request & { user: JwtValidatedUser },
+  ) {
+    await this.authService.revokeSession(req.user.userId, id);
+    return { message: 'OK' };
+  }
+
   @Get('me')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
@@ -117,8 +172,30 @@ export class AuthController {
   async me(@Req() req: Request & { user: JwtValidatedUser }) {
     const user = await this.userService.findById(req.user.userId);
     if (!user) {
-      throw new NotFoundException({ message: 'Không tìm thấy user.', code: 'USER_NOT_FOUND' });
+      throw new NotFoundException({
+        message: 'Không tìm thấy user.',
+        code: 'USER_NOT_FOUND',
+      });
     }
     return { user };
+  }
+
+  @Post('change-password')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Đổi mật khẩu (yêu cầu đăng nhập)' })
+  @ApiResponse({ status: 200, description: '{ message }' })
+  @ApiResponse({ status: 401, description: 'Mật khẩu hiện tại không đúng' })
+  async changePassword(
+    @Body() dto: ChangePasswordDto,
+    @Req() req: Request & { user: JwtValidatedUser },
+  ) {
+    await this.authService.changePassword(
+      req.user.userId,
+      dto.currentPassword,
+      dto.newPassword,
+    );
+    return { message: 'OK' };
   }
 }

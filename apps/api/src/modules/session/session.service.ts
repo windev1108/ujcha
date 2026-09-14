@@ -2,6 +2,7 @@ import * as bcrypt from 'bcrypt';
 import * as jwt from 'jsonwebtoken';
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -18,6 +19,36 @@ export type ValidatedRefreshContext = {
   userId: string;
 };
 
+export type SessionDeviceInfo = {
+  id: string;
+  deviceId: string;
+  deviceName: string;
+  ipAddress: string;
+  lastActiveAt: Date;
+  createdAt: Date;
+  isCurrent: boolean;
+};
+
+function parseDeviceName(userAgent: string | null | undefined): string {
+  if (!userAgent) return 'Thiết bị không xác định';
+  const ua = userAgent.toLowerCase();
+
+  let os = 'Unknown OS';
+  if (ua.includes('windows')) os = 'Windows';
+  else if (ua.includes('mac os')) os = 'macOS';
+  else if (ua.includes('android')) os = 'Android';
+  else if (ua.includes('iphone') || ua.includes('ipad')) os = 'iOS';
+  else if (ua.includes('linux')) os = 'Linux';
+
+  let browser = 'trình duyệt';
+  if (ua.includes('edg/')) browser = 'Edge';
+  else if (ua.includes('chrome/') && !ua.includes('edg/')) browser = 'Chrome';
+  else if (ua.includes('firefox/')) browser = 'Firefox';
+  else if (ua.includes('safari/') && !ua.includes('chrome/')) browser = 'Safari';
+
+  return `${browser} trên ${os}`;
+}
+
 @Injectable()
 export class SessionService {
   constructor(
@@ -31,6 +62,7 @@ export class SessionService {
     deviceId: string,
     ipAddress: string,
     sessionId: string,
+    userAgent?: string,
   ): Promise<Session> {
     const rounds = this.getBcryptRounds();
     const hashed = await bcrypt.hash(refreshTokenPlain, rounds);
@@ -44,6 +76,7 @@ export class SessionService {
         deviceId,
         ipAddress,
         expiredAt,
+        userAgent,
       },
     });
   }
@@ -73,7 +106,7 @@ export class SessionService {
     }
 
     const session = await this.prisma.session.findFirst({
-      where: { id: sessionId, userId, expiredAt: { gt: new Date() } },
+      where: { id: sessionId, userId, expiredAt: { gt: new Date() }, revokedAt: null },
     });
 
     if (!session) {
@@ -91,10 +124,36 @@ export class SessionService {
       });
     }
 
+    await this.prisma.session.update({
+      where: { id: session.id },
+      data: { lastActiveAt: new Date() },
+    });
+
     return { sessionId: session.id, userId };
   }
 
-  async revokeSession(sessionId: string): Promise<void> {
+  /** Danh sách thiết bị đăng nhập còn hiệu lực của user, thiết bị hiện tại lên đầu. */
+  async listSessions(userId: string, currentDeviceId?: string): Promise<SessionDeviceInfo[]> {
+    const sessions = await this.prisma.session.findMany({
+      where: { userId, revokedAt: null, expiredAt: { gt: new Date() } },
+      orderBy: { lastActiveAt: 'desc' },
+    });
+
+    return sessions
+      .map((s) => ({
+        id: s.id,
+        deviceId: s.deviceId,
+        deviceName: parseDeviceName(s.userAgent),
+        ipAddress: s.ipAddress,
+        lastActiveAt: s.lastActiveAt,
+        createdAt: s.createdAt,
+        isCurrent: !!currentDeviceId && s.deviceId === currentDeviceId,
+      }))
+      .sort((a, b) => (a.isCurrent === b.isCurrent ? 0 : a.isCurrent ? -1 : 1));
+  }
+
+  /** Thu hồi (đăng xuất) một thiết bị — chỉ chủ sở hữu session mới revoke được. Soft-delete để giữ audit trail. */
+  async revokeSession(userId: string, sessionId: string): Promise<void> {
     const existing = await this.prisma.session.findUnique({
       where: { id: sessionId },
     });
@@ -104,7 +163,16 @@ export class SessionService {
         code: 'SESSION_NOT_FOUND',
       });
     }
-    await this.prisma.session.delete({ where: { id: sessionId } });
+    if (existing.userId !== userId) {
+      throw new ForbiddenException({
+        message: 'Bạn không có quyền thu hồi phiên này.',
+        code: 'SESSION_FORBIDDEN',
+      });
+    }
+    await this.prisma.session.update({
+      where: { id: sessionId },
+      data: { revokedAt: new Date() },
+    });
   }
 
   private expiredAtFromRefreshJwt(token: string): Date {
