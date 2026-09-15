@@ -51,6 +51,10 @@ type GrabPreparingOrder = {
   times: { createdAt: string; estimatedPickUpTime?: string, readyAt?: string | null }
   preparationTaskID?: string
   labels?: { isRead: boolean; acceptedViaAA?: boolean }
+  leadsGenData: {
+    paxDistanceToMex: number
+    isOrderWithFriends: boolean
+  }
   [key: string]: unknown
 }
 
@@ -490,13 +494,13 @@ export function ExternalOrdersModal({
 
   const isGrabTab = platformFilter === 'grabfood'
   const isSpfPartnerTab = platformFilter === 'shopeefood' && shopeePartnerConnected
-
+  const countComingOrder = isGrabTab ? liveOrders.filter(o => o.state === 'ORDER_IN_PREPARE').length : isSpfPartnerTab ? spfTransactions.length : filtered.length
   return (
     <I18nProvider locale="vi-VN">
       <div className="fixed inset-0 z-40 flex flex-col bg-gray-50 animate-in fade-in duration-200">
 
         {/* ── Header ── */}
-        <div className="flex h-14 shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-4 shadow-sm">
+        <div className="flex h-14 shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-4">
           <button
             onClick={onClose}
             className="flex items-center justify-center rounded-xl p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
@@ -508,9 +512,11 @@ export function ExternalOrdersModal({
             <h1 className="text-base font-black text-gray-900">
               {isGrabTab ? 'Đơn hàng GrabFood' : isSpfPartnerTab ? 'Đơn hàng ShopeeFood' : 'Đơn hàng từ đối tác'}
             </h1>
-            <span className="rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-bold text-orange-700">
-              {isGrabTab ? liveOrders.filter(o => o.state === 'ORDER_IN_PREPARE').length : isSpfPartnerTab ? spfTransactions.length : filtered.length}
-            </span>
+            {countComingOrder > 0 &&
+              <span className="rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-bold text-orange-700">
+                {countComingOrder}
+              </span>
+            }
           </div>
           <div className="ml-auto flex items-center gap-2">
             <button

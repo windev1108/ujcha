@@ -1,4 +1,4 @@
-import { FlaskConical, Sparkle } from 'lucide-react'
+import { FlaskConical, NotepadText, Sparkle } from 'lucide-react'
 import type { ResolvedRecipe } from '../types/common'
 
 function formatQty(n: number): string {
@@ -18,8 +18,8 @@ export function RecipeChecklist({
 }) {
     if (!recipe || !recipe.matched) {
         return (
-            <div className="mt-1.5 flex items-center gap-1.5 rounded-lg bg-gray-50 px-2.5 py-1.5 text-[11px] italic text-gray-400">
-                <FlaskConical className="size-3 shrink-0" />
+            <div className="mt-2 flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-sm italic text-gray-400">
+                <FlaskConical className="size-3.5 shrink-0" />
                 Chưa import công thức cho món này
             </div>
         )
@@ -39,8 +39,8 @@ export function RecipeChecklist({
 
     if (rows.length === 0) {
         return (
-            <div className="mt-1.5 flex items-center gap-1.5 rounded-lg bg-gray-50 px-2.5 py-1.5 text-[11px] italic text-gray-400">
-                <FlaskConical className="size-3 shrink-0" />
+            <div className="mt-2 flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-sm italic text-gray-400">
+                <FlaskConical className="size-3.5 shrink-0" />
                 Chưa cấu hình định lượng cho biến thể này
             </div>
         )
@@ -48,26 +48,26 @@ export function RecipeChecklist({
 
     return (
         <div className="mt-2 overflow-hidden rounded-xl border border-teal-100 bg-teal-50/50">
-            <div className="flex items-center gap-1.5 bg-teal-100/50 px-3 py-1.5">
-                <FlaskConical className="size-3 shrink-0 text-teal-600" />
-                <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700">
-                    Công thức pha chế{sizeLabel ? ` · ${sizeLabel}` : ''}
+            <div className="flex items-center gap-2 bg-teal-100/50 px-3.5 py-2">
+                <FlaskConical className="size-3.5 shrink-0 text-teal-600" />
+                <span className="text-xs font-bold uppercase tracking-wider text-teal-700">
+                    Công thức{sizeLabel ? ` · ${sizeLabel}` : ''}
                 </span>
             </div>
-            <div className="space-y-1 px-3 py-2">
+            <div className="space-y-1.5 px-3.5 py-2.5">
                 {rows.map((row) => {
                     const perUnit = Number(row.quantity)
                     const total = perUnit * quantity
                     return (
-                        <div key={row.id} className="flex items-center justify-between text-xs">
+                        <div key={row.id} className="flex items-center justify-between text-sm">
                             <span className="flex items-center gap-1.5 text-gray-700">
-                                {row.isTopping && <Sparkle className="size-3 shrink-0 text-emerald-500" />}
+                                {row.isTopping && <Sparkle className="size-3.5 shrink-0 text-emerald-500" />}
                                 {row.ingredientName}
                             </span>
                             <span className="shrink-0 font-semibold tabular-nums text-gray-800">
                                 {formatQty(perUnit)} {row.unit}
                                 {quantity > 1 && (
-                                    <span className="ml-1 text-[10px] font-normal text-gray-400">
+                                    <span className="ml-1 text-xs font-normal text-gray-400">
                                         (×{quantity} = {formatQty(total)} {row.unit})
                                     </span>
                                 )}
@@ -77,8 +77,9 @@ export function RecipeChecklist({
                 })}
             </div>
             {recipe.recipeNote && (
-                <div className="border-t border-teal-100 px-3 py-1.5 text-[11px] italic text-teal-700">
-                    Ghi chú: {recipe.recipeNote}
+                <div className="flex items-center gap-2 border-t border-teal-100 px-3.5 py-2  italic text-teal-700">
+                    <NotepadText className='size-5'/>
+                    <span className='text-sm whitespace-pre-line'>{recipe.recipeNote}</span>
                 </div>
             )}
         </div>

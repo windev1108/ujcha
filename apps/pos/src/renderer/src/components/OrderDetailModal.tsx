@@ -20,6 +20,7 @@ import { LabelPickerModal } from './LabelPickerModal'
 import { RecipeChecklist } from './RecipeChecklist'
 import { useShowRecipe } from '@/hooks/useShowRecipe'
 import { RecipeToggleButton } from './RecipeToggleButton'
+import { Avatar, Button, Card, Chip, ListBox, Tooltip, Select } from '@heroui/react'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const eAPI = (window as any).electronAPI as import('../../../preload').ElectronAPI | undefined
@@ -118,7 +119,7 @@ function StatusTimelineCard({ order }: { order: AdminOrder }) {
     if (status === 'cancelled') {
         return (
             <div className="rounded-2xl border border-red-100 bg-white p-4">
-                <p className="mb-3 text-xs font-bold uppercase tracking-widest text-gray-400">Trạng thái đơn hàng</p>
+                <p className="mb-3 text-sm font-bold uppercase tracking-widest text-gray-400">Trạng thái đơn hàng</p>
                 <div className="flex items-center justify-between gap-2.5 rounded-xl border border-red-100 bg-red-50 px-3.5 py-3">
                     <div className="flex items-center gap-2.5">
                         <Ban className="size-4 shrink-0 text-red-500" />
@@ -137,7 +138,7 @@ function StatusTimelineCard({ order }: { order: AdminOrder }) {
 
     return (
         <div className="rounded-2xl border border-gray-100 bg-white p-4">
-            <p className="mb-3 text-xs font-bold uppercase tracking-widest text-gray-400">Trạng thái đơn hàng</p>
+            <p className="mb-3 text-sm font-bold uppercase tracking-widest text-gray-400">Trạng thái đơn hàng</p>
             <div>
                 {steps.map((step, i) => {
                     const done = i <= activeIdx
@@ -163,10 +164,10 @@ function StatusTimelineCard({ order }: { order: AdminOrder }) {
                             </div>
                             <div className="flex flex-1 items-start justify-between gap-2 pb-4">
                                 <div>
-                                    <p className={`text-sm font-bold leading-tight ${done ? 'text-gray-900' : 'text-gray-300'}`}>
+                                    <p className={`text-md font-bold leading-tight ${done ? 'text-gray-900' : 'text-gray-300'}`}>
                                         {STEP_META[step].label}
                                     </p>
-                                    <p className={`text-xs leading-snug ${done ? 'text-gray-400' : 'text-gray-300'}`}>
+                                    <p className={`text-sm leading-snug ${done ? 'text-gray-400' : 'text-gray-300'}`}>
                                         {STEP_META[step].desc}
                                     </p>
                                 </div>
@@ -194,25 +195,25 @@ function ItemRow({ item, recipe, showRecipe }: { item: AdminOrder['items'][numbe
         <div className="flex flex-col gap-0 px-4 py-3">
             <div className="flex items-start gap-3">
                 <div className="relative shrink-0">
-                    <div className="flex size-11 items-center justify-center rounded-xl bg-gray-100 ring-1 ring-black/6 overflow-hidden">
+                    <div className="flex size-20 items-center justify-center rounded-xl bg-gray-100 ring-1 ring-black/6 overflow-hidden">
                         {item.product?.imageUrls?.[0] ? (
                             <img src={item.product.imageUrls[0]} alt={item.product.name} className="size-full object-cover" />
                         ) : (
                             <ShoppingBag className="size-4 text-gray-300" />
                         )}
                     </div>
-                    <span className="absolute -bottom-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full bg-brand text-[10px] font-black text-white ring-2 ring-white shadow-sm">
+                    <span className="absolute -bottom-1.5 -right-1.5 flex size-6 items-center justify-center rounded-full bg-brand text-sm font-black text-white ring-2 ring-white shadow-sm">
                         {item.quantity}
                     </span>
                 </div>
 
                 <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
-                        <p className="font-semibold text-gray-900 leading-snug">{item.product?.name}</p>
+                        <p className="font-semibold text-gray-900 leading-snug text-lg">{item.product?.name}</p>
                         <div className="shrink-0 text-right">
                             <p className="font-semibold text-gray-800 tabular-nums">{fmt(lineTotal)}</p>
                             {item.quantity > 1 && (
-                                <p className="text-[11px] text-gray-400 tabular-nums">{fmt(item.price)} / cái</p>
+                                <p className="text-md text-gray-400 tabular-nums">{fmt(item.price)} / cái</p>
                             )}
                         </div>
                     </div>
@@ -220,12 +221,12 @@ function ItemRow({ item, recipe, showRecipe }: { item: AdminOrder['items'][numbe
                     {(optsStr || extras.length > 0) && (
                         <div className="mt-1.5 flex flex-wrap gap-1">
                             {optsStr && optsStr.split(' · ').map((opt, i) => (
-                                <span key={i} className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
+                                <span key={i} className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-sm font-medium text-gray-600">
                                     {opt}
                                 </span>
                             ))}
                             {extras.map((ex, i) => (
-                                <span key={i} className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                                <span key={i} className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-2 py-0.5 text-sm font-medium text-emerald-700">
                                     + {ex.name}
                                     {ex.price > 0 && <span className="text-emerald-500">+{fmt(ex.price)}</span>}
                                 </span>
@@ -233,7 +234,7 @@ function ItemRow({ item, recipe, showRecipe }: { item: AdminOrder['items'][numbe
                         </div>
                     )}
                     {item.note && (
-                        <p className="mt-1.5 text-[11px] font-medium text-amber-700">Ghi chú: {item.note}</p>
+                        <p className="mt-1.5 text-sm font-medium text-amber-700">Ghi chú: {item.note}</p>
                     )}
                 </div>
             </div>
@@ -243,7 +244,7 @@ function ItemRow({ item, recipe, showRecipe }: { item: AdminOrder['items'][numbe
 }
 
 const ORDER_TYPE_LABEL: Record<string, string> = {
-    table: 'Tại bàn', delivery: 'Giao hàng', pickup: 'Mang về',
+    table: 'Tại bàn', delivery: 'Giao hàng', pickup: 'Mang đi',
 }
 const PAYMENT_TYPE_LABEL: Record<string, string> = {
     cash: 'Tiền mặt', bank_transfer: 'Chuyển khoản', card: 'Thẻ ngân hàng',
@@ -274,6 +275,7 @@ export function OrderDetailModal({
     const [selectedShipperId, setSelectedShipperId] = useState(order.shipperId ?? '')
     const [assignBusy, setAssignBusy] = useState(false)
     const [assignDone, setAssignDone] = useState(false)
+    const [changingShipper, setChangingShipper] = useState(false)
     const [distanceKm, setDistanceKm] = useState<number | null>(null)
     const [actionBusy, setActionBusy] = useState(false)
     const [localStatus, setLocalStatus] = useState<OrderStatus>(order.status)
@@ -286,7 +288,7 @@ export function OrderDetailModal({
     const [printMenuOpen, setPrintMenuOpen] = useState(false)
     const [moreMenuOpen, setMoreMenuOpen] = useState(false)
     const [mapFullscreen, setMapFullscreen] = useState(false)
-    const [codeCopied, setCodeCopied] = useState(false)
+    const [copiedField, setCopiedField] = useState<'code' | 'phone' | null>(null)
     const headerMenuRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
@@ -448,14 +450,12 @@ export function OrderDetailModal({
         }
     }
 
-    async function handleCopyCode() {
-        const code = order.paymentCode ?? order.orderRef ?? order.id
+    async function handleCopy(text: string, field: 'code' | 'phone') {
         try {
-            await navigator.clipboard.writeText(code)
-            setCodeCopied(true)
-            setTimeout(() => setCodeCopied(false), 1500)
+            await navigator.clipboard.writeText(text)
+            setCopiedField(field)
+            setTimeout(() => setCopiedField(f => (f === field ? null : f)), 1500)
         } catch { /* ignore */ }
-        setMoreMenuOpen(false)
     }
 
     const orderRef = order.orderRef ?? order.id
@@ -481,9 +481,8 @@ export function OrderDetailModal({
         : !(billCfg.address || billCfg.printerId) ? 'Chưa chọn máy in trong Cài đặt' : undefined
     const labelDisabledReason = !labelCfg.enabled ? 'Chưa bật in tem nhãn trong Cài đặt'
         : !(labelCfg.address || labelCfg.printerId) ? 'Chưa chọn máy in nhãn trong Cài đặt' : undefined
-
-    const deliveryName = order.guestDeliveryName ?? null
-    const deliveryPhone = order.guestDeliveryPhone ?? null
+    const deliveryName = order.guestDeliveryName ?? order?.user?.name ?? null
+    const deliveryPhone = order.guestDeliveryPhone ?? order?.user?.phone ?? null
     const deliveryAddr = order.guestDeliveryAddress ?? order.address?.fullAddress ?? null
     const mapLat = order.address?.lat
     const mapLng = order.address?.lng
@@ -506,7 +505,7 @@ export function OrderDetailModal({
         <div className="fixed inset-0 z-50 flex flex-col bg-gray-50 animate-in fade-in duration-200">
 
             {/* ── Header ── */}
-            <div className="flex h-16 shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-4 sm:px-6 shadow-sm">
+            <div className="flex h-14 shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-4 sm:px-6">
                 <button
                     onClick={onClose}
                     className="flex items-center justify-center rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
@@ -517,9 +516,6 @@ export function OrderDetailModal({
                 <div className="min-w-0 flex-1">
                     <p className="truncate font-mono text-base sm:text-lg font-black text-gray-900">
                         Đơn hàng {order.paymentCode ?? orderRef}
-                    </p>
-                    <p className="truncate text-xs text-gray-400">
-                        {formatDate(order.createdAt)} · Mã đơn: {order.paymentCode ?? orderRef}
                     </p>
                 </div>
 
@@ -535,11 +531,11 @@ export function OrderDetailModal({
                         {moreMenuOpen && (
                             <div className="absolute right-0 top-full z-10 mt-1.5 w-48 rounded-2xl border border-gray-100 bg-white py-1.5 shadow-xl">
                                 <button
-                                    onClick={() => void handleCopyCode()}
+                                    onClick={() => { void handleCopy(order.paymentCode ?? order.orderRef ?? order.id, 'code'); setMoreMenuOpen(false) }}
                                     className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
                                 >
-                                    {codeCopied ? <CheckIcon className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5 text-gray-400" />}
-                                    {codeCopied ? 'Đã sao chép' : 'Sao chép mã đơn'}
+                                    {copiedField === 'code' ? <CheckIcon className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5 text-gray-400" />}
+                                    {copiedField === 'code' ? 'Đã sao chép' : 'Sao chép mã đơn'}
                                 </button>
                             </div>
                         )}
@@ -596,7 +592,7 @@ export function OrderDetailModal({
 
                         {(hasDelivery || hasPickupContact) && (
                             <div className="rounded-2xl border border-gray-100 bg-white p-4">
-                                <p className="mb-3 text-xs font-bold uppercase tracking-widest text-gray-400">Thông tin khách hàng</p>
+                                <p className="mb-3 text-sm font-bold uppercase tracking-widest text-gray-400">Thông tin khách hàng</p>
                                 <div className="space-y-2.5">
                                     {deliveryName && (
                                         <div className="flex items-center justify-between gap-2">
@@ -612,9 +608,16 @@ export function OrderDetailModal({
                                         </div>
                                     )}
                                     {deliveryPhone && (
-                                        <div className="flex items-center gap-2.5 text-sm">
+                                        <div className="flex items-center gap-2.5 text-md">
                                             <Phone className="size-4 shrink-0 text-gray-400" />
                                             <span className="font-mono font-medium text-gray-800">{deliveryPhone}</span>
+                                            <button
+                                                onClick={() => void handleCopy(deliveryPhone, 'phone')}
+                                                className="text-gray-300 hover:text-brand transition-colors"
+                                                title="Sao chép số điện thoại"
+                                            >
+                                                {copiedField === 'phone' ? <CheckIcon className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
+                                            </button>
                                         </div>
                                     )}
                                     {order.type === 'delivery' && deliveryAddr && (
@@ -630,7 +633,7 @@ export function OrderDetailModal({
                         {order.type === 'delivery' && hasMap && mapEmbedUrl && (
                             <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
                                 <div className="flex items-center justify-between px-4 pt-3.5 pb-2">
-                                    <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Địa điểm giao hàng</p>
+                                    <p className="text-sm font-bold uppercase tracking-widest text-gray-400">Địa điểm giao hàng</p>
                                     <button
                                         onClick={() => setMapFullscreen(true)}
                                         title="Xem toàn màn hình"
@@ -654,10 +657,10 @@ export function OrderDetailModal({
                                     />
                                 </div>
                                 {deliveryAddr && (
-                                    <p className="px-4 pb-1 text-xs leading-snug text-gray-500">{deliveryAddr}</p>
+                                    <p className="px-4 pb-1 text-sm leading-snug text-gray-500">{deliveryAddr}</p>
                                 )}
                                 {distanceKm !== null && (
-                                    <p className="px-4 pb-1 text-xs font-medium text-gray-400">Khoảng cách: {distanceKm.toFixed(1)} km</p>
+                                    <p className="px-4 pb-1 text-sm font-medium text-emerald-600">Khoảng cách: {distanceKm.toFixed(1)} km</p>
                                 )}
                                 {mapsUrl && (
                                     <div className="px-4 pb-3.5 pt-1">
@@ -671,39 +674,99 @@ export function OrderDetailModal({
                         )}
 
                         {order.type === 'delivery' && shippers.length > 0 && (
-                            <div className="rounded-2xl border border-gray-100 bg-white overflow-hidden">
-                                <p className="px-4 pt-3.5 pb-2 text-xs font-bold uppercase tracking-widest text-gray-400 flex items-center gap-1.5">
-                                    <Bike className="size-3" /> Shipper
-                                </p>
-                                {order.shipper && (
-                                    <div className="px-4 pb-2 flex items-center gap-2">
-                                        <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-800 ring-1 ring-sky-200">
-                                            <Bike className="size-3" />{order.shipper.name}
-                                        </span>
-                                        <span className="text-[10px] text-gray-400">đang phụ trách</span>
-                                    </div>
-                                )}
-                                <div className="px-4 pb-3.5 flex gap-2">
-                                    <select
-                                        value={selectedShipperId}
-                                        onChange={e => setSelectedShipperId(e.target.value)}
-                                        className="flex-1 min-w-0 rounded-full border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 outline-none focus:border-brand focus:ring-2 focus:ring-brand/10"
-                                    >
-                                        <option value="">Chọn shipper…</option>
-                                        {shippers.map(s => (
-                                            <option key={s.id} value={s.id}>{s.name}{s.phone ? ` · ${s.phone}` : ''}</option>
-                                        ))}
-                                    </select>
-                                    <button
-                                        onClick={() => void handleAssignShipper()}
-                                        disabled={!selectedShipperId || assignBusy}
-                                        className="shrink-0 flex items-center gap-1.5 rounded-full bg-brand px-3.5 py-2 text-sm font-bold text-white disabled:opacity-40 hover:opacity-90 transition-opacity"
-                                    >
-                                        {assignBusy ? <Loader2 className="size-4 animate-spin" /> : assignDone ? <CheckCircle2 className="size-4" /> : <UserPlus className="size-4" />}
-                                        {assignDone ? 'Đã gán' : 'Gán'}
-                                    </button>
-                                </div>
-                            </div>
+                            <Card>
+                                <Card.Header className="flex">
+                                    <p className="text-sm font-bold uppercase tracking-widest text-gray-400 flex items-center gap-1.5">
+                                        <Bike className="size-3" /> Thông tin tài xế
+                                    </p>
+                                    {order.shipper && (
+                                        <Button
+                                            variant="outline"
+                                            onPress={() => setChangingShipper(v => !v)}
+                                            className="h-6 min-w-0 px-2 mt-2 text-xs font-semibold"
+                                        >
+                                            {changingShipper ? 'Huỷ' : 'Đổi tài xế'}
+                                        </Button>
+                                    )}
+                                </Card.Header>
+
+                                <Card.Content>
+                                    {order.shipper && !changingShipper ? (
+                                        <div className="flex items-center gap-3 rounded-xl bg-sky-50 px-3.5 py-3 ring-1 ring-sky-100">
+                                            <Avatar size="md">
+                                                <Avatar.Fallback className="bg-sky-500 text-white">
+                                                    <Bike className="size-5" />
+                                                </Avatar.Fallback>
+                                            </Avatar>
+
+                                            <div className="min-w-0 flex-1">
+                                                <p className="truncate text-sm font-bold text-sky-900">{order.shipper.name}</p>
+                                                <Chip color="default" size="sm" className="mt-0.5">
+                                                    <Chip.Label>Đang phụ trách</Chip.Label>
+                                                </Chip>
+                                            </div>
+
+                                            {order.shipper.phone && (
+                                                <Tooltip delay={200}>
+                                                    <Tooltip.Trigger aria-label={`Gọi ${order.shipper.phone}`}>
+                                                        <Button
+                                                            isIconOnly
+                                                            variant="outline"
+                                                            className="rounded-full bg-white ring-1 ring-sky-200 text-sky-600"
+                                                        >
+                                                            <Phone className="size-4" />
+                                                        </Button>
+                                                    </Tooltip.Trigger>
+                                                    <Tooltip.Content showArrow>
+                                                        <Tooltip.Arrow />
+                                                        Gọi {order.shipper.phone}
+                                                    </Tooltip.Content>
+                                                </Tooltip>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="flex gap-2">
+                                            <Select
+                                                placeholder="Chọn shipper…"
+                                                value={selectedShipperId || null}
+                                                onChange={(key) => setSelectedShipperId(key?.toString() ?? '')}
+                                                className="flex-1"
+                                            >
+                                                <Select.Trigger className="rounded-full">
+                                                    <Select.Value />
+                                                    <Select.Indicator />
+                                                </Select.Trigger>
+                                                <Select.Popover>
+                                                    <ListBox>
+                                                        {shippers.map(s => (
+                                                            <ListBox.Item key={s.id} id={s.id} textValue={s.name}>
+                                                                {s.name}{s.phone ? ` · ${s.phone}` : ''}
+                                                                <ListBox.ItemIndicator />
+                                                            </ListBox.Item>
+                                                        ))}
+                                                    </ListBox>
+                                                </Select.Popover>
+                                            </Select>
+
+                                            <Button
+                                                isPending={assignBusy}
+                                                isDisabled={!selectedShipperId || assignBusy}
+                                                onPress={() => void handleAssignShipper()}
+                                                className="shrink-0 rounded-full font-bold"
+                                            >
+                                                {({ isPending }) => (
+                                                    <>
+                                                        {isPending
+                                                            ? <Loader2 className="size-4 animate-spin" />
+                                                            : assignDone ? <CheckCircle2 className="size-4" /> : <UserPlus className="size-4" />}
+                                                        {assignDone ? 'Đã gán' : 'Gán'}
+                                                    </>
+                                                )}
+                                            </Button>
+                                        </div>
+                                    )}
+                                </Card.Content>
+                            </Card>
                         )}
                     </div>
 
@@ -711,7 +774,7 @@ export function OrderDetailModal({
                     <div className="space-y-4 lg:order-2">
                         <div className="rounded-2xl border border-gray-100 bg-white overflow-hidden">
                             <div className="flex items-center justify-between gap-3 border-b border-gray-50 px-4 py-3">
-                                <p className="text-sm font-bold text-gray-800">Chi tiết món ({totalQty})</p>
+                                <p className="text-md font-bold text-gray-800">Chi tiết món ({totalQty})</p>
                                 <RecipeToggleButton show={showRecipe} onToggle={toggleRecipe} />
                             </div>
                             {order.groupOrder ? (
@@ -743,7 +806,7 @@ export function OrderDetailModal({
                     {/* Right column: summary */}
                     <div className="space-y-4 lg:order-3 lg:sticky lg:top-0 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:pb-2 scrollbar-thin">
                         <div className="rounded-2xl border border-gray-100 bg-white p-4">
-                            <p className="mb-3 text-xs font-bold uppercase tracking-widest text-gray-400">Tổng kết đơn hàng</p>
+                            <p className="mb-3 text-sm font-bold uppercase tracking-widest text-gray-400">Tổng kết đơn hàng</p>
                             <div className="space-y-2.5">
                                 <PriceRow label={`Tổng tiền món (${totalQty})`} value={fmt(subtotal)} />
                                 <PriceRow
@@ -752,7 +815,7 @@ export function OrderDetailModal({
                                     valueClass={order.type === 'delivery' && shippingFee === 0 ? 'text-brand font-semibold' : undefined}
                                 />
                                 <PriceRow
-                                    label="Giảm giá / Khuyến mãi"
+                                    label="Giảm giá"
                                     value={discount + pointDiscount > 0 ? `-${fmt(discount + pointDiscount)}` : fmt(0)}
                                     valueClass={discount + pointDiscount > 0 ? 'text-green-600' : undefined}
                                 />
@@ -781,7 +844,7 @@ export function OrderDetailModal({
                                         Đã thanh toán{order.paidAt ? ` · ${formatStepTime(order.paidAt)}` : ''}
                                     </p>
                                     <p className="text-xs text-emerald-600">
-                                        Thanh toán {order?.paymentType === 'cash' ? "bằng": "qua"} {PAYMENT_TYPE_LABEL[order.paymentType] ?? order.paymentType}
+                                        Thanh toán {order?.paymentType === 'cash' ? "bằng" : "qua"} {PAYMENT_TYPE_LABEL[order.paymentType] ?? order.paymentType}
                                         {channel.tone !== 'direct' ? ` · ${channel.label}` : ''}
                                     </p>
                                 </div>
@@ -789,7 +852,7 @@ export function OrderDetailModal({
                         )}
 
                         <div className="rounded-2xl border border-gray-100 bg-white p-4">
-                            <p className="mb-3 text-xs font-bold uppercase tracking-widest text-gray-400">Thông tin đơn hàng</p>
+                            <p className="mb-3 text-sm font-bold uppercase tracking-widest text-gray-400">Thông tin đơn hàng</p>
                             <div className="space-y-2.5 text-sm">
                                 <InfoRow label="Kênh đặt">
                                     <span className={`font-bold ${CHANNEL_TONE_CLS[channel.tone]}`}>{channel.label}</span>
@@ -809,17 +872,17 @@ export function OrderDetailModal({
                                 </InfoRow>
                                 <InfoRow label="Hình thức thanh toán">
                                     <div className="flex items-center gap-2">
-                                        {order.paymentType === 'cash' ? <BanknoteIcon className='size-4 text-emerald-500'/> : <CreditCardIcon className='size-4 text-emerald-500'/>}
+                                        {order.paymentType === 'cash' ? <BanknoteIcon className='size-4 text-emerald-500' /> : <CreditCardIcon className='size-4 text-emerald-500' />}
                                         {PAYMENT_TYPE_LABEL[order.paymentType] ?? order.paymentType}
                                     </div>
                                 </InfoRow>
                                 <InfoRow label="Mã đơn hàng">
                                     <button
-                                        onClick={() => void handleCopyCode()}
+                                        onClick={() => void handleCopy(order.paymentCode ?? orderRef, 'code')}
                                         className="flex items-center gap-1 font-mono font-semibold text-gray-800 hover:text-brand transition-colors"
                                     >
                                         {order.paymentCode ?? orderRef}
-                                        {codeCopied ? <CheckIcon className="size-3 text-emerald-500" /> : <Copy className="size-3 text-gray-300" />}
+                                        {copiedField === 'code' ? <CheckIcon className="size-3 text-emerald-500" /> : <Copy className="size-3 text-gray-300" />}
                                     </button>
                                 </InfoRow>
                                 <InfoRow label="Thời gian đặt">{formatDate(order.createdAt)}</InfoRow>
@@ -829,12 +892,18 @@ export function OrderDetailModal({
                                         {Math.max(0, Math.round((new Date(order.readyAt).getTime() - new Date(order.preparingAt).getTime()) / 60000))} phút
                                     </InfoRow>
                                 )}
+
                                 {order.completedAt && (
                                     <InfoRow label="Thời gian giao">
                                         {Math.max(0, Math.round((new Date(order.completedAt).getTime() - new Date(order.deliveringAt).getTime()) / 60000))} phút
                                     </InfoRow>
                                 )}
+                                {distanceKm !== null && (
+                                    <InfoRow label="Khoảng cách">
+                                        {distanceKm.toFixed(1)}km
+                                    </InfoRow>
 
+                                )}
                                 {staffName && <InfoRow label="Nhân viên xử lý">{staffName}</InfoRow>}
                             </div>
                         </div>
@@ -1029,22 +1098,22 @@ function GroupOrderItemsSection({
     const isSplit = go.paymentMode === 'split'
     return (
         <div>
-            <div className="flex items-center gap-2 px-4 py-2 bg-violet-50/60">
-                <Users className="size-3.5 text-violet-500 shrink-0" />
-                <p className="text-[10px] font-bold uppercase tracking-widest text-violet-500">
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-violet-50/60">
+                <Users className="size-4 text-violet-500 shrink-0" />
+                <p className="text-sm font-bold tracking-widest text-violet-500">
                     {withItems.length} thành viên · {totalQty} món
                 </p>
                 <div className="ml-auto flex items-center gap-2">
                     {isSplit && (
-                        <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ${paidCount === withItems.length
+                        <span className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-sm font-bold tabular-nums ${paidCount === withItems.length
                             ? 'bg-emerald-100 text-emerald-700'
                             : 'bg-violet-100 text-violet-700'
                             }`}>
-                            {paidCount === withItems.length && <CheckCircle2 className="size-3" />}
+                            {paidCount === withItems.length && <CheckCircle2 className="size-3.5" />}
                             {paidCount}/{withItems.length} TT
                         </span>
                     )}
-                    <span className="text-[10px] font-semibold text-violet-400">
+                    <span className="text-sm font-semibold text-violet-400">
                         {isSplit ? 'Chia tiền' : 'Chủ nhóm trả'}
                     </span>
                 </div>
@@ -1063,20 +1132,20 @@ function GroupOrderItemsSection({
                         : p.paymentStatus === 'paid'
                     return (
                         <div key={p.id}>
-                            <div className="flex items-center gap-2 px-4 py-2 bg-gray-50/70">
-                                <div className={`flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${p.isHost ? 'bg-amber-100 text-amber-700' : 'bg-gray-200 text-gray-500'}`}>
-                                    {p.isHost ? <Crown className="size-3.5" /> : <User className="size-3" />}
+                            <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50/70">
+                                <div className={`flex size-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${p.isHost ? 'bg-amber-100 text-amber-700' : 'bg-gray-200 text-gray-500'}`}>
+                                    {p.isHost ? <Crown className="size-4" /> : <User className="size-3.5" />}
                                 </div>
-                                <span className="flex-1 text-xs font-semibold text-gray-700">{memberName}</span>
+                                <span className="flex-1 text-sm font-semibold text-gray-700">{memberName}</span>
                                 {p.isHost && (
-                                    <span className="text-[9px] font-bold uppercase tracking-wide text-amber-600">Chủ nhóm</span>
+                                    <span className="text-xs font-bold uppercase tracking-wide text-amber-600">Chủ nhóm</span>
                                 )}
                                 {isSplit && (
                                     livePaid
                                         ? <CheckCircle2 className="size-4 shrink-0 text-emerald-500" />
-                                        : <Loader2 className="size-3.5 shrink-0 animate-spin text-gray-300" />
+                                        : <Loader2 className="size-4 shrink-0 animate-spin text-gray-300" />
                                 )}
-                                <span className="text-xs font-semibold text-gray-600 tabular-nums">{fmt(memberSubtotal)}</span>
+                                <span className="text-sm font-semibold text-gray-600 tabular-nums">{fmt(memberSubtotal)}</span>
                             </div>
                             <div className="divide-y divide-gray-50">
                                 {p.items.map((item) => {
@@ -1097,33 +1166,35 @@ function GroupOrderItemsSection({
                                         : 0
                                     const lineTotal = (Number(item.unitPrice) + toppingSum) * item.quantity
                                     return (
-                                        <div key={item.id} className="flex flex-col pl-12 pr-4 py-2.5">
+                                        <div key={item.id} className="flex flex-col pl-14 pr-4 py-3">
                                             <div className="flex items-start gap-3">
-                                                {item.product.imageUrls?.[0] ? (
-                                                    <img src={item.product.imageUrls[0]} alt={item.product.name} className="size-9 shrink-0 rounded-lg object-cover ring-1 ring-black/6" />
-                                                ) : (
-                                                    <div className="size-9 shrink-0 rounded-lg bg-gray-100 flex items-center justify-center ring-1 ring-black/6">
-                                                        <ShoppingBag className="size-3.5 text-gray-300" />
+                                                <div className="relative shrink-0">
+                                                    <div className="flex size-16 items-center justify-center rounded-xl bg-gray-100 ring-1 ring-black/6 overflow-hidden">
+                                                        {item.product.imageUrls?.[0] ? (
+                                                            <img src={item.product.imageUrls[0]} alt={item.product.name} className="size-full object-cover" />
+                                                        ) : (
+                                                            <ShoppingBag className="size-4 text-gray-300" />
+                                                        )}
                                                     </div>
-                                                )}
+                                                    <span className="absolute -bottom-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full bg-brand text-xs font-black text-white ring-2 ring-white shadow-sm">
+                                                        {item.quantity}
+                                                    </span>
+                                                </div>
                                                 <div className="min-w-0 flex-1">
                                                     <div className="flex items-start justify-between gap-2">
-                                                        <p className="text-xs font-semibold text-gray-800 leading-snug">{item.product.name}</p>
-                                                        <div className="shrink-0 text-right">
-                                                            <p className="text-xs font-semibold text-gray-700 tabular-nums">{fmt(lineTotal)}</p>
-                                                            <span className="text-[10px] font-bold text-gray-400">×{item.quantity}</span>
-                                                        </div>
+                                                        <p className="text-sm font-semibold text-gray-800 leading-snug">{item.product.name}</p>
+                                                        <p className="shrink-0 text-sm font-semibold text-gray-700 tabular-nums">{fmt(lineTotal)}</p>
                                                     </div>
                                                     {(opts || toppings || item.note) && (
-                                                        <div className="mt-1 flex flex-wrap gap-1">
+                                                        <div className="mt-1.5 flex flex-wrap gap-1">
                                                             {opts && opts.split(' · ').map((o, i) => (
-                                                                <span key={i} className="rounded-full bg-gray-100 px-2 py-px text-[10px] text-gray-500">{o}</span>
+                                                                <span key={i} className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">{o}</span>
                                                             ))}
                                                             {toppings && (
-                                                                <span className="rounded-full bg-emerald-50 px-2 py-px text-[10px] text-emerald-700">+{toppings}</span>
+                                                                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700">+{toppings}</span>
                                                             )}
                                                             {item.note && (
-                                                                <span className="rounded-full bg-amber-50 px-2 py-px text-[10px] italic text-amber-700">&ldquo;{item.note}&rdquo;</span>
+                                                                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs italic text-amber-700">&ldquo;{item.note}&rdquo;</span>
                                                             )}
                                                         </div>
                                                     )}

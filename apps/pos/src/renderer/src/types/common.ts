@@ -233,6 +233,7 @@ export interface AdminOrder {
   orderRef: string
   paymentCode: string
   type: OrderKind
+  note: string
 
   // Relations (nullable)
   userId: string | null
@@ -290,7 +291,7 @@ export interface AdminOrder {
   table: { name: string; id?: string } | null
   user: { id: string; name: string; email: string; phone?: string | null } | null
   address: { id: string; fullAddress: string; lat?: number | null; lng?: number | null } | null
-  shipper: { id: string; name: string } | null
+  shipper: { id: string; name: string, phone: string } | null
   scheduledDeliveryTime: string | null;
   items: AdminOrderItem[]
 

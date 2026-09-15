@@ -27,6 +27,7 @@ import { ExternalOrdersModal } from '../components/ExternalOrdersModal'
 import { SettingsPage, type Section as SettingsSection } from '../components/SettingPage'
 import { AIOrderPanel } from '../components/AIOrderPanel'
 import { UpdateModal, type UpdateInfo } from '../components/UpdateModal'
+import { learnEaterInfo, pruneEaterCacheNow } from '../../../shared/grab-eater-cache'
 
 const eAPI = (window as unknown as {
   electronAPI?: {
@@ -269,14 +270,23 @@ export function StaffApp() {
       const labelCfg = loadLocal<LabelConfig>(KEYS.label, DEFAULT_LABEL_CONFIG)
       const shouldBill = billCfg.enabled && billCfg.autoPrint && !!(billCfg.address || billCfg.printerId)
       const shouldLabel = labelCfg.enabled && labelCfg.autoPrint && !!(labelCfg.address || labelCfg.printerId)
+      const alreadyFetched = autoPrintedIdsRef.current.has(id)
 
-      if ((shouldBill || shouldLabel) && id && !autoPrintedIdsRef.current.has(id)) {
+      if (id && !alreadyFetched) {
         autoPrintedIdsRef.current.add(id)
         void (async () => {
           try {
             const result = await eAPI!.grab!.getOrder(id)
             if (result.ok && result.order) {
-              const adminOrder = grabFullToAdminOrder(result.order as GrabFull)
+              const order = result.order as GrabFull
+              learnEaterInfo(order.displayID, {
+                eaterName: order.eater.name,
+                mobileNumber: order.eater.mobileNumber,
+                address: order.eater.address,
+                driverMobileNumber: order.driver?.mobileNumber,
+              })
+
+              const adminOrder = grabFullToAdminOrder(order)
               if (shouldBill) {
                 void printGrabBill(adminOrder).then(r => {
                   if (!r.ok) console.warn('[auto-print bill]', id, r.error)
@@ -291,7 +301,7 @@ export function StaffApp() {
               }
             }
           } catch (e) {
-            console.warn('[auto-print] getOrder error:', e)
+            console.warn('[auto-print/cache] getOrder error:', e)
           }
         })()
       }
@@ -441,6 +451,11 @@ export function StaffApp() {
   // ── App version (for update modal) ────────────────────────────────────────
   useEffect(() => {
     eAPI?.app?.getVersion().then(setAppVersion).catch(() => { })
+  }, [])
+
+  // ── Dọn cache eater (SĐT/địa chỉ khách) đã hết hạn TTL — chạy 1 lần khi app mở ──
+  useEffect(() => {
+    pruneEaterCacheNow()
   }, [])
 
   // ── Auto-updater events ────────────────────────────────────────────────────

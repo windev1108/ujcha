@@ -17,6 +17,7 @@ export type GrabItemFull = {
   quantity: number
   fare: { priceDisplay: string; priceFloat: number }
   comment: string
+  image: string
   modifierGroups: GrabItemModGroup[]
   itemID?: string
   itemKey: string
@@ -37,13 +38,17 @@ export type GrabFull = {
     passengerTotalDisplay: string
     smallOrderFeeDisplay?: string
   }
-  eater: { name: string; comment: string }
+  eater: { name: string; comment: string, mobileNumber: string, address: string }
   driver?: { name: string; mobileNumber: string; avatar?: string }
   times: {
     createdAt: string
     acceptedAt?: string | null
     completedAt?: string | null
     cancelledAt?: string | null
+  }
+  isOrderWithFriends: boolean;
+  leadsGenData: {
+    paxDistanceToMex: number
   }
 }
 
@@ -59,7 +64,7 @@ export function grabFullToAdminOrder(grab: GrabFull): AdminOrder {
   const total = parseAmt(grab.fare.passengerTotalDisplay) || subtotal
 
   const items = grab.itemInfo.items.map((it, idx) => ({
-    id: it.itemID ?? String(idx),
+    id: it.itemKey ?? it.itemID ?? String(idx),
     quantity: it.quantity,
     price: String(it.fare.priceFloat),
     note: it.comment || undefined,
@@ -153,6 +158,7 @@ export async function printGrabLabels(
   if (!address || !labelCfg.enabled) return { ok: false, error: 'Chưa cấu hình máy in tem nhãn' }
   try {
     const fontBase64 = await getFontBase64()
+    const isManualPrint = !!selectedItemIds 
     const labels = buildOrderLabels(order, {
       labelWidth: labelCfg.labelWidth,
       labelHeight: labelCfg.labelHeight,
@@ -164,7 +170,7 @@ export async function printGrabLabels(
       feedAfterCut: labelCfg.feedAfterCut,
       paddingTop: labelCfg.paddingTop,
       paddingBottom: labelCfg.paddingBottom,
-      skipItemsWithoutOptions: labelCfg.skipItemsWithoutOptions ?? false,
+      skipItemsWithoutOptions: isManualPrint ? false : (labelCfg.skipItemsWithoutOptions ?? false),
     }, fontBase64, selectedItemIds)
     return await printerBridge().printLabelsByAddress(address, printerName!, labels, labelCfg)
   } catch (e) {

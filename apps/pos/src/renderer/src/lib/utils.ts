@@ -82,3 +82,11 @@ export function applyProductDiscount(basePrice: number, discountPercent: number)
 }
 
 
+export function formatMeterToKm(meters: number): string {
+    if (isNaN(meters) || meters === null) return "0km";
+
+    // Chia cho 1000 và làm tròn đến 1 chữ số thập phân
+    const km = (meters / 1000).toFixed(1);
+
+    return `${km}km`;
+}
