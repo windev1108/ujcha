@@ -26,11 +26,6 @@ export default function Footer() {
   const mapLng = location?.lng
   const locationAddress = location?.address
   const hasMap = typeof mapLat === 'number' && typeof mapLng === 'number'
-  const mapsUrl = locationAddress
-    ? hasMap
-      ? `https://www.google.com/maps?q=${mapLat},${mapLng}`
-      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationAddress)}`
-    : null
   const mapEmbedUrl = buildMapEmbedUrl(mapLat, mapLng, locationAddress)
 
 
