@@ -7,14 +7,7 @@ import { ROUTES } from "@/lib/routes";
 import { usePublicStoreLocationQuery, usePublicDeliveryPlatformsQuery, useStoreStatusQuery } from "@/services/store/hooks";
 import { Logo } from "../common/Logo";
 import { useTranslations } from "next-intl";
-
-const LeafletMap = dynamic(() => import("../common/LeafletMapInner"), {
-  ssr: false,
-  loading: () => (
-    <div className="h-full w-full animate-pulse rounded-2xl bg-surface-card" />
-  ),
-});
-
+import { buildMapEmbedUrl } from "@/lib/utils";
 
 
 export function minutesToTime(minutes: number) {
@@ -29,6 +22,18 @@ export default function Footer() {
   const { data: platforms = [] } = usePublicDeliveryPlatformsQuery();
   const hasCoords = location && location.lat !== 0 && location.lng !== 0;
   const t = useTranslations();
+  const mapLat = location?.lat
+  const mapLng = location?.lng
+  const locationAddress = location?.address
+  const hasMap = typeof mapLat === 'number' && typeof mapLng === 'number'
+  const mapsUrl = locationAddress
+    ? hasMap
+      ? `https://www.google.com/maps?q=${mapLat},${mapLng}`
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationAddress)}`
+    : null
+  const mapEmbedUrl = buildMapEmbedUrl(mapLat, mapLng, locationAddress)
+
+
   const phone = location?.phone ?? null;
   const hours = status
     ? `${minutesToTime(status.openMinutes)} – ${minutesToTime(status.closeMinutes)}`
@@ -149,10 +154,12 @@ export default function Footer() {
             </p>
             <div className="h-44 w-full overflow-hidden rounded-2xl border border-black/6">
               {hasCoords ? (
-                <LeafletMap
-                  lat={location.lat}
-                  lng={location.lng}
-                  address={location.address}
+                <iframe
+                  title="Địa điểm giao hàng"
+                  src={mapEmbedUrl!}
+                  className="size-full border-0"
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
                 />
               ) : (
                 <div className="flex h-full w-full items-center justify-center bg-surface-card text-xs text-muted">

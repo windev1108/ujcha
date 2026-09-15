@@ -66,7 +66,7 @@ export function AppHeader() {
 
   const NAV: ReadonlyArray<{ href: string; label: string; Icon: React.ElementType }> = [
     { href: ROUTES.PRODUCTS, label: t("menu"), Icon: UtensilsCrossed },
-    { href: ROUTES.PROMOTIONS, label: t("promotions"), Icon: Tag },
+    // { href: ROUTES.PROMOTIONS, label: t("promotions"), Icon: Tag },
     { href: ROUTES.GROUP_ORDERS, label: t("group_orders"), Icon: Users },
     { href: ROUTES.REFERRAL, label: t("referral_and_earn"), Icon: Share2 },
     { href: ROUTES.LOYALTY_PAGE, label: t("loyalty_nav_label"), Icon: Star },

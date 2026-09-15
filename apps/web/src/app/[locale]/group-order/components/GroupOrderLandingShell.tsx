@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, useInView } from "motion/react";
 import {
   ArrowRight, ChevronRight, Loader2,
-  PauseCircle, Share2, ShoppingBag, Sparkles, Timer, Truck, Users, Zap,
+  PauseCircle, Share2, ShoppingBag, Sparkles, Timer, Truck, User, Users, Users2, Zap,
 } from "lucide-react";
 import { Button } from "@heroui/react";
 import { ROUTES } from "@/lib/routes";
@@ -123,6 +123,7 @@ export function GroupOrderLandingShell() {
   const [tiers, setTiers] = useState<GroupDiscountTier[]>([]);
   const [expiryMinutes, setExpiryMinutes] = useState(120);
   const [configLoaded, setConfigLoaded] = useState(false);
+  const [limitMembers, setLimitMember] = useState(0);
   const [isEnabled, setIsEnabled] = useState(true);
   const [storeClosedInfo, setStoreClosedInfo] = useState<{ code: string } | null>(null);
 
@@ -131,7 +132,7 @@ export function GroupOrderLandingShell() {
       .then((cfg) => {
         setTiers(cfg.discountTiers);
         setIsEnabled(cfg.isEnabled);
-        if (cfg.expiryMinutes) setExpiryMinutes(cfg.expiryMinutes);
+        if (cfg.expiryMinutes) setExpiryMinutes(cfg.expiryMinutes); setLimitMember(cfg.limitParticipants)
       })
       .catch(() => { })
       .finally(() => setConfigLoaded(true));
@@ -139,6 +140,7 @@ export function GroupOrderLandingShell() {
 
   const sorted = [...tiers].sort((a, b) => a.minParticipants - b.minParticipants);
   const maxDiscount = tiers.length > 0 ? Math.max(...tiers.map((t) => t.discountPercent)) : null;
+
 
   const hasDiscount = configLoaded && sorted.length > 0;
 
@@ -208,7 +210,7 @@ export function GroupOrderLandingShell() {
               >
                 {[
                   { label: t("max_discount_label"), value: <><CountUp to={maxDiscount} />%</> },
-                  { label: t("one_per_account"), value: t("fair_value") },
+                  { label: t("limit_persons"), value: <span className="flex items-center gap-1.5 justify-center"><Users2 /><CountUp to={limitMembers} /></span> },
                   { label: t("time_limit_label"), value: fmtExpiry(expiryMinutes, locale) },
                 ].map((s) => (
                   <div key={s.label} className="text-center">

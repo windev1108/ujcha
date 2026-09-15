@@ -75,11 +75,21 @@ export function minutesToHHmm(minutes: number): string {
 }
 
 export function sanitizeRedirect(raw: string | null) {
-  if (!raw) return null;
+    if (!raw) return null;
 
-  if (!raw.startsWith("/") || raw.startsWith("//")) {
-    return null;
-  }
+    if (!raw.startsWith("/") || raw.startsWith("//")) {
+        return null;
+    }
 
-  return raw;
+    return raw;
+}
+
+export function buildMapEmbedUrl(lat?: number | null, lng?: number | null, address?: string | null): string | null {
+    if (typeof lat === 'number' && typeof lng === 'number') {
+        return `https://maps.google.com/maps?q=${lat},${lng}&z=16&output=embed`
+    }
+    if (address) {
+        return `https://maps.google.com/maps?q=${encodeURIComponent(address)}&z=15&output=embed`
+    }
+    return null
 }
