@@ -258,3 +258,13 @@ export function isWithinStoreHours(
   }
   return nowMinutes >= openMinutes || nowMinutes < closeMinutes;
 }
+
+export function buildScopeKey(
+  conditions: { group: string; value: string }[],
+): string {
+  if (conditions.length === 0) return 'ALL';
+  return [...conditions]
+    .sort((a, b) => a.group.localeCompare(b.group))
+    .map((c) => `${c.group}::${c.value}`)
+    .join('|');
+}

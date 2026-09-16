@@ -10,6 +10,7 @@ import type { CreateProductDto } from './dto/create-product.dto';
 import type { ToggleProductAvailabilityDto } from './dto/toggle-product-availability.dto';
 import type { UpdateProductDto } from './dto/update-product.dto';
 import {
+  buildScopeKey,
   clampDiscountPercent,
   computeFinalPrice,
   normalizeImageUrls,
@@ -342,7 +343,7 @@ export class AdminProductService {
       this.prisma.productRecipeItem.findMany({
         where: { productId },
         include: { ingredient: true },
-        orderBy: [{ optionGroupName: 'asc' }, { createdAt: 'asc' }],
+        orderBy: [{ scopeKey: 'asc' }, { createdAt: 'asc' }], // đổi từ optionGroupName
       }),
       this.prisma.productToppingRecipeItem.findMany({
         where: { productId },
@@ -368,25 +369,37 @@ export class AdminProductService {
     const optionGroups = (product.optionGroups as any[]) ?? [];
     const toppings = (product.toppings as any[]) ?? [];
 
+    const seenScopeKeys = new Map<string, Set<string>>(); // ingredientId -> set of scopeKey, chặn trùng ở tầng service (fail sớm, đẹp hơn để DB unique bắt)
+
     for (const it of dto.items) {
-      if (!!it.optionGroupName !== !!it.optionValueLabel) {
-        throw new BadRequestException({
-          message: 'optionGroupName và optionValueLabel phải đi cùng nhau.',
-          code: 'INVALID_RECIPE_VARIANT',
-        });
-      }
-      if (it.optionGroupName) {
-        const group = optionGroups.find((g) => g.name === it.optionGroupName);
+      const conditions = it.conditions ?? [];
+
+      // validate từng điều kiện phải khớp đúng option group + value đang tồn tại trên sản phẩm
+      for (const c of conditions) {
+        const group = optionGroups.find((g) => g.name === c.group);
         const valueExists = group?.values?.some(
-          (v: any) => v.label === it.optionValueLabel,
+          (v: any) => v.label === c.value,
         );
         if (!group || !valueExists) {
           throw new BadRequestException({
-            message: `Biến thể "${it.optionGroupName} / ${it.optionValueLabel}" không tồn tại trên sản phẩm.`,
+            message: `Biến thể "${c.group} / ${c.value}" không tồn tại trên sản phẩm.`,
             code: 'INVALID_RECIPE_VARIANT',
           });
         }
       }
+
+      // chặn 2 dòng cùng ingredient trùng đúng 1 scope (trước khi đụng DB unique)
+      const scopeKey = buildScopeKey(conditions);
+      const set = seenScopeKeys.get(it.ingredientId) ?? new Set<string>();
+      if (set.has(scopeKey)) {
+        throw new BadRequestException({
+          message:
+            'Có 2 dòng công thức trùng điều kiện cho cùng 1 nguyên liệu.',
+          code: 'DUPLICATE_RECIPE_SCOPE',
+        });
+      }
+      set.add(scopeKey);
+      seenScopeKeys.set(it.ingredientId, set);
     }
 
     for (const t of dto.toppingItems ?? []) {
@@ -408,13 +421,17 @@ export class AdminProductService {
 
       if (dto.items.length) {
         await tx.productRecipeItem.createMany({
-          data: dto.items.map((i) => ({
-            productId,
-            ingredientId: i.ingredientId,
-            optionGroupName: i.optionGroupName ?? null,
-            optionValueLabel: i.optionValueLabel ?? null,
-            quantity: new Prisma.Decimal(i.quantity),
-          })),
+          data: dto.items.map((i) => {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            const conditions = i.conditions ?? [];
+            return {
+              productId,
+              ingredientId: i.ingredientId,
+              conditions: conditions as unknown as Prisma.InputJsonValue,
+              scopeKey: buildScopeKey(conditions),
+              quantity: new Prisma.Decimal(i.quantity),
+            };
+          }),
         });
       }
 
@@ -601,6 +618,12 @@ export class AdminProductService {
       );
     };
 
+    // Điều kiện coi là khớp nếu MỌI condition.value đều fuzzy-match 1 label đã chọn
+    const conditionsMatch = (
+      conditions: { group: string; value: string }[],
+      selectedNorm: string[],
+    ) => conditions.every((c) => matchLabel(c.value, selectedNorm));
+
     const result: Record<
       string,
       {
@@ -615,8 +638,7 @@ export class AdminProductService {
           ingredientName: string;
           unit: string;
           quantity: string;
-          optionGroupName: string | null;
-          optionValueLabel: string | null;
+          conditions: { group: string; value: string }[];
         }>;
         toppingItems?: Array<{
           id: string;
@@ -644,12 +666,29 @@ export class AdminProductService {
 
       const selectedNorm = item.selectedLabels.map(normalize).filter(Boolean);
 
-      const matchedItems = recipeItems.filter(
-        (ri) =>
-          ri.productId === product.id &&
-          (ri.optionGroupName == null ||
-            matchLabel(ri.optionValueLabel ?? '', selectedNorm)),
+      const productRecipes = recipeItems.filter(
+        (ri) => ri.productId === product.id,
       );
+
+      const bestByIngredient = new Map<
+        string,
+        (typeof productRecipes)[number] & { score: number }
+      >();
+
+      for (const ri of productRecipes) {
+        const conditions =
+          (ri.conditions as unknown as { group: string; value: string }[]) ??
+          [];
+        if (!conditionsMatch(conditions, selectedNorm)) continue;
+
+        const score = conditions.length;
+        const current = bestByIngredient.get(ri.ingredientId);
+        if (!current || score > current.score) {
+          bestByIngredient.set(ri.ingredientId, { ...ri, score });
+        }
+      }
+
+      const matchedItems = [...bestByIngredient.values()];
 
       const toppingsArr =
         (product.toppings as Array<{ id: string; name: string }>) ?? [];
@@ -672,8 +711,9 @@ export class AdminProductService {
           ingredientName: mi.ingredient.name,
           unit: mi.ingredient.unit,
           quantity: mi.quantity.toString(),
-          optionGroupName: mi.optionGroupName,
-          optionValueLabel: mi.optionValueLabel,
+          conditions:
+            (mi.conditions as unknown as { group: string; value: string }[]) ??
+            [],
         })),
         toppingItems: matchedToppingItems.map((mt) => ({
           id: mt.id,
