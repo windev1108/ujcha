@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 export type NormalizedOptionValue = {
   label: string;
   priceDelta: number;
+  isDefault?: boolean;
   nameTranslation?: Record<string, string>;
 };
 
@@ -64,6 +65,7 @@ export function normalizeOptionGroupValues(
 ): NormalizedOptionValue[] {
   if (!Array.isArray(raw)) return [];
   const byLabel = new Map<string, NormalizedOptionValue>();
+  let defaultAssigned = false;
   (raw as unknown[]).forEach((v) => {
     if (typeof v === 'string') {
       const label = v.trim();
@@ -77,6 +79,9 @@ export function normalizeOptionGroupValues(
         rawPd !== undefined && rawPd !== null && Number.isFinite(Number(rawPd))
           ? Math.min(1e12, Math.max(0, Math.round(Number(rawPd) * 100) / 100))
           : 0;
+      const rawIsDefault = (v as { isDefault?: unknown }).isDefault === true;
+      const isDefault = rawIsDefault && !defaultAssigned;
+      if (isDefault) defaultAssigned = true;
       const rawNt = (v as { nameTranslation?: unknown }).nameTranslation;
       const nameTranslation =
         rawNt && typeof rawNt === 'object'
@@ -86,6 +91,7 @@ export function normalizeOptionGroupValues(
         byLabel.set(label, {
           label,
           priceDelta,
+          ...(isDefault ? { isDefault: true } : {}),
           ...(nameTranslation && Object.keys(nameTranslation).length
             ? { nameTranslation }
             : {}),

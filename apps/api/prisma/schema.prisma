@@ -292,16 +292,11 @@ model Ingredient {
 }
 
 model ProductRecipeItem {
-  id               String     @id @default(uuid()) @db.Uuid
-  productId        String     @db.Uuid
-  product          Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
-  ingredientId     String     @db.Uuid
-  ingredient       Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
-  /// Tên nhóm option áp dụng (vd "Size"). null = dùng cho MỌI biến thể (không phụ thuộc size).
-  optionGroupName  String?
-  /// Nhãn giá trị option (vd "L"). Luôn đi cùng optionGroupName.
-  optionValueLabel String?
-  /// Định lượng cho 1 đơn vị sản phẩm ở biến thể này (theo unit của ingredient)
+  id           String     @id @default(uuid()) @db.Uuid
+  productId    String     @db.Uuid
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  ingredientId String     @db.Uuid
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
 
   conditions Json   @default("[]")
   scopeKey   String @default("ALL")
@@ -310,7 +305,7 @@ model ProductRecipeItem {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([productId, ingredientId, optionGroupName, optionValueLabel])
+  @@unique([productId, ingredientId, scopeKey])
   @@index([productId])
   @@index([ingredientId])
 }

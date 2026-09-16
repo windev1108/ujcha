@@ -732,14 +732,27 @@ export function ProductEditorClient({ mode, productId }: Props) {
                                   className={`w-28 ${adminInputClass}`}
                                   disabled={pending}
                                 />
+                                <button
+                                  type="button"
+                                  disabled={pending}
+                                  onClick={() =>
+                                    setOptionGroups((prev) =>
+                                      prev.map((g, i) =>
+                                        i === gIdx
+                                          ? { ...g, values: g.values.map((v, j) => ({ ...v, isDefault: j === vIdx })) }
+                                          : g,
+                                      ),
+                                    )
+                                  }
+                                  className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${val.isDefault
+                                    ? "bg-[#1a3c34] text-white"
+                                    : "bg-black/5 text-foreground/50 hover:bg-black/10"
+                                    }`}
+                                >
+                                  Mặc định
+                                </button>
                                 {og.values.length > 1 ? (
-                                  <Button
-                                    isIconOnly
-                                    variant="ghost"
-                                    size="sm"
-                                    onPress={() => removeOptionValue(gIdx, vIdx)}
-                                    isDisabled={pending}
-                                  >
+                                  <Button isIconOnly variant="ghost" size="sm" onPress={() => removeOptionValue(gIdx, vIdx)} isDisabled={pending}>
                                     <Trash2 className="size-3.5" />
                                   </Button>
                                 ) : null}

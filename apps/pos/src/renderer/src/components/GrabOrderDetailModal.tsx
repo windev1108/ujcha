@@ -134,7 +134,7 @@ export default function GrabOrderDetailModal({
             driverMobileNumber: data.driver?.mobileNumber,
         })
     }, [data])
-
+    console.log({ data })
     useEffect(() => {
         if (!data) return
         const requestItems = data.itemInfo.items.map((item, i) => ({

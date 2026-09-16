@@ -3,6 +3,7 @@ import { plainToInstance, Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsNumber,
   IsObject,
   IsOptional,
@@ -12,7 +13,6 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
-
 
 export class ProductOptionValueDto {
   @ApiProperty({ example: 'L' })
@@ -31,12 +31,25 @@ export class ProductOptionValueDto {
   @Min(0)
   priceDelta?: number;
 
-  @ApiPropertyOptional({ description: 'Bản dịch nhãn giá trị: { "en": "..." }' })
+  @ApiPropertyOptional({
+    example: false,
+    description:
+      'Giá trị mặc định của nhóm — dùng để suy luận lựa chọn khi kênh bên ngoài (Grab, Shopee…) không gửi label cho nhóm này.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  isDefault?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Bản dịch nhãn giá trị: { "en": "..." }',
+  })
   @IsOptional()
   @IsObject()
   nameTranslation?: Record<string, string>;
 
-  @ApiPropertyOptional({ description: 'Bản dịch mô tả giá trị: { "en": "..." }' })
+  @ApiPropertyOptional({
+    description: 'Bản dịch mô tả giá trị: { "en": "..." }',
+  })
   @IsOptional()
   @IsObject()
   descriptionTranslation?: Record<string, string>;
@@ -46,7 +59,11 @@ export class ProductOptionValueDto {
  * Trả về instance `ProductOptionValueDto` để `ValidateNested` + `forbidNonWhitelisted`
  * nhận đúng metadata (plain object sau Transform bị coi là thuộc tính lạ).
  */
-function transformOptionValues({ value }: { value: unknown }): ProductOptionValueDto[] {
+function transformOptionValues({
+  value,
+}: {
+  value: unknown;
+}): ProductOptionValueDto[] {
   if (!Array.isArray(value)) return [];
   const out: ProductOptionValueDto[] = [];
   for (const item of value) {
@@ -66,25 +83,33 @@ function transformOptionValues({ value }: { value: unknown }): ProductOptionValu
       let priceDelta = 0;
       if (raw !== undefined && raw !== null && raw !== '') {
         const n = Number(raw);
-        if (Number.isFinite(n) && n >= 0) priceDelta = Math.round(n * 100) / 100;
+        if (Number.isFinite(n) && n >= 0)
+          priceDelta = Math.round(n * 100) / 100;
       }
+      const isDefault = (item as { isDefault?: unknown }).isDefault === true;
       const nt = (item as { nameTranslation?: unknown }).nameTranslation;
-      const dt = (item as { descriptionTranslation?: unknown }).descriptionTranslation;
+      const dt = (item as { descriptionTranslation?: unknown })
+        .descriptionTranslation;
       out.push(
         plainToInstance(ProductOptionValueDto, {
           label,
           priceDelta,
+          ...(isDefault ? { isDefault: true } : {}),
           ...(nt && typeof nt === 'object' ? { nameTranslation: nt } : {}),
-          ...(dt && typeof dt === 'object' ? { descriptionTranslation: dt } : {}),
+          ...(dt && typeof dt === 'object'
+            ? { descriptionTranslation: dt }
+            : {}),
         }),
       );
     }
   }
   return out;
 }
-
 export class ProductOptionGroupDto {
-  @ApiPropertyOptional({ example: 'grp-size-1', description: 'Client-generated ID; server generates uuid if omitted' })
+  @ApiPropertyOptional({
+    example: 'grp-size-1',
+    description: 'Client-generated ID; server generates uuid if omitted',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(64)
@@ -96,7 +121,10 @@ export class ProductOptionGroupDto {
   @MaxLength(120)
   name!: string;
 
-  @ApiPropertyOptional({ example: 1, description: 'Số lựa chọn tối thiểu (0 = tùy chọn, ≥1 = bắt buộc)' })
+  @ApiPropertyOptional({
+    example: 1,
+    description: 'Số lựa chọn tối thiểu (0 = tùy chọn, ≥1 = bắt buộc)',
+  })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()

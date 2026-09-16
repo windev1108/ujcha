@@ -30,7 +30,7 @@ export class AdminProductService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
-  ) { }
+  ) {}
 
   async list(categoryId?: string, categorySlug?: string, q?: string) {
     const qx = q?.trim();
@@ -42,12 +42,12 @@ export class AdminProductService {
             categorySlug ? { category: { slug: categorySlug } } : {},
             qx
               ? {
-                OR: [
-                  { name: { contains: qx, mode: 'insensitive' } },
-                  { sku: { contains: qx, mode: 'insensitive' } },
-                  { description: { contains: qx, mode: 'insensitive' } },
-                ],
-              }
+                  OR: [
+                    { name: { contains: qx, mode: 'insensitive' } },
+                    { sku: { contains: qx, mode: 'insensitive' } },
+                    { description: { contains: qx, mode: 'insensitive' } },
+                  ],
+                }
               : {},
           ],
         },
@@ -574,20 +574,21 @@ export class AdminProductService {
     const products =
       productIds.length || skus.length
         ? await this.prisma.product.findMany({
-          where: {
-            OR: [
-              ...(productIds.length ? [{ id: { in: productIds } }] : []),
-              ...(skus.length ? [{ sku: { in: skus } }] : []),
-            ],
-          },
-          select: {
-            id: true,
-            name: true,
-            sku: true,
-            toppings: true,
-            recipeNote: true,
-          },
-        })
+            where: {
+              OR: [
+                ...(productIds.length ? [{ id: { in: productIds } }] : []),
+                ...(skus.length ? [{ sku: { in: skus } }] : []),
+              ],
+            },
+            select: {
+              id: true,
+              name: true,
+              sku: true,
+              optionGroups: true, // ← thêm: cần để suy default cho group bị thiếu
+              toppings: true,
+              recipeNote: true,
+            },
+          })
         : [];
 
     const byId = new Map(products.map((p) => [p.id, p]));
@@ -598,29 +599,73 @@ export class AdminProductService {
     const relevantProductIds = products.map((p) => p.id);
     const [recipeItems, toppingRecipeItems] = relevantProductIds.length
       ? await Promise.all([
-        this.prisma.productRecipeItem.findMany({
-          where: { productId: { in: relevantProductIds } },
-          include: { ingredient: true },
-        }),
-        this.prisma.productToppingRecipeItem.findMany({
-          where: { productId: { in: relevantProductIds } },
-          include: { ingredient: true },
-        }),
-      ])
+          this.prisma.productRecipeItem.findMany({
+            where: { productId: { in: relevantProductIds } },
+            include: { ingredient: true },
+          }),
+          this.prisma.productToppingRecipeItem.findMany({
+            where: { productId: { in: relevantProductIds } },
+            include: { ingredient: true },
+          }),
+        ])
       : [[], []];
 
     const normalize = (s: string) => s.trim().toLowerCase();
-    const matchLabel = (candidate: string, selectedNorm: string[]) => {
-      const c = normalize(candidate)
-      if (!c) return false
-      return selectedNorm.includes(c)
-    }
 
-    // Điều kiện coi là khớp nếu MỌI condition.value đều fuzzy-match 1 label đã chọn
+    // So khớp "Size L" (Grab gửi, đã rút gọn) với "Size L (700ml)" (admin định nghĩa đầy đủ)
+    // mà KHÔNG khớp nhầm kiểu "Bình Thường" ⊂ "Đá Bình Thường" — chỉ chấp nhận nếu phần dư
+    // bắt đầu bằng dấu cách hoặc dấu ngoặc, để tránh dính chữ liền nhau.
+    const labelsEqual = (a: string, b: string): boolean => {
+      if (a === b) return true;
+      const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
+      if (!shorter || !longer.startsWith(shorter)) return false;
+      const rest = longer.slice(shorter.length);
+      return rest === '' || rest.startsWith(' ') || rest.startsWith('(');
+    };
+
+    const matchLabel = (candidate: string, selectedNorm: string[]) => {
+      const c = normalize(candidate);
+      if (!c) return false;
+      return selectedNorm.some((s) => labelsEqual(c, s));
+    };
+
+    // Điều kiện coi là khớp nếu MỌI condition.value đều match 1 label đã chọn (hoặc suy default)
     const conditionsMatch = (
       conditions: { group: string; value: string }[],
       selectedNorm: string[],
     ) => conditions.every((c) => matchLabel(c.value, selectedNorm));
+
+    // Với các option group mà Grab KHÔNG gửi label lên (vì đang ở default),
+    // tự bổ sung value mặc định của group đó vào danh sách để so khớp.
+    const buildEffectiveSelectedNorm = (
+      optionGroups: Array<{
+        name: string;
+        values: Array<{
+          label: string;
+          priceDelta?: number;
+          isDefault?: boolean;
+        }>;
+      }>,
+      selectedLabels: string[],
+    ): string[] => {
+      const selectedNorm = selectedLabels.map(normalize).filter(Boolean);
+      const result = [...selectedNorm];
+
+      for (const group of optionGroups ?? []) {
+        const hasSelection = (group.values ?? []).some((v) =>
+          selectedNorm.some((s) => labelsEqual(normalize(v.label), s)),
+        );
+        if (hasSelection) continue;
+
+        const def =
+          group.values?.find((v) => v.isDefault) ??
+          group.values?.find((v) => (v.priceDelta ?? 0) === 0) ??
+          group.values?.[0];
+        if (def) result.push(normalize(def.label));
+      }
+
+      return result;
+    };
 
     const result: Record<
       string,
@@ -662,7 +707,11 @@ export class AdminProductService {
         continue;
       }
 
-      const selectedNorm = item.selectedLabels.map(normalize).filter(Boolean);
+      const optionGroups = (product.optionGroups as any[]) ?? [];
+      const selectedNorm = buildEffectiveSelectedNorm(
+        optionGroups,
+        item.selectedLabels,
+      );
 
       const productRecipes = recipeItems.filter(
         (ri) => ri.productId === product.id,
@@ -683,10 +732,7 @@ export class AdminProductService {
         const current = bestByIngredient.get(ri.ingredientId);
         if (!current || score > current.score) {
           bestByIngredient.set(ri.ingredientId, { ...ri, score });
-        } else if (current && score === current.score && score > 0) {
-          // scope trùng điểm — log để phát hiện dữ liệu admin bị lỗi/trùng
-          console.warn(`[recipe-resolve] ambiguous scope tie for ingredient ${ri.ingredientId} on product ${product.id}`);
-        }  
+        }
       }
 
       const matchedItems = [...bestByIngredient.values()];
@@ -755,11 +801,11 @@ function normalizeProductRow<
     optionGroups: normalizeInlineOptionGroups(row.optionGroups as any),
     toppings: normalizeInlineToppings(row.toppings as any),
     nameTranslation: (row.nameTranslation &&
-      typeof row.nameTranslation === 'object'
+    typeof row.nameTranslation === 'object'
       ? row.nameTranslation
       : {}) as Record<string, string>,
     descriptionTranslation: (row.descriptionTranslation &&
-      typeof row.descriptionTranslation === 'object'
+    typeof row.descriptionTranslation === 'object'
       ? row.descriptionTranslation
       : {}) as Record<string, string>,
     finalPrice: computeFinalPrice(row.price, effectiveDiscount),
