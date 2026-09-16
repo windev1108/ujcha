@@ -1,8 +1,16 @@
 import { loadLocal, saveLocal } from '../renderer/src/lib/local-storage'
 
-const CACHE_KEY = 'grabEaterCache' 
+const CACHE_KEY = 'grabEaterCache'
 const TTL_MS = 7 * 24 * 60 * 60 * 1000 // cache 7 ngày
 const MAX_ENTRIES = 1000
+
+// Grab trả về "***" (hoặc chuỗi toàn dấu *) khi tên khách bị ẩn — thường là
+// sau khi đơn đã hoàn thành / quá thời gian cho phép merchant xem thông tin.
+// Không bao giờ được lưu giá trị này đè lên tên thật đã cache trước đó.
+export function isMaskedValue(value?: string | null): boolean {
+  if (!value) return true
+  return /^\*+$/.test(value.trim())
+}
 
 type CachedEaterInfo = {
   eaterName?: string
@@ -34,14 +42,19 @@ export function learnEaterInfo(
   info: { eaterName?: string | null; mobileNumber?: string | null; address?: string | null; driverMobileNumber?: string | null },
 ) {
   if (!displayID) return
-  if (!info.eaterName && !info.mobileNumber && !info.address && !info.driverMobileNumber) return
+
+  // Chỉ coi eaterName là "có giá trị" nếu không phải chuỗi bị mask ("***")
+  const cleanEaterName = isMaskedValue(info.eaterName) ? undefined : info.eaterName ?? undefined
+
+  if (!cleanEaterName && !info.mobileNumber && !info.address && !info.driverMobileNumber) return
 
   const store = loadLocal<EaterCacheStore>(CACHE_KEY, {})
   pruneExpired(store)
 
   const prev = store[displayID]
   store[displayID] = {
-    eaterName: info.eaterName || prev?.eaterName,
+    // Ưu tiên tên thật mới học được; nếu lần này bị mask thì giữ nguyên tên cũ đã cache
+    eaterName: cleanEaterName || prev?.eaterName,
     mobileNumber: info.mobileNumber || prev?.mobileNumber,
     address: info.address || prev?.address,
     driverMobileNumber: info.driverMobileNumber || prev?.driverMobileNumber,

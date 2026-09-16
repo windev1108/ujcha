@@ -25,9 +25,7 @@ export default function Footer() {
   const mapLat = location?.lat
   const mapLng = location?.lng
   const locationAddress = location?.address
-  const hasMap = typeof mapLat === 'number' && typeof mapLng === 'number'
   const mapEmbedUrl = buildMapEmbedUrl(mapLat, mapLng, locationAddress)
-
 
   const phone = location?.phone ?? null;
   const hours = status

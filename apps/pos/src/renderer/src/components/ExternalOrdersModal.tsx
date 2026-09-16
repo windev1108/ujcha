@@ -3,6 +3,9 @@ import {
   ArrowLeft, RefreshCw, Clock, CheckCircle2, XCircle,
   ShoppingBag, MapPin, Phone, User, Loader2, ChevronRight,
   TrendingUp, PackageCheck,
+  UserPlus,
+  Sparkles,
+  UserCheck,
 } from 'lucide-react'
 import { fetchExternalOrders, updateOrderStatus } from '../api'
 import type { AdminOrder, OrderStatus, QuickDate } from '../types/common'
@@ -46,6 +49,7 @@ type GrabPreparingOrder = {
   displayID: string
   state: string
   orderValue: string
+  isPaxNewCustomer: boolean;
   eater: { ID: number; name: string }
   itemInfo: { count: number; items: Array<{ itemID?: string; name: string; quantity: number; comment?: string }> }
   times: { createdAt: string; estimatedPickUpTime?: string, readyAt?: string | null }
@@ -588,7 +592,6 @@ export function ExternalOrdersModal({
           {/* GrabFood direct API tab */}
           {isGrabTab ? (
             <>
-              {/* ── Tổng doanh thu (theo khoảng ngày đang xem ở Lịch sử) ── */}
               {/* ── Tổng doanh thu + Sync (theo khoảng ngày đang xem) ── */}
               {(() => {
                 const rate = getLearnedCommissionRate(DEFAULT_GRAB_COMMISSION_RATE)
@@ -965,9 +968,9 @@ function GrabPreparingOrderCard({
   onMarkReady: () => void
   onOpen: () => void
 }) {
-
   const label = grabOrderLabel(order.state, context)
   const amount = order.orderValue ? Number(order.orderValue) : 0
+  const isNewCustomer = order?.isPaxNewCustomer === true
   return (
     <div
       onClick={onOpen}
@@ -979,10 +982,17 @@ function GrabPreparingOrderCard({
           <img src={grabFoodLogo} className="h-4 w-4 object-contain shrink-0" alt="" />
           <span className="text-xs font-black tracking-wide text-green-700">GRABFOOD</span>
         </div>
-        <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">
-          <span className="size-1.5 rounded-full bg-blue-500" />
-          {label}
-        </span>
+        <div className="flex items-center gap-2">
+          {isNewCustomer &&
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-700">
+              <Sparkles className="size-2.5" /> Khách mới
+            </span>
+          }
+          <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">
+            <span className="size-1.5 rounded-full bg-blue-500" />
+            {label}
+          </span>
+        </div>
       </div>
 
       {/* Info */}
@@ -1081,7 +1091,7 @@ function GrabOrderCard({
   const rate = getLearnedCommissionRate(DEFAULT_GRAB_COMMISSION_RATE)
   const cached = getCachedNet(order.displayID)
   const amount = cached ?? estimateGrabNetReceived(order.orderEarningsInMinorUnit, rate)
-
+  const isNewCustomer = order?.isPaxNewCustomer === true
   return (
     <div className="relative flex flex-col rounded-2xl border border-gray-100 bg-white shadow-sm transition-all hover:shadow-md">
 
@@ -1093,10 +1103,17 @@ function GrabOrderCard({
             {order.displayID || order.bookingCode}
           </span>
         </div>
-        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${color}`}>
-          <span className={`size-1.5 rounded-full ${dot}`} />
-          {label}
-        </span>
+        <div className="flex items-center gap-2">
+          {isNewCustomer &&
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-700">
+              <Sparkles className="size-2.5" /> Khách mới
+            </span>
+          }
+          <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${color}`}>
+            <span className={`size-1.5 rounded-full ${dot}`} />
+            {label}
+          </span>
+        </div>
       </div>
 
       {/* Main info */}

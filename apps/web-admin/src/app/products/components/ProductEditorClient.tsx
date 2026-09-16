@@ -9,11 +9,12 @@ import {
   Label,
   ListBox,
   Select,
+  Spinner,
   Switch,
   TextArea,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ImagePlus, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, ImagePlus, Plus, Save, SaveIcon, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -35,8 +36,9 @@ import {
   setAdminProductRecipe,
   updateAdminProduct,
 } from "@/services/admin/products-api";
-import type { AdminProduct, ProductOptionGroup, ProductRecipe, ProductTopping } from "@/services/admin/types";
+import type { AdminProduct, ProductOptionGroup, ProductRecipe, ProductTopping, RecipeGroupForm, RecipeItemForm, ToppingRecipeItemForm } from "@/services/admin/types";
 import { fetchAdminIngredients } from "@/services/admin/ingredients-api";
+import { buildScopeKey, flattenGroups, groupsFromFlatItems } from "@/lib/functions";
 
 function parseApiMessage(err: unknown): string {
   if (err && typeof err === "object" && "response" in err) {
@@ -154,9 +156,7 @@ export function ProductEditorClient({ mode, productId }: Props) {
   const [isBestSeller, setIsBestSeller] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [baselineSnapshot, setBaselineSnapshot] = useState<string | null>(null);
-  type RecipeItemForm = { ingredientId: string; quantity: number; scopeKey: string }; // "ALL" | "Group::Label"
-  type ToppingRecipeItemForm = { toppingId: string; ingredientId: string; quantity: number };
-
+  const [recipeGroups, setRecipeGroups] = useState<RecipeGroupForm[]>([]);
   const [recipeNote, setRecipeNote] = useState("");
   const [recipeItems, setRecipeItems] = useState<RecipeItemForm[]>([]);
   const [toppingRecipeItems, setToppingRecipeItems] = useState<ToppingRecipeItemForm[]>([]);
@@ -166,16 +166,7 @@ export function ProductEditorClient({ mode, productId }: Props) {
   if (recipe && loadedRecipe !== recipe) {
     setLoadedRecipe(recipe);
     setRecipeNote(recipe.recipeNote ?? "");
-    setRecipeItems(
-      recipe.items.map((i) => ({
-        ingredientId: i.ingredientId,
-        quantity: Number(i.quantity) || 0,
-        scopeKey:
-          i.optionGroupName && i.optionValueLabel
-            ? `${i.optionGroupName}::${i.optionValueLabel}`
-            : "ALL",
-      })),
-    );
+    setRecipeGroups(groupsFromFlatItems(recipe.items));
     setToppingRecipeItems(
       recipe.toppingItems.map((t) => ({
         toppingId: t.toppingId,
@@ -185,26 +176,11 @@ export function ProductEditorClient({ mode, productId }: Props) {
     );
   }
 
-  const scopeOptions = useMemo(() => {
-    const opts: { key: string; label: string }[] = [{ key: "ALL", label: "Tất cả biến thể" }];
-    for (const g of optionGroups) {
-      for (const v of g.values) {
-        if (!v.label.trim()) continue;
-        opts.push({ key: `${g.name}::${v.label}`, label: `${g.name || "Nhóm"}: ${v.label}` });
-      }
-    }
-    return opts;
-  }, [optionGroups]);
-
   const saveRecipeMut = useMutation({
     mutationFn: () =>
       setAdminProductRecipe(productId!, {
         recipeNote: recipeNote.trim() || undefined,
-        items: recipeItems.map((i) => {
-          const [g, l] =
-            i.scopeKey === "ALL" ? [undefined, undefined] : (i.scopeKey.split("::") as [string, string]);
-          return { ingredientId: i.ingredientId, quantity: i.quantity, optionGroupName: g, optionValueLabel: l };
-        }),
+        items: flattenGroups(recipeGroups),
         toppingItems: toppingRecipeItems,
       }),
   });
@@ -430,6 +406,8 @@ export function ProductEditorClient({ mode, productId }: Props) {
     setToppings((prev) =>
       prev.map((t, i) => (i === idx ? { ...t, ...patch } : t)),
     );
+  const scopeKeys = recipeGroups.map((g) => buildScopeKey(g.conditions));
+  const hasDuplicateScope = new Set(scopeKeys).size !== scopeKeys.length;
 
   if (mode === "edit" && loadingProduct) {
     return (
@@ -867,8 +845,13 @@ export function ProductEditorClient({ mode, productId }: Props) {
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-bold uppercase tracking-wide text-[#1a3c34]">Công thức pha chế</h2>
                 {mode === "edit" && (
-                  <Button variant="ghost" size="sm" className="rounded-xl" onPress={() => saveRecipeMut.mutate()} isDisabled={saveRecipeMut.isPending}>
-                    {saveRecipeMut.isPending ? "Đang lưu…" : "Lưu công thức"}
+                  <Button variant="ghost" size="sm" className="rounded-xl" onPress={() => saveRecipeMut.mutate()} isPending={saveRecipeMut.isPending}>
+                    {saveRecipeMut.isPending ?
+                      <Spinner />
+                      :
+                      <SaveIcon />
+                    }
+                    {"Lưu công thức"}
                   </Button>
                 )}
               </div>
@@ -880,44 +863,209 @@ export function ProductEditorClient({ mode, productId }: Props) {
               </div>
 
               {/* Định lượng theo biến thể */}
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between">
-                  <Label className={adminLabelClassProduct}>Định lượng nguyên liệu (theo size / biến thể)</Label>
+                  <Label className={adminLabelClassProduct}>Công thức theo biến thể</Label>
+                  {hasDuplicateScope && (
+                    <span className="text-xs font-semibold text-red-600">
+                      Có 2 biến thể trùng điều kiện — hãy sửa lại.
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-foreground/50">
-                  Chọn “Tất cả biến thể” cho nguyên liệu không đổi theo size (ly, ống hút…). Chọn size cụ thể
-                  cho nguyên liệu hao khác nhau theo size (sữa, trân châu…).
+                  Mỗi thẻ dưới đây là 1 tổ hợp biến thể (vd: Vị Trà = Trà Lài, Size = L). Để trống mọi điều kiện
+                  (Bất kỳ) nghĩa là áp dụng cho mọi ly — dùng cho ly, ống hút, đá…
                 </p>
-                {recipeItems.map((it, idx) => (
-                  <div key={idx} className="flex flex-wrap items-center gap-2 rounded-xl border border-black/8 p-2">
-                    <Select className="min-w-[160px] flex-1" value={it.ingredientId}
-                      onChange={(k) => setRecipeItems((prev) => prev.map((r, i) => (i === idx ? { ...r, ingredientId: String(k) } : r)))}>
-                      <Select.Trigger className={adminSelectTriggerClass}><Select.Value className={adminSelectValueClass} /><Select.Indicator /></Select.Trigger>
-                      <Select.Popover placement="bottom start">
-                        <ListBox>{ingredients.map((ing) => <ListBox.Item key={ing.id} id={ing.id} textValue={ing.name}>{ing.name} ({ing.unit})</ListBox.Item>)}</ListBox>
-                      </Select.Popover>
-                    </Select>
 
-                    <Select className="min-w-[160px] flex-1" value={it.scopeKey}
-                      onChange={(k) => setRecipeItems((prev) => prev.map((r, i) => (i === idx ? { ...r, scopeKey: String(k) } : r)))}>
-                      <Select.Trigger className={adminSelectTriggerClass}><Select.Value className={adminSelectValueClass} /><Select.Indicator /></Select.Trigger>
-                      <Select.Popover placement="bottom start">
-                        <ListBox>{scopeOptions.map((o) => <ListBox.Item key={o.key} id={o.key} textValue={o.label}>{o.label}</ListBox.Item>)}</ListBox>
-                      </Select.Popover>
-                    </Select>
+                {recipeGroups.map((g, gIdx) => {
+                  const scopeKey = buildScopeKey(g.conditions);
+                  const isDup = scopeKeys.filter((k) => k === scopeKey).length > 1;
+                  return (
+                    <div
+                      key={g.localId}
+                      className={`rounded-xl border p-3 ${isDup ? "border-red-300 bg-red-50/40" : "border-black/8"}`}
+                    >
+                      {/* Điều kiện của nhóm */}
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs font-semibold text-foreground/60 shrink-0">
+                            {g.conditions.length === 0 ? "Áp dụng: Mọi biến thể" : "Áp dụng khi:"}
+                          </span>
+                          {optionGroups.map((og) => {
+                            const current = g.conditions.find((c) => c.group === og.name)?.value ?? "ANY";
+                            return (
+                              <Select
+                                key={og.id}
+                                className="min-w-[140px]"
+                                value={current}
+                                onChange={(k) => {
+                                  const val = String(k);
+                                  setRecipeGroups((prev) =>
+                                    prev.map((row, i) => {
+                                      if (i !== gIdx) return row;
+                                      const withoutGroup = row.conditions.filter((c) => c.group !== og.name);
+                                      return {
+                                        ...row,
+                                        conditions:
+                                          val === "ANY"
+                                            ? withoutGroup
+                                            : [...withoutGroup, { group: og.name, value: val }],
+                                      };
+                                    }),
+                                  );
+                                }}
+                              >
+                                <Select.Trigger className={adminSelectTriggerClass}>
+                                  <Select.Value className={adminSelectValueClass} />
+                                  <Select.Indicator />
+                                </Select.Trigger>
+                                <Select.Popover placement="bottom start">
+                                  <ListBox>
+                                    <ListBox.Item id="ANY" textValue="Bất kỳ">
+                                      {og.name}: Bất kỳ
+                                    </ListBox.Item>
+                                    {og.values
+                                      .filter((v) => v.label.trim())
+                                      .map((v) => (
+                                        <ListBox.Item key={v.label} id={v.label} textValue={v.label}>
+                                          {og.name}: {v.label}
+                                        </ListBox.Item>
+                                      ))}
+                                  </ListBox>
+                                </Select.Popover>
+                              </Select>
+                            );
+                          })}
+                        </div>
+                        <Button
+                          isIconOnly
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-500 hover:bg-red-50"
+                          onPress={() => setRecipeGroups((prev) => prev.filter((_, i) => i !== gIdx))}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
 
-                    <Input type="number" min={0} step={0.01} value={String(it.quantity)}
-                      onChange={(e) => setRecipeItems((prev) => prev.map((r, i) => (i === idx ? { ...r, quantity: Number(e.target.value) || 0 } : r)))}
-                      className={`w-28 ${adminInputClass}`} placeholder="Định lượng" />
+                      {/* Danh sách nguyên liệu trong nhóm này */}
+                      <div className="mt-3 flex flex-col gap-2 border-t border-black/6 pt-3">
+                        {g.ingredients.map((ing, iIdx) => (
+                          <div key={iIdx} className="flex items-center gap-2">
+                            <Select
+                              className="min-w-[160px] flex-1"
+                              value={ing.ingredientId}
+                              onChange={(k) =>
+                                setRecipeGroups((prev) =>
+                                  prev.map((row, i) =>
+                                    i === gIdx
+                                      ? {
+                                        ...row,
+                                        ingredients: row.ingredients.map((x, j) =>
+                                          j === iIdx ? { ...x, ingredientId: String(k) } : x,
+                                        ),
+                                      }
+                                      : row,
+                                  ),
+                                )
+                              }
+                            >
+                              <Select.Trigger className={adminSelectTriggerClass}>
+                                <Select.Value className={adminSelectValueClass} />
+                                <Select.Indicator />
+                              </Select.Trigger>
+                              <Select.Popover placement="bottom start">
+                                <ListBox>
+                                  {ingredients.map((item) => (
+                                    <ListBox.Item key={item.id} id={item.id} textValue={item.name}>
+                                      {item.name} ({item.unit})
+                                    </ListBox.Item>
+                                  ))}
+                                </ListBox>
+                              </Select.Popover>
+                            </Select>
 
-                    <Button isIconOnly variant="ghost" size="sm" onPress={() => setRecipeItems((prev) => prev.filter((_, i) => i !== idx))}>
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                  </div>
-                ))}
-                <Button variant="ghost" size="sm" className="w-fit rounded-xl"
-                  onPress={() => setRecipeItems((prev) => [...prev, { ingredientId: ingredients[0]?.id ?? "", quantity: 0, scopeKey: "ALL" }])}>
-                  <Plus className="mr-1.5 size-3.5" /> Thêm nguyên liệu
+                            <Input
+                              type="number"
+                              min={0}
+                              step={0.01}
+                              value={String(ing.quantity)}
+                              onChange={(e) =>
+                                setRecipeGroups((prev) =>
+                                  prev.map((row, i) =>
+                                    i === gIdx
+                                      ? {
+                                        ...row,
+                                        ingredients: row.ingredients.map((x, j) =>
+                                          j === iIdx ? { ...x, quantity: Number(e.target.value) || 0 } : x,
+                                        ),
+                                      }
+                                      : row,
+                                  ),
+                                )
+                              }
+                              className={`w-28 ${adminInputClass}`}
+                              placeholder="Định lượng"
+                            />
+
+                            <Button
+                              isIconOnly
+                              variant="ghost"
+                              size="sm"
+                              onPress={() =>
+                                setRecipeGroups((prev) =>
+                                  prev.map((row, i) =>
+                                    i === gIdx
+                                      ? { ...row, ingredients: row.ingredients.filter((_, j) => j !== iIdx) }
+                                      : row,
+                                  ),
+                                )
+                              }
+                            >
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          </div>
+                        ))}
+
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-fit rounded-xl"
+                          onPress={() =>
+                            setRecipeGroups((prev) =>
+                              prev.map((row, i) =>
+                                i === gIdx
+                                  ? {
+                                    ...row,
+                                    ingredients: [
+                                      ...row.ingredients,
+                                      { ingredientId: ingredients[0]?.id ?? "", quantity: 0 },
+                                    ],
+                                  }
+                                  : row,
+                              ),
+                            )
+                          }
+                        >
+                          <Plus className="mr-1.5 size-3.5" /> Thêm nguyên liệu
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-fit rounded-xl"
+                  onPress={() =>
+                    setRecipeGroups((prev) => [
+                      ...prev,
+                      { localId: crypto.randomUUID(), conditions: [], ingredients: [] },
+                    ])
+                  }
+                >
+                  <Plus className="mr-1.5 size-3.5" /> Thêm biến thể
                 </Button>
               </div>
 

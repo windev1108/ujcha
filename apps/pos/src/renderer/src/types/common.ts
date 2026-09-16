@@ -385,21 +385,43 @@ export interface ResolvedRecipeTopping {
   toppingName: string
 }
 
-export interface ResolvedRecipe {
-  matched: boolean
-  productId?: string
-  productName?: string
-  sku?: string | null
-  recipeNote?: string | null
-  items?: ResolvedRecipeIngredient[]
-  toppingItems?: ResolvedRecipeTopping[]
-}
-
-export type ResolvedRecipeMap = Record<string, ResolvedRecipe>
-
 export interface RecipeResolveRequestItem {
   key: string
   productId?: string
   sku?: string
   selectedLabels: string[]
 }
+
+export type RecipeCondition = { group: string; value: string }
+
+
+export type ResolvedRecipeItem = {
+  id: string
+  ingredientId: string
+  ingredientName: string
+  unit: string
+  quantity: string
+  conditions: RecipeCondition[]
+}
+
+export type ResolvedRecipeToppingItem = {
+  id: string
+  ingredientId: string
+  ingredientName: string
+  unit: string
+  quantity: string
+  toppingId: string
+  toppingName: string
+}
+
+export type ResolvedRecipe = {
+  matched: boolean
+  productId?: string
+  productName?: string
+  sku?: string | null
+  recipeNote?: string | null
+  items?: ResolvedRecipeItem[]
+  toppingItems?: ResolvedRecipeToppingItem[]
+}
+
+export type ResolvedRecipeMap = Record<string, ResolvedRecipe>

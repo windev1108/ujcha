@@ -1,11 +1,13 @@
-import { GRAB_STATUS_COLOR, GRAB_STATUS_DOT, GRAB_STATUS_LABEL } from "@/lib/constants";
+import { GRAB_STATUS_COLOR, GRAB_STATUS_DOT } from "@/lib/constants";
 import { GrabFull, grabFullToAdminOrder, printGrabBill, printGrabLabels } from "@/lib/grab-print"
 import { KEYS, loadLocal } from "@/lib/local-storage";
 import { DEFAULT_BILL_CONFIG, DEFAULT_LABEL_CONFIG, ResolvedRecipeMap } from "@/types/common";
 import {
     ArrowLeft, AlertCircle, CheckCircle2, Loader2, MoreHorizontal,
-    PackageCheck, Phone, Printer, Tag, User, Copy, Check as CheckIcon,
+    PackageCheck, Phone, Printer, Tag, Copy, Check as CheckIcon,
     ShoppingBag,
+    Sparkles,
+    UserCheck,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react"
 import { BillConfig, LabelConfig } from "src/preload";
@@ -19,7 +21,7 @@ import { useShowRecipe } from "@/hooks/useShowRecipe";
 import { RecipeToggleButton } from "./RecipeToggleButton";
 import { GrabOrderContext, grabOrderLabel } from "@/lib/grab-status";
 import { getCachedNet, getLearnedCommissionRate, learnFromDetail } from "../../../shared/grab-net-cache";
-import { getCachedEaterInfo, learnEaterInfo } from "../../../shared/grab-eater-cache";
+import { getCachedEaterInfo, isMaskedValue, learnEaterInfo } from "../../../shared/grab-eater-cache";
 import { DEFAULT_GRAB_COMMISSION_RATE, estimateGrabNetReceived } from "../../../shared/grab-fees";
 import { Chip, ChipLabel } from "@heroui/react";
 
@@ -117,11 +119,11 @@ export default function GrabOrderDetailModal({
     const [recipeMap, setRecipeMap] = useState<ResolvedRecipeMap>({})
     const [copiedField, setCopiedField] = useState<'code' | 'eaterPhone' | 'driverPhone' | null>(null)
     const cachedEater = data ? getCachedEaterInfo(data.displayID) : null
-    const eaterName = (data?.eater.name && data.eater.name !== '***' ? data.eater.name : null) || cachedEater?.eaterName
+    const eaterName = (!isMaskedValue(data?.eater.name) ? data?.eater.name : null) || cachedEater?.eaterName
     const eaterMobile = data?.eater.mobileNumber || cachedEater?.mobileNumber
     const eaterAddress = data?.eater.address || cachedEater?.address
     const driverMobile = data?.driver?.mobileNumber || cachedEater?.driverMobileNumber
-
+    const isNewCustomer = data?.flags?.isPaxNewCustomer === true
     useEffect(() => {
         if (!data) return
         learnEaterInfo(data.displayID, {
@@ -219,9 +221,8 @@ export default function GrabOrderDetailModal({
     const label = data ? grabOrderLabel(status, context) : ''
     const color = GRAB_STATUS_COLOR[status] ?? 'bg-gray-100 text-gray-600 border-gray-200'
     const dot = GRAB_STATUS_DOT[status] ?? 'bg-gray-400'
-
+    const isCompleted = data?.state === "COMPLETED"
     void id
-
     return (
         <div className="fixed inset-0 z-50 flex flex-col bg-gray-50 animate-in fade-in duration-200">
 
@@ -323,6 +324,15 @@ export default function GrabOrderDetailModal({
                                         <div className="flex items-center gap-2 text-md text-gray-700">
                                             <span className="font-semibold">{eaterName}</span>
                                         </div>
+                                    )}
+                                    {isNewCustomer ? (
+                                        <span className="inline-flex items-center gap-0.5 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-700">
+                                            <Sparkles className="size-2.5" /> Khách mới
+                                        </span>
+                                    ) : (
+                                        <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                                            <UserCheck className="size-2.5" /> Khách quen
+                                        </span>
                                     )}
                                     {eaterMobile && (
                                         <div className="flex items-center gap-1.5 text-md text-gray-500">
@@ -471,10 +481,10 @@ export default function GrabOrderDetailModal({
                                     <span className="text-gray-400">Giờ đặt</span>
                                     <span className="font-semibold text-gray-800">{formatDate(data.times.createdAt)}</span>
                                 </div>
-                                {data.times.completedAt &&
+                                {Boolean(isCompleted && data.times.completedAt) &&
                                     <div className="flex items-center justify-between">
                                         <span className="text-gray-400">Giờ hoàn thành</span>
-                                        <span className="font-semibold text-gray-800">{formatDate(data.times.completedAt)}</span>
+                                        <span className="font-semibold text-gray-800">{formatDate(data.times.completedAt!)}</span>
                                     </div>
                                 }
                                 <div className="flex items-center justify-between">

@@ -6,6 +6,20 @@ function formatQty(n: number): string {
     return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '')
 }
 
+/// Gom toàn bộ điều kiện đã khớp trong các dòng recipe thành 1 chuỗi hiển thị header,
+/// vd: "Trà Lài · Size L · Đường 70%". Khử trùng theo group (ưu tiên giá trị xuất hiện trước).
+function buildVariantLabel(items: { conditions: { group: string; value: string }[] }[] | undefined): string | null {
+    if (!items || items.length === 0) return null
+    const byGroup = new Map<string, string>()
+    for (const item of items) {
+        for (const c of item.conditions ?? []) {
+            if (!byGroup.has(c.group)) byGroup.set(c.group, c.value)
+        }
+    }
+    if (byGroup.size === 0) return null
+    return [...byGroup.values()].join(' · ')
+}
+
 export function RecipeChecklist({
     recipe,
     quantity,
@@ -13,7 +27,7 @@ export function RecipeChecklist({
 }: {
     recipe: ResolvedRecipe | undefined
     quantity: number
-    /** Nhãn size/biến thể hiển thị ở tiêu đề, vd "Size L" */
+    /** Fallback khi recipe chưa có items nào mang conditions (hiếm khi cần) */
     sizeLabel?: string
 }) {
     if (!recipe || !recipe.matched) {
@@ -46,12 +60,14 @@ export function RecipeChecklist({
         )
     }
 
+    const variantLabel = buildVariantLabel(recipe.items) ?? sizeLabel
+
     return (
         <div className="mt-2 overflow-hidden rounded-xl border border-teal-100 bg-teal-50/50">
             <div className="flex items-center gap-2 bg-teal-100/50 px-3.5 py-2">
                 <FlaskConical className="size-3.5 shrink-0 text-teal-600" />
                 <span className="text-xs font-bold uppercase tracking-wider text-teal-700">
-                    Công thức{sizeLabel ? ` · ${sizeLabel}` : ''}
+                    Công thức{variantLabel ? ` · ${variantLabel}` : ''}
                 </span>
             </div>
             <div className="space-y-1.5 px-3.5 py-2.5">
@@ -77,8 +93,8 @@ export function RecipeChecklist({
                 })}
             </div>
             {recipe.recipeNote && (
-                <div className="flex items-center gap-2 border-t border-teal-100 px-3.5 py-2  italic text-teal-700">
-                    <NotepadText className='size-5'/>
+                <div className="flex items-center gap-2 border-t border-teal-100 px-3.5 py-2 italic text-teal-700">
+                    <NotepadText className='size-5' />
                     <span className='text-sm whitespace-pre-line'>{recipe.recipeNote}</span>
                 </div>
             )}

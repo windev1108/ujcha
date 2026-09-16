@@ -1055,15 +1055,18 @@ export type InventoryTransaction = {
   note: string | null;
   createdAt: string;
 };
+export type RecipeCondition = {
+  group: string;
+  value: string;
+};
 
 export type ProductRecipeItem = {
   id: string;
-  productId: string;
   ingredientId: string;
-  optionGroupName: string | null;
-  optionValueLabel: string | null;
+  ingredientName: string;
+  unit: string;
   quantity: string;
-  ingredient: Ingredient;
+  conditions: RecipeCondition[];
 };
 
 export type ProductToppingRecipeItem = {
@@ -1128,3 +1131,17 @@ export type AdminProductStats = {
 
 export type FetchAdminProductStatsParams = { from?: string; to?: string; limit?: number };
 
+
+
+export type RecipeItemForm = {
+  ingredientId: string;
+  quantity: number;
+  conditions: { group: string; value: string }[];
+};
+export type ToppingRecipeItemForm = { toppingId: string; ingredientId: string; quantity: number };
+
+export type RecipeGroupForm = {
+  localId: string; // key ổn định khi đang sửa, KHÔNG dùng scopeKey vì nó đổi theo conditions
+  conditions: RecipeCondition[];
+  ingredients: { ingredientId: string; quantity: number }[];
+};

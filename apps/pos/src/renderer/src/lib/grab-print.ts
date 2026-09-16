@@ -38,6 +38,9 @@ export type GrabFull = {
     passengerTotalDisplay: string
     smallOrderFeeDisplay?: string
   }
+  flags: {
+    isPaxNewCustomer: boolean
+  }
   eater: { name: string; comment: string, mobileNumber: string, address: string }
   driver?: { name: string; mobileNumber: string; avatar?: string }
   times: {
