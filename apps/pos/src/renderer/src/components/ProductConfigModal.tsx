@@ -27,6 +27,7 @@ export function ProductConfigModal({ product, onClose, onConfirm }: Props) {
     const [quantity, setQuantity] = useState(1)
     const [showRecipe, setShowRecipe] = useState(false)
     const [recipeMap, setRecipeMap] = useState<ResolvedRecipeMap>({})
+    const [isFetching, setIsFetching] = useState(false)
 
     useEffect(() => {
         if (!product) return
@@ -61,7 +62,10 @@ export function ProductConfigModal({ product, onClose, onConfirm }: Props) {
             productId: product.id,
             selectedLabels,
         }]
-        void resolveRecipeBatch(requestItems).then(setRecipeMap).catch(() => setRecipeMap({}))
+        setIsFetching(true)
+        void resolveRecipeBatch(requestItems).then(setRecipeMap).catch(() => setRecipeMap({})).finally(() => {
+            setIsFetching(false)
+        })
     }, [product, options, selectedToppingIds])
 
     if (!product) return null
@@ -250,7 +254,7 @@ export function ProductConfigModal({ product, onClose, onConfirm }: Props) {
                                 </Switch.Control>
                             </Switch>
                             {showRecipe && (
-                                <RecipeChecklist recipe={recipe} quantity={quantity} sizeLabel={sizeLabel} />
+                                <RecipeChecklist fetching={isFetching} recipe={recipe} quantity={quantity} sizeLabel={sizeLabel} />
                             )}
                         </div>
                     )}

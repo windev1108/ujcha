@@ -24,11 +24,13 @@ export function RecipeChecklist({
     recipe,
     quantity,
     sizeLabel,
+    fetching,
 }: {
     recipe: ResolvedRecipe | undefined
     quantity: number
     /** Fallback khi recipe chưa có items nào mang conditions (hiếm khi cần) */
     sizeLabel?: string
+    fetching: boolean
 }) {
     if (!recipe || !recipe.matched) {
         return (
@@ -50,6 +52,27 @@ export function RecipeChecklist({
             isTopping: true as const,
         })),
     ]
+
+    if (fetching) {
+        return (
+            <div className="mt-2 overflow-hidden rounded-xl border border-teal-100 bg-teal-50/50">
+                <div className="flex items-center gap-2 bg-teal-100/50 px-3.5 py-2">
+                    <FlaskConical className="size-3.5 shrink-0 animate-pulse text-teal-600" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-teal-700">
+                        Công thức
+                    </span>
+                </div>
+                <div className="space-y-2 px-3.5 py-2.5">
+                    {[0, 1, 2].map((i) => (
+                        <div key={i} className="flex items-center justify-between">
+                            <div className="h-3.5 w-28 animate-pulse rounded bg-teal-100" />
+                            <div className="h-3.5 w-14 animate-pulse rounded bg-teal-100" />
+                        </div>
+                    ))}
+                </div>
+            </div>
+        )
+    }
 
     if (rows.length === 0) {
         return (

@@ -116,6 +116,7 @@ export default function GrabOrderDetailModal({
     const hasBillPrinter = billCfg.enabled && !!(billCfg.address || billCfg.printerId)
     const hasLabelPrinter = labelCfg.enabled && !!(labelCfg.address || labelCfg.printerId)
     const { showRecipe, toggle: toggleRecipe } = useShowRecipe()
+    const [isFetchingRecipe, setIsFetchingRecipe] = useState(false)
     const [recipeMap, setRecipeMap] = useState<ResolvedRecipeMap>({})
     const [copiedField, setCopiedField] = useState<'code' | 'eaterPhone' | 'driverPhone' | null>(null)
     const cachedEater = data ? getCachedEaterInfo(data.displayID) : null
@@ -142,7 +143,8 @@ export default function GrabOrderDetailModal({
             selectedLabels: (item.modifierGroups ?? []).flatMap((g) => g.modifiers.map((m) => m.modifierName)),
         }))
         if (requestItems.length === 0) return
-        void resolveRecipeBatch(requestItems).then(setRecipeMap).catch(() => { })
+        setIsFetchingRecipe(true)
+        void resolveRecipeBatch(requestItems).then(setRecipeMap).catch(() => { }).finally(() => setIsFetchingRecipe(false))
     }, [data])
 
     useEffect(() => {
@@ -409,7 +411,7 @@ export default function GrabOrderDetailModal({
                                                         )}
                                                     </div>
                                                 </div>
-                                                {showRecipe && <RecipeChecklist recipe={recipeMap[key]} quantity={item.quantity} sizeLabel={sizeLabel} />}
+                                                {showRecipe && <RecipeChecklist fetching={isFetchingRecipe} recipe={recipeMap[key]} quantity={item.quantity} sizeLabel={sizeLabel} />}
                                             </div>
                                         )
                                     })}

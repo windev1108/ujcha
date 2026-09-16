@@ -185,7 +185,7 @@ function StatusTimelineCard({ order }: { order: AdminOrder }) {
 
 // ── Item row ───────────────────────────────────────────────────────────────────
 
-function ItemRow({ item, recipe, showRecipe }: { item: AdminOrder['items'][number]; recipe?: ResolvedRecipe; showRecipe: boolean }) {
+function ItemRow({ item, recipe, showRecipe, isFetching }: { item: AdminOrder['items'][number]; recipe?: ResolvedRecipe; showRecipe: boolean, isFetching: boolean }) {
     const optsStr = parseOptionsStr(item.optionsJson)
     const extras = parseExtras(item.extrasJson)
     const lineTotal = Number(item.price) * item.quantity
@@ -238,7 +238,7 @@ function ItemRow({ item, recipe, showRecipe }: { item: AdminOrder['items'][numbe
                     )}
                 </div>
             </div>
-            {showRecipe && <RecipeChecklist recipe={recipe} quantity={item.quantity} sizeLabel={sizeLabel} />}
+            {showRecipe && <RecipeChecklist fetching={isFetching} recipe={recipe} quantity={item.quantity} sizeLabel={sizeLabel} />}
         </div>
     )
 }
@@ -283,6 +283,7 @@ export function OrderDetailModal({
     const groupSocketRef = useRef<Socket | null>(null)
     const [recipeMap, setRecipeMap] = useState<ResolvedRecipeMap>({})
     const { showRecipe, toggle: toggleRecipe } = useShowRecipe()
+    const [isFetchingRecipe, setIsFetchingRecipe] = useState(false)
 
     // ── New for the redesign: print dropdown / "more" menu / fullscreen map ──
     const [printMenuOpen, setPrintMenuOpen] = useState(false)
@@ -315,7 +316,8 @@ export function OrderDetailModal({
             }))
 
         if (requestItems.length === 0) return
-        void resolveRecipeBatch(requestItems).then(setRecipeMap).catch(() => { })
+        setIsFetchingRecipe(true)
+        void resolveRecipeBatch(requestItems).then(setRecipeMap).catch(() => { }).finally(() => setIsFetchingRecipe(false))
     }, [order.id, order.groupOrder, order.items])
 
     useEffect(() => {
@@ -784,11 +786,12 @@ export function OrderDetailModal({
                                     liveParticipants={groupLive?.participants}
                                     recipeMap={recipeMap}
                                     showRecipe={showRecipe}
+                                    isFetching={isFetchingRecipe}
                                 />
                             ) : (
                                 <div className="divide-y divide-gray-50">
                                     {order.items.map((item) => (
-                                        <ItemRow key={item.id} item={item} recipe={recipeMap[item.id]} showRecipe={showRecipe} />
+                                        <ItemRow key={item.id} isFetching={isFetchingRecipe} item={item} recipe={recipeMap[item.id]} showRecipe={showRecipe} />
                                     ))}
                                 </div>
                             )}
@@ -1083,13 +1086,15 @@ function GroupOrderItemsSection({
     go,
     totalQty,
     liveParticipants,
-    recipeMap, showRecipe
+    recipeMap, showRecipe,
+    isFetching
 }: {
     go: NonNullable<AdminOrder['groupOrder']>
     totalQty: number
     liveParticipants?: Array<{ id: string; paymentStatus: 'pending' | 'paid' }>
     recipeMap: ResolvedRecipeMap
     showRecipe: boolean
+    isFetching: boolean
 }) {
     const withItems = go.participants.filter((p) => p.items.length > 0)
     const paidCount = liveParticipants
@@ -1201,7 +1206,7 @@ function GroupOrderItemsSection({
                                                 </div>
                                             </div>
                                             {showRecipe && (
-                                                <RecipeChecklist recipe={recipeMap[item.id]} quantity={item.quantity} />
+                                                <RecipeChecklist fetching={isFetching} recipe={recipeMap[item.id]} quantity={item.quantity} />
                                             )}
                                         </div>
                                     )
