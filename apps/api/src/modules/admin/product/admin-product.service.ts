@@ -30,7 +30,7 @@ export class AdminProductService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
-  ) {}
+  ) { }
 
   async list(categoryId?: string, categorySlug?: string, q?: string) {
     const qx = q?.trim();
@@ -42,12 +42,12 @@ export class AdminProductService {
             categorySlug ? { category: { slug: categorySlug } } : {},
             qx
               ? {
-                  OR: [
-                    { name: { contains: qx, mode: 'insensitive' } },
-                    { sku: { contains: qx, mode: 'insensitive' } },
-                    { description: { contains: qx, mode: 'insensitive' } },
-                  ],
-                }
+                OR: [
+                  { name: { contains: qx, mode: 'insensitive' } },
+                  { sku: { contains: qx, mode: 'insensitive' } },
+                  { description: { contains: qx, mode: 'insensitive' } },
+                ],
+              }
               : {},
           ],
         },
@@ -574,20 +574,20 @@ export class AdminProductService {
     const products =
       productIds.length || skus.length
         ? await this.prisma.product.findMany({
-            where: {
-              OR: [
-                ...(productIds.length ? [{ id: { in: productIds } }] : []),
-                ...(skus.length ? [{ sku: { in: skus } }] : []),
-              ],
-            },
-            select: {
-              id: true,
-              name: true,
-              sku: true,
-              toppings: true,
-              recipeNote: true,
-            },
-          })
+          where: {
+            OR: [
+              ...(productIds.length ? [{ id: { in: productIds } }] : []),
+              ...(skus.length ? [{ sku: { in: skus } }] : []),
+            ],
+          },
+          select: {
+            id: true,
+            name: true,
+            sku: true,
+            toppings: true,
+            recipeNote: true,
+          },
+        })
         : [];
 
     const byId = new Map(products.map((p) => [p.id, p]));
@@ -598,25 +598,23 @@ export class AdminProductService {
     const relevantProductIds = products.map((p) => p.id);
     const [recipeItems, toppingRecipeItems] = relevantProductIds.length
       ? await Promise.all([
-          this.prisma.productRecipeItem.findMany({
-            where: { productId: { in: relevantProductIds } },
-            include: { ingredient: true },
-          }),
-          this.prisma.productToppingRecipeItem.findMany({
-            where: { productId: { in: relevantProductIds } },
-            include: { ingredient: true },
-          }),
-        ])
+        this.prisma.productRecipeItem.findMany({
+          where: { productId: { in: relevantProductIds } },
+          include: { ingredient: true },
+        }),
+        this.prisma.productToppingRecipeItem.findMany({
+          where: { productId: { in: relevantProductIds } },
+          include: { ingredient: true },
+        }),
+      ])
       : [[], []];
 
     const normalize = (s: string) => s.trim().toLowerCase();
     const matchLabel = (candidate: string, selectedNorm: string[]) => {
-      const c = normalize(candidate);
-      if (!c) return false;
-      return selectedNorm.some(
-        (s) => c === s || c.includes(s) || s.includes(c),
-      );
-    };
+      const c = normalize(candidate)
+      if (!c) return false
+      return selectedNorm.includes(c)
+    }
 
     // Điều kiện coi là khớp nếu MỌI condition.value đều fuzzy-match 1 label đã chọn
     const conditionsMatch = (
@@ -685,7 +683,10 @@ export class AdminProductService {
         const current = bestByIngredient.get(ri.ingredientId);
         if (!current || score > current.score) {
           bestByIngredient.set(ri.ingredientId, { ...ri, score });
-        }
+        } else if (current && score === current.score && score > 0) {
+          // scope trùng điểm — log để phát hiện dữ liệu admin bị lỗi/trùng
+          console.warn(`[recipe-resolve] ambiguous scope tie for ingredient ${ri.ingredientId} on product ${product.id}`);
+        }  
       }
 
       const matchedItems = [...bestByIngredient.values()];
@@ -754,11 +755,11 @@ function normalizeProductRow<
     optionGroups: normalizeInlineOptionGroups(row.optionGroups as any),
     toppings: normalizeInlineToppings(row.toppings as any),
     nameTranslation: (row.nameTranslation &&
-    typeof row.nameTranslation === 'object'
+      typeof row.nameTranslation === 'object'
       ? row.nameTranslation
       : {}) as Record<string, string>,
     descriptionTranslation: (row.descriptionTranslation &&
-    typeof row.descriptionTranslation === 'object'
+      typeof row.descriptionTranslation === 'object'
       ? row.descriptionTranslation
       : {}) as Record<string, string>,
     finalPrice: computeFinalPrice(row.price, effectiveDiscount),

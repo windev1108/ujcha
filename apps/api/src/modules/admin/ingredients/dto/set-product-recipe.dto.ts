@@ -35,7 +35,7 @@ export class RecipeItemDto {
   conditions?: RecipeConditionDto[];
 
   @IsNumber()
-  @Min(0.001)
+  @Min(0)
   quantity!: number;
 }
 
