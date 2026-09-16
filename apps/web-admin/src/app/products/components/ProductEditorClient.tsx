@@ -14,7 +14,7 @@ import {
   TextArea,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ImagePlus, Plus, Save, SaveIcon, Trash2 } from "lucide-react";
+import { ArrowLeft, Copy, ImagePlus, Plus, Save, SaveIcon, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -158,10 +158,23 @@ export function ProductEditorClient({ mode, productId }: Props) {
   const [baselineSnapshot, setBaselineSnapshot] = useState<string | null>(null);
   const [recipeGroups, setRecipeGroups] = useState<RecipeGroupForm[]>([]);
   const [recipeNote, setRecipeNote] = useState("");
-  const [recipeItems, setRecipeItems] = useState<RecipeItemForm[]>([]);
   const [toppingRecipeItems, setToppingRecipeItems] = useState<ToppingRecipeItemForm[]>([]);
   const [loadedRecipe, setLoadedRecipe] = useState<ProductRecipe | null>(null);
   const createBaselineReadyRef = useRef(false);
+
+  const duplicateRecipeGroup = (gIdx: number) =>
+    setRecipeGroups((prev) => {
+      const src = prev[gIdx];
+      if (!src) return prev;
+      const clone: RecipeGroupForm = {
+        localId: crypto.randomUUID(),
+        conditions: src.conditions.map((c) => ({ ...c })),
+        ingredients: src.ingredients.map((ing) => ({ ...ing })),
+      };
+      const next = [...prev];
+      next.splice(gIdx + 1, 0, clone);
+      return next;
+    });
 
   if (recipe && loadedRecipe !== recipe) {
     setLoadedRecipe(recipe);
@@ -866,12 +879,12 @@ export function ProductEditorClient({ mode, productId }: Props) {
               <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <Label className={adminLabelClassProduct}>Công thức theo biến thể</Label>
-                  {hasDuplicateScope && (
-                    <span className="text-xs font-semibold text-red-600">
-                      Có 2 biến thể trùng điều kiện — hãy sửa lại.
-                    </span>
-                  )}
                 </div>
+                {hasDuplicateScope && (
+                  <span className="text-xs font-semibold text-red-600 w-full">
+                    Có 2 biến thể trùng điều kiện — hãy sửa lại.
+                  </span>
+                )}
                 <p className="text-xs text-foreground/50">
                   Mỗi thẻ dưới đây là 1 tổ hợp biến thể (vd: Vị Trà = Trà Lài, Size = L). Để trống mọi điều kiện
                   (Bất kỳ) nghĩa là áp dụng cho mọi ly — dùng cho ly, ống hút, đá…
@@ -937,15 +950,26 @@ export function ProductEditorClient({ mode, productId }: Props) {
                             );
                           })}
                         </div>
-                        <Button
-                          isIconOnly
-                          variant="ghost"
-                          size="sm"
-                          className="text-red-500 hover:bg-red-50"
-                          onPress={() => setRecipeGroups((prev) => prev.filter((_, i) => i !== gIdx))}
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            isIconOnly
+                            variant="ghost"
+                            size="sm"
+                            onPress={() => duplicateRecipeGroup(gIdx)}
+                            aria-label="Nhân bản biến thể"
+                          >
+                            <Copy className="size-4" />
+                          </Button>
+                          <Button
+                            isIconOnly
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-500 hover:bg-red-50"
+                            onPress={() => setRecipeGroups((prev) => prev.filter((_, i) => i !== gIdx))}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
                       </div>
 
                       {/* Danh sách nguyên liệu trong nhóm này */}
