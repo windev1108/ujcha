@@ -238,7 +238,11 @@ function ItemRow({ item, recipe, showRecipe, isFetching }: { item: AdminOrder['i
                     )}
                 </div>
             </div>
-            {showRecipe && <RecipeChecklist fetching={isFetching} recipe={recipe} quantity={item.quantity} sizeLabel={sizeLabel} />}
+            {showRecipe &&
+                <div className='mt-2'>
+                    <RecipeChecklist fetching={isFetching} recipe={recipe} quantity={item.quantity} sizeLabel={sizeLabel} />
+                </div>
+            }
         </div>
     )
 }
@@ -1206,7 +1210,9 @@ function GroupOrderItemsSection({
                                                 </div>
                                             </div>
                                             {showRecipe && (
-                                                <RecipeChecklist fetching={isFetching} recipe={recipeMap[item.id]} quantity={item.quantity} />
+                                                <div className='mt-2'>
+                                                    <RecipeChecklist fetching={isFetching} recipe={recipeMap[item.id]} quantity={item.quantity} />
+                                                </div>
                                             )}
                                         </div>
                                     )

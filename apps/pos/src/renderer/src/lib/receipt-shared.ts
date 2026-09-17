@@ -65,6 +65,198 @@ function userIcon(size: number): string {
  * their individual units gets only their own name — not everyone's names
  * joined together.
  */
+
+// ─── Label pagination helpers ─────────────────────────────────────────────
+const PX_PER_MM = 96 / 25.4
+const LABEL_HEADER_PX = 16
+const LABEL_FOOTER_PX = 11
+const LABEL_PADDING_PX = 8 // paddingTop 0.5mm + paddingBottom 1.5mm
+const LINE_HEIGHT_RATIO = 1.15
+const AVG_CHAR_WIDTH_RATIO = 0.56
+
+interface LabelContentBlock {
+  html: string
+  text: string
+  fontSizePx: number
+}
+
+function estimateWrappedLines(text: string, fontSizePx: number, labelWidthMm: number): number {
+  if (!text) return 1
+  const usablePx = Math.max(10, (labelWidthMm - 4) * PX_PER_MM)
+  const avgCharPx = fontSizePx * AVG_CHAR_WIDTH_RATIO
+  const charsPerLine = Math.max(1, Math.floor(usablePx / avgCharPx))
+  return Math.max(1, Math.ceil(text.length / charsPerLine))
+}
+
+function labelContentBudgetPx(cfg: LabelHtmlConfig): number {
+  const h = cfg.labelHeight ?? 30
+  const paddingMm = 0.5 + 1.5
+  const paddingPx = paddingMm * PX_PER_MM
+  return Math.max(20, h * PX_PER_MM - LABEL_HEADER_PX - LABEL_FOOTER_PX - paddingPx)
+}
+function estimateBlockHeightPx(block: LabelContentBlock, labelWidthMm: number): number {
+  const lines = estimateWrappedLines(block.text, block.fontSizePx, labelWidthMm)
+  return lines * block.fontSizePx * LINE_HEIGHT_RATIO
+}
+
+function paginateContentBlocks(
+  blocks: LabelContentBlock[],
+  cfg: LabelHtmlConfig,
+): LabelContentBlock[][] {
+  const budget = labelContentBudgetPx(cfg)
+  const pages: LabelContentBlock[][] = []
+  let current: LabelContentBlock[] = []
+  let currentHeight = 0
+
+  for (const block of blocks) {
+    const blockHeight = estimateBlockHeightPx(block, cfg.labelWidth)
+    if (current.length > 0 && currentHeight + blockHeight > budget) {
+      pages.push(current)
+      current = []
+      currentHeight = 0
+    }
+    current.push(block)
+    currentHeight += blockHeight
+  }
+  if (current.length > 0) pages.push(current)
+  return pages.length > 0 ? pages : [[]]
+}
+
+function buildLabelContentBlocks(
+  item: AdminOrderItem,
+  cfg: LabelHtmlConfig,
+  participantName?: string,
+): LabelContentBlock[] {
+  const optEntries =
+    item.optionsJson &&
+      typeof item.optionsJson === 'object' &&
+      !Array.isArray(item.optionsJson)
+      ? Object.entries(item.optionsJson as Record<string, string>)
+        .filter(([k, v]) => Boolean(v) && !isDefaultLabelOption(k, v))
+      : []
+  const extras = parseExtras(item.extrasJson)
+  const blocks: LabelContentBlock[] = []
+
+  if (cfg.showProductName) {
+    blocks.push({
+      text: item.product.name,
+      fontSizePx: 10,
+      html: `<div style="font-weight:bold;font-size:10px;line-height:1.1;color:#000;">${esc(item.product.name)}</div>`,
+    })
+  }
+
+  for (const [k, v] of optEntries) {
+    const label = formatOptionDisplay(k, stripEmbeddedPrice(v))
+    blocks.push({
+      text: `+ ${label}`,
+      fontSizePx: 9,
+      html: `<div style="font-size:9px;line-height:1.1;color:#000;font-weight:400;">+ ${esc(label)}</div>`,
+    })
+  }
+
+  for (const ex of extras) {
+    const label = stripEmbeddedPrice(ex.name)
+    blocks.push({
+      text: `+ ${label}`,
+      fontSizePx: 9,
+      html: `<div style="font-size:9px;line-height:1.1;color:#000;font-weight:400;">+ ${esc(label)}</div>`,
+    })
+  }
+
+  if (cfg.showNote && item.note) {
+    blocks.push({
+      text: item.note,
+      fontSizePx: 9,
+      html: `<div style="display:flex;align-items:center;gap:2px;font-size:9px;line-height:1.1;color:#000;font-weight:400;">${stickyNoteIcon(9)}<span>${esc(item.note)}</span></div>`,
+    })
+  }
+
+  if (participantName) {
+    blocks.push({
+      text: participantName,
+      fontSizePx: 9,
+      html: `<div style="display:flex;align-items:center;gap:3px;font-size:9px;font-weight:bold;color:#000;">${userIcon(9)}<span style="line-height:1;">${esc(participantName)}</span></div>`,
+    })
+  }
+
+  if (cfg.customText) {
+    blocks.push({
+      text: cfg.customText,
+      fontSizePx: 9,
+      html: `<div style="font-size:9px;color:#000;">${esc(cfg.customText)}</div>`,
+    })
+  }
+
+  return blocks
+}
+
+function renderLabelDocument(
+  blocksHtml: string[],
+  cfg: LabelHtmlConfig,
+  orderRef: string,
+  itemIndex: number,
+  totalLabels: number,
+  printedAt: string,
+  fontBase64: string,
+  priceStr: string,
+  pageIndex: number,
+  pageCount: number,
+): string {
+  const w = cfg.labelWidth
+  const h = cfg.labelHeight ?? 30
+
+  const headerRightLabel = pageCount > 1
+    ? `${itemIndex}/${totalLabels} · ${pageIndex}/${pageCount}`
+    : `${itemIndex}/${totalLabels}`
+
+  const headerHtml =
+    `<div style="flex-shrink:0;">` +
+    `<div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;font-weight:bold;">` +
+    `<span style="font-size:11px;color:#000;">${esc(orderRef)}${pageIndex > 1 ? ' (tiếp)' : ''}</span>` +
+    `<span style="font-size:11px;color:#000;">${headerRightLabel}</span>` +
+    `</div>` +
+    `<div style="border-top:1px dashed #000;margin:1px 0;"></div>` +
+    `</div>`
+
+  const contentHtml =
+    `<div style="flex:1;overflow:hidden;min-height:0;">` +
+    blocksHtml.join('') +
+    `</div>`
+
+  const footerHtml =
+    `<div style="flex-shrink:0;">` +
+    `<div style="display:flex;justify-content:space-between;align-items:center;font-size:9px;">` +
+    `<span style="color:#000;">${cfg.showPrice && pageIndex === pageCount ? esc(priceStr) : ''}</span>` +
+    `<span style="color:#000;">${esc(printedAt)}</span>` +
+    `</div>` +
+    `</div>`
+
+  const titleText = `Label ${itemIndex} of ${totalLabels}${pageCount > 1 ? ` (${pageIndex}/${pageCount})` : ''}`
+  const fontFace = getFontFaceStyle(fontBase64)
+  return (
+    `<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"/>` +
+    `<title>${titleText}</title>` +
+    `<style>` +
+    fontFace +
+    `@page { size: ${w}mm ${h}mm; margin: 0; }` +
+    `* { box-sizing: border-box; }` +
+    `html { -webkit-text-size-adjust: none; text-size-adjust: none; }` +
+    `body {` +
+    `  font-family: ui-sans-serif, system-ui, 'Segoe UI', Arial, sans-serif;` +
+    `  font-weight: 700;` +
+    `  ${FONT_SMOOTHING}` +
+    `  margin: 0; padding: 0.5mm 2mm 1.5mm;` +
+    `  width: ${w - 2}mm; height: ${h}mm;` +
+    `  color: #000; background: #fff;` +
+    `  font-size: 10px;` +
+    `  display: flex; flex-direction: column; overflow: hidden;` +
+    `}` +
+    `</style></head><body>` +
+    headerHtml + contentHtml + footerHtml +
+    `</body></html>`
+  )
+}
+
 function buildGroupParticipantMap(
   groupOrder: AdminOrder['groupOrder'],
 ): Map<string, string[]> {
@@ -489,96 +681,23 @@ export function buildSingleLabelHtml(
   printedAt: string,
   fontBase64 = '',
   participantName?: string,
-): string {
-  const optEntries =
-    item.optionsJson &&
-      typeof item.optionsJson === 'object' &&
-      !Array.isArray(item.optionsJson)
-      ? Object.entries(item.optionsJson as Record<string, string>)
-        .filter(([k, v]) => Boolean(v) && !isDefaultLabelOption(k, v))
-      : []
-
-  const extras = parseExtras(item.extrasJson)
+): string[] {
   const priceStr = formatVnd(Number.parseFloat(item.price))
-  const w = cfg.labelWidth
-  const h = cfg.labelHeight ?? 30
-
-  // ── Header (always at top) ────────────────────────────────────────────────
-  const headerHtml =
-    `<div style="flex-shrink:0;">` +
-    `<div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;font-weight:bold;">` +
-    `<span style="font-size:11px;color:#000;">${orderRef}</span>` +
-    `<span style="font-size:11px;color:#000;">${itemIndex}/${totalLabels}</span>` +
-    `</div>` +
-    `<div style="border-top:1px dashed #000;margin:1px 0;"></div>` +
-    `</div>`
-
-  // ── Content middle (clips overflow — never pushes to page 2) ─────────────
-  const contentLines: string[] = []
-
-  if (cfg.showProductName) {
-    contentLines.push(`<div style="font-weight:bold;font-size:10px;line-height:1.1;color:#000;">${esc(item.product.name)}</div>`)
-  }
-
-  for (const [k, v] of optEntries) {
-    contentLines.push(`<div style="font-size:9px;line-height:1.1;color:#000;font-weight:400;">+ ${esc(formatOptionDisplay(k, stripEmbeddedPrice(v)))}</div>`)
-  }
-
-  for (const ex of extras) {
-    contentLines.push(`<div style="font-size:9px;line-height:1.1;color:#000;font-weight:400;">+ ${esc(stripEmbeddedPrice(ex.name))}</div>`)
-  }
-
-  if (cfg.showNote && item.note) {
-    contentLines.push(`<div style="display:flex;align-items:center;gap:2px;font-size:9px;line-height:1.1;color:#000;font-weight:400;">${stickyNoteIcon(9)}<span style="line-height:1;">${esc(item.note)}</span></div>`)
-  }
-
-  if (participantName) {
-    contentLines.push(
-      `<div style="display:flex;align-items:center;gap:3px;font-size:9px;font-weight:bold;color:#000;">${userIcon(9)}<span style="line-height:1;">${esc(participantName)}</span></div>`,
-    )
-  }
-
-  if (cfg.customText) {
-    contentLines.push(`<div style="font-size:9px;color:#000;">${esc(cfg.customText)}</div>`)
-  }
-
-  const contentHtml =
-    `<div style="flex:1;overflow:hidden;min-height:0;">` +
-    contentLines.join('') +
-    `</div>`
-
-  // ── Footer (price/time — pinned to bottom, offset 2mm from edge) ──────────
-  const footerHtml =
-    `<div style="flex-shrink:0;">` +
-    `<div style="display:flex;justify-content:space-between;align-items:center;font-size:9px;">` +
-    `<span style="color:#000;">${esc(cfg.showPrice ? priceStr : '')}</span>` +
-    `<span style="color:#000;">${esc(printedAt)}</span>` +
-    `</div>` +
-    `</div>`
-
-  const titleText = `Label ${itemIndex} of ${totalLabels}`
-  const fontFace = getFontFaceStyle(fontBase64)
-  return (
-    `<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"/>` +
-    `<title>${titleText}</title>` +
-    `<style>` +
-    fontFace +
-    `@page { size: ${w}mm ${h}mm; margin: 0; }` +
-    `* { box-sizing: border-box; }` +
-    `html { -webkit-text-size-adjust: none; text-size-adjust: none; }` +
-    `body {` +
-    `  font-family: ui-sans-serif, system-ui, 'Segoe UI', Arial, sans-serif;` +
-    `  font-weight: 700;` +
-    `  ${FONT_SMOOTHING}` +
-    `  margin: 0; padding: 0.5mm 2mm 1.5mm;` +
-    `  width: ${w - 2}mm; height: ${h}mm;` +
-    `  color: #000; background: #fff;` +
-    `  font-size: 10px;` +
-    `  display: flex; flex-direction: column; overflow: hidden;` +
-    `}` +
-    `</style></head><body>` +
-    headerHtml + contentHtml + footerHtml +
-    `</body></html>`
+  const blocks = buildLabelContentBlocks(item, cfg, participantName)
+  const pages = paginateContentBlocks(blocks, cfg)
+  return pages.map((pageBlocks, i) =>
+    renderLabelDocument(
+      pageBlocks.map(b => b.html),
+      cfg,
+      orderRef,
+      itemIndex,
+      totalLabels,
+      printedAt,
+      fontBase64,
+      priceStr,
+      i + 1,
+      pages.length,
+    ),
   )
 }
 
@@ -631,18 +750,17 @@ export function buildOrderLabels(
       // This is what makes "Phúc" and "Ly" each get their own cup's label
       // instead of both cups showing "Phúc, Ly".
       const participantName = names && names.length > 0 ? names.shift() : undefined
-      labels.push(
-        buildSingleLabelHtml(
-          item,
-          cfg,
-          order.paymentCode ?? order?.orderRef,
-          labelIndex,
-          totalLabels,
-          printedAt,
-          fontBase64,
-          participantName,
-        ),
+      const pages = buildSingleLabelHtml(
+        item,
+        cfg,
+        order.paymentCode ?? order?.orderRef,
+        labelIndex,
+        totalLabels,
+        printedAt,
+        fontBase64,
+        participantName,
       )
+      labels.push(...pages)
       labelIndex++
     }
   }

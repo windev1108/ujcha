@@ -134,7 +134,7 @@ export default function GrabOrderDetailModal({
             driverMobileNumber: data.driver?.mobileNumber,
         })
     }, [data])
-    console.log({ data })
+    
     useEffect(() => {
         if (!data) return
         const requestItems = data.itemInfo.items.map((item, i) => ({
@@ -411,7 +411,11 @@ export default function GrabOrderDetailModal({
                                                         )}
                                                     </div>
                                                 </div>
-                                                {showRecipe && <RecipeChecklist fetching={isFetchingRecipe} recipe={recipeMap[key]} quantity={item.quantity} sizeLabel={sizeLabel} />}
+                                                {showRecipe &&
+                                                    <div className="mt-2">
+                                                        <RecipeChecklist fetching={isFetchingRecipe} recipe={recipeMap[key]} quantity={item.quantity} sizeLabel={sizeLabel} />
+                                                    </div>
+                                                }
                                             </div>
                                         )
                                     })}
@@ -454,7 +458,7 @@ export default function GrabOrderDetailModal({
                         </div>
 
                         {/* Right / summary column */}
-                        <div className="space-y-4 lg:order-2">
+                        <div className="space-y-4 lg:order-2 lg:sticky lg:top-0 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:pb-2 scrollbar-thin">
                             <div className="rounded-2xl border border-gray-100 bg-white p-4">
                                 <p className="text-sm font-bold uppercase tracking-widest text-gray-400">Tổng kết đơn hàng</p>
                                 <FareBreakdown data={data} />

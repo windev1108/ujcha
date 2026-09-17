@@ -55,7 +55,7 @@ export function RecipeChecklist({
 
     if (fetching) {
         return (
-            <div className="mt-2 overflow-hidden rounded-xl border border-teal-100 bg-teal-50/50">
+            <div className="overflow-hidden rounded-xl border border-teal-100 bg-teal-50/50">
                 <div className="flex items-center gap-2 bg-teal-100/50 px-3.5 py-2">
                     <FlaskConical className="size-3.5 shrink-0 animate-pulse text-teal-600" />
                     <span className="text-xs font-bold uppercase tracking-wider text-teal-700">
@@ -76,7 +76,7 @@ export function RecipeChecklist({
 
     if (rows.length === 0) {
         return (
-            <div className="mt-2 flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-sm italic text-gray-400">
+            <div className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-sm italic text-gray-400">
                 <FlaskConical className="size-3.5 shrink-0" />
                 Chưa cấu hình định lượng cho biến thể này
             </div>
@@ -86,7 +86,7 @@ export function RecipeChecklist({
     const variantLabel = buildVariantLabel(recipe.items) ?? sizeLabel
 
     return (
-        <div className="mt-2 overflow-hidden rounded-xl border border-teal-100 bg-teal-50/50">
+        <div className="overflow-hidden rounded-xl border border-teal-100 bg-teal-50/50">
             <div className="flex items-center gap-2 bg-teal-100/50 px-3.5 py-2">
                 <FlaskConical className="size-3.5 shrink-0 text-teal-600" />
                 <span className="text-xs font-bold uppercase tracking-wider text-teal-700">
