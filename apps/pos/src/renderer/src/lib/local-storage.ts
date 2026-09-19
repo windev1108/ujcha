@@ -1,6 +1,7 @@
 export const KEYS = {
     bill: 'kun-pos:billConfig',
     label: 'kun-pos:labelConfig',
+    scheduledAlert: 'kun_pos_scheduled_alert_config',
 }
 
 export function loadLocal<T>(key: string, fallback: T): T {

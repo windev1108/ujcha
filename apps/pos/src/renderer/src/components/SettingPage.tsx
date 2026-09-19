@@ -4,11 +4,12 @@ import {
     XCircle, Loader2, Save, FlaskConical, Trash2,
     Mail, Shield, FileText, RefreshCw, LogOut,
     ShoppingBagIcon, HandshakeIcon, Bot, Download, Volume2,
+    Bell,
 } from 'lucide-react'
 import grabFoodLogo from '../assets/grab-food.png'
 import shopeeFoodLogo from '../assets/shopee-food.png'
 import { useState, useEffect, useCallback, useRef } from 'react'
-import type { PosConfig } from '../types/common'
+import { DEFAULT_SCHEDULED_ALERT_CONFIG, type PosConfig, type ScheduledAlertConfig } from '../types/common'
 import { KEYS, loadLocal, saveLocal } from '@/lib/local-storage'
 import type { BillConfig, LabelConfig } from '../../../preload/index'
 
@@ -18,7 +19,7 @@ const eAPI = (window as unknown as {
 }).electronAPI
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-export type Section = 'account' | 'printer-bill' | 'printer-label' | 'partners' | 'ai'
+export type Section = 'account' | 'printer-bill' | 'printer-label' | 'partners' | 'ai' | 'schedule'
 
 type PrinterTypeId =
     | 'xprinter-bluetooth'
@@ -205,6 +206,107 @@ function Card({ title, children }: { title?: string; children: React.ReactNode }
                 </div>
             )}
             <div className="px-5 py-4">{children}</div>
+        </div>
+    )
+}
+
+function ScheduleAlertSection() {
+    const [cfg, setCfg] = useState<ScheduledAlertConfig>(() =>
+        loadLocal<ScheduledAlertConfig>(KEYS.scheduledAlert, DEFAULT_SCHEDULED_ALERT_CONFIG))
+    const [saving, setSaving] = useState(false)
+    const [saved, setSaved] = useState(false)
+
+    function update(next: ScheduledAlertConfig) {
+        setCfg(next)
+        setSaved(false)
+    }
+
+    function handleSave() {
+        setSaving(true)
+        try {
+            saveLocal(KEYS.scheduledAlert, cfg)
+            setSaved(true)
+            setTimeout(() => setSaved(false), 2500)
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    return (
+        <div className="space-y-4">
+            <Card>
+                <Toggle
+                    checked={cfg.enabled}
+                    onChange={v => update({ ...cfg, enabled: v })}
+                    label="Bật nhắc lại đơn đặt trước"
+                    sub="Nhắc lại như đơn mới khi gần tới giờ hẹn giao (scheduledDeliveryTime)"
+                />
+            </Card>
+
+            {cfg.enabled && (
+                <Card title="Cách tính thời gian báo trước">
+                    <div className="flex gap-2 mb-4">
+                        {(['fixed', 'dynamic'] as const).map(m => (
+                            <button
+                                key={m}
+                                onClick={() => update({ ...cfg, mode: m })}
+                                className={`flex-1 h-10 rounded-xl text-sm font-semibold transition-colors ${cfg.mode === m ? 'bg-brand text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                            >
+                                {m === 'fixed' ? 'Cố định' : 'Theo số món'}
+                            </button>
+                        ))}
+                    </div>
+
+                    {cfg.mode === 'fixed' ? (
+                        <SpacingSlider
+                            label={`Báo trước ${cfg.fixedMinutes} phút`}
+                            sub="Áp dụng cho mọi đơn đặt trước, không phân biệt số món"
+                            value={cfg.fixedMinutes}
+                            min={5} max={120} defaultVal={30}
+                            onChange={v => update({ ...cfg, fixedMinutes: v })}
+                        />
+                    ) : (
+                        <>
+                            <SpacingSlider
+                                label={`Thời gian nền: ${cfg.dynamicBaseMinutes} phút`}
+                                sub="Thời gian báo trước tối thiểu, kể cả đơn 1 món"
+                                value={cfg.dynamicBaseMinutes}
+                                min={0} max={60} defaultVal={15}
+                                onChange={v => update({ ...cfg, dynamicBaseMinutes: v })}
+                            />
+                            <SpacingSlider
+                                label={`+ ${cfg.dynamicPerItemMinutes} phút / món`}
+                                sub="Đơn càng nhiều món càng được báo sớm hơn"
+                                value={cfg.dynamicPerItemMinutes}
+                                min={0} max={15} defaultVal={3}
+                                onChange={v => update({ ...cfg, dynamicPerItemMinutes: v })}
+                            />
+                            <SpacingSlider
+                                label={`Tối đa: ${cfg.dynamicMaxMinutes} phút`}
+                                sub="Trần thời gian báo trước, tránh báo quá sớm với đơn rất nhiều món"
+                                value={cfg.dynamicMaxMinutes}
+                                min={15} max={180} defaultVal={90}
+                                onChange={v => update({ ...cfg, dynamicMaxMinutes: v })}
+                            />
+                        </>
+                    )}
+                </Card>
+            )}
+
+            <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex w-full items-center justify-center gap-2 h-12 rounded-xl bg-brand text-sm font-bold text-white hover:bg-brand/90 disabled:opacity-60 transition-colors"
+            >
+                {saving ? (
+                    <Loader2 className="size-4 animate-spin" />
+                ) : saved ? (
+                    <CheckCircle2 className="size-4" />
+                ) : (
+                    <Save className="size-4" />
+                )}
+                {saving ? 'Đang lưu…' : saved ? 'Đã lưu' : 'Lưu lại'}
+            </button>
         </div>
     )
 }
@@ -1548,7 +1650,7 @@ export function SettingsPage({
         {
             id: 'account',
             label: 'Thông tin tài khoản',
-            sub: config.adminUser?.email || '—',
+            sub: config.adminUser?.phone || '—',
             icon: <User className="size-4" />,
         },
         {
@@ -1562,6 +1664,12 @@ export function SettingsPage({
             label: 'Cài đặt máy in tem nhãn',
             sub: labelCfg.enabled && labelCfg.address ? labelCfg.address : 'Chưa cấu hình',
             icon: <Tag className="size-4" />,
+        },
+        {
+            id: 'schedule',
+            label: 'Nhắc đơn đặt trước',
+            sub: 'Cấu hình thời gian báo lại trước giờ hẹn giao',
+            icon: <Bell className="size-4" />,
         },
         {
             id: 'partners',
@@ -1631,7 +1739,7 @@ export function SettingsPage({
                     <div className="max-w-2xl mx-auto px-8 py-6">
                         {section === 'account' && <AccountSection config={config} />}
                         {section === 'ai' && <AiSection />}
-
+                        {section === 'schedule' && <ScheduleAlertSection />}
                         {section === 'partners' && (
                             <div className="space-y-8">
                                 <div>

@@ -288,14 +288,12 @@ export function OrderDetailModal({
     const [recipeMap, setRecipeMap] = useState<ResolvedRecipeMap>({})
     const { showRecipe, toggle: toggleRecipe } = useShowRecipe()
     const [isFetchingRecipe, setIsFetchingRecipe] = useState(false)
-
     // ── New for the redesign: print dropdown / "more" menu / fullscreen map ──
     const [printMenuOpen, setPrintMenuOpen] = useState(false)
     const [moreMenuOpen, setMoreMenuOpen] = useState(false)
     const [mapFullscreen, setMapFullscreen] = useState(false)
     const [copiedField, setCopiedField] = useState<'code' | 'phone' | null>(null)
     const headerMenuRef = useRef<HTMLDivElement>(null)
-
     useEffect(() => {
         const requestItems: RecipeResolveRequestItem[] = order.groupOrder
             ? order.groupOrder.participants.flatMap((p) =>
@@ -519,10 +517,15 @@ export function OrderDetailModal({
                     <ArrowLeft className="size-5" />
                 </button>
                 <div className="hidden h-6 w-px bg-gray-200 sm:block" />
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1 flex gap-3">
                     <p className="truncate font-mono text-base sm:text-lg font-black text-gray-900">
                         Đơn hàng {order.paymentCode ?? orderRef}
                     </p>
+                    {order.scheduledDeliveryTime && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-bold text-indigo-700">
+                            <Clock className="size-4" /> Hẹn giờ giao · {formatDate(order.scheduledDeliveryTime)}
+                        </span>
+                    )}
                 </div>
 
                 <div ref={headerMenuRef} className="flex shrink-0 items-center gap-2">
@@ -606,6 +609,11 @@ export function OrderDetailModal({
                                                 <User className="size-4 shrink-0 text-gray-400" />
                                                 <span className="font-semibold text-gray-800">{deliveryName}</span>
                                             </div>
+                                            {isReturning === false && (
+                                                <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-600">
+                                                    <Sparkles className="size-3" /> Khách mới
+                                                </span>
+                                            )}
                                             {isReturning === true && (
                                                 <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
                                                     <UserCheck className="size-2.5" /> Khách quen

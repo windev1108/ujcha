@@ -206,7 +206,7 @@ function renderLabelDocument(
   const h = cfg.labelHeight ?? 30
 
   const headerRightLabel = pageCount > 1
-    ? `${itemIndex}/${totalLabels} · ${pageIndex}/${pageCount}`
+    ? `${pageIndex}/${pageCount} · ${itemIndex}/${totalLabels}`
     : `${itemIndex}/${totalLabels}`
 
   const headerHtml =
@@ -226,7 +226,7 @@ function renderLabelDocument(
   const footerHtml =
     `<div style="flex-shrink:0;">` +
     `<div style="display:flex;justify-content:space-between;align-items:center;font-size:9px;">` +
-    `<span style="color:#000;">${cfg.showPrice && pageIndex === pageCount ? esc(priceStr) : ''}</span>` +
+    `<span style="color:#000;">${cfg.showPrice ? esc(priceStr) : ''}</span>` +
     `<span style="color:#000;">${esc(printedAt)}</span>` +
     `</div>` +
     `</div>`

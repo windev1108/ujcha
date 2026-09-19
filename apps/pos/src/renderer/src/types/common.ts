@@ -425,3 +425,23 @@ export type ResolvedRecipe = {
 }
 
 export type ResolvedRecipeMap = Record<string, ResolvedRecipe>
+
+
+
+export interface ScheduledAlertConfig {
+  enabled: boolean
+  mode: 'fixed' | 'dynamic'
+  fixedMinutes: number         
+  dynamicBaseMinutes: number   
+  dynamicPerItemMinutes: number 
+  dynamicMaxMinutes: number     
+}
+
+export const DEFAULT_SCHEDULED_ALERT_CONFIG: ScheduledAlertConfig = {
+  enabled: true,
+  mode: 'fixed',
+  fixedMinutes: 30,
+  dynamicBaseMinutes: 15,
+  dynamicPerItemMinutes: 3,
+  dynamicMaxMinutes: 90,
+}

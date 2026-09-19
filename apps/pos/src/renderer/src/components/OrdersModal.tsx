@@ -224,7 +224,8 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
   const [preOrderOnly, setPreOrderOnly] = useState(false)
   // Queue: IDs of pending orders that arrived since last full-clear; audio plays until queue is empty
   const [newOrderQueue, setNewOrderQueue] = useState<Set<string>>(new Set())
-
+  const [scheduledAlertIds, setScheduledAlertIds] = useState<Set<string>>(new Set())
+  const scheduledAlertTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set())
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkBusy, setBulkBusy] = useState(false)
@@ -237,7 +238,46 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const scheduledCount = orders.filter(o => !!o.scheduledDeliveryTime).length
+  const markScheduledAlert = (id: string) => {
+    setScheduledAlertIds(prev => new Set(prev).add(id))
+    const existing = scheduledAlertTimersRef.current.get(id)
+    if (existing) clearTimeout(existing)
+    // Fallback tự tắt highlight sau 5 phút nếu staff không thao tác gì
+    const t = setTimeout(() => {
+      setScheduledAlertIds(prev => { const s = new Set(prev); s.delete(id); return s })
+      scheduledAlertTimersRef.current.delete(id)
+    }, 5 * 60_000)
+    scheduledAlertTimersRef.current.set(id, t)
+  }
 
+  const clearScheduledAlert = (ids: string[]) => {
+    setScheduledAlertIds(prev => {
+      const s = new Set(prev)
+      ids.forEach(id => s.delete(id))
+      return s
+    })
+    ids.forEach(id => {
+      const t = scheduledAlertTimersRef.current.get(id)
+      if (t) { clearTimeout(t); scheduledAlertTimersRef.current.delete(id) }
+    })
+  }
+
+  const highlightedIds = new Set<string>([...newOrderQueue, ...scheduledAlertIds])
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const id = (e as CustomEvent<{ orderId: string }>).detail?.orderId
+      if (id) markScheduledAlert(id)
+    }
+    window.addEventListener('order-schedule-alert', handler)
+    return () => window.removeEventListener('order-schedule-alert', handler)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Dọn tất cả timer khi unmount
+  useEffect(() => {
+    return () => { scheduledAlertTimersRef.current.forEach(t => clearTimeout(t)) }
+  }, [])
 
   useEffect(() => {
     const audio = new Audio(newOrderMp3)
@@ -351,10 +391,10 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
       setOrders(prev => prev.map(o =>
         o.id === payload.orderId ? { ...o, status: payload.status as OrderStatus } : o
       ))
-      // Confirmed/cancelled from another terminal also clears from queue
       if (payload.status === 'confirmed' || payload.status === 'cancelled') {
         removeFromQueue([payload.orderId])
       }
+      clearScheduledAlert([payload.orderId])
     })
     socket.on('order:paid', (payload: { orderId: string }) => {
       setOrders(prev => prev.map(o =>
@@ -739,12 +779,13 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
                   <OrderCard
                     key={order.id}
                     order={order}
-                    onOpen={() => { setSelectedOrder(order) }}
+                    onOpen={() => { setSelectedOrder(order); clearScheduledAlert([order.id]) }}
                     onStatusChange={handleStatusOrAssign}
                     isBusy={busyIds.has(order.id)}
                     isSelected={selectedIds.has(order.id)}
                     onToggleSelect={() => toggleSelect(order.id)}
                     isReturning={getReturningStatus(order)}
+                    isJustAlerted={highlightedIds.has(order.id)}
                   />
                 ))}
               </div>
@@ -894,6 +935,7 @@ function OrderCard({
   isSelected,
   onToggleSelect,
   isReturning,
+  isJustAlerted
 }: {
   order: AdminOrder
   onOpen: () => void
@@ -902,6 +944,7 @@ function OrderCard({
   isSelected: boolean
   onToggleSelect: () => void
   isReturning?: boolean
+  isJustAlerted?: boolean
 }) {
   const typeInfo = ORDER_TYPE_LABEL[order.type] ?? { label: order.type, Icon: ShoppingBag }
   const totalQty = order.items.reduce((s, i) => s + i.quantity, 0)
@@ -916,11 +959,19 @@ function OrderCard({
   const showActions = ['pending', 'confirmed', 'preparing', 'ready', 'delivering', 'arrived'].includes(order.status)
 
   return (
-    <div className={`relative flex flex-col rounded-2xl border bg-white transition-all duration-200 ${isSelected
-      ? 'border-brand/50 ring-2 ring-brand/15 shadow-lg shadow-brand/10'
-      : 'border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-0.5 hover:border-gray-200'
+    <div className={`relative flex flex-col rounded-2xl border bg-white transition-all duration-200 ${isJustAlerted
+      ? 'border-red-200 shadow-lg shadow-red-200/50'
+      : isSelected
+        ? 'border-brand/50 ring-2 ring-brand/15 shadow-lg shadow-brand/10'
+        : 'border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-0.5 hover:border-gray-200'
       } ${isBusy ? 'opacity-60' : ''}`}>
-
+      {/* Ring highlight cho đơn vừa được alert (mới hoặc đặt trước sắp tới giờ) */}
+      {isJustAlerted && (
+        <>
+          <span className="pointer-events-none absolute inset-0 rounded-2xl ring-2 ring-red-400 animate-ping opacity-50" />
+          <span className="pointer-events-none absolute inset-0 rounded-2xl ring-2 ring-red-400" />
+        </>
+      )}
       {/* Left status accent bar */}
       <div className={`absolute top-0 left-0 bottom-0 w-1 rounded-l-2xl ${STATUS_DOT[order.status]}`} />
 

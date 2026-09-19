@@ -28,6 +28,7 @@ import { SettingsPage, type Section as SettingsSection } from '../components/Set
 import { AIOrderPanel } from '../components/AIOrderPanel'
 import { UpdateModal, type UpdateInfo } from '../components/UpdateModal'
 import { learnEaterInfo, pruneEaterCacheNow } from '../../../shared/grab-eater-cache'
+import { useScheduledDeliveryAlerts } from '@/hooks/useScheduledDeliveryAlerts'
 
 const eAPI = (window as unknown as {
   electronAPI?: {
@@ -168,7 +169,19 @@ export function StaffApp() {
     currentAudioRef.current?.pause()
     currentAudioRef.current = null
   }, [])
+  const pendingOrderIdsRef = useRef<Set<string>>(new Set())
 
+  const syncPendingBadge = useCallback(async () => {
+    try {
+      const today = new Date().toISOString().slice(0, 10)
+      const data = await fetchOrders(1, 100, today, today)
+      const items = (data as { items: AdminOrder[] }).items ?? []
+      const pendingIds = new Set(items.filter(o => o.status === 'pending').map(o => o.id))
+      pendingOrderIdsRef.current = pendingIds
+      setNewOrderBadge(pendingIds.size)
+      if (pendingIds.size === 0) stopAlert()
+    } catch { /* ignore */ }
+  }, [stopAlert])
 
   const stopGrabAudioOnly = useCallback(() => {
     if (grabAlertIntervalRef.current) {
@@ -212,6 +225,15 @@ export function StaffApp() {
     playMp3(url)
     alertIntervalRef.current = setInterval(() => playMp3(alertUrlRef.current), 8_000)
   }, [stopAlert, playMp3])
+
+  useScheduledDeliveryAlerts((order) => {
+    pendingOrderIdsRef.current.add(order.id)
+    setNewOrderBadge(n => n + 1)
+    startAlert(newOrderMp3)
+    // Báo cho OrdersModal (nếu đang mở) highlight ring đơn này
+    window.dispatchEvent(new CustomEvent('order-schedule-alert', { detail: { orderId: order.id } }))
+  }, isLoggedIn)
+
 
   // Alert handler ref — lets the socket closure always call the latest logic
   const alertHandlerRef = useRef<(p: string) => void>(() => { })
@@ -335,10 +357,10 @@ export function StaffApp() {
       }
       if (initOrders.status === 'fulfilled') {
         const items = (initOrders.value as { items: AdminOrder[] }).items ?? []
-        // Seed dedup set so existing today's orders are never double-printed on reconnect
         items.forEach(o => autoPrintedIdsRef.current.add(o.id))
-        const pending = items.filter(o => o.status === 'pending').length
-        if (pending > 0) setNewOrderBadge(pending)
+        const pendingItems = items.filter(o => o.status === 'pending')
+        pendingOrderIdsRef.current = new Set(pendingItems.map(o => o.id))
+        if (pendingItems.length > 0) setNewOrderBadge(pendingItems.length)
       }
     }
     void load()
@@ -393,7 +415,15 @@ export function StaffApp() {
     socket.on('order:new', () => {
       console.log('[socket] order:new received')
       newOrderHandlerRef.current()
+      void syncPendingBadge()
       void autoPrintWebOrderRef.current()
+    })
+    socket.on('order:status', (payload: { orderId: string; status: string }) => {
+      if (payload.status === 'confirmed' || payload.status === 'cancelled') {
+        pendingOrderIdsRef.current.delete(payload.orderId)
+        setNewOrderBadge(pendingOrderIdsRef.current.size)
+        if (pendingOrderIdsRef.current.size === 0) stopAlert()
+      }
     })
     socket.on('order:external', (data?: { platform?: string }) => {
       const p = (data?.platform ?? '').toUpperCase()
