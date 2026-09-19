@@ -39,14 +39,19 @@ function buildNewOrderHtml(data: NewOrderEmailData, siteUrl: string): string {
     )
     .join('');
 
-  const mapsUrl = data.coordinate?.lng && data.coordinate?.lat
-    ? `https://www.google.com/maps/search/?api=1&query=${data.coordinate.lat},${data.coordinate.lng}`
-    : data.address
-      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.address)}`
-      : null;
+  const mapsUrl =
+    data.coordinate?.lng && data.coordinate?.lat
+      ? `https://www.google.com/maps/search/?api=1&query=${data.coordinate.lat},${data.coordinate.lng}`
+      : data.address
+        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.address)}`
+        : null;
 
   const orderTypeLabel =
-    data.type === 'delivery' ? 'Giao hàng' : data.type === 'table' ? 'Đặt bàn' : 'Mang đi';
+    data.type === 'delivery'
+      ? 'Giao hàng'
+      : data.type === 'table'
+        ? 'Đặt bàn'
+        : 'Mang đi';
 
   // Chuẩn hoá số điện thoại về dạng E.164 cho href="tel:" (giữ nguyên text hiển thị)
   const telHref = data.customerPhone
@@ -59,15 +64,17 @@ function buildNewOrderHtml(data: NewOrderEmailData, siteUrl: string): string {
         <td style="padding:2px 0;font-size:13px;color:#717171;width:90px;">Loại đơn</td>
         <td style="padding:2px 0;font-size:14px;color:#1a1a1a;font-weight:600;">${orderTypeLabel}</td>
       </tr>
-      ${data.customerName
-      ? `<tr>
+      ${
+        data.customerName
+          ? `<tr>
                <td style="padding:2px 0;font-size:13px;color:#717171;">Khách hàng</td>
                <td style="padding:2px 0;font-size:14px;color:#1a1a1a;">${data.customerName}</td>
              </tr>`
-      : ''
-    }
-      ${data.customerPhone
-      ? `<tr>
+          : ''
+      }
+      ${
+        data.customerPhone
+          ? `<tr>
                <td style="padding:2px 0;font-size:13px;color:#717171;">Điện thoại</td>
                <td style="padding:2px 0;font-size:14px;">
                  <a href="${telHref}" style="color:#1a3c34;text-decoration:underline;font-weight:600;">
@@ -75,8 +82,8 @@ function buildNewOrderHtml(data: NewOrderEmailData, siteUrl: string): string {
                  </a>
                </td>
              </tr>`
-      : ''
-    }
+          : ''
+      }
     </table>`;
 
   const addressBlock = data.address
@@ -208,7 +215,7 @@ export class MailService {
   constructor(
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
-  ) { }
+  ) {}
 
   private getTransporter(): nodemailer.Transporter {
     if (!this.transporter) {
@@ -257,9 +264,14 @@ export class MailService {
     }
   }
 
-  async sendPromotionEmail(to: string, data: PromotionEmailData): Promise<void> {
-    const from = this.config.get<string>('SMTP_FROM') ?? 'UjCha <noreply@ujcha.vn>';
-    const siteUrl = this.config.get<string>('NEXT_PUBLIC_SITE_URL') ?? 'https://ujcha.vn';
+  async sendPromotionEmail(
+    to: string,
+    data: PromotionEmailData,
+  ): Promise<void> {
+    const from =
+      this.config.get<string>('SMTP_FROM') ?? 'UjCha <noreply@ujcha.vn>';
+    const siteUrl =
+      this.config.get<string>('NEXT_PUBLIC_SITE_URL') ?? 'https://ujcha.vn';
 
     await this.getTransporter().sendMail({
       from,
@@ -269,7 +281,9 @@ export class MailService {
     });
   }
 
-  async sendPromotionBlast(data: PromotionEmailData): Promise<{ sent: number; failed: number }> {
+  async sendPromotionBlast(
+    data: PromotionEmailData,
+  ): Promise<{ sent: number; failed: number }> {
     const users = await this.prisma.user.findMany({
       where: { emailMarketingEnabled: true, email: { not: null } },
       select: { email: true },
@@ -284,7 +298,9 @@ export class MailService {
         sent++;
       } catch (err) {
         failed++;
-        this.logger.error(`Failed to send to ${user.email}: ${(err as Error).message}`);
+        this.logger.error(
+          `Failed to send to ${user.email}: ${(err as Error).message}`,
+        );
       }
     }
 

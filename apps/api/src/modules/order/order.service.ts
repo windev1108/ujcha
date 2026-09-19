@@ -61,9 +61,7 @@ export interface OrderDiscountContext {
 }
 
 /** Catalog JSON: giá trị là string (legacy) hoặc { label, priceDelta, nameTranslation? }. */
-function parseOptionCatalogValue(
-  v: unknown,
-): {
+function parseOptionCatalogValue(v: unknown): {
   label: string;
   priceDelta: number;
   nameTranslation?: Record<string, string>;
@@ -371,7 +369,7 @@ export class OrderService {
     if (!options?.skipStoreHoursCheck) {
       await this.storeStatus.assertOpenForOrders();
     }
-    
+
     this.orderValidation.assertCreateOrderTypeRules(dto);
 
     const pickupDate =
@@ -614,7 +612,9 @@ export class OrderService {
         })),
       });
 
-      // Mark the user's voucher as used atomically with the order
+      // Mark the user's voucher as used atomically with the order, and
+      // remember WHICH UserVoucher row was consumed so it can be restored
+      // if the order is later cancelled/deleted.
       if (dto.voucherCode && userId) {
         const voucherCode = dto.voucherCode.trim().toUpperCase();
         const voucher = await tx.voucher.findUnique({
@@ -622,13 +622,22 @@ export class OrderService {
           select: { id: true },
         });
         if (voucher) {
-          await tx.userVoucher.updateMany({
+          const userVoucher = await tx.userVoucher.findFirst({
             where: { userId, voucherId: voucher.id, usedAt: null },
-            data: { usedAt: new Date() },
+            select: { id: true },
           });
+          if (userVoucher) {
+            await tx.userVoucher.update({
+              where: { id: userVoucher.id },
+              data: { usedAt: new Date(), usedOrderId: order.id },
+            });
+            await tx.order.update({
+              where: { id: order.id },
+              data: { appliedUserVoucherId: userVoucher.id },
+            });
+          }
         }
       }
-
       return tx.order.findUniqueOrThrow({
         where: { id: order.id },
         include: {
@@ -704,6 +713,10 @@ export class OrderService {
       existing.paymentStatus !== PaymentStatus.paid &&
       existing.pointsReserved > 0;
 
+    const isCancelling =
+      dto.status === OrderStatus.cancelled &&
+      existing.status !== OrderStatus.cancelled;
+
     if (shouldSpendPoints) {
       if (!existing.userId) {
         throw new BadRequestException({
@@ -722,7 +735,7 @@ export class OrderService {
             referenceId: orderId,
           },
         );
-        return tx.order.update({
+        const result = await tx.order.update({
           where: { id: orderId },
           data: {
             ...(dto.status !== undefined && { status: dto.status }),
@@ -752,6 +765,10 @@ export class OrderService {
             user: { select: { name: true, phone: true } },
           },
         });
+        if (isCancelling) {
+          await this.restoreVoucherForOrder(tx, orderId);
+        }
+        return result;
       });
 
       if (shouldRewardPoints) {
@@ -765,33 +782,39 @@ export class OrderService {
       return updated;
     }
 
-    const updated = await this.prisma.order.update({
-      where: { id: orderId },
-      data: {
-        ...(dto.status !== undefined && { status: dto.status }),
-        ...(dto.paymentStatus !== undefined && {
-          paymentStatus: dto.paymentStatus,
-        }),
-      },
-      include: {
-        items: {
-          orderBy: { id: 'asc' },
-          include: {
-            product: {
-              select: {
-                id: true,
-                name: true,
-                nameTranslation: true,
-                imageUrls: true,
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.order.update({
+        where: { id: orderId },
+        data: {
+          ...(dto.status !== undefined && { status: dto.status }),
+          ...(dto.paymentStatus !== undefined && {
+            paymentStatus: dto.paymentStatus,
+          }),
+        },
+        include: {
+          items: {
+            orderBy: { id: 'asc' },
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  nameTranslation: true,
+                  imageUrls: true,
+                },
               },
             },
           },
+          address: true,
+          table: true,
+          shipper: { select: { id: true, name: true, phone: true } },
+          user: { select: { name: true, phone: true } },
         },
-        address: true,
-        table: true,
-        shipper: { select: { id: true, name: true, phone: true } },
-        user: { select: { name: true, phone: true } },
-      },
+      });
+      if (isCancelling) {
+        await this.restoreVoucherForOrder(tx, orderId);
+      }
+      return result;
     });
 
     if (shouldRewardPoints) {
@@ -1173,5 +1196,26 @@ export class OrderService {
         : null,
       minOrderAmount: minOrder,
     };
+  }
+
+  async restoreVoucherForOrder(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+  ): Promise<void> {
+    const order = await tx.order.findUnique({
+      where: { id: orderId },
+      select: { appliedUserVoucherId: true },
+    });
+    if (!order?.appliedUserVoucherId) return;
+
+    await tx.userVoucher.update({
+      where: { id: order.appliedUserVoucherId },
+      data: { usedAt: null, usedOrderId: null },
+    });
+
+    await tx.order.update({
+      where: { id: orderId },
+      data: { appliedUserVoucherId: null },
+    });
   }
 }

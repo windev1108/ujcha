@@ -512,6 +512,9 @@ model Order {
   completedAt  DateTime?
   cancelledAt  DateTime?
 
+  appliedUserVoucherId String?      @db.Uuid
+  appliedUserVoucher   UserVoucher? @relation(fields: [appliedUserVoucherId], references: [id])
+
   inventoryDeductedAt   DateTime?
   inventoryTransactions InventoryTransaction[]
 
@@ -721,6 +724,7 @@ model UserVoucher {
   usedAt      DateTime?
   usedOrderId String?           @db.Uuid
   createdAt   DateTime          @default(now())
+  orders      Order[]
 
   @@unique([userId, voucherId])
   @@index([userId])

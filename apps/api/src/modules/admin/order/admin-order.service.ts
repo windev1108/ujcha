@@ -164,7 +164,7 @@ export class AdminOrderService {
     private readonly groupOrderService: GroupOrderService,
     private readonly pushService: PushService,
     private readonly inventoryService: InventoryService,
-  ) {}
+  ) { }
 
   async findAll(query: AdminOrderListQueryDto) {
     const page = query.page ?? 1;
@@ -318,6 +318,7 @@ export class AdminOrderService {
       });
     }
     await this.prisma.$transaction(async (tx) => {
+      await this.orderService.restoreVoucherForOrder(tx, orderId);
       await tx.payment.deleteMany({ where: { orderId } });
       await tx.order.delete({ where: { id: orderId } });
     });
@@ -364,6 +365,10 @@ export class AdminOrderService {
       existing.paymentStatus !== PaymentStatus.paid &&
       existing.pointsReserved > 0;
 
+    const isCancelling =
+      dto.status === OrderStatus.cancelled &&
+      existing.status !== OrderStatus.cancelled;
+
     if (shouldSpendPoints) {
       if (!existing.userId) {
         throw new BadRequestException({
@@ -393,7 +398,7 @@ export class AdminOrderService {
         if (dto.status === OrderStatus.cancelled)
           spendTs.cancelledAt = new Date();
 
-        return tx.order.update({
+        const result = await tx.order.update({
           where: { id: orderId },
           data: {
             ...(dto.status !== undefined && { status: dto.status }),
@@ -406,6 +411,12 @@ export class AdminOrderService {
           },
           include: adminOrderInclude,
         });
+
+        if (isCancelling) {
+          await this.orderService.restoreVoucherForOrder(tx, orderId);
+        }
+
+        return result;
       });
 
       if (shouldRewardPoints) {
@@ -451,6 +462,7 @@ export class AdminOrderService {
 
       return this.withTypeDisplay(updated);
     }
+
     const statusTs: Prisma.OrderUpdateInput = {};
     if (dto.status === OrderStatus.confirmed) statusTs.confirmedAt = new Date();
     if (dto.status === OrderStatus.preparing) statusTs.preparingAt = new Date();
@@ -475,10 +487,18 @@ export class AdminOrderService {
       }
     }
 
-    const updated = await this.prisma.order.update({
-      where: { id: orderId },
-      data: dataUpdate,
-      include: adminOrderInclude,
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.order.update({
+        where: { id: orderId },
+        data: dataUpdate,
+        include: adminOrderInclude,
+      });
+
+      if (isCancelling) {
+        await this.orderService.restoreVoucherForOrder(tx, orderId);
+      }
+
+      return result;
     });
 
     if (shouldRewardPoints) {
@@ -621,17 +641,17 @@ export class AdminOrderService {
 
     const points = ownerId
       ? await this.prisma.pointTransaction
-          .findFirst({
-            where: {
-              userId: ownerId,
-              source: PointSource.order,
-              referenceId: orderId,
-              type: PointTransactionType.earn,
-            },
-            select: { amount: true },
-          })
-          .then((t) => t?.amount ?? 0)
-          .catch(() => 0)
+        .findFirst({
+          where: {
+            userId: ownerId,
+            source: PointSource.order,
+            referenceId: orderId,
+            type: PointTransactionType.earn,
+          },
+          select: { amount: true },
+        })
+        .then((t) => t?.amount ?? 0)
+        .catch(() => 0)
       : 0;
 
     await Promise.allSettled(
@@ -696,6 +716,15 @@ export class AdminOrderService {
     if (dto.status === OrderStatus.delivering) bulkTs.deliveringAt = new Date();
     if (dto.status === OrderStatus.completed) bulkTs.completedAt = new Date();
     if (dto.status === OrderStatus.cancelled) bulkTs.cancelledAt = new Date();
+
+    if (dto.status === OrderStatus.cancelled) {
+      // Hoàn voucher cho từng đơn TRƯỚC khi cập nhật status hàng loạt.
+      await this.prisma.$transaction(async (tx) => {
+        for (const id of dto.orderIds) {
+          await this.orderService.restoreVoucherForOrder(tx, id);
+        }
+      });
+    }
 
     const updated = await this.prisma.order.updateMany({
       where: { id: { in: dto.orderIds } },
@@ -788,20 +817,20 @@ export class AdminOrderService {
     const [byPhone, byUser] = await Promise.all([
       phones.length
         ? this.prisma.order.findMany({
-            where: {
-              guestDeliveryPhone: { in: phones },
-              status: OrderStatus.completed,
-            },
-            select: { guestDeliveryPhone: true },
-            distinct: ['guestDeliveryPhone'],
-          })
+          where: {
+            guestDeliveryPhone: { in: phones },
+            status: OrderStatus.completed,
+          },
+          select: { guestDeliveryPhone: true },
+          distinct: ['guestDeliveryPhone'],
+        })
         : [],
       userIds.length
         ? this.prisma.order.findMany({
-            where: { userId: { in: userIds }, status: OrderStatus.completed },
-            select: { userId: true },
-            distinct: ['userId'],
-          })
+          where: { userId: { in: userIds }, status: OrderStatus.completed },
+          select: { userId: true },
+          distinct: ['userId'],
+        })
         : [],
     ]);
     return {
@@ -876,28 +905,28 @@ export class AdminOrderService {
     const typeDisplay =
       orderWithAddress.type === OrderType.delivery
         ? {
-            kind: 'delivery' as const,
-            delivery: {
-              shipperId: orderWithAddress.shipperId,
-              shipper: orderWithAddress.shipper,
-              address: orderWithAddress.address,
-              guestDeliveryAddress: orderWithAddress.guestDeliveryAddress,
-              guestDeliveryPhone: orderWithAddress.guestDeliveryPhone,
-              guestDeliveryName: orderWithAddress.guestDeliveryName,
-            },
-          }
+          kind: 'delivery' as const,
+          delivery: {
+            shipperId: orderWithAddress.shipperId,
+            shipper: orderWithAddress.shipper,
+            address: orderWithAddress.address,
+            guestDeliveryAddress: orderWithAddress.guestDeliveryAddress,
+            guestDeliveryPhone: orderWithAddress.guestDeliveryPhone,
+            guestDeliveryName: orderWithAddress.guestDeliveryName,
+          },
+        }
         : orderWithAddress.type === OrderType.table
           ? {
-              kind: 'table' as const,
-              table: {
-                tableId: orderWithAddress.tableId,
-                table: orderWithAddress.table,
-              },
-            }
+            kind: 'table' as const,
+            table: {
+              tableId: orderWithAddress.tableId,
+              table: orderWithAddress.table,
+            },
+          }
           : {
-              kind: 'pickup' as const,
-              pickup: { pickupTime: orderWithAddress.pickupTime },
-            };
+            kind: 'pickup' as const,
+            pickup: { pickupTime: orderWithAddress.pickupTime },
+          };
 
     return { ...orderWithAddress, typeDisplay };
   }
