@@ -1244,5 +1244,12 @@
   "new_password_requirements_not_met": "Mật khẩu mới chưa đáp ứng đủ yêu cầu.",
   "change_password_success": "Đổi mật khẩu thành công!",
   "generic_error": "Đã có lỗi xảy ra. Vui lòng thử lại."
-}
+ },
+  "security": {
+    "devTools": {
+      "title": "Đã phát hiện Developer Tools",
+      "description": "Developer Tools không được phép sử dụng trên trang này. Vui lòng đóng Developer Tools để tiếp tục sử dụng Ujcha.",
+      "instruction": "Đóng Developer Tools và trang sẽ tự động hoạt động trở lại."
+    }
+  }
 }

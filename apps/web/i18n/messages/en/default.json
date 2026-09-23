@@ -1245,5 +1245,12 @@
   "new_password_requirements_not_met": "New password doesn't meet all requirements.",
   "change_password_success": "Password changed successfully!",
   "generic_error":"Something went wrong. Please try again."
-}
+ },
+ "security": {
+    "devTools": {
+      "title": "Developer Tools Detected",
+      "description": "Developer Tools are not available on this page. Please close Developer Tools to continue using Ujcha.",
+      "instruction": "Close Developer Tools and the page will automatically become available again."
+    }
+  }
 }

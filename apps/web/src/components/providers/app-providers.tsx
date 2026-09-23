@@ -7,6 +7,7 @@ import { Toaster } from "sonner";
 import { useAuthStore } from "@/store/auth-store";
 import { RefCodeCapture } from "@/components/common/RefCodeCapture";
 import { StoreStatusModal } from "@/components/common/StoreStatusModal";
+import { ProductionSecurityGuard } from "../auth/ProductionSecurityGuard";
 
 function AuthPersistHydration() {
   const setHydrated = useAuthStore((s) => s.setHydrated);
@@ -41,6 +42,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       <AuthPersistHydration />
       <Suspense fallback={null}><RefCodeCapture /></Suspense>
       <Toaster position="top-right" richColors />
+      <ProductionSecurityGuard />
       <QueryClientProvider client={queryClient}>
         {children}
         <StoreStatusModal />
