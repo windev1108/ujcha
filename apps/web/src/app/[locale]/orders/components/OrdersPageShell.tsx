@@ -256,7 +256,7 @@ function OrderCard({ order, index = 0 }: { order: UserOrder; index?: number }) {
         </div>
 
         {/* Row 5: Reorder — chỉ hiện với đơn đã hoàn thành/đã huỷ */}
-        {canReorder && (
+        {/* {canReorder && (
           <div className="flex mt-3 border-t border-black/5 pt-3 md:justify-end justify-center">
             <div className="md:w-auto w-full">
               <button
@@ -279,7 +279,7 @@ function OrderCard({ order, index = 0 }: { order: UserOrder; index?: number }) {
               )}
             </div>
           </div>
-        )}
+        )} */}
 
       </div>
     </motion.div>

@@ -597,7 +597,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
           </button>
 
           <div className="flex items-center gap-2">
-            {canReorder && (
+            {/* {canReorder && (
               <button
                 type="button"
                 onClick={handleReorder}
@@ -606,7 +606,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                 <RotateCcw className="size-3.5" />
                 {t("reorder_cta")}
               </button>
-            )}
+            )} */}
             {canExportInvoice && (
               <button
                 type="button"
