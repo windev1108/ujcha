@@ -8,6 +8,7 @@ import { useAuthStore } from "@/store/auth-store";
 import { RefCodeCapture } from "@/components/common/RefCodeCapture";
 import { StoreStatusModal } from "@/components/common/StoreStatusModal";
 import { ProductionSecurityGuard } from "../auth/ProductionSecurityGuard";
+import { GlobalAnnouncementModal } from "../common/GlobalAnnouncementModal";
 
 function AuthPersistHydration() {
   const setHydrated = useAuthStore((s) => s.setHydrated);
@@ -44,8 +45,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
       <Toaster position="top-right" richColors />
       <ProductionSecurityGuard />
       <QueryClientProvider client={queryClient}>
-        {children}
         <StoreStatusModal />
+        <GlobalAnnouncementModal />
+        {children}
       </QueryClientProvider>
     </>
   );

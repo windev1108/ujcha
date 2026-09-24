@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { fetchPublicStoreLocation, fetchPublicDeliveryPlatforms, fetchPublicStoreStatus } from './api'
+import { fetchPublicStoreLocation, fetchPublicDeliveryPlatforms, fetchPublicStoreStatus, fetchStoreAnnouncement } from './api'
 
 export function usePublicStoreLocationQuery() {
   return useQuery({
@@ -25,4 +25,14 @@ export function usePublicDeliveryPlatformsQuery() {
     queryFn: fetchPublicDeliveryPlatforms,
     staleTime: 10 * 60 * 1000,
   })
+}
+
+export function useAnnouncementQuery() {
+  return useQuery({
+    queryKey: ["store", "announcement"],
+    queryFn: fetchStoreAnnouncement,
+    staleTime: 30_000,
+    refetchInterval: 60_000, // để modal tự cập nhật nếu admin đổi trạng thái khi khách đang browse
+    refetchOnWindowFocus: true,
+  });
 }

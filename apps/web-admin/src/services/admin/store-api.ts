@@ -37,6 +37,25 @@ export type CreatePlatformBody = {
   logoWidth?: number;
   logoHeight?: number;
 };
+export type AnnouncementType = "info" | "feature" | "warning";
+export type AnnouncementFrequency = "session" | "once";
+
+export interface AnnouncementConfig {
+  id: string;
+  isActive: boolean;
+  type: AnnouncementType;
+  frequency: AnnouncementFrequency;
+  title: string;
+  content: string;
+  ctaLabel: string | null;
+  ctaUrl: string | null;
+  imageUrl: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  version: number;
+  updatedAt: string;
+}
+export type UpdateAnnouncementPayload = Partial<Omit<AnnouncementConfig, "id" | "version" | "updatedAt">>;
 
 export async function fetchDeliveryPlatforms(): Promise<DeliveryPlatform[]> {
   const { data } = await api.get<DeliveryPlatform[]>("/admin/store/platforms");
@@ -72,5 +91,17 @@ export async function updateStoreStatusConfig(payload: {
   statusReason?: string;
 }): Promise<StoreStatusConfig> {
   const { data } = await api.patch("/admin/store/status", payload);
+  return data;
+}
+
+export async function fetchAnnouncementConfig(): Promise<AnnouncementConfig> {
+  const { data } = await api.get("/admin/store/announcement");
+  return data;
+}
+
+export async function updateAnnouncementConfig(
+  payload: UpdateAnnouncementPayload,
+): Promise<AnnouncementConfig> {
+  const { data } = await api.patch("/admin/store/announcement", payload);
   return data;
 }

@@ -1273,5 +1273,7 @@
   "group_point_discount": "Ujcha Points",
   "group_points_unsaved_warning": "Saving points, please wait a moment.",
   "reorder_cta": "Reorder",
-  "reorder_failed":  "Couldn't load this order's items. Please try again."
+  "reorder_failed":  "Couldn't load this order's items. Please try again.",
+  "announcement_ok": "Got it",
+  "announcement_close": "Close"
 }

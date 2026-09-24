@@ -1,16 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { AlarmClock, ExternalLink, MapPin, type LucideIcon } from "lucide-react";
+import { AlarmClock, Bell, ExternalLink, MapPin, type LucideIcon } from "lucide-react";
 import { StoreLocationTab } from "@/app/hrm/components/StoreLocationTab";
 import { DeliveryPlatformsTab } from "./DeliveryPlatformsTab";
 import { StoreHoursTab } from "./StoreHoursTab";
+import { AnnouncementTab } from "./AnnouncementTab";
 
-type Tab = "location" | "platforms" | "hours";
+type Tab = "location" | "platforms" | "hours" | "announcement";
 type TabItem = { id: Tab; label: string; icon: LucideIcon };
 
 const TABS: TabItem[] = [
   { id: "hours", label: "Trạng thái cửa hàng", icon: AlarmClock },
+  { id: "announcement", label: "Thông báo", icon: Bell },
   { id: "location", label: "Vị trí & địa chỉ", icon: MapPin },
   { id: "platforms", label: "Nền tảng đối tác", icon: ExternalLink },
 ];
@@ -51,6 +53,7 @@ export function StorePageClient() {
       {tab === "location" && <StoreLocationTab />}
       {tab === "hours" && <StoreHoursTab />}
       {tab === "platforms" && <DeliveryPlatformsTab />}
+      {tab === "announcement" && <AnnouncementTab />}
     </div>
   );
 }

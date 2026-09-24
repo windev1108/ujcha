@@ -6,8 +6,7 @@ import { AlertTriangle, Ban, Clock, X } from "lucide-react";
 import { useStoreStatusQuery } from "@/services/store/hooks";
 import { useTranslations } from "next-intl";
 import { minutesToHHmm } from "@/lib/utils";
-
-const SESSION_PREFIX = "ujcha_store_status_seen";
+import { STORE_SESSION_PREFIX, STORE_STATUS_DISMISSED_EVENT } from "@/services/store/types";
 
 export function StoreStatusModal() {
     const { data } = useStoreStatusQuery();
@@ -20,7 +19,7 @@ export function StoreStatusModal() {
             setOpen(false);
             return;
         }
-        const key = `${SESSION_PREFIX}_${data.effectiveStatus}_${data.updatedAt}`;
+        const key = `${STORE_SESSION_PREFIX}_${data.effectiveStatus}_${data.updatedAt}`;
         if (sessionStorage.getItem(key)) return;
         setOpen(true);
     }, [data]);
@@ -36,11 +35,12 @@ export function StoreStatusModal() {
     function dismiss() {
         if (data) {
             sessionStorage.setItem(
-                `${SESSION_PREFIX}_${data.effectiveStatus}_${data.updatedAt}`,
+                `${STORE_SESSION_PREFIX}_${data.effectiveStatus}_${data.updatedAt}`,
                 "1",
             );
         }
         setOpen(false);
+        window.dispatchEvent(new Event(STORE_STATUS_DISMISSED_EVENT));
     }
 
     const message = isHoursClosed
