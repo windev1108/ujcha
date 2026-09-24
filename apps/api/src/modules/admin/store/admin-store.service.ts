@@ -1,12 +1,17 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { CreatePlatformDto } from './dto/create-platform.dto';
 import type { UpdatePlatformDto } from './dto/update-platform.dto';
 import { UpdateStoreStatusDto } from '../../store/dto/update-store-status.dto';
+import { UpdateAnnouncementDto } from './dto/update-announcement.dto';
 
 @Injectable()
 export class AdminStoreService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async listPlatforms() {
     return this.prisma.deliveryPlatform.findMany({
@@ -92,6 +97,77 @@ export class AdminStoreService {
           statusReason: dto.statusReason.trim() || null,
         }),
       },
+    });
+  }
+
+  async getAnnouncement() {
+    const existing = await this.prisma.globalAnnouncement.findUnique({
+      where: { id: 'default' },
+    });
+    if (existing) return existing;
+    return this.prisma.globalAnnouncement.create({ data: { id: 'default' } });
+  }
+
+  async updateAnnouncement(dto: UpdateAnnouncementDto) {
+    const current = await this.getAnnouncement();
+
+    const next = {
+      isActive: dto.isActive ?? current.isActive,
+      type: dto.type ?? current.type,
+      frequency: dto.frequency ?? current.frequency,
+      title: dto.title !== undefined ? dto.title.trim() : current.title,
+      content: dto.content !== undefined ? dto.content.trim() : current.content,
+      ctaLabel:
+        dto.ctaLabel !== undefined
+          ? dto.ctaLabel?.trim() || null
+          : current.ctaLabel,
+      ctaUrl:
+        dto.ctaUrl !== undefined ? dto.ctaUrl?.trim() || null : current.ctaUrl,
+      imageUrl:
+        dto.imageUrl !== undefined
+          ? dto.imageUrl?.trim() || null
+          : current.imageUrl,
+      startsAt:
+        dto.startsAt !== undefined
+          ? dto.startsAt
+            ? new Date(dto.startsAt)
+            : null
+          : current.startsAt,
+      endsAt:
+        dto.endsAt !== undefined
+          ? dto.endsAt
+            ? new Date(dto.endsAt)
+            : null
+          : current.endsAt,
+    };
+
+    if (next.isActive && !next.title && !next.content) {
+      throw new BadRequestException(
+        'Cần nhập tiêu đề hoặc nội dung thông báo.',
+      );
+    }
+    if (!!next.ctaLabel !== !!next.ctaUrl) {
+      throw new BadRequestException(
+        'Nút hành động cần có cả nhãn và đường dẫn.',
+      );
+    }
+    if (next.startsAt && next.endsAt && next.endsAt <= next.startsAt) {
+      throw new BadRequestException(
+        'Thời gian kết thúc phải sau thời gian bắt đầu.',
+      );
+    }
+
+    const contentChanged =
+      next.type !== current.type ||
+      next.title !== current.title ||
+      next.content !== current.content ||
+      next.ctaLabel !== current.ctaLabel ||
+      next.ctaUrl !== current.ctaUrl ||
+      next.imageUrl !== current.imageUrl;
+
+    return this.prisma.globalAnnouncement.update({
+      where: { id: 'default' },
+      data: { ...next, ...(contentChanged && { version: { increment: 1 } }) },
     });
   }
 }

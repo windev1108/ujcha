@@ -29,4 +29,31 @@ export class StoreController {
   async getPublicStoreStatus() {
     return this.storeStatus.getStatus();
   }
+
+  @Get('announcement')
+  @ApiOperation({ summary: 'Thông báo toàn site đang hiệu lực (public)' })
+  async getActive() {
+    const row = await this.prisma.globalAnnouncement.findUnique({
+      where: { id: 'default' },
+    });
+    const now = new Date();
+    const live =
+      !!row &&
+      row.isActive &&
+      !!(row.title || row.content) &&
+      (!row.startsAt || row.startsAt <= now) &&
+      (!row.endsAt || row.endsAt > now);
+
+    if (!row || !live) return null;
+    return {
+      type: row.type,
+      frequency: row.frequency,
+      title: row.title,
+      content: row.content,
+      ctaLabel: row.ctaLabel,
+      ctaUrl: row.ctaUrl,
+      imageUrl: row.imageUrl,
+      version: row.version,
+    };
+  }
 }

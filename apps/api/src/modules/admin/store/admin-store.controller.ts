@@ -19,6 +19,7 @@ import { AdminStoreService } from './admin-store.service';
 import { CreatePlatformDto } from './dto/create-platform.dto';
 import { UpdatePlatformDto } from './dto/update-platform.dto';
 import { UpdateStoreStatusDto } from '../../store/dto/update-store-status.dto';
+import { UpdateAnnouncementDto } from './dto/update-announcement.dto';
 
 @ApiTags('admin-store')
 @ApiBearerAuth('admin-access-token')
@@ -67,5 +68,19 @@ export class AdminStoreController {
   @Patch('status')
   updateStoreStatus(@Body() dto: UpdateStoreStatusDto) {
     return this.service.updateStoreStatus(dto);
+  }
+
+  @Get('announcement')
+  @Roles(AdminRole.super_admin, AdminRole.staff)
+  @ApiOperation({ summary: 'Lấy cấu hình thông báo toàn site' })
+  getAnnouncement() {
+    return this.service.getAnnouncement();
+  }
+
+  @Patch('announcement')
+  @Roles(AdminRole.super_admin, AdminRole.staff)
+  @ApiOperation({ summary: 'Cập nhật thông báo toàn site' })
+  updateAnnouncement(@Body() dto: UpdateAnnouncementDto) {
+    return this.service.updateAnnouncement(dto);
   }
 }

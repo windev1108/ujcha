@@ -1133,3 +1133,33 @@ model PushSubscription {
   @@index([deviceId])
   @@index([participantId])
 }
+
+enum AnnouncementType {
+  info
+  feature
+  warning
+}
+
+enum AnnouncementFrequency {
+  session
+  once
+}
+
+/// Thông báo toàn site (popup khi khách vào web) — singleton id = "default".
+model GlobalAnnouncement {
+  id        String                @id @default("default")
+  isActive  Boolean               @default(false)
+  type      AnnouncementType      @default(info)
+  frequency AnnouncementFrequency @default(session)
+  title     String                @default("")
+  content   String                @default("") @db.Text
+  ctaLabel  String?
+  imageUrl  String?
+  /// Đường dẫn nội bộ ("/menu") hoặc link https.
+  ctaUrl    String?
+  startsAt  DateTime?
+  endsAt    DateTime?
+  /// Tăng khi nội dung đổi → khách đã đóng ở chế độ "once" sẽ thấy lại.
+  version   Int                   @default(1)
+  updatedAt DateTime              @updatedAt
+}
