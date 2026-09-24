@@ -1506,7 +1506,7 @@ export function GroupOrderPageShell() {
 
   const meetsMinOrderToSpend = !pointConfig || pointsBaseSubtotal >= pointConfig.minOrderAmountToSpend;
   const canEditPoints =
-    state?.status === "collecting" && (perParticipantPoints ? !!me?.userId : isHost);
+    state?.status === "collecting" && !!me?.userId;
 
   const effectivePoints = canEditPoints
     ? meetsMinOrderToSpend ? Math.min(pointsToUse, maxUsablePoints) : 0
