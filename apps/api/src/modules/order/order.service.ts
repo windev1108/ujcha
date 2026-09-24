@@ -186,7 +186,7 @@ export class OrderService {
     private readonly notificationService: NotificationService,
     private readonly inventoryService: InventoryService,
     private readonly storeStatus: StoreStatusService,
-  ) { }
+  ) {}
 
   calculateTotal(items: CreateOrderItemDto[]): Prisma.Decimal {
     let sum = new Prisma.Decimal(0);
@@ -289,7 +289,7 @@ export class OrderService {
         normalized: optionsNormalized,
         details: optionDetails,
       } = skipOptionValidation
-          ? {
+        ? {
             surcharge: new Prisma.Decimal(0),
             normalized: {} as Record<string, string>,
             details: [] as {
@@ -299,7 +299,7 @@ export class OrderService {
               nameTranslation?: Record<string, string>;
             }[],
           }
-          : validateOptionsAndSurcharge(optionGroupsResolved, item.options);
+        : validateOptionsAndSurcharge(optionGroupsResolved, item.options);
       unit = unit.add(optionSurcharge);
 
       // Merge client-provided nameTranslation as fallback for option values the product record may lack.
@@ -575,8 +575,8 @@ export class OrderService {
       const vatAmount =
         vatPercent > 0
           ? new Prisma.Decimal(
-            Math.round((Number(finalAmount) * vatPercent) / 100),
-          )
+              Math.round((Number(finalAmount) * vatPercent) / 100),
+            )
           : new Prisma.Decimal(0);
       const vatRate = new Prisma.Decimal(vatPercent);
 
@@ -989,20 +989,20 @@ export class OrderService {
     const [txns, groupLinks] = await Promise.all([
       orderIds.length > 0
         ? this.prisma.pointTransaction.findMany({
-          where: {
-            userId,
-            type: PointTransactionType.earn,
-            source: PointSource.order,
-            referenceId: { in: orderIds },
-          },
-          select: { referenceId: true, amount: true },
-        })
+            where: {
+              userId,
+              type: PointTransactionType.earn,
+              source: PointSource.order,
+              referenceId: { in: orderIds },
+            },
+            select: { referenceId: true, amount: true },
+          })
         : Promise.resolve([]),
       orderIds.length > 0
         ? this.prisma.groupOrder.findMany({
-          where: { orderId: { in: orderIds } },
-          select: { orderId: true, token: true },
-        })
+            where: { orderId: { in: orderIds } },
+            select: { orderId: true, token: true },
+          })
         : Promise.resolve([]),
     ]);
 
@@ -1215,63 +1215,92 @@ export class OrderService {
     };
   }
 
-  async restorePointsForOrder(
+  private async releaseOrRefundPointsTx(
     tx: Prisma.TransactionClient,
+    userId: string,
+    reserved: number,
+    consumed: number,
     orderId: string,
-  ): Promise<void> {
-    const order = await tx.order.findUnique({
-      where: { id: orderId },
-      select: {
-        userId: true,
-        pointsReserved: true,
-        pointsConsumed: true,
-      },
-    });
-    if (!order?.userId) return;
-
-    // Case 1: điểm mới reserved (đơn chưa paid) — chưa có tiền thật bị trừ, chỉ cần zero-out.
-    if (order.pointsReserved > 0) {
-      await this.pointService.unlockPointsTx(
-        tx,
-        order.userId,
-        order.pointsReserved,
-      );
-      await tx.order.update({
-        where: { id: orderId },
-        data: { pointsReserved: 0 },
-      });
+  ) {
+    // Điểm mới reserved (chưa paid): chỉ cần unlock
+    if (reserved > 0) {
+      await this.pointService.unlockPointsTx(tx, userId, reserved);
     }
-
-    // Case 2: điểm đã bị trừ thật khi đơn paid trước đó — phải hoàn lại.
-    if (order.pointsConsumed > 0) {
+    // Điểm đã trừ thật: hoàn lại (idempotent theo userId + orderId)
+    if (consumed > 0) {
       const alreadyRefunded = await tx.pointTransaction.findFirst({
         where: {
-          userId: order.userId,
+          userId,
           type: PointTransactionType.earn,
           source: PointSource.admin,
           referenceId: orderId,
         },
         select: { id: true },
       });
-
       if (!alreadyRefunded) {
         await this.pointService.earnPointsTx(
           tx,
-          order.userId,
-          order.pointsConsumed,
+          userId,
+          consumed,
           PointSource.admin,
           orderId,
-          {
-            // Hoàn point dùng ngay, không set lại hạn expire cũ (tránh phức tạp hoá logic).
-            expiresAt: null,
-            usableFrom: null,
-          },
+          { expiresAt: null, usableFrom: null },
         );
       }
+    }
+  }
 
+  async restorePointsForOrder(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+  ): Promise<void> {
+    // 1) Point cấp đơn (đơn thường / group host_pays)
+    const order = await tx.order.findUnique({
+      where: { id: orderId },
+      select: { userId: true, pointsReserved: true, pointsConsumed: true },
+    });
+    if (
+      order?.userId &&
+      (order.pointsReserved > 0 || order.pointsConsumed > 0)
+    ) {
+      await this.releaseOrRefundPointsTx(
+        tx,
+        order.userId,
+        order.pointsReserved,
+        order.pointsConsumed,
+        orderId,
+      );
       await tx.order.update({
         where: { id: orderId },
-        data: { pointsConsumed: 0 },
+        data: { pointsReserved: 0, pointsConsumed: 0 },
+      });
+    }
+
+    const participants = await tx.groupOrderParticipant.findMany({
+      where: {
+        groupOrder: { orderId },
+        OR: [{ pointsReserved: { gt: 0 } }, { pointsConsumed: { gt: 0 } }],
+      },
+      select: {
+        id: true,
+        userId: true,
+        pointsReserved: true,
+        pointsConsumed: true,
+      },
+    });
+    for (const p of participants) {
+      if (p.userId) {
+        await this.releaseOrRefundPointsTx(
+          tx,
+          p.userId,
+          p.pointsReserved,
+          p.pointsConsumed,
+          orderId,
+        );
+      }
+      await tx.groupOrderParticipant.update({
+        where: { id: p.id },
+        data: { pointsReserved: 0, pointsConsumed: 0 },
       });
     }
   }

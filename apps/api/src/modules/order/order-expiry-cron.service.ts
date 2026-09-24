@@ -1,7 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
-import { GroupOrderStatus, GroupParticipantPaymentType, OrderStatus, PaymentStatus, PaymentType } from '@prisma/client';
+import {
+  GroupOrderStatus,
+  GroupParticipantPaymentType,
+  OrderStatus,
+  PaymentStatus,
+  PaymentType,
+} from '@prisma/client';
 import { OrdersGateway } from '../events/orders.gateway';
 import { GroupOrderGateway } from '../group-order/group-order.gateway';
 import { GroupOrderService } from '../group-order/group-order.service';
@@ -34,7 +40,9 @@ export class OrderExpiryCronService {
       ]);
     } catch (err: any) {
       if (err?.code === 'P2024') {
-        this.logger.warn('Connection pool busy during expiry cron — will retry next cycle');
+        this.logger.warn(
+          'Connection pool busy during expiry cron — will retry next cycle',
+        );
         return;
       }
       this.logger.error('Expiry cron failed', err);
@@ -67,7 +75,10 @@ export class OrderExpiryCronService {
 
     // Notify all clients watching these orders
     for (const id of ids) {
-      this.ordersGateway.emitOrderStatusUpdated({ orderId: id, status: 'cancelled' });
+      this.ordersGateway.emitOrderStatusUpdated({
+        orderId: id,
+        status: 'cancelled',
+      });
     }
 
     this.logger.log(
@@ -107,29 +118,28 @@ export class OrderExpiryCronService {
     const groupIds = expiredGroups.map((g) => g.id);
     const orderIds = expiredGroups.map((g) => g.orderId!);
 
-    await this.prisma.$transaction([
-      this.prisma.order.updateMany({
-        where: { id: { in: orderIds } },
-        data: { status: OrderStatus.cancelled },
-      }),
-      this.prisma.groupOrder.updateMany({
-        where: { id: { in: groupIds } },
-        data: { status: GroupOrderStatus.cancelled },
-      }),
-    ]);
+    await this.groupOrderService.cancelGroupOrdersAndReleasePoints(
+      groupIds,
+      orderIds,
+    );
 
     // Emit realtime updates for each expired group so all members' UIs update
     await Promise.allSettled(
       expiredGroups.map(async (g) => {
         // Update order detail page for all participants viewing this order
-        this.ordersGateway.emitOrderStatusUpdated({ orderId: g.orderId!, status: 'cancelled' });
+        this.ordersGateway.emitOrderStatusUpdated({
+          orderId: g.orderId!,
+          status: 'cancelled',
+        });
 
         // Update group order page with full cancelled state
         try {
           const state = await this.groupOrderService.findByToken(g.token);
           this.groupOrderGateway.broadcast(g.token, state);
         } catch (err) {
-          this.logger.warn(`Failed to broadcast group cancellation for ${g.token}: ${err}`);
+          this.logger.warn(
+            `Failed to broadcast group cancellation for ${g.token}: ${err}`,
+          );
         }
       }),
     );

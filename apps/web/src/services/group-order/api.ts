@@ -28,6 +28,10 @@ export interface GroupOrderParticipant {
   paymentQrToken: string | null
   paidAt: string | null
   joinedAt: string
+  pointsToUse: number
+  pointDiscountAmount: number
+  pointsReserved: number
+  amountDue: number | null;
   subtotal: number
   items: GroupOrderItem[]
 }
@@ -42,6 +46,7 @@ export interface GroupOrderState {
   type: 'delivery' | 'pickup' | 'table'
   shippingFee: number
   shippingFeeMode: 'split' | 'host_pays'
+  pointsToUse: number;
   note: string | null
   expiresAt: string
   createdAt: string
@@ -252,4 +257,11 @@ export async function checkoutSplitCash(
 export async function fetchGroupOrderConfig(): Promise<GroupOrderConfig> {
   const { data } = await api.get<GroupOrderConfig>('/group-orders/config/discount')
   return data
+}
+
+export async function setParticipantPoints(
+  token: string, sessionToken: string, pointsToUse: number,
+): Promise<GroupOrderState> {
+  const { data } = await api.patch(`/group-orders/${token}/points`, { sessionToken, pointsToUse });
+  return data;
 }

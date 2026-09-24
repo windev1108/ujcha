@@ -24,6 +24,7 @@ import {
   PaymentActionDto,
   SessionActionDto,
   SetFulfillmentDto,
+  SetParticipantPointsDto,
   UpdateGroupOrderConfigDto,
   UpdateItemsDto,
 } from './dto/group-order.dto';
@@ -52,6 +53,20 @@ export class GroupOrderController {
   @Get(':token')
   getState(@Param('token') token: string) {
     return this.service.findByToken(token);
+  }
+
+  @Patch(':token/points')
+  async setMyPoints(
+    @Param('token') token: string,
+    @Body() dto: SetParticipantPointsDto,
+  ) {
+    const state = await this.service.setMyPoints(
+      token,
+      dto.sessionToken,
+      dto.pointsToUse,
+    );
+    this.gateway.broadcast(token, state);
+    return state;
   }
 
   @UseGuards(OptionalJwtAuthGuard)

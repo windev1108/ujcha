@@ -77,13 +77,14 @@ import {
   type GroupOrderState,
   type GroupOrderItem,
   type GroupDiscountTier,
+  setParticipantPoints,
 } from "@/services/group-order/api";
 import { toast } from "sonner";
 import { useLocale, useTranslations } from "next-intl";
 import { getDisplayName } from "@/lib/product-name";
 import { getDeviceId } from "@/hooks/useDeviceId";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
-import { extractErrorCode, extractErrorMessage } from "@/lib/utils";
+import { extractErrorCode } from "@/lib/utils";
 import { StoreClosedDialog } from "@/components/common/StoreClosedDialog";
 
 const SESSION_KEY = (token: string) => `group_order_session_${token}`;
@@ -1051,7 +1052,11 @@ export function GroupOrderPageShell() {
     (p) => (myParticipantId && p.id === myParticipantId) || (user?.id && p.userId === user.id),
   );
   const isHost = me?.isHost ?? false;
-  const { permission: pushPermission, subscribing: pushSubscribing, subscribe: subscribePush } =
+  // split + bank_transfer: mỗi participant (có auth) dùng điểm cho phần của mình
+  const perParticipantPoints =
+    state?.paymentMode === "split" && (state?.paymentType ?? "cash") === "bank_transfer";
+
+  const { permission: pushPermission, subscribe: subscribePush } =
     usePushSubscription(myParticipantId);
 
   const matchedAddress = savedAddresses.find((a) => a.id === state?.address?.id);
@@ -1473,19 +1478,25 @@ export function GroupOrderPageShell() {
     }
   }, [isHost, state?.status, state?.shippingFeeMode, sessionToken, token, localType, localShowNewForm, localSelectedAddressId, localDeliveryForm, localShippingFee, localShippingIsOutOfRange, t]);
 
-  // ── Points (host only) — chỉ giữ ở local state, gửi kèm khi lock/checkout ──
+  // ── Points ──
   const [pointsToUse, setPointsToUse] = useState(0);
+  const pointsHydratedRef = useRef(false);
   const { data: pointConfig } = usePublicPointConfigQuery();
   const pointBalance = profile?.availablePoints ?? 0;
   const pointRate = pointConfig?.pointRate ?? 0;
 
-  // Base tính điểm = tổng món - giảm giá nhóm (khớp BE)
+  // Base tính điểm (khớp BE): per-participant = phần của mình sau giảm giá nhóm
   const pointsBaseSubtotal = useMemo(() => {
     if (!state) return 0;
-    const total = state.participants.reduce((s, p) => s + p.subtotal, 0);
     const active = state.participants.filter((p) => p.items.length > 0).length;
-    return total - Math.round((total * resolveDiscount(active, config)) / 100);
-  }, [state, config]);
+    const pct = resolveDiscount(active, config);
+    if (perParticipantPoints) {
+      const sub = me?.subtotal ?? 0;
+      return sub - Math.round((sub * pct) / 100);
+    }
+    const total = state.participants.reduce((s, p) => s + p.subtotal, 0);
+    return total - Math.round((total * pct) / 100);
+  }, [state, config, perParticipantPoints, me?.subtotal]);
 
   const maxUsablePoints = useMemo(() => {
     if (!pointConfig || pointConfig.pointRate <= 0) return pointBalance;
@@ -1494,19 +1505,53 @@ export function GroupOrderPageShell() {
   }, [pointConfig, pointsBaseSubtotal, pointBalance]);
 
   const meetsMinOrderToSpend = !pointConfig || pointsBaseSubtotal >= pointConfig.minOrderAmountToSpend;
-  const canEditPoints = isHost && state?.status === "collecting";
+  const canEditPoints =
+    state?.status === "collecting" && (perParticipantPoints ? !!me?.userId : isHost);
 
-  // Điểm thực sự hiển thị / gửi đi. Sau khi lock thì lấy từ server.
   const effectivePoints = canEditPoints
     ? meetsMinOrderToSpend ? Math.min(pointsToUse, maxUsablePoints) : 0
-    : state?.pointsToUse ?? 0;
-  const appliedPointDiscount = effectivePoints * pointRate;
+    : perParticipantPoints
+      ? me?.pointsReserved ?? 0
+      : state?.pointsToUse ?? 0;
 
-  // Co input lại khi maxUsablePoints giảm (participant xóa món...). Chỉ chạy khi đã có profile + config.
+  // Sau lock (per-participant) lấy số tiền giảm đã chốt từ server
+  const appliedPointDiscount =
+    perParticipantPoints && !canEditPoints
+      ? me?.pointDiscountAmount ?? 0
+      : effectivePoints * pointRate;
+
+  // Tổng giảm điểm hiển thị ở "Tổng cộng"
+  const groupPointDiscount = perParticipantPoints
+    ? state?.status === "collecting"
+      ? appliedPointDiscount
+      : (state?.participants.reduce((s, p) => s + (p.pointDiscountAmount ?? 0), 0) ?? 0)
+    : appliedPointDiscount;
+
   useEffect(() => {
     if (!pointConfig || !profile) return;
     setPointsToUse((p) => Math.min(p, maxUsablePoints));
   }, [pointConfig, profile, maxUsablePoints]);
+
+  // Khôi phục số điểm đã lưu trên server (F5 / vào lại)
+  useEffect(() => {
+    if (!perParticipantPoints || !me || pointsHydratedRef.current) return;
+    pointsHydratedRef.current = true;
+    if (me.pointsToUse > 0) setPointsToUse(me.pointsToUse);
+  }, [perParticipantPoints, me]);
+
+  // Đồng bộ điểm của mình lên server (debounce)
+  const syncMyPoints = useCallback(async () => {
+    if (!perParticipantPoints || !canEditPoints || !sessionToken) return;
+    if (effectivePoints === (me?.pointsToUse ?? 0)) return;
+    const ns = await setParticipantPoints(token, sessionToken, effectivePoints);
+    setState(ns);
+  }, [perParticipantPoints, canEditPoints, sessionToken, effectivePoints, me?.pointsToUse, token]);
+
+  useEffect(() => {
+    if (!perParticipantPoints || !canEditPoints || !profile) return;
+    const id = setTimeout(() => { void syncMyPoints().catch(() => { }); }, 600);
+    return () => clearTimeout(id);
+  }, [syncMyPoints, perParticipantPoints, canEditPoints, profile]);
 
   // Per-participant amount for split mode (discount proportional, shipping per shippingFeeMode)
   const myAmountBreakdown = useMemo(() => {
@@ -1517,9 +1562,13 @@ export function GroupOrderPageShell() {
     const shippingShare = Math.round(shippingFeeMode === "host_pays"
       ? (isHost ? state.shippingFee : 0)
       : (activeCount > 0 ? state.shippingFee / activeCount : 0));
-    const pointDiscount = isHost
-      ? Math.min(appliedPointDiscount, Math.round(me.subtotal - discountAmt + shippingShare))
-      : 0;
+    const pointDiscount = perParticipantPoints
+      ? me.userId
+        ? Math.min(appliedPointDiscount, Math.round(me.subtotal - discountAmt))
+        : 0
+      : isHost
+        ? Math.min(appliedPointDiscount, Math.round(me.subtotal - discountAmt + shippingShare))
+        : 0;
     return {
       subtotal: me.subtotal,
       discountPct,
@@ -1550,7 +1599,7 @@ export function GroupOrderPageShell() {
     } catch (e: unknown) {
       const code = extractErrorCode(e);
       if (code?.startsWith("STORE_")) {
-        setStoreClosedInfo({ code, message: extractErrorMessage(e) });
+        setStoreClosedInfo({ code });
         return;
       }
       const err = e as { response?: { data?: { message?: string | string[] } } };
@@ -1589,6 +1638,7 @@ export function GroupOrderPageShell() {
     if (!sessionToken) return;
     setLockLoading(true);
     try {
+      await syncMyPoints();
       const go = await lockGroupOrder(token, sessionToken, effectivePoints);
       setState(go);
     } catch (e: unknown) {
@@ -1976,7 +2026,10 @@ export function GroupOrderPageShell() {
                   className="flex-1 rounded-full bg-[#1a3c34] py-3 font-semibold text-white"
                   isDisabled={actionLoading || me.items.length === 0}
                   onPress={() =>
-                    void withAction(() => markGroupOrderReady(token, sessionToken!))
+                    void withAction(async () => {
+                      await syncMyPoints();
+                      return markGroupOrderReady(token, sessionToken!);
+                    })
                   }
                 >
                   <CheckCircle2 className="mr-1 size-4" />
@@ -2133,7 +2186,7 @@ export function GroupOrderPageShell() {
                     : state.shippingFee;
                   const displayFinalAmount = Math.max(
                     0,
-                    totalAmount - discountAmount - appliedPointDiscount + displayShippingFee,
+                    totalAmount - discountAmount - groupPointDiscount + displayShippingFee,
                   );
                   return (
                     <>
@@ -2240,13 +2293,15 @@ export function GroupOrderPageShell() {
                 <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
                   {t("points_label")}
                 </p>
-                <PointsSection
-                  pointBalance={pointBalance}
-                  pointConfig={pointConfig ?? undefined}
-                  subtotal={pointsBaseSubtotal}
-                  pointsToUse={pointsToUse}
-                  onChange={setPointsToUse}
-                />
+                {canEditPoints && pointBalance > 0 &&
+                  <PointsSection
+                    pointBalance={pointBalance}
+                    pointConfig={pointConfig ?? undefined}
+                    subtotal={pointsBaseSubtotal}
+                    pointsToUse={pointsToUse}
+                    onChange={setPointsToUse}
+                  />
+                }
               </div>
             )}
 

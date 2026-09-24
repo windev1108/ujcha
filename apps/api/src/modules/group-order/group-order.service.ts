@@ -66,7 +66,7 @@ export class GroupOrderService {
     private readonly storeStatus: StoreStatusService,
     private readonly orderService: OrderService,
     private readonly pointService: PointService,
-  ) { }
+  ) {}
 
   private fullInclude() {
     return {
@@ -119,9 +119,9 @@ export class GroupOrderService {
           const unit = Number(item.unitPrice);
           const toppings = Array.isArray(item.toppingsJson)
             ? (item.toppingsJson as any[]).reduce(
-              (s: number, t: any) => s + Number(t.price ?? 0),
-              0,
-            )
+                (s: number, t: any) => s + Number(t.price ?? 0),
+                0,
+              )
             : 0;
           return sum + (unit + toppings) * item.quantity;
         }, 0);
@@ -139,6 +139,10 @@ export class GroupOrderService {
           paidAt: p.paidAt,
           joinedAt: p.joinedAt,
           subtotal,
+          pointsToUse: p.pointsToUse ?? 0,
+          pointsReserved: p.pointsReserved ?? 0,
+          pointDiscountAmount: Number(p.pointDiscountAmount ?? 0),
+          amountDue: p.amountDue != null ? Number(p.amountDue) : null,
           items: p.items.map((item: any) => ({
             id: item.id,
             productId: item.productId,
@@ -224,7 +228,7 @@ export class GroupOrderService {
             where: { id: hostParticipant.id },
             data: { deviceId: dto.deviceId },
           })
-          .catch(() => { });
+          .catch(() => {});
       }
       return {
         ...this.serialize(existing),
@@ -511,7 +515,7 @@ export class GroupOrderService {
               where: { id: existing.id },
               data: { deviceId: dto.deviceId },
             })
-            .catch(() => { });
+            .catch(() => {});
         }
         return {
           sessionToken: existing.sessionToken,
@@ -689,7 +693,9 @@ export class GroupOrderService {
       throw new BadRequestException('Don nhom khong o trang thai thu thap.');
     }
     await this.storeStatus.assertOpenForOrders();
-    await this.persistHostPoints(go, pointsToUse);
+    if (!this.isPerParticipantPoints(go)) {
+      await this.persistHostPoints(go, pointsToUse);
+    }
 
     if ((go as any).paymentType === 'bank_transfer') {
       const goFull = await this.prisma.groupOrder.findUnique({
@@ -1066,12 +1072,12 @@ export class GroupOrderService {
     const result = cfg
       ? this._serializeConfig(cfg)
       : {
-        id: 'default',
-        isEnabled: true,
-        expiryMinutes: 120,
-        discountTiers: [] as unknown[],
-        limitParticipants: 0,
-      };
+          id: 'default',
+          isEnabled: true,
+          expiryMinutes: 120,
+          discountTiers: [] as unknown[],
+          limitParticipants: 0,
+        };
 
     await this.redis.set(
       GROUP_ORDER_CONFIG_KEY,
@@ -1163,9 +1169,9 @@ export class GroupOrderService {
     if (!cfg || !cfg.isEnabled) return 0;
     const tiers = Array.isArray(cfg.discountTiersJson)
       ? (cfg.discountTiersJson as Array<{
-        minParticipants: number;
-        discountPercent: number;
-      }>)
+          minParticipants: number;
+          discountPercent: number;
+        }>)
       : [];
     const sorted = [...tiers].sort(
       (a, b) => b.minParticipants - a.minParticipants,
@@ -1181,22 +1187,58 @@ export class GroupOrderService {
   } | null> {
     const participant = await this.prisma.groupOrderParticipant.findUnique({
       where: { id: participantId },
-      select: { id: true, paymentStatus: true, groupOrderId: true },
+      select: {
+        id: true,
+        paymentStatus: true,
+        groupOrderId: true,
+        userId: true,
+        pointsReserved: true,
+      },
     });
     if (!participant || (participant.paymentStatus as string) === 'paid')
       return null;
 
     const groupOrder = await this.prisma.groupOrder.findUnique({
       where: { id: participant.groupOrderId },
-      select: { token: true },
+      select: { token: true, orderId: true },
     });
     if (!groupOrder) return null;
     const { token } = groupOrder;
 
-    await this.prisma.groupOrderParticipant.update({
-      where: { id: participantId },
-      data: { paymentStatus: 'paid' as any, paidAt: new Date() },
-    });
+    const claimed = await this.prisma.$transaction(
+      async (tx) => {
+        // Claim nguyên tử: chống 2 webhook trùng cùng trừ điểm 2 lần
+        const res = await tx.groupOrderParticipant.updateMany({
+          where: { id: participantId, paymentStatus: 'pending' as any },
+          data: { paymentStatus: 'paid' as any, paidAt: new Date() },
+        });
+        if (res.count === 0) return false;
+
+        if (
+          participant.userId &&
+          participant.pointsReserved > 0 &&
+          groupOrder.orderId
+        ) {
+          await this.pointService.spendReservedPointsTx(
+            tx,
+            participant.userId,
+            participant.pointsReserved,
+            { source: PointSource.order, referenceId: groupOrder.orderId },
+          );
+          await tx.groupOrderParticipant.update({
+            where: { id: participantId },
+            data: {
+              pointsConsumed: participant.pointsReserved,
+              pointsReserved: 0,
+            },
+          });
+        }
+        return true;
+      },
+      { timeout: 15000, maxWait: 10000 },
+    );
+    if (!claimed) return null;
+
     const goCheck = await this.prisma.groupOrder.findUnique({
       where: { token },
       include: { participants: { include: { items: true } } },
@@ -1324,9 +1366,9 @@ export class GroupOrderService {
     const discountAmount =
       discountPercent > 0
         ? totalAmount
-          .mul(new Prisma.Decimal(discountPercent))
-          .div(new Prisma.Decimal(100))
-          .toDecimalPlaces(0)
+            .mul(new Prisma.Decimal(discountPercent))
+            .div(new Prisma.Decimal(100))
+            .toDecimalPlaces(0)
         : new Prisma.Decimal(0);
 
     // ── Resolve toạ độ giao hàng: ưu tiên addressId đã lưu, fallback inline ──
@@ -1349,11 +1391,44 @@ export class GroupOrderService {
       resolvedLat = go.inlineLat ?? null;
       resolvedLng = go.inlineLng ?? null;
     }
+    const perParticipantPoints =
+      !alreadyPaid &&
+      paymentType === 'bank_transfer' &&
+      go.paymentMode === 'split';
 
-    // ── Điểm của host: tính lại + clamp theo dữ liệu thực tế lúc tạo đơn ──
     let pointsToSpend = 0;
     let pointDiscountMoney = new Prisma.Decimal(0);
-    if (go.hostUserId && (go.pointsToUse ?? 0) > 0) {
+    const participantPointPlans: Array<{
+      participantId: string;
+      userId: string;
+      points: number;
+      discount: Prisma.Decimal;
+    }> = [];
+
+    // ── Điểm của host: tính lại + clamp theo dữ liệu thực tế lúc tạo đơn ──
+    if (perParticipantPoints) {
+      for (const p of activeParticipants) {
+        if (!p.userId || (p.pointsToUse ?? 0) < 1) continue;
+        const sub = this.participantSubtotal(p);
+        // base = phần của người đó sau giảm giá nhóm (khớp FE, không gồm ship)
+        const base = sub.sub(
+          sub.mul(discountPercent).div(100).toDecimalPlaces(0),
+        );
+        const r = await this.orderService.computePointsDiscount(
+          p.userId,
+          base,
+          p.pointsToUse,
+        );
+        if (r.pointsToSpend < 1) continue;
+        participantPointPlans.push({
+          participantId: p.id,
+          userId: p.userId,
+          points: r.pointsToSpend,
+          discount: r.discountMoney,
+        });
+        pointDiscountMoney = pointDiscountMoney.add(r.discountMoney);
+      }
+    } else if (go.hostUserId && (go.pointsToUse ?? 0) > 0) {
       const r = await this.orderService.computePointsDiscount(
         go.hostUserId,
         totalAmount.sub(discountAmount),
@@ -1362,8 +1437,45 @@ export class GroupOrderService {
       pointsToSpend = r.pointsToSpend;
       pointDiscountMoney = r.discountMoney;
     }
-
     const shippingFee = new Prisma.Decimal(go.shippingFee ?? 0);
+    const isSplitBankTransfer =
+      !alreadyPaid &&
+      paymentType === 'bank_transfer' &&
+      go.paymentMode === 'split';
+
+    const participantPayables: Array<{
+      id: string;
+      due: Prisma.Decimal;
+      point: Prisma.Decimal;
+      reserved: number;
+    }> = [];
+
+    if (isSplitBankTransfer) {
+      const n = activeParticipants.length;
+      const hostPaysShipping = go.shippingFeeMode === 'host_pays';
+      for (const p of activeParticipants) {
+        const sub = this.participantSubtotal(p);
+        const disc = sub.mul(discountPercent).div(100).toDecimalPlaces(0);
+        const ship = hostPaysShipping
+          ? p.isHost
+            ? shippingFee
+            : new Prisma.Decimal(0)
+          : n > 0
+            ? shippingFee.div(n).toDecimalPlaces(0)
+            : new Prisma.Decimal(0);
+        const plan = participantPointPlans.find(
+          (x) => x.participantId === p.id,
+        );
+        const point = plan?.discount ?? new Prisma.Decimal(0);
+        const due = Prisma.Decimal.max(0, sub.sub(disc).add(ship).sub(point));
+        participantPayables.push({
+          id: p.id,
+          due,
+          point,
+          reserved: plan?.points ?? 0,
+        });
+      }
+    }
     const finalAmount = totalAmount
       .sub(discountAmount)
       .sub(pointDiscountMoney)
@@ -1411,16 +1523,32 @@ export class GroupOrderService {
           },
         });
 
+        // 1) Split + bank_transfer: khoá điểm từng người và chốt số tiền phải trả
+        for (const pay of participantPayables) {
+          const plan = participantPointPlans.find(
+            (x) => x.participantId === pay.id,
+          );
+          if (plan) {
+            await this.pointService.lockPointsTx(tx, plan.userId, plan.points);
+          }
+          await tx.groupOrderParticipant.update({
+            where: { id: pay.id },
+            data: {
+              amountDue: pay.due,
+              pointsReserved: pay.reserved,
+              pointDiscountAmount: pay.point,
+            },
+          });
+        }
+
+        // 2) Đơn thường / host_pays: điểm của host (giữ nguyên logic cũ)
         if (pointsToSpend > 0 && go.hostUserId) {
           if (alreadyPaid) {
             await this.pointService.spendReservedPointsTx(
               tx,
               go.hostUserId,
               pointsToSpend,
-              {
-                source: PointSource.order,
-                referenceId: created.id,
-              },
+              { source: PointSource.order, referenceId: created.id },
             );
             await tx.order.update({
               where: { id: created.id },
@@ -1434,7 +1562,6 @@ export class GroupOrderService {
             );
           }
         }
-
         return created;
       },
       { timeout: 15000, maxWait: 10000 },
@@ -1464,7 +1591,7 @@ export class GroupOrderService {
           price: x.price,
         })),
       })
-      .catch(() => { });
+      .catch(() => {});
 
     void this.notifyGroupOrderCreated(
       go.participants,
@@ -1499,7 +1626,11 @@ export class GroupOrderService {
     );
   }
 
-  async checkoutSplitCash(token: string, sessionToken: string, pointsToUse?: number) {
+  async checkoutSplitCash(
+    token: string,
+    sessionToken: string,
+    pointsToUse?: number,
+  ) {
     const { go, participant } = await this.resolveParticipant(
       token,
       sessionToken,
@@ -1538,11 +1669,11 @@ export class GroupOrderService {
     const lockOp =
       go.status === GroupOrderStatus.collecting
         ? [
-          this.prisma.groupOrder.update({
-            where: { token },
-            data: { status: GroupOrderStatus.locked },
-          }),
-        ]
+            this.prisma.groupOrder.update({
+              where: { token },
+              data: { status: GroupOrderStatus.locked },
+            }),
+          ]
         : [];
 
     await this.prisma.$transaction([
@@ -1625,5 +1756,88 @@ export class GroupOrderService {
     }
 
     return { go, participant };
+  }
+
+  private isPerParticipantPoints(go: {
+    paymentMode: string;
+    paymentType?: string | null;
+  }) {
+    return go.paymentMode === 'split' && go.paymentType === 'bank_transfer';
+  }
+
+  private participantSubtotal(p: any): Prisma.Decimal {
+    let total = new Prisma.Decimal(0);
+    for (const item of p.items) {
+      const toppingSum = (
+        Array.isArray(item.toppingsJson) ? item.toppingsJson : []
+      ).reduce((s: number, t: any) => s + Number(t.price ?? 0), 0);
+      total = total.add(
+        new Prisma.Decimal(item.unitPrice).add(toppingSum).mul(item.quantity),
+      );
+    }
+    return total;
+  }
+
+  /** Participant tự đặt số điểm muốn dùng cho phần của mình (chỉ lưu; clamp thật ở lúc lock). */
+  async setMyPoints(token: string, sessionToken: string, pointsToUse: number) {
+    const { go, participant } = await this.resolveParticipant(
+      token,
+      sessionToken,
+    );
+
+    if (go.status !== GroupOrderStatus.collecting) {
+      throw new BadRequestException({
+        message: 'Chỉ có thể chỉnh điểm khi đơn nhóm đang thu thập.',
+        code: 'GROUP_ORDER_NOT_COLLECTING',
+      });
+    }
+    if (!this.isPerParticipantPoints(go)) {
+      throw new BadRequestException({
+        message: 'Chỉ áp dụng cho đơn nhóm chia tiền + chuyển khoản.',
+        code: 'GROUP_ORDER_POINTS_NOT_SUPPORTED',
+      });
+    }
+    if (!participant.userId) {
+      throw new ForbiddenException({
+        message: 'Cần đăng nhập để dùng điểm.',
+        code: 'GROUP_ORDER_POINTS_REQUIRE_AUTH',
+      });
+    }
+
+    const points = Number.isFinite(pointsToUse)
+      ? Math.max(0, Math.floor(pointsToUse))
+      : 0;
+    await this.prisma.groupOrderParticipant.update({
+      where: { id: participant.id },
+      data: { pointsToUse: points },
+    });
+
+    const updated = await this.prisma.groupOrder.findUnique({
+      where: { token },
+      include: this.fullInclude(),
+    });
+    return this.serialize(updated!);
+  }
+
+  async cancelGroupOrdersAndReleasePoints(
+    groupIds: string[],
+    orderIds: string[],
+  ) {
+    await this.prisma.$transaction(
+      async (tx) => {
+        await tx.order.updateMany({
+          where: { id: { in: orderIds } },
+          data: { status: OrderStatus.cancelled },
+        });
+        await tx.groupOrder.updateMany({
+          where: { id: { in: groupIds } },
+          data: { status: GroupOrderStatus.cancelled },
+        });
+        for (const orderId of orderIds) {
+          await this.orderService.restorePointsForOrder(tx, orderId);
+        }
+      },
+      { timeout: 30000, maxWait: 10000 },
+    );
   }
 }

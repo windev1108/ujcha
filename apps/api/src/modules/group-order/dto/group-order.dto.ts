@@ -213,6 +213,15 @@ export class LockGroupOrderDto extends SessionActionDto {
   pointsToUse?: number;
 }
 
+export class SetParticipantPointsDto {
+  @IsString()
+  sessionToken: string;
+
+  @IsInt()
+  @Min(0)
+  pointsToUse: number;
+}
+
 export type GroupOrderFull = Prisma.GroupOrderGetPayload<{
   include: {
     participants: {

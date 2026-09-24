@@ -422,7 +422,11 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
     queryKey: ["group-order", groupToken],
     queryFn: () => fetchGroupOrder(groupToken!),
     enabled: !!groupToken,
-    staleTime: 60_000,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchInterval:
+      order?.paymentType === "bank_transfer" && order?.paymentStatus === "pending" ? 10_000 : false,
   });
 
   const { data: payConfig } = usePublicPaymentConfigQuery();
@@ -443,6 +447,9 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
     });
     groupSocketRef.current = socket;
     socket.emit("join-room", { token: groupToken });
+    socket.on("connect", () => {
+      queryClient.invalidateQueries({ queryKey: ["group-order", groupToken] });
+    });
     socket.on("updated", (newState: GroupOrderState) => {
       queryClient.setQueryData(["group-order", groupToken], newState);
       const participantsWithItems = newState.participants.filter((p) => p.items.length > 0);
@@ -575,15 +582,19 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
   const discountFraction = orderTotalItems > 0 ? orderDiscountAmt / orderTotalItems : 0;
   const perParticipantShipping = splitN > 0 ? Math.round(orderShipping / splitN) : 0;
   const splitShippingFeeMode = groupOrder?.shippingFeeMode ?? 'split';
-  function calcSplitAmount(subtotal: number, isParticipantHost = false) {
-    const discountShare = Math.round(subtotal * discountFraction);
+
+  function calcSplitAmount(p: GroupOrderParticipant) {
+    const discountShare = Math.round(p.subtotal * discountFraction);
     const shippingShare = splitShippingFeeMode === 'host_pays'
-      ? (isParticipantHost ? Math.round(orderShipping) : 0)
+      ? (p.isHost ? Math.round(orderShipping) : 0)
       : perParticipantShipping;
+    const pointShare = Math.round(p.pointDiscountAmount ?? 0);
+    const computed = Math.max(0, Math.round(p.subtotal - discountShare + shippingShare - pointShare));
     return {
-      total: Math.round(subtotal - discountShare + shippingShare),
+      total: p.amountDue != null ? Math.round(p.amountDue) : computed, // ưu tiên số server chốt
       discountShare,
       shippingShare,
+      pointShare,
     };
   }
 
@@ -1163,7 +1174,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                           amount: String(
                             groupOrder.paymentMode === "host_pays"
                               ? Math.round(parseFloat(order.finalAmount))
-                              : calcSplitAmount(myGroupParticipant.subtotal, myGroupParticipant.isHost).total,
+                              : calcSplitAmount(myGroupParticipant).total,
                           ),
                           des: myGroupParticipant.paymentQrToken.replace(/-/g, "").slice(0, 12).toUpperCase(),
                         }).toString()}`}
@@ -1195,11 +1206,11 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                             {groupOrder.paymentMode === "host_pays"
                               ? fmtVnd(parseFloat(order.finalAmount))
                               : (() => {
-                                const { total, discountShare, shippingShare } = calcSplitAmount(myGroupParticipant.subtotal, myGroupParticipant.isHost);
+                                const { total, discountShare, shippingShare, pointShare } = calcSplitAmount(myGroupParticipant);
                                 return (
                                   <>
                                     {fmtVnd(total)}
-                                    {(discountShare > 0 || shippingShare > 0) && (
+                                    {(discountShare > 0 || shippingShare > 0 || pointShare > 0) && (
                                       <InfoPopup>
                                         <span className="flex justify-between">
                                           <span className="text-foreground/60">{t("group_split_items")}</span>
@@ -1215,6 +1226,12 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                                           <span className="flex justify-between">
                                             <span className="text-foreground/60">{t(splitShippingFeeMode === 'host_pays' ? "group_split_shipping_all" : "group_split_shipping")}</span>
                                             <span>+{fmtVnd(shippingShare)}</span>
+                                          </span>
+                                        )}
+                                        {pointShare > 0 && (
+                                          <span className="flex justify-between">
+                                            <span className="text-foreground/60">{t("group_point_discount")}</span>
+                                            <span className="text-emerald-600">-{fmtVnd(pointShare)}</span>
                                           </span>
                                         )}
                                       </InfoPopup>
@@ -1317,7 +1334,8 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                               )}
                               <span className="shrink-0 flex items-center gap-1 text-sm font-medium tabular-nums text-foreground/60">
                                 {(() => {
-                                  const { total, discountShare, shippingShare } = calcSplitAmount(p.subtotal, p.isHost);
+                                  const { total, discountShare, shippingShare, pointShare } =
+                                    calcSplitAmount(p);
                                   return (
                                     <>
                                       {fmtVnd(total)}
@@ -1338,6 +1356,12 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                                             <span>+{fmtVnd(shippingShare)}</span>
                                           </span>
                                         )}
+                                        {pointShare > 0 && (
+                                          <span className="flex justify-between">
+                                            <span className="text-foreground/60">{t("group_point_discount")}</span>
+                                            <span className="text-emerald-600">-{fmtVnd(pointShare)}</span>
+                                          </span>
+                                        )}
                                         <span className="flex justify-between border-t border-black/6 pt-1.5 font-semibold text-foreground">
                                           <span>{t("total")}</span>
                                           <span>{fmtVnd(total)}</span>
@@ -1350,6 +1374,12 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                             </li>
                           ))}
                       </ul>
+                      <div className="flex items-center justify-between border-t border-black/6 pt-2.5 text-sm">
+                        <span className="font-semibold text-foreground/70">{t("total")}</span>
+                        <span className="font-bold tabular-nums text-[#1a3c34]">
+                          {fmtVnd(activeParts.reduce((s, p) => s + calcSplitAmount(p).total, 0))}
+                        </span>
+                      </div>
                     </div>
                   );
                 })()}
