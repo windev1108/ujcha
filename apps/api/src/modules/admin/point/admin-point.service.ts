@@ -21,7 +21,10 @@ export class AdminPointService {
     const take = query.limit ?? 50;
     const skip = query.skip ?? 0;
 
-    const where = query.type !== undefined ? { type: query.type } : {};
+    const where = {
+      ...(query.type !== undefined && { type: query.type }),
+      ...(query.source !== undefined && { source: query.source }),
+    };
 
     const [rows, total] = await Promise.all([
       this.prisma.pointTransaction.findMany({
@@ -106,7 +109,7 @@ export class AdminPointService {
 
     const user = await this.prisma.user.findUnique({
       where: { id: dto.userId },
-      select: { id: true, pointBalance: true },
+      select: { id: true, pointBalance: true, lockedPoints: true },
     });
     if (!user) {
       throw new NotFoundException({
@@ -120,7 +123,16 @@ export class AdminPointService {
         code: 'ADMIN_POINT_BALANCE_NEGATIVE',
       });
     }
-
+    if (dto.amount < 0) {
+      const availableToDeduct = user.pointBalance - user.lockedPoints;
+      if (availableToDeduct + dto.amount < 0) {
+        throw new BadRequestException({
+          message:
+            'Không thể trừ quá số điểm khả dụng (một phần đang bị khoá bởi đơn pending).',
+          code: 'ADMIN_POINT_LOCKED',
+        });
+      }
+    }
     await this.prisma.$transaction(async (tx) => {
       if (dto.amount > 0) {
         await this.pointService.earnPointsTx(

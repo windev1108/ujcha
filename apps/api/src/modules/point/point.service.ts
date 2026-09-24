@@ -1,13 +1,10 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  PointSource,
-  PointTransactionType,
-  Prisma,
-} from '@prisma/client';
+import { PointSource, PointTransactionType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type EarnPointsOptions = {
@@ -25,11 +22,10 @@ export type SpendPointsOptions = {
 
 @Injectable()
 export class PointService {
+  private readonly logger = new Logger(PointService.name);
+
   constructor(private readonly prisma: PrismaService) { }
 
-  /**
-   * Cộng điểm: ghi nhận earn + tăng `pointBalance` trong một transaction.
-   */
   async earnPoints(
     userId: string,
     amount: number,
@@ -205,6 +201,29 @@ export class PointService {
     });
   }
 
+  async spendReservedPointsTx(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    amount: number,
+    spendOptions?: SpendPointsOptions,
+  ): Promise<void> {
+    if (amount < 1) return;
+    await this.spendPointsTx(tx, userId, amount, spendOptions);
+    const user = await tx.user.findUnique({
+      where: { id: userId },
+      select: { lockedPoints: true },
+    });
+    if (user) {
+      const dec = Math.min(amount, user.lockedPoints);
+      if (dec > 0) {
+        await tx.user.update({
+          where: { id: userId },
+          data: { lockedPoints: { decrement: dec } },
+        });
+      }
+    }
+  }
+
   /**
    * Xử lý các lô earn đã quá hạn (theo `expiresAt`); gọi từ cron hoặc job.
    */
@@ -318,10 +337,86 @@ export class PointService {
       });
     }
   }
+  async lockPointsTx(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    amount: number,
+  ): Promise<void> {
+    if (amount < 1) return;
+    await this.lockUserRow(tx, userId);
+
+    const user = await tx.user.findUnique({
+      where: { id: userId },
+      select: { pointBalance: true, lockedPoints: true },
+    });
+    if (!user) {
+      throw new NotFoundException({
+        message: 'Không tìm thấy user.',
+        code: 'POINT_USER_NOT_FOUND',
+      });
+    }
+
+    const available = user.pointBalance - user.lockedPoints;
+    if (available < amount) {
+      throw new BadRequestException({
+        message: 'Không đủ điểm khả dụng (đã bị khoá bởi đơn khác).',
+        code: 'POINT_LOCKED_INSUFFICIENT',
+      });
+    }
+
+    await tx.user.update({
+      where: { id: userId },
+      data: { lockedPoints: { increment: amount } },
+    });
+  }
+  async unlockPointsTx(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    amount: number,
+  ): Promise<void> {
+    if (amount < 1) return;
+    await this.lockUserRow(tx, userId);
+
+    const user = await tx.user.findUnique({
+      where: { id: userId },
+      select: { lockedPoints: true },
+    });
+    if (!user) return;
+
+    const dec = Math.min(amount, user.lockedPoints);
+    if (dec > 0) {
+      await tx.user.update({
+        where: { id: userId },
+        data: { lockedPoints: { decrement: dec } },
+      });
+    }
+  }
 
   private async lockUserRow(tx: Prisma.TransactionClient, userId: string) {
     await tx.$executeRaw(
       Prisma.sql`SELECT 1 FROM "User" WHERE id = ${userId}::uuid FOR UPDATE`,
     );
+  }
+
+  async grantSignupBonus(userId: string): Promise<void> {
+    const cfg = await this.prisma.referralProgramConfig.findFirst({
+      where: { isActive: true },
+      select: { signupBonusPoints: true },
+    });
+
+    const points = cfg?.signupBonusPoints ?? 0;
+    if (points < 1) return;
+
+    try {
+      await this.earnPoints(userId, points, PointSource.promotion, null);
+      this.logger.log(
+        `Signup bonus ${points} points granted to user ${userId}`,
+      );
+    } catch (e) {
+      this.logger.error(
+        `Grant signup bonus failed for user ${userId}`,
+        e as Error,
+      );
+    }
   }
 }

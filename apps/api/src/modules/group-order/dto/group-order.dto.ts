@@ -206,6 +206,12 @@ export class UpdateGroupOrderConfigDto {
   discountTiers?: DiscountTierDto[];
 }
 
+export class LockGroupOrderDto extends SessionActionDto {
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  pointsToUse?: number;
+}
 
 export type GroupOrderFull = Prisma.GroupOrderGetPayload<{
   include: {

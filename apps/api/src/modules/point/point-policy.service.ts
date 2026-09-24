@@ -14,6 +14,7 @@ export type ResolvedPointPolicy = {
   delayHours: number;
   expireDays: number;
   minOrderAmount: Prisma.Decimal;
+  minOrderAmountToSpend: Prisma.Decimal;
 };
 
 @Injectable()
@@ -59,6 +60,7 @@ export class PointPolicyService {
       delayHours: config.delayHours,
       expireDays: config.expireDays,
       minOrderAmount: config.minOrderAmount,
+      minOrderAmountToSpend: config.minOrderAmount,
     };
   }
 }

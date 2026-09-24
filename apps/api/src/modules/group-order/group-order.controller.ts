@@ -20,6 +20,7 @@ import {
   CreateGroupOrderDto,
   JoinGroupOrderDto,
   KickParticipantDto,
+  LockGroupOrderDto,
   PaymentActionDto,
   SessionActionDto,
   SetFulfillmentDto,
@@ -61,7 +62,7 @@ export class GroupOrderController {
     @Req() req: any,
     @Body() dto: JoinGroupOrderDto,
   ) {
-    const userId: string | null = (req.user as any)?.userId ?? null;
+    const userId: string | null = req.user?.userId ?? null;
     const result = await this.service.join(token, userId, dto);
     if (!result.alreadyJoined) {
       const state = await this.service.findByToken(token);
@@ -75,7 +76,11 @@ export class GroupOrderController {
     @Param('token') token: string,
     @Body() dto: UpdateItemsDto,
   ) {
-    const state = await this.service.updateItems(token, dto.sessionToken, dto.items);
+    const state = await this.service.updateItems(
+      token,
+      dto.sessionToken,
+      dto.items,
+    );
     this.gateway.broadcast(token, state);
     return state;
   }
@@ -93,21 +98,19 @@ export class GroupOrderController {
 
   @Post(':token/lock')
   @HttpCode(200)
-  async lock(
-    @Param('token') token: string,
-    @Body() dto: SessionActionDto,
-  ) {
-    const state = await this.service.lock(token, dto.sessionToken);
+  async lock(@Param('token') token: string, @Body() dto: LockGroupOrderDto) {
+    const state = await this.service.lock(
+      token,
+      dto.sessionToken,
+      dto.pointsToUse,
+    );
     this.gateway.broadcast(token, state);
     return state;
   }
 
   @Post(':token/unlock')
   @HttpCode(200)
-  async unlock(
-    @Param('token') token: string,
-    @Body() dto: SessionActionDto,
-  ) {
+  async unlock(@Param('token') token: string, @Body() dto: SessionActionDto) {
     const state = await this.service.unlock(token, dto.sessionToken);
     this.gateway.broadcast(token, state);
     return state;
@@ -119,7 +122,11 @@ export class GroupOrderController {
     @Param('token') token: string,
     @Body() dto: SetFulfillmentDto,
   ) {
-    const state = await this.service.setFulfillment(token, dto.sessionToken, dto);
+    const state = await this.service.setFulfillment(
+      token,
+      dto.sessionToken,
+      dto,
+    );
     this.gateway.broadcast(token, state);
     return state;
   }
@@ -145,7 +152,10 @@ export class GroupOrderController {
     @Param('token') token: string,
     @Body() dto: SessionActionDto,
   ) {
-    const state = await this.service.initHostBankTransfer(token, dto.sessionToken);
+    const state = await this.service.initHostBankTransfer(
+      token,
+      dto.sessionToken,
+    );
     this.gateway.broadcast(token, state);
     return state;
   }
@@ -171,7 +181,10 @@ export class GroupOrderController {
     @Param('token') token: string,
     @Body() dto: SessionActionDto,
   ) {
-    const state = await this.service.dissolveGroupOrder(token, dto.sessionToken);
+    const state = await this.service.dissolveGroupOrder(
+      token,
+      dto.sessionToken,
+    );
     this.gateway.broadcastDissolved(token);
     this.gateway.broadcast(token, state);
     return state;
@@ -183,7 +196,11 @@ export class GroupOrderController {
     @Param('token') token: string,
     @Body() dto: KickParticipantDto,
   ) {
-    const result = await this.service.kickParticipant(token, dto.sessionToken, dto.participantId);
+    const result = await this.service.kickParticipant(
+      token,
+      dto.sessionToken,
+      dto.participantId,
+    );
     this.gateway.broadcastKick(token, result.kicked);
     this.gateway.broadcast(token, result.groupOrder);
     return result.groupOrder;
@@ -220,9 +237,13 @@ export class GroupOrderController {
   @HttpCode(200)
   async checkoutSplitCash(
     @Param('token') token: string,
-    @Body() dto: SessionActionDto,
+    @Body() dto: LockGroupOrderDto,
   ) {
-    const result = await this.service.checkoutSplitCash(token, dto.sessionToken);
+    const result = await this.service.checkoutSplitCash(
+      token,
+      dto.sessionToken,
+      dto.pointsToUse,
+    );
     this.gateway.broadcast(token, result.groupOrder);
     return result;
   }
@@ -238,7 +259,7 @@ export class GroupOrderController {
     return this.service.updateConfig({
       isEnabled: dto.isEnabled,
       discountTiers: dto.discountTiers,
-      limitParticipants: dto.limitParticipants
+      limitParticipants: dto.limitParticipants,
     });
   }
 }

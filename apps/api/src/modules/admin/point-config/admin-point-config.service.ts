@@ -15,7 +15,7 @@ function dec(n: number | Prisma.Decimal) {
 
 @Injectable()
 export class AdminPointConfigService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   async getCurrentConfig() {
     const now = new Date();
@@ -49,7 +49,9 @@ export class AdminPointConfigService {
       activeCampaign: activeCampaign
         ? this.serializeCampaign(activeCampaign)
         : null,
-      earnPercentSource: activeCampaign ? ('campaign' as const) : ('config' as const),
+      earnPercentSource: activeCampaign
+        ? ('campaign' as const)
+        : ('config' as const),
       effectiveEarnPercent: effectiveEarnPercent.toString(),
     };
   }
@@ -82,12 +84,16 @@ export class AdminPointConfigService {
 
       const data: Prisma.PointConfigUpdateInput = {};
       if (dto.pointRate !== undefined) data.pointRate = dto.pointRate;
-      if (dto.earnPercent !== undefined) data.earnPercent = dec(dto.earnPercent);
+      if (dto.earnPercent !== undefined)
+        data.earnPercent = dec(dto.earnPercent);
       if (dto.maxUsagePercent !== undefined) {
         data.maxUsagePercent = dec(dto.maxUsagePercent);
       }
       if (dto.minOrderAmount !== undefined) {
         data.minOrderAmount = dec(dto.minOrderAmount);
+      }
+      if (dto.minOrderAmountToSpend !== undefined) {
+        data.minOrderAmountToSpend = dec(dto.minOrderAmountToSpend);
       }
       if (dto.delayHours !== undefined) data.delayHours = dto.delayHours;
       if (dto.expireDays !== undefined) data.expireDays = dto.expireDays;
@@ -157,8 +163,10 @@ export class AdminPointConfigService {
       });
     }
 
-    const startAt = dto.startAt !== undefined ? new Date(dto.startAt) : existing.startAt;
-    const endAt = dto.endAt !== undefined ? new Date(dto.endAt) : existing.endAt;
+    const startAt =
+      dto.startAt !== undefined ? new Date(dto.startAt) : existing.startAt;
+    const endAt =
+      dto.endAt !== undefined ? new Date(dto.endAt) : existing.endAt;
     if (dto.startAt !== undefined || dto.endAt !== undefined) {
       this.assertCampaignWindow(startAt, endAt);
     }
@@ -210,6 +218,7 @@ export class AdminPointConfigService {
     earnPercent: Prisma.Decimal;
     maxUsagePercent: Prisma.Decimal;
     minOrderAmount: Prisma.Decimal;
+    minOrderAmountToSpend: Prisma.Decimal;
     delayHours: number;
     expireDays: number;
     isActive: boolean;
@@ -222,6 +231,7 @@ export class AdminPointConfigService {
       earnPercent: row.earnPercent.toString(),
       maxUsagePercent: row.maxUsagePercent.toString(),
       minOrderAmount: row.minOrderAmount.toString(),
+      minOrderAmountToSpend: row.minOrderAmountToSpend.toString(),
       delayHours: row.delayHours,
       expireDays: row.expireDays,
       isActive: row.isActive,

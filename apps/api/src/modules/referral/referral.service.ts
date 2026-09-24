@@ -46,6 +46,7 @@ export type ReferralProgramPublicConfig = {
   goldPoints: number;
   diamondThreshold: number;
   diamondPoints: number;
+  signupBonusPoints: number;
 };
 
 export type ReferralMyStats = {
@@ -171,10 +172,15 @@ export class ReferralService {
           minOrderAmount: true,
           blockSameIpAsReferrer: true,
           blockSameDeviceAsReferrer: true,
-          bronzeThreshold: true, bronzePoints: true,
-          silverThreshold: true, silverPoints: true,
-          goldThreshold: true, goldPoints: true,
-          diamondThreshold: true, diamondPoints: true,
+          bronzeThreshold: true,
+          bronzePoints: true,
+          silverThreshold: true,
+          silverPoints: true,
+          goldThreshold: true,
+          goldPoints: true,
+          diamondThreshold: true,
+          diamondPoints: true,
+          signupBonusPoints: true,
         },
       }),
     ]);
@@ -208,6 +214,7 @@ export class ReferralService {
             goldPoints: cfg.goldPoints,
             diamondThreshold: cfg.diamondThreshold,
             diamondPoints: cfg.diamondPoints,
+            signupBonusPoints: cfg.signupBonusPoints,
           }
         : null,
     };
@@ -319,10 +326,15 @@ export class ReferralService {
         minOrderAmount: true,
         blockSameIpAsReferrer: true,
         blockSameDeviceAsReferrer: true,
-        bronzeThreshold: true, bronzePoints: true,
-        silverThreshold: true, silverPoints: true,
-        goldThreshold: true, goldPoints: true,
-        diamondThreshold: true, diamondPoints: true,
+        bronzeThreshold: true,
+        bronzePoints: true,
+        silverThreshold: true,
+        silverPoints: true,
+        goldThreshold: true,
+        goldPoints: true,
+        diamondThreshold: true,
+        diamondPoints: true,
+        signupBonusPoints: true,
       },
     });
     if (!cfg) return null;
@@ -341,6 +353,7 @@ export class ReferralService {
       goldPoints: cfg.goldPoints,
       diamondThreshold: cfg.diamondThreshold,
       diamondPoints: cfg.diamondPoints,
+      signupBonusPoints: cfg.signupBonusPoints,
     };
   }
 
@@ -406,17 +419,27 @@ export class ReferralService {
   ): Promise<{ points: number }> {
     const cfg = await this.prisma.referralProgramConfig.findFirst({
       select: {
-        bronzeThreshold: true, bronzePoints: true,
-        silverThreshold: true, silverPoints: true,
-        goldThreshold: true, goldPoints: true,
-        diamondThreshold: true, diamondPoints: true,
+        bronzeThreshold: true,
+        bronzePoints: true,
+        silverThreshold: true,
+        silverPoints: true,
+        goldThreshold: true,
+        goldPoints: true,
+        diamondThreshold: true,
+        diamondPoints: true,
       },
     });
     if (!cfg) {
-      throw new BadRequestException({ message: 'Chưa có cấu hình chương trình giới thiệu.', code: 'REFERRAL_CONFIG_MISSING' });
+      throw new BadRequestException({
+        message: 'Chưa có cấu hình chương trình giới thiệu.',
+        code: 'REFERRAL_CONFIG_MISSING',
+      });
     }
 
-    const tierMap: Record<MilestoneTierId, { threshold: number; points: number }> = {
+    const tierMap: Record<
+      MilestoneTierId,
+      { threshold: number; points: number }
+    > = {
       bronze: { threshold: cfg.bronzeThreshold, points: cfg.bronzePoints },
       silver: { threshold: cfg.silverThreshold, points: cfg.silverPoints },
       gold: { threshold: cfg.goldThreshold, points: cfg.goldPoints },

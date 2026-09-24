@@ -29,7 +29,7 @@ export class OrderPointApplyService {
     private readonly prisma: PrismaService,
     private readonly pointPolicy: PointPolicyService,
     private readonly pointService: PointService,
-  ) { }
+  ) {}
 
   async getPublicRedemptionConfig() {
     const config = await this.pointPolicy.getActiveConfigRaw();
@@ -37,7 +37,7 @@ export class OrderPointApplyService {
     return {
       pointRate: Number(config.pointRate),
       maxUsagePercent: Number(config.maxUsagePercent),
-      minOrderAmount: Number(config.minOrderAmount),
+      minOrderAmountToSpend: Number(config.minOrderAmountToSpend),
     };
   }
 
@@ -106,7 +106,9 @@ export class OrderPointApplyService {
       });
     }
 
-    const pointDiscountAmount = new Prisma.Decimal(computed.actualDiscountMoney);
+    const pointDiscountAmount = new Prisma.Decimal(
+      computed.actualDiscountMoney,
+    );
     const finalAmount = new Prisma.Decimal(computed.finalAmount);
 
     return this.prisma.order.update({
@@ -136,7 +138,9 @@ export class OrderPointApplyService {
   ): Promise<void> {
     if (pointToUse < 1) return;
 
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
     if (!order || order.userId !== userId) return;
 
     const config = await this.pointPolicy.getActiveConfigRaw();
@@ -151,24 +155,41 @@ export class OrderPointApplyService {
     });
     if (!user || user.pointBalance < computed.pointsToSpend) return;
 
-    const pointDiscountAmount = new Prisma.Decimal(computed.actualDiscountMoney);
+    const pointDiscountAmount = new Prisma.Decimal(
+      computed.actualDiscountMoney,
+    );
     const finalAmount = new Prisma.Decimal(computed.finalAmount);
 
     if (spendImmediately) {
       await this.prisma.$transaction(async (tx) => {
         await tx.order.update({
           where: { id: orderId },
-          data: { pointDiscountAmount, finalAmount, pointsConsumed: computed.pointsToSpend },
+          data: {
+            pointDiscountAmount,
+            finalAmount,
+            pointsConsumed: computed.pointsToSpend,
+          },
         });
-        await this.pointService.spendPointsTx(tx, userId, computed.pointsToSpend, {
-          source: PointSource.order,
-          referenceId: orderId,
-        });
+        if (computed.pointsToSpend > 0 && userId) {
+          await this.pointService.spendReservedPointsTx(
+            tx,
+            userId,
+            computed.pointsToSpend,
+            {
+              source: PointSource.order,
+              referenceId: orderId,
+            },
+          );
+        }
       });
     } else {
       await this.prisma.order.update({
         where: { id: orderId },
-        data: { pointDiscountAmount, finalAmount, pointsReserved: computed.pointsToSpend },
+        data: {
+          pointDiscountAmount,
+          finalAmount,
+          pointsReserved: computed.pointsToSpend,
+        },
       });
     }
   }
@@ -179,7 +200,11 @@ export class OrderPointApplyService {
       discountAmount: Prisma.Decimal;
       shippingFee: Prisma.Decimal;
     },
-    config: { pointRate: number; maxUsagePercent: Prisma.Decimal; minOrderAmount: Prisma.Decimal },
+    config: {
+      pointRate: number;
+      maxUsagePercent: Prisma.Decimal;
+      minOrderAmountToSpend: Prisma.Decimal;
+    },
     pointToUse: number,
   ): OrderPointComputation {
     const baseSubtotal = order.totalAmount.sub(order.discountAmount);
@@ -189,14 +214,14 @@ export class OrderPointApplyService {
     const capped = moneyFromPoints.lessThan(maxUsable)
       ? moneyFromPoints
       : maxUsable;
-    const pointsToSpend = Math.floor(
-      Number(capped.div(pointRate).toString()),
-    );
+    const pointsToSpend = Math.floor(Number(capped.div(pointRate).toString()));
     const actualDiscountMoney = pointRate.mul(pointsToSpend);
-    const finalAmount = baseSubtotal.sub(actualDiscountMoney).add(order.shippingFee);
+    const finalAmount = baseSubtotal
+      .sub(actualDiscountMoney)
+      .add(order.shippingFee);
 
     const meetsMinOrderAmount = baseSubtotal.greaterThanOrEqualTo(
-      config.minOrderAmount,
+      config.minOrderAmountToSpend,
     );
 
     return {

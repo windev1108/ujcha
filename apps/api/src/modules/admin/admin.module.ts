@@ -24,7 +24,6 @@ import { AdminFeedbackModule } from './feedback/admin-feedback.module';
 import { AdminSmsModule } from './sms/admin-sms.module';
 import { ExternalOrderModule } from './external/external-order.module';
 import { AdminShippingModule } from './shipping/admin-shipping.module';
-import { AdminPointRewardModule } from './point-reward/admin-point-reward.module';
 import { AdminGroupOrderModule } from './group-order/admin-group-order.module';
 import { AdminStoreModule } from './store/admin-store.module';
 import { AdminIngredientsModule } from './ingredients/admin-ingredients.module';
@@ -57,7 +56,6 @@ import { AdminToppingModule } from './toppings/admin-topping.module';
     HrmModule,
     ExternalOrderModule,
     AdminShippingModule,
-    AdminPointRewardModule,
     AdminGroupOrderModule,
     AdminStoreModule,
     AdminIngredientsModule,

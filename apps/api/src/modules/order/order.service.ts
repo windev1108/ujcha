@@ -30,6 +30,7 @@ import {
 } from '../../helper/utils';
 import { InventoryService } from '../admin/inventory/inventory.service';
 import { StoreStatusService } from '../store/store-status.service';
+import { PointPolicyService } from '../point/point-policy.service';
 
 export type OrderDetail = Prisma.OrderGetPayload<{
   include: {
@@ -180,10 +181,11 @@ export class OrderService {
     private readonly orderValidation: OrderValidationService,
     private readonly pointOrderReward: PointOrderRewardService,
     private readonly pointService: PointService,
+    private readonly pointPolicy: PointPolicyService,
     private readonly referralRewardProcessing: ReferralRewardProcessingService,
     private readonly notificationService: NotificationService,
     private readonly inventoryService: InventoryService,
-    private readonly storeStatus: StoreStatusService
+    private readonly storeStatus: StoreStatusService,
   ) { }
 
   calculateTotal(items: CreateOrderItemDto[]): Prisma.Decimal {
@@ -272,8 +274,7 @@ export class OrderService {
           toppingId: t.id,
           name: t.name,
           price: Number(t.price),
-          nameTranslation:
-            (t as any).nameTranslation ?? ex.nameTranslation ?? {},
+          nameTranslation: t.nameTranslation ?? ex.nameTranslation ?? {},
         });
       }
 
@@ -480,21 +481,29 @@ export class OrderService {
       (sum, r) => sum.add(r.price.mul(r.quantity)),
       new Prisma.Decimal(0),
     );
-    const discountRaw = dto.discountAmount ?? 0;
-    const discountAmount = new Prisma.Decimal(discountRaw);
-    if (discountAmount.greaterThan(totalAmount)) {
+
+    const manualDiscountRaw =
+      (dto as { discountAmount?: number }).discountAmount ?? 0;
+    const manualDiscount = new Prisma.Decimal(manualDiscountRaw);
+    if (manualDiscount.greaterThan(totalAmount)) {
       throw new BadRequestException({
         message: 'Giảm giá không được vượt tổng tiền hàng.',
         code: 'ORDER_DISCOUNT_EXCEEDS_TOTAL',
       });
     }
+
+    const { pointsToSpend, discountMoney: pointDiscountMoney } =
+      await this.computePointsDiscount(
+        userId,
+        totalAmount.sub(manualDiscount),
+        dto.pointsToUse ?? 0,
+      );
+
+    const totalDiscount = manualDiscount.add(pointDiscountMoney);
     const shippingFeeRaw =
       dto.type === OrderType.delivery ? (dto.shippingFee ?? 0) : 0;
     const shippingFee = new Prisma.Decimal(shippingFeeRaw);
-    const finalAmount = this.applyDiscount(totalAmount, discountRaw).add(
-      shippingFee,
-    );
-
+    const finalAmount = totalAmount.sub(totalDiscount).add(shippingFee);
     const paymentStatusOnCreate =
       options?.initialPaymentStatus ?? PaymentStatus.pending;
 
@@ -585,7 +594,9 @@ export class OrderService {
           pickupTime: dto.type === OrderType.pickup ? pickupDate! : null,
           scheduledDeliveryTime: scheduledDeliveryDate,
           totalAmount,
-          discountAmount,
+          discountAmount: manualDiscount,
+          pointDiscountAmount: pointDiscountMoney,
+          pointsReserved: pointsToSpend,
           shippingFee,
           finalAmount,
           vatConfigId: activeVat?.id ?? null,
@@ -598,6 +609,26 @@ export class OrderService {
           paidAt: paymentStatusOnCreate === 'paid' ? new Date() : null,
         },
       });
+
+      if (pointsToSpend > 0 && userId) {
+        if (paymentStatusOnCreate === PaymentStatus.paid) {
+          await this.pointService.spendReservedPointsTx(
+            tx,
+            userId,
+            pointsToSpend,
+            {
+              source: PointSource.order,
+              referenceId: order.id,
+            },
+          );
+          await tx.order.update({
+            where: { id: order.id },
+            data: { pointsConsumed: pointsToSpend, pointsReserved: 0 },
+          });
+        } else {
+          await this.pointService.lockPointsTx(tx, userId, pointsToSpend);
+        }
+      }
 
       await tx.orderItem.createMany({
         data: itemRows.map((row) => ({
@@ -612,32 +643,6 @@ export class OrderService {
         })),
       });
 
-      // Mark the user's voucher as used atomically with the order, and
-      // remember WHICH UserVoucher row was consumed so it can be restored
-      // if the order is later cancelled/deleted.
-      if (dto.voucherCode && userId) {
-        const voucherCode = dto.voucherCode.trim().toUpperCase();
-        const voucher = await tx.voucher.findUnique({
-          where: { code: voucherCode },
-          select: { id: true },
-        });
-        if (voucher) {
-          const userVoucher = await tx.userVoucher.findFirst({
-            where: { userId, voucherId: voucher.id, usedAt: null },
-            select: { id: true },
-          });
-          if (userVoucher) {
-            await tx.userVoucher.update({
-              where: { id: userVoucher.id },
-              data: { usedAt: new Date(), usedOrderId: order.id },
-            });
-            await tx.order.update({
-              where: { id: order.id },
-              data: { appliedUserVoucherId: userVoucher.id },
-            });
-          }
-        }
-      }
       return tx.order.findUniqueOrThrow({
         where: { id: order.id },
         include: {
@@ -725,16 +730,71 @@ export class OrderService {
           code: 'ORDER_POINTS_REQUIRE_USER',
         });
       }
-      const updated = await this.prisma.$transaction(async (tx) => {
-        await this.pointService.spendPointsTx(
-          tx,
-          existing.userId!,
-          existing.pointsReserved,
-          {
-            source: PointSource.order,
-            referenceId: orderId,
-          },
+      const updated = await this.prisma.$transaction(
+        async (tx) => {
+          await this.pointService.spendReservedPointsTx(
+            tx,
+            existing.userId!,
+            existing.pointsReserved,
+            {
+              source: PointSource.order,
+              referenceId: orderId,
+            },
+          );
+          const result = await tx.order.update({
+            where: { id: orderId },
+            data: {
+              ...(dto.status !== undefined && { status: dto.status }),
+              ...(dto.paymentStatus !== undefined && {
+                paymentStatus: dto.paymentStatus,
+              }),
+              pointsConsumed: existing.pointsReserved,
+              pointsReserved: 0,
+            },
+            include: {
+              items: {
+                orderBy: { id: 'asc' },
+                include: {
+                  product: {
+                    select: {
+                      id: true,
+                      name: true,
+                      nameTranslation: true,
+                      imageUrls: true,
+                    },
+                  },
+                },
+              },
+              address: true,
+              table: true,
+              shipper: { select: { id: true, name: true, phone: true } },
+              user: { select: { name: true, phone: true } },
+            },
+          });
+          if (isCancelling) {
+            await this.restorePointsForOrder(tx, orderId);
+          }
+          return result;
+        },
+        {
+          timeout: 15000,
+          maxWait: 10000,
+        },
+      );
+
+      if (shouldRewardPoints) {
+        this.fireOrderCompletionSideEffects(
+          updated.id,
+          updated.userId,
+          updated.paymentCode,
         );
+      }
+
+      return updated;
+    }
+
+    const updated = await this.prisma.$transaction(
+      async (tx) => {
         const result = await tx.order.update({
           where: { id: orderId },
           data: {
@@ -742,8 +802,6 @@ export class OrderService {
             ...(dto.paymentStatus !== undefined && {
               paymentStatus: dto.paymentStatus,
             }),
-            pointsConsumed: existing.pointsReserved,
-            pointsReserved: 0,
           },
           include: {
             items: {
@@ -766,56 +824,15 @@ export class OrderService {
           },
         });
         if (isCancelling) {
-          await this.restoreVoucherForOrder(tx, orderId);
+          await this.restorePointsForOrder(tx, orderId);
         }
         return result;
-      });
-
-      if (shouldRewardPoints) {
-        this.fireOrderCompletionSideEffects(
-          updated.id,
-          updated.userId,
-          updated.paymentCode,
-        );
-      }
-
-      return updated;
-    }
-
-    const updated = await this.prisma.$transaction(async (tx) => {
-      const result = await tx.order.update({
-        where: { id: orderId },
-        data: {
-          ...(dto.status !== undefined && { status: dto.status }),
-          ...(dto.paymentStatus !== undefined && {
-            paymentStatus: dto.paymentStatus,
-          }),
-        },
-        include: {
-          items: {
-            orderBy: { id: 'asc' },
-            include: {
-              product: {
-                select: {
-                  id: true,
-                  name: true,
-                  nameTranslation: true,
-                  imageUrls: true,
-                },
-              },
-            },
-          },
-          address: true,
-          table: true,
-          shipper: { select: { id: true, name: true, phone: true } },
-          user: { select: { name: true, phone: true } },
-        },
-      });
-      if (isCancelling) {
-        await this.restoreVoucherForOrder(tx, orderId);
-      }
-      return result;
-    });
+      },
+      {
+        timeout: 15000,
+        maxWait: 10000,
+      },
+    );
 
     if (shouldRewardPoints) {
       this.fireOrderCompletionSideEffects(updated.id, updated.userId);
@@ -1198,24 +1215,107 @@ export class OrderService {
     };
   }
 
-  async restoreVoucherForOrder(
+  async restorePointsForOrder(
     tx: Prisma.TransactionClient,
     orderId: string,
   ): Promise<void> {
     const order = await tx.order.findUnique({
       where: { id: orderId },
-      select: { appliedUserVoucherId: true },
+      select: {
+        userId: true,
+        pointsReserved: true,
+        pointsConsumed: true,
+      },
     });
-    if (!order?.appliedUserVoucherId) return;
+    if (!order?.userId) return;
 
-    await tx.userVoucher.update({
-      where: { id: order.appliedUserVoucherId },
-      data: { usedAt: null, usedOrderId: null },
-    });
+    // Case 1: điểm mới reserved (đơn chưa paid) — chưa có tiền thật bị trừ, chỉ cần zero-out.
+    if (order.pointsReserved > 0) {
+      await this.pointService.unlockPointsTx(
+        tx,
+        order.userId,
+        order.pointsReserved,
+      );
+      await tx.order.update({
+        where: { id: orderId },
+        data: { pointsReserved: 0 },
+      });
+    }
 
-    await tx.order.update({
-      where: { id: orderId },
-      data: { appliedUserVoucherId: null },
+    // Case 2: điểm đã bị trừ thật khi đơn paid trước đó — phải hoàn lại.
+    if (order.pointsConsumed > 0) {
+      const alreadyRefunded = await tx.pointTransaction.findFirst({
+        where: {
+          userId: order.userId,
+          type: PointTransactionType.earn,
+          source: PointSource.admin,
+          referenceId: orderId,
+        },
+        select: { id: true },
+      });
+
+      if (!alreadyRefunded) {
+        await this.pointService.earnPointsTx(
+          tx,
+          order.userId,
+          order.pointsConsumed,
+          PointSource.admin,
+          orderId,
+          {
+            // Hoàn point dùng ngay, không set lại hạn expire cũ (tránh phức tạp hoá logic).
+            expiresAt: null,
+            usableFrom: null,
+          },
+        );
+      }
+
+      await tx.order.update({
+        where: { id: orderId },
+        data: { pointsConsumed: 0 },
+      });
+    }
+  }
+
+  async computePointsDiscount(
+    userId: string | null,
+    baseSubtotal: Prisma.Decimal,
+    pointsToUse: number,
+  ): Promise<{ pointsToSpend: number; discountMoney: Prisma.Decimal }> {
+    if (!userId || pointsToUse < 1) {
+      return { pointsToSpend: 0, discountMoney: new Prisma.Decimal(0) };
+    }
+
+    const config = await this.pointPolicy.getActiveConfigRaw();
+    if (!config || !config.isActive) {
+      return { pointsToSpend: 0, discountMoney: new Prisma.Decimal(0) };
+    }
+
+    if (baseSubtotal.lessThan(config.minOrderAmountToSpend)) {
+      return { pointsToSpend: 0, discountMoney: new Prisma.Decimal(0) };
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { pointBalance: true, lockedPoints: true },
     });
+    const availableBalance = Math.max(
+      0,
+      (user?.pointBalance ?? 0) - (user?.lockedPoints ?? 0), // ← điểm thực sự khả dụng
+    );
+    const availablePoints = Math.min(pointsToUse, availableBalance);
+    if (availablePoints < 1) {
+      return { pointsToSpend: 0, discountMoney: new Prisma.Decimal(0) };
+    }
+
+    const pointRate = new Prisma.Decimal(config.pointRate);
+    const maxUsable = baseSubtotal.mul(config.maxUsagePercent).div(100);
+    const moneyFromPoints = pointRate.mul(availablePoints);
+    const capped = moneyFromPoints.lessThan(maxUsable)
+      ? moneyFromPoints
+      : maxUsable;
+    const pointsToSpend = Math.floor(Number(capped.div(pointRate).toString()));
+    const discountMoney = pointRate.mul(pointsToSpend);
+
+    return { pointsToSpend, discountMoney };
   }
 }

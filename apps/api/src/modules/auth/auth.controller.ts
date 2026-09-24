@@ -103,23 +103,6 @@ export class AuthController {
     });
   }
 
-  @Post('google')
-  @HttpCode(200)
-  @ApiOperation({ summary: 'Đăng nhập / đăng ký bằng Google (idToken)' })
-  @ApiResponse({
-    status: 200,
-    description: '{ user, accessToken, refreshToken }',
-  })
-  async google(@Body() dto: GoogleLoginDto, @Req() req: Request) {
-    const ip = getClientIp(req);
-    return this.authService.loginWithGoogle(dto.idToken, {
-      deviceId: dto.deviceId,
-      ipAddress: ip,
-      userAgent: getUserAgent(req),
-      refCode: dto.refCode,
-    });
-  }
-
   @Post('reset-password')
   @HttpCode(200)
   @ApiOperation({ summary: 'Đặt lại mật khẩu qua OTP' })

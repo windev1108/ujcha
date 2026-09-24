@@ -164,7 +164,7 @@ export class AdminOrderService {
     private readonly groupOrderService: GroupOrderService,
     private readonly pushService: PushService,
     private readonly inventoryService: InventoryService,
-  ) { }
+  ) {}
 
   async findAll(query: AdminOrderListQueryDto) {
     const page = query.page ?? 1;
@@ -317,11 +317,17 @@ export class AdminOrderService {
         code: 'ORDER_NOT_FOUND',
       });
     }
-    await this.prisma.$transaction(async (tx) => {
-      await this.orderService.restoreVoucherForOrder(tx, orderId);
-      await tx.payment.deleteMany({ where: { orderId } });
-      await tx.order.delete({ where: { id: orderId } });
-    });
+    await this.prisma.$transaction(
+      async (tx) => {
+        await this.orderService.restorePointsForOrder(tx, orderId);
+        await tx.payment.deleteMany({ where: { orderId } });
+        await tx.order.delete({ where: { id: orderId } });
+      },
+      {
+        timeout: 15000,
+        maxWait: 10000,
+      },
+    );
   }
 
   async findById(orderId: string) {
@@ -377,47 +383,56 @@ export class AdminOrderService {
           code: 'ORDER_POINTS_REQUIRE_USER',
         });
       }
-      const updated = await this.prisma.$transaction(async (tx) => {
-        await this.pointService.spendPointsTx(
-          tx,
-          existing.userId!,
-          existing.pointsReserved,
-          {
-            source: PointSource.order,
-            referenceId: orderId,
-          },
-        );
-        const spendTs: Prisma.OrderUpdateInput = {};
-        if (dto.status === OrderStatus.confirmed)
-          spendTs.confirmedAt = new Date();
-        if (dto.status === OrderStatus.preparing)
-          spendTs.preparingAt = new Date();
-        if (dto.status === OrderStatus.ready) spendTs.readyAt = new Date();
-        if (dto.status === OrderStatus.completed)
-          spendTs.completedAt = new Date();
-        if (dto.status === OrderStatus.cancelled)
-          spendTs.cancelledAt = new Date();
+      const updated = await this.prisma.$transaction(
+        async (tx) => {
+          await this.pointService.spendReservedPointsTx(
+            tx,
+            existing.userId!,
+            existing.pointsReserved,
+            {
+              source: PointSource.order,
+              referenceId: orderId,
+            },
+          );
 
-        const result = await tx.order.update({
-          where: { id: orderId },
-          data: {
-            ...(dto.status !== undefined && { status: dto.status }),
-            ...(dto.paymentStatus !== undefined && {
-              paymentStatus: dto.paymentStatus,
-            }),
-            pointsConsumed: existing.pointsReserved,
-            pointsReserved: 0,
-            ...spendTs,
-          },
-          include: adminOrderInclude,
-        });
+          const spendTs: Prisma.OrderUpdateInput = {};
+          if (dto.status === OrderStatus.confirmed)
+            spendTs.confirmedAt = new Date();
+          if (dto.status === OrderStatus.preparing)
+            spendTs.preparingAt = new Date();
+          if (dto.status === OrderStatus.ready) spendTs.readyAt = new Date();
+          if (dto.status === OrderStatus.completed)
+            spendTs.completedAt = new Date();
+          if (dto.status === OrderStatus.cancelled)
+            spendTs.cancelledAt = new Date();
 
-        if (isCancelling) {
-          await this.orderService.restoreVoucherForOrder(tx, orderId);
-        }
+          const result = await tx.order.update({
+            where: { id: orderId },
+            data: {
+              ...(dto.status !== undefined && { status: dto.status }),
+              ...(dto.paymentStatus !== undefined && {
+                paymentStatus: dto.paymentStatus,
+              }),
+              pointsConsumed: existing.pointsReserved,
+              pointsReserved: 0,
+              ...spendTs,
+            },
+            include: adminOrderInclude,
+          });
 
-        return result;
-      });
+          // Trường hợp hiếm: vừa paid vừa cancel cùng lúc trong 1 request —
+          // restorePointsForOrder sẽ hoàn lại pointsConsumed vừa spend ở trên (case 2 của nó)
+          if (isCancelling) {
+            await this.orderService.restorePointsForOrder(tx, orderId);
+          }
+
+          return result;
+        },
+        {
+          timeout: 15000,
+          maxWait: 10000,
+        },
+      );
 
       if (shouldRewardPoints) {
         this.fireOrderCompletionSideEffects(
@@ -463,6 +478,7 @@ export class AdminOrderService {
       return this.withTypeDisplay(updated);
     }
 
+    // ── Nhánh 2: mọi trường hợp khác (đổi status thường, hoặc hủy đơn còn pending) ──
     const statusTs: Prisma.OrderUpdateInput = {};
     if (dto.status === OrderStatus.confirmed) statusTs.confirmedAt = new Date();
     if (dto.status === OrderStatus.preparing) statusTs.preparingAt = new Date();
@@ -487,19 +503,27 @@ export class AdminOrderService {
       }
     }
 
-    const updated = await this.prisma.$transaction(async (tx) => {
-      const result = await tx.order.update({
-        where: { id: orderId },
-        data: dataUpdate,
-        include: adminOrderInclude,
-      });
+    const updated = await this.prisma.$transaction(
+      async (tx) => {
+        // Nhánh này KHÔNG đụng đến point balance/locked — chỉ order.update
+        // và unlock nếu đơn bị hủy (restorePointsForOrder tự lo phần đó)
+        const result = await tx.order.update({
+          where: { id: orderId },
+          data: dataUpdate,
+          include: adminOrderInclude,
+        });
 
-      if (isCancelling) {
-        await this.orderService.restoreVoucherForOrder(tx, orderId);
-      }
+        if (isCancelling) {
+          await this.orderService.restorePointsForOrder(tx, orderId);
+        }
 
-      return result;
-    });
+        return result;
+      },
+      {
+        timeout: 15000,
+        maxWait: 10000,
+      },
+    );
 
     if (shouldRewardPoints) {
       this.fireOrderCompletionSideEffects(
@@ -578,7 +602,6 @@ export class AdminOrderService {
         updated.type === OrderType.delivery &&
         dto.status !== undefined
       ) {
-        // No shipper yet — broadcast to all shippers so their available-orders list stays current
         this.ordersGateway.emitAvailableOrderStatus({
           orderId,
           status: dto.status,
@@ -641,17 +664,17 @@ export class AdminOrderService {
 
     const points = ownerId
       ? await this.prisma.pointTransaction
-        .findFirst({
-          where: {
-            userId: ownerId,
-            source: PointSource.order,
-            referenceId: orderId,
-            type: PointTransactionType.earn,
-          },
-          select: { amount: true },
-        })
-        .then((t) => t?.amount ?? 0)
-        .catch(() => 0)
+          .findFirst({
+            where: {
+              userId: ownerId,
+              source: PointSource.order,
+              referenceId: orderId,
+              type: PointTransactionType.earn,
+            },
+            select: { amount: true },
+          })
+          .then((t) => t?.amount ?? 0)
+          .catch(() => 0)
       : 0;
 
     await Promise.allSettled(
@@ -718,14 +741,41 @@ export class AdminOrderService {
     if (dto.status === OrderStatus.cancelled) bulkTs.cancelledAt = new Date();
 
     if (dto.status === OrderStatus.cancelled) {
-      // Hoàn voucher cho từng đơn TRƯỚC khi cập nhật status hàng loạt.
-      await this.prisma.$transaction(async (tx) => {
-        for (const id of dto.orderIds) {
-          await this.orderService.restoreVoucherForOrder(tx, id);
-        }
-      });
+      await this.prisma.$transaction(
+        async (tx) => {
+          for (const id of dto.orderIds) {
+            await this.orderService.restorePointsForOrder(tx, id);
+          }
+        },
+        { timeout: 20000, maxWait: 10000 },
+      );
     }
 
+    if (dto.status === OrderStatus.completed) {
+      const pending = await this.prisma.order.findMany({
+        where: { id: { in: dto.orderIds }, pointsReserved: { gt: 0 } },
+        select: { id: true, userId: true, pointsReserved: true },
+      });
+
+      await this.prisma.$transaction(
+        async (tx) => {
+          for (const o of pending) {
+            if (!o.userId) continue; // đơn guest không thể có pointsReserved > 0 (do resolveOrderUserId), nhưng phòng hờ
+            await this.pointService.spendReservedPointsTx(
+              tx,
+              o.userId,
+              o.pointsReserved,
+              { source: PointSource.order, referenceId: o.id },
+            );
+            await tx.order.update({
+              where: { id: o.id },
+              data: { pointsConsumed: o.pointsReserved, pointsReserved: 0 },
+            });
+          }
+        },
+        { timeout: 20000, maxWait: 10000 },
+      );
+    }
     const updated = await this.prisma.order.updateMany({
       where: { id: { in: dto.orderIds } },
       data: { status: dto.status, ...bulkTs },
@@ -817,20 +867,20 @@ export class AdminOrderService {
     const [byPhone, byUser] = await Promise.all([
       phones.length
         ? this.prisma.order.findMany({
-          where: {
-            guestDeliveryPhone: { in: phones },
-            status: OrderStatus.completed,
-          },
-          select: { guestDeliveryPhone: true },
-          distinct: ['guestDeliveryPhone'],
-        })
+            where: {
+              guestDeliveryPhone: { in: phones },
+              status: OrderStatus.completed,
+            },
+            select: { guestDeliveryPhone: true },
+            distinct: ['guestDeliveryPhone'],
+          })
         : [],
       userIds.length
         ? this.prisma.order.findMany({
-          where: { userId: { in: userIds }, status: OrderStatus.completed },
-          select: { userId: true },
-          distinct: ['userId'],
-        })
+            where: { userId: { in: userIds }, status: OrderStatus.completed },
+            select: { userId: true },
+            distinct: ['userId'],
+          })
         : [],
     ]);
     return {
@@ -878,10 +928,30 @@ export class AdminOrderService {
       (order.groupOrder.paymentMode === 'host_pays' && isMarkingHost);
 
     if (shouldMarkOrderPaid) {
-      await this.prisma.order.update({
-        where: { id: orderId },
-        data: { paymentStatus: PaymentStatus.paid, paidAt: new Date() },
-      });
+      await this.prisma.$transaction(
+        async (tx) => {
+          if (order.userId && order.pointsReserved > 0) {
+            await this.pointService.spendReservedPointsTx(
+              tx,
+              order.userId,
+              order.pointsReserved,
+              { source: PointSource.order, referenceId: orderId },
+            );
+          }
+          await tx.order.update({
+            where: { id: orderId },
+            data: {
+              paymentStatus: PaymentStatus.paid,
+              paidAt: new Date(),
+              ...(order.pointsReserved > 0
+                ? { pointsConsumed: order.pointsReserved, pointsReserved: 0 }
+                : {}),
+            },
+          });
+        },
+        { timeout: 15000, maxWait: 10000 },
+      );
+
       this.ordersGateway.emitOrderPaid({
         orderId,
         paymentCode: order.paymentCode,
@@ -905,28 +975,28 @@ export class AdminOrderService {
     const typeDisplay =
       orderWithAddress.type === OrderType.delivery
         ? {
-          kind: 'delivery' as const,
-          delivery: {
-            shipperId: orderWithAddress.shipperId,
-            shipper: orderWithAddress.shipper,
-            address: orderWithAddress.address,
-            guestDeliveryAddress: orderWithAddress.guestDeliveryAddress,
-            guestDeliveryPhone: orderWithAddress.guestDeliveryPhone,
-            guestDeliveryName: orderWithAddress.guestDeliveryName,
-          },
-        }
-        : orderWithAddress.type === OrderType.table
-          ? {
-            kind: 'table' as const,
-            table: {
-              tableId: orderWithAddress.tableId,
-              table: orderWithAddress.table,
+            kind: 'delivery' as const,
+            delivery: {
+              shipperId: orderWithAddress.shipperId,
+              shipper: orderWithAddress.shipper,
+              address: orderWithAddress.address,
+              guestDeliveryAddress: orderWithAddress.guestDeliveryAddress,
+              guestDeliveryPhone: orderWithAddress.guestDeliveryPhone,
+              guestDeliveryName: orderWithAddress.guestDeliveryName,
             },
           }
+        : orderWithAddress.type === OrderType.table
+          ? {
+              kind: 'table' as const,
+              table: {
+                tableId: orderWithAddress.tableId,
+                table: orderWithAddress.table,
+              },
+            }
           : {
-            kind: 'pickup' as const,
-            pickup: { pickupTime: orderWithAddress.pickupTime },
-          };
+              kind: 'pickup' as const,
+              pickup: { pickupTime: orderWithAddress.pickupTime },
+            };
 
     return { ...orderWithAddress, typeDisplay };
   }

@@ -4,21 +4,30 @@ import { PointCampaignController } from './point-campaign.controller';
 import { PointExpiryCronService } from './point-expiry-cron.service';
 import { PointOrderRewardService } from './point-order-reward.service';
 import { PointPolicyService } from './point-policy.service';
-import { PointRewardController } from './point-reward.controller';
-import { PointRewardService } from './point-reward.service';
 import { PointService } from './point.service';
 import { PromotionsController } from './promotions.controller';
+import { PointPublicController } from './point-public.controller';
+import { OrderPointApplyService } from '../order/order-point-apply.service';
 
 @Module({
   imports: [PrismaModule],
-  controllers: [PointCampaignController, PromotionsController, PointRewardController],
+  controllers: [
+    PointCampaignController,
+    PromotionsController,
+    PointPublicController,
+  ],
   providers: [
     PointService,
     PointExpiryCronService,
     PointPolicyService,
     PointOrderRewardService,
-    PointRewardService,
+    OrderPointApplyService,
   ],
-  exports: [PointService, PointOrderRewardService, PointPolicyService, PointRewardService],
+  exports: [
+    PointService,
+    PointOrderRewardService,
+    PointPolicyService,
+    OrderPointApplyService,
+  ],
 })
 export class PointModule {}

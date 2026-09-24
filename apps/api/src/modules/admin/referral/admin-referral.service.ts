@@ -77,9 +77,7 @@ export class AdminReferralService {
 
     return this.prisma.user.findMany({
       where: {
-        referredBy: query.referrerCode
-          ? query.referrerCode
-          : { not: null },
+        referredBy: query.referrerCode ? query.referrerCode : { not: null },
       },
       select: {
         ...inviteeSelect,
@@ -214,7 +212,10 @@ export class AdminReferralService {
     ] = await Promise.all([
       this.prisma.user.count({ where: referredBase }),
       this.prisma.user.count({
-        where: { ...referredBase, createdAt: { gte: thisMonthStart, lte: now } },
+        where: {
+          ...referredBase,
+          createdAt: { gte: thisMonthStart, lte: now },
+        },
       }),
       this.prisma.user.count({
         where: {
@@ -272,10 +273,14 @@ export class AdminReferralService {
       this.prisma.referralProgramConfig.findFirst({
         orderBy: { updatedAt: 'desc' },
         select: {
-          bronzeThreshold: true, bronzePoints: true,
-          silverThreshold: true, silverPoints: true,
-          goldThreshold: true, goldPoints: true,
-          diamondThreshold: true, diamondPoints: true,
+          bronzeThreshold: true,
+          bronzePoints: true,
+          silverThreshold: true,
+          silverPoints: true,
+          goldThreshold: true,
+          goldPoints: true,
+          diamondThreshold: true,
+          diamondPoints: true,
         },
       }),
     ]);
@@ -394,7 +399,7 @@ export class AdminReferralService {
       isActive: row.isActive,
       minOrderAmount: row.minOrderAmount.toString(),
       referrerCommissionPercent: row.referrerCommissionPercent,
-      welcomeVoucherId: row.welcomeVoucherId ?? null,
+      signupBonusPoints: row.signupBonusPoints, // ← thay welcomeVoucherId
       maxReferrerRewardsPerDay: row.maxReferrerRewardsPerDay,
       blockSameIpAsReferrer: row.blockSameIpAsReferrer,
       blockSameDeviceAsReferrer: row.blockSameDeviceAsReferrer,
@@ -429,10 +434,8 @@ export class AdminReferralService {
     if (dto.referrerCommissionPercent !== undefined) {
       data.referrerCommissionPercent = dto.referrerCommissionPercent;
     }
-    if (dto.welcomeVoucherId !== undefined) {
-      data.welcomeVoucher = dto.welcomeVoucherId
-        ? { connect: { id: dto.welcomeVoucherId } }
-        : { disconnect: true };
+    if (dto.signupBonusPoints !== undefined) {
+      data.signupBonusPoints = dto.signupBonusPoints; // ← thay khối welcomeVoucher connect/disconnect
     }
     if (dto.maxReferrerRewardsPerDay !== undefined) {
       data.maxReferrerRewardsPerDay = dto.maxReferrerRewardsPerDay;
@@ -443,13 +446,16 @@ export class AdminReferralService {
     if (dto.blockSameDeviceAsReferrer !== undefined) {
       data.blockSameDeviceAsReferrer = dto.blockSameDeviceAsReferrer;
     }
-    if (dto.bronzeThreshold !== undefined) data.bronzeThreshold = dto.bronzeThreshold;
+    if (dto.bronzeThreshold !== undefined)
+      data.bronzeThreshold = dto.bronzeThreshold;
     if (dto.bronzePoints !== undefined) data.bronzePoints = dto.bronzePoints;
-    if (dto.silverThreshold !== undefined) data.silverThreshold = dto.silverThreshold;
+    if (dto.silverThreshold !== undefined)
+      data.silverThreshold = dto.silverThreshold;
     if (dto.silverPoints !== undefined) data.silverPoints = dto.silverPoints;
     if (dto.goldThreshold !== undefined) data.goldThreshold = dto.goldThreshold;
     if (dto.goldPoints !== undefined) data.goldPoints = dto.goldPoints;
-    if (dto.diamondThreshold !== undefined) data.diamondThreshold = dto.diamondThreshold;
+    if (dto.diamondThreshold !== undefined)
+      data.diamondThreshold = dto.diamondThreshold;
     if (dto.diamondPoints !== undefined) data.diamondPoints = dto.diamondPoints;
 
     await this.prisma.referralProgramConfig.update({

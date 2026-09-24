@@ -8,13 +8,12 @@ import { randomUUID } from 'crypto';
 import type { User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { FraudService } from '../fraud/fraud.service';
-import { GoogleAuthService } from '../google-auth/google-auth.service';
 import { JwtTokensService } from './jwt-tokens.service';
 import { OtpService } from '../otp/otp.service';
 import { SessionService } from '../session/session.service';
 import { SmsService } from '../sms/sms.service';
 import { UserService } from '../user/user.service';
-import { UserVoucherService } from '../voucher/user-voucher.service';
+import { PointService } from '../point/point.service';
 
 export type AuthTokens = {
   accessToken: string;
@@ -43,8 +42,7 @@ export class AuthService {
     private readonly sessionService: SessionService,
     private readonly smsService: SmsService,
     private readonly fraudService: FraudService,
-    private readonly userVoucherService: UserVoucherService,
-    private readonly googleAuthService: GoogleAuthService,
+    private readonly pointService: PointService,
   ) { }
 
   /** Gửi OTP để đăng ký hoặc quên mật khẩu. */
@@ -108,7 +106,7 @@ export class AuthService {
     });
 
     try {
-      await this.userVoucherService.grantWelcomeVoucher(user.id);
+      await this.pointService.grantSignupBonus(user.id);
     } catch (e) {
       console.error('[WelcomeVoucher]', e);
     }
@@ -234,13 +232,6 @@ export class AuthService {
 
   async revokeSession(userId: string, sessionId: string): Promise<void> {
     await this.sessionService.revokeSession(userId, sessionId);
-  }
-  async loginWithGoogle(
-    idToken: string,
-    ctx: SessionContext,
-  ): Promise<AuthResult> {
-    const user = await this.googleAuthService.signInWithIdToken(idToken, ctx);
-    return this.issueTokensAndSession(user, ctx);
   }
 
   private async resolveRefCode(refCode: string): Promise<string | undefined> {

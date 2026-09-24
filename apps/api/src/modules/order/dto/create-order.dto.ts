@@ -4,6 +4,7 @@ import {
   IsArray,
   IsDateString,
   IsEnum,
+  IsInt,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -54,7 +55,8 @@ export class CreateOrderDto {
   addressId?: string;
 
   @ApiPropertyOptional({
-    description: 'Địa chỉ mới (inline) — tự động lưu nếu user < 3 địa chỉ. Không dùng cùng lúc với addressId.',
+    description:
+      'Địa chỉ mới (inline) — tự động lưu nếu user < 3 địa chỉ. Không dùng cùng lúc với addressId.',
   })
   @IsOptional()
   @ValidateNested()
@@ -70,13 +72,17 @@ export class CreateOrderDto {
   @MaxLength(2000)
   guestDeliveryAddress?: string;
 
-  @ApiPropertyOptional({ description: 'SĐT người nhận (khách không tài khoản).' })
+  @ApiPropertyOptional({
+    description: 'SĐT người nhận (khách không tài khoản).',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(30)
   guestDeliveryPhone?: string;
 
-  @ApiPropertyOptional({ description: 'Tên người nhận (khách không tài khoản).' })
+  @ApiPropertyOptional({
+    description: 'Tên người nhận (khách không tài khoản).',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(120)
@@ -119,25 +125,10 @@ export class CreateOrderDto {
   @Type(() => CreateOrderItemDto)
   items!: CreateOrderItemDto[];
 
-  @ApiPropertyOptional({
-    description: 'Mã voucher đã áp dụng — backend dùng để mark UserVoucher.usedAt.',
-  })
   @IsOptional()
-  @IsString()
-  @MaxLength(64)
-  voucherCode?: string;
-
-  @ApiPropertyOptional({
-    description:
-      'Giảm giá tuyến tính (mở rộng: voucher/referral map vào đây sau khi resolve).',
-    minimum: 0,
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsInt()
   @Min(0)
-  discountAmount?: number;
-
+  pointsToUse?: number;
   @ApiPropertyOptional({
     description: 'Phí giao hàng (tính từ GPS). Chỉ áp dụng cho đơn delivery.',
     minimum: 0,

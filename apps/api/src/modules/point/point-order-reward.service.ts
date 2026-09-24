@@ -7,7 +7,10 @@ import {
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { PointPolicyService, type ResolvedPointPolicy } from './point-policy.service';
+import {
+  PointPolicyService,
+  type ResolvedPointPolicy,
+} from './point-policy.service';
 import { PointService } from './point.service';
 
 @Injectable()
@@ -18,7 +21,7 @@ export class PointOrderRewardService {
     private readonly prisma: PrismaService,
     private readonly pointPolicy: PointPolicyService,
     private readonly pointService: PointService,
-  ) { }
+  ) {}
 
   /**
    * Gọi sau khi đơn chuyển sang `completed`: tích điểm một lần / đơn (idempotent).
@@ -67,7 +70,13 @@ export class PointOrderRewardService {
     }
 
     // Đơn thường hoặc group order host_pays: tích điểm theo giá trị sản phẩm
-    await this.rewardForAmount(order.userId, orderId, productAmount, order.updatedAt, policy);
+    await this.rewardForAmount(
+      order.userId,
+      orderId,
+      productAmount,
+      order.updatedAt,
+      policy,
+    );
   }
 
   /**
@@ -78,7 +87,11 @@ export class PointOrderRewardService {
     order: { id: string; productAmount: Prisma.Decimal; updatedAt: Date },
     participants: Array<{
       userId: string | null;
-      items: Array<{ unitPrice: Prisma.Decimal; quantity: number; toppingsJson: unknown }>;
+      items: Array<{
+        unitPrice: Prisma.Decimal;
+        quantity: number;
+        toppingsJson: unknown;
+      }>;
     }>,
     hostUserId: string,
     policy: ResolvedPointPolicy,
@@ -95,14 +108,19 @@ export class PointOrderRewardService {
               0,
             )
           : 0;
-        const unit = new Prisma.Decimal(item.unitPrice).add(new Prisma.Decimal(toppingSum));
+        const unit = new Prisma.Decimal(item.unitPrice).add(
+          new Prisma.Decimal(toppingSum),
+        );
         sub = sub.add(unit.mul(item.quantity));
       }
       if (sub.isZero()) continue;
 
       // Guest participant → điểm gộp vào chủ nhóm
       const recipientId = participant.userId ?? hostUserId;
-      userSubtotals.set(recipientId, (userSubtotals.get(recipientId) ?? new Prisma.Decimal(0)).add(sub));
+      userSubtotals.set(
+        recipientId,
+        (userSubtotals.get(recipientId) ?? new Prisma.Decimal(0)).add(sub),
+      );
       totalSubtotal = totalSubtotal.add(sub);
     }
 
@@ -113,7 +131,13 @@ export class PointOrderRewardService {
         .mul(order.productAmount)
         .div(totalSubtotal)
         .toDecimalPlaces(0);
-      await this.rewardForAmount(userId, order.id, proportionalAmount, order.updatedAt, policy);
+      await this.rewardForAmount(
+        userId,
+        order.id,
+        proportionalAmount,
+        order.updatedAt,
+        policy,
+      );
     }
   }
 

@@ -40,6 +40,11 @@ export class UpdatePointConfigDto {
   @Min(0)
   minOrderAmount?: number;
 
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  minOrderAmountToSpend?: number;
+
   @ApiPropertyOptional()
   @IsOptional()
   @Type(() => Number)

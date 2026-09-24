@@ -19,7 +19,7 @@ export class SepayWebhookService {
     private readonly groupOrderService: GroupOrderService,
     private readonly groupOrderGateway: GroupOrderGateway,
     private readonly notificationService: NotificationService,
-  ) { }
+  ) {}
 
   async handle(
     payload: SepayWebhookPayloadDto,
@@ -32,7 +32,9 @@ export class SepayWebhookService {
         provider: 'sepay',
         path: '/webhooks/sepay',
         rawBody,
-        headersJson: authHeader ? { authorization: authHeader } : Prisma.JsonNull,
+        headersJson: authHeader
+          ? { authorization: authHeader }
+          : Prisma.JsonNull,
         status: 'received',
       },
     });
@@ -67,7 +69,8 @@ export class SepayWebhookService {
       // 4. Match pending order: find where order.paymentCode appears in SePay content.
       //    Strip all non-alphanumeric chars before comparing — MoMo/banks may convert
       //    hyphens to spaces or drop them entirely in transfer memos.
-      const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const normalize = (s: string) =>
+        s.toLowerCase().replace(/[^a-z0-9]/g, '');
       const content = normalize(payload.content ?? '');
       const pendingOrders = await this.prisma.order.findMany({
         where: { paymentStatus: PaymentStatus.pending },
@@ -86,24 +89,31 @@ export class SepayWebhookService {
 
       if (!matched) {
         // Try matching a group order participant by paymentQrToken (split bank_transfer)
-        const pendingParticipants = await this.prisma.groupOrderParticipant.findMany({
-          where: {
-            paymentStatus: 'pending' as any,
-            paymentType: 'bank_transfer' as any,
-            paymentQrToken: { not: null },
-          },
-          select: { id: true, paymentQrToken: true },
-        });
+        const pendingParticipants =
+          await this.prisma.groupOrderParticipant.findMany({
+            where: {
+              paymentStatus: 'pending' as any,
+              paymentType: 'bank_transfer' as any,
+              paymentQrToken: { not: null },
+            },
+            select: { id: true, paymentQrToken: true },
+          });
 
         const matchedParticipant = pendingParticipants.find((p) =>
           content.includes(normalize(p.paymentQrToken!).slice(0, 12)),
         );
 
         if (matchedParticipant) {
-          const result = await this.groupOrderService.autoConfirmParticipantPaid(matchedParticipant.id);
+          const result =
+            await this.groupOrderService.autoConfirmParticipantPaid(
+              matchedParticipant.id,
+            );
           if (result) {
             this.groupOrderGateway.broadcast(result.token, result.state);
-            if (result.orderId && (result.state as any).status === 'completed') {
+            if (
+              result.orderId &&
+              (result.state as any).status === 'completed'
+            ) {
               this.ordersGateway.emitOrderPaid({
                 orderId: result.orderId,
                 paymentCode: (result.state as any).order?.paymentCode ?? '',
@@ -112,8 +122,13 @@ export class SepayWebhookService {
               });
             }
             await this.setLogStatus(log.id, 'group_participant_paid');
-            this.logger.log(`Group participant ${matchedParticipant.id} marked paid — SePay tx #${payload.id}`);
-            return { success: true, message: 'Group participant marked as paid' };
+            this.logger.log(
+              `Group participant ${matchedParticipant.id} marked paid — SePay tx #${payload.id}`,
+            );
+            return {
+              success: true,
+              message: 'Group participant marked as paid',
+            };
           }
         }
 
@@ -153,11 +168,14 @@ export class SepayWebhookService {
         }
 
         if (fresh.pointsReserved > 0 && fresh.userId) {
-          await this.pointService.spendPointsTx(
+          await this.pointService.spendReservedPointsTx(
             tx,
             fresh.userId,
             fresh.pointsReserved,
-            { source: PointSource.order, referenceId: matched.id },
+            {
+              source: PointSource.order,
+              referenceId: matched.userId,
+            },
           );
         }
 
@@ -202,13 +220,19 @@ export class SepayWebhookService {
       });
 
       if (matched.userId) {
-        void this.notificationService.createAndEmit({
-          userId: matched.userId,
-          type: 'payment',
-          title: 'Thanh toán thành công',
-          content: `Đơn #${matched.paymentCode} đã được thanh toán.`,
-          data: { orderId: matched.id, paymentCode: matched.paymentCode, notifKey: 'payment_success' },
-        }).catch(() => null);
+        void this.notificationService
+          .createAndEmit({
+            userId: matched.userId,
+            type: 'payment',
+            title: 'Thanh toán thành công',
+            content: `Đơn #${matched.paymentCode} đã được thanh toán.`,
+            data: {
+              orderId: matched.id,
+              paymentCode: matched.paymentCode,
+              notifKey: 'payment_success',
+            },
+          })
+          .catch(() => null);
       }
 
       return { success: true, message: 'Order marked as paid' };

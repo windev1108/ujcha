@@ -8,11 +8,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AdminRole } from '@prisma/client';
 import { AdminJwtGuard } from '../auth/admin-jwt.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -29,7 +25,7 @@ import { UpdateReferralProgramDto } from './dto/update-referral-program.dto';
 @Roles(AdminRole.super_admin, AdminRole.staff)
 @Controller('admin/referrals')
 export class AdminReferralController {
-  constructor(private readonly adminReferralService: AdminReferralService) { }
+  constructor(private readonly adminReferralService: AdminReferralService) {}
 
   @Get('dashboard')
   @ApiOperation({
@@ -42,7 +38,8 @@ export class AdminReferralController {
 
   @Get('users')
   @ApiOperation({
-    summary: 'Danh sách người dùng (mã giới thiệu, điểm, trạng thái) — phân trang',
+    summary:
+      'Danh sách người dùng (mã giới thiệu, điểm, trạng thái) — phân trang',
   })
   listReferralUsers(@Query() query: AdminReferralUsersQueryDto) {
     return this.adminReferralService.listReferralUsers(query);

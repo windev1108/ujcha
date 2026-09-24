@@ -17,24 +17,38 @@ export class ProfileService {
     private readonly config: ConfigService,
   ) {}
 
-  async getProfile(userId: string): Promise<User> {
+  async getProfile(
+    userId: string,
+  ): Promise<User & { availablePoints: number }> {
     const user = await this.userService.findById(userId);
     if (!user) {
-      throw new NotFoundException({ message: 'Không tìm thấy người dùng.', code: 'USER_NOT_FOUND' });
+      throw new NotFoundException({
+        message: 'Không tìm thấy người dùng.',
+        code: 'USER_NOT_FOUND',
+      });
     }
-    return user;
+    return {
+      ...user,
+      availablePoints: Math.max(0, user.pointBalance - user.lockedPoints),
+    };
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto): Promise<User> {
     const existing = await this.userService.findById(userId);
     if (!existing) {
-      throw new NotFoundException({ message: 'Không tìm thấy người dùng.', code: 'USER_NOT_FOUND' });
+      throw new NotFoundException({
+        message: 'Không tìm thấy người dùng.',
+        code: 'USER_NOT_FOUND',
+      });
     }
 
-    const data: Partial<Pick<User, 'name' | 'email' | 'emailMarketingEnabled'>> = {};
+    const data: Partial<
+      Pick<User, 'name' | 'email' | 'emailMarketingEnabled'>
+    > = {};
     if (dto.name !== undefined) data.name = dto.name;
     if (dto.email !== undefined) data.email = dto.email || null;
-    if (dto.emailMarketingEnabled !== undefined) data.emailMarketingEnabled = dto.emailMarketingEnabled;
+    if (dto.emailMarketingEnabled !== undefined)
+      data.emailMarketingEnabled = dto.emailMarketingEnabled;
 
     if (Object.keys(data).length === 0) return existing;
     return this.userService.updateUser(userId, data);
@@ -43,14 +57,20 @@ export class ProfileService {
   async checkAvatarUploadAllowed(userId: string): Promise<void> {
     const user = await this.userService.findById(userId);
     if (!user) {
-      throw new NotFoundException({ message: 'Không tìm thấy người dùng.', code: 'USER_NOT_FOUND' });
+      throw new NotFoundException({
+        message: 'Không tìm thấy người dùng.',
+        code: 'USER_NOT_FOUND',
+      });
     }
     if (user.lastAvatarUploadAt) {
       const todayStart = new Date();
       todayStart.setUTCHours(0, 0, 0, 0);
       if (user.lastAvatarUploadAt >= todayStart) {
         throw new HttpException(
-          { message: 'Bạn chỉ có thể cập nhật ảnh đại diện 1 lần mỗi ngày.', code: 'AVATAR_DAILY_LIMIT' },
+          {
+            message: 'Bạn chỉ có thể cập nhật ảnh đại diện 1 lần mỗi ngày.',
+            code: 'AVATAR_DAILY_LIMIT',
+          },
           HttpStatus.TOO_MANY_REQUESTS,
         );
       }
@@ -60,7 +80,10 @@ export class ProfileService {
   async uploadAvatar(userId: string, avatarUrl: string): Promise<User> {
     const user = await this.userService.findById(userId);
     if (!user) {
-      throw new NotFoundException({ message: 'Không tìm thấy người dùng.', code: 'USER_NOT_FOUND' });
+      throw new NotFoundException({
+        message: 'Không tìm thấy người dùng.',
+        code: 'USER_NOT_FOUND',
+      });
     }
 
     // Daily limit: 1 upload per calendar day (UTC)
@@ -69,15 +92,24 @@ export class ProfileService {
       todayStart.setUTCHours(0, 0, 0, 0);
       if (user.lastAvatarUploadAt >= todayStart) {
         throw new HttpException(
-          { message: 'Bạn chỉ có thể cập nhật ảnh đại diện 1 lần mỗi ngày.', code: 'AVATAR_DAILY_LIMIT' },
+          {
+            message: 'Bạn chỉ có thể cập nhật ảnh đại diện 1 lần mỗi ngày.',
+            code: 'AVATAR_DAILY_LIMIT',
+          },
           HttpStatus.TOO_MANY_REQUESTS,
         );
       }
     }
 
     const cloudName = this.config.get<string>('CLOUDINARY_CLOUD_NAME');
-    if (cloudName && !avatarUrl.startsWith(`https://res.cloudinary.com/${cloudName}/`)) {
-      throw new BadRequestException({ message: 'URL ảnh không hợp lệ.', code: 'INVALID_AVATAR_URL' });
+    if (
+      cloudName &&
+      !avatarUrl.startsWith(`https://res.cloudinary.com/${cloudName}/`)
+    ) {
+      throw new BadRequestException({
+        message: 'URL ảnh không hợp lệ.',
+        code: 'INVALID_AVATAR_URL',
+      });
     }
 
     return this.userService.updateUser(userId, {

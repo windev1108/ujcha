@@ -5,8 +5,6 @@ import {
   IsInt,
   IsNumber,
   IsOptional,
-  IsString,
-  IsUUID,
   Max,
   Min,
 } from 'class-validator';
@@ -17,14 +15,18 @@ export class UpdateReferralProgramDto {
   @IsBoolean()
   isActive?: boolean;
 
-  @ApiPropertyOptional({ description: 'Đơn tối thiểu (VND) để kích hoạt thưởng' })
+  @ApiPropertyOptional({
+    description: 'Đơn tối thiểu (VND) để kích hoạt thưởng',
+  })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
   minOrderAmount?: number;
 
-  @ApiPropertyOptional({ description: '% hoa hồng cộng điểm cho người mời (0–100)' })
+  @ApiPropertyOptional({
+    description: '% hoa hồng cộng điểm cho người mời (0–100)',
+  })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
@@ -32,10 +34,10 @@ export class UpdateReferralProgramDto {
   @Max(100)
   referrerCommissionPercent?: number;
 
-  @ApiPropertyOptional({ description: 'ID voucher chào mừng cho người đăng ký mới (null = dùng isWelcome flag)' })
   @IsOptional()
-  @IsUUID()
-  welcomeVoucherId?: string | null;
+  @IsInt()
+  @Min(0)
+  signupBonusPoints?: number;
 
   @ApiPropertyOptional()
   @IsOptional()

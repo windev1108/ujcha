@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsUUID, Min } from 'class-validator';
+import { IsEnum, IsInt, IsNumber, IsOptional, IsUUID, Min } from 'class-validator';
 import { PaymentStatus } from '@prisma/client';
 
 import { CreateOrderDto } from '../../../order/dto/create-order.dto';
@@ -24,4 +24,9 @@ export class AdminCreateOrderDto extends CreateOrderDto {
   @IsEnum(PaymentStatus)
   paymentStatus?: PaymentStatus;
 
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  discountAmount?: number;
 }

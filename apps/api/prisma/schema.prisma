@@ -34,6 +34,7 @@ model User {
   groupOrdersHosted          GroupOrder[]             @relation("GroupOrderHost")
   groupOrderParticipations   GroupOrderParticipant[]  @relation("GroupOrderParticipant")
   pointBalance               Int                      @default(0)
+  lockedPoints               Int                      @default(0)
   pointTransactions          PointTransaction[]
   userVouchers               UserVoucher[]
 
@@ -99,17 +100,18 @@ model PointTransaction {
 
 /// Cấu hình điểm UjCha; chỉ một bản ghi `isActive = true` (đảm bảo trong service + unique partial index).
 model PointConfig {
-  id              String   @id @default(uuid()) @db.Uuid
+  id                    String   @id @default(uuid()) @db.Uuid
   /// Ví dụ 100 → 1 điểm = 100đ.
-  pointRate       Int
-  earnPercent     Decimal  @db.Decimal(5, 2)
-  maxUsagePercent Decimal  @db.Decimal(5, 2)
-  minOrderAmount  Decimal  @db.Decimal(12, 2)
-  delayHours      Int
-  expireDays      Int
-  isActive        Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  pointRate             Int
+  earnPercent           Decimal  @db.Decimal(5, 2)
+  maxUsagePercent       Decimal  @db.Decimal(5, 2)
+  minOrderAmount        Decimal  @db.Decimal(12, 2)
+  minOrderAmountToSpend Decimal  @default(0) @db.Decimal(12, 2)
+  delayHours            Int
+  expireDays            Int
+  isActive              Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   @@index([isActive])
 }
@@ -591,7 +593,6 @@ model ReferralProgramConfig {
   id                        String   @id @default(uuid()) @db.Uuid
   isActive                  Boolean  @default(true)
   minOrderAmount            Decimal  @db.Decimal(12, 2)
-  /// % của giá trị đơn đầu tiên → điểm thưởng cho người mời (thay thế điểm cố định).
   referrerCommissionPercent Float    @default(5)
   maxReferrerRewardsPerDay  Int      @default(20)
   blockSameIpAsReferrer     Boolean  @default(true)
@@ -604,9 +605,8 @@ model ReferralProgramConfig {
   goldPoints                Int      @default(1000)
   diamondThreshold          Int      @default(100)
   diamondPoints             Int      @default(3000)
-  /// Voucher tự động cấp cho mọi user mới khi đăng ký (chọn từ danh sách voucher).
-  welcomeVoucherId          String?  @db.Uuid
-  welcomeVoucher            Voucher? @relation(fields: [welcomeVoucherId], references: [id], onDelete: SetNull)
+  /// Số điểm UjCha thưởng tự động cho MỌI user mới khi đăng ký (thay cho welcomeVoucher cũ).
+  signupBonusPoints         Int      @default(0)
   createdAt                 DateTime @default(now())
   updatedAt                 DateTime @updatedAt
 }
@@ -682,34 +682,12 @@ model Voucher {
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
 
-  referralRewards        ReferralReward[]
-  userVouchers           UserVoucher[]
-  referralProgramConfigs ReferralProgramConfig[]
-  pointRewardCatalogs    PointRewardCatalog[]
+  referralRewards ReferralReward[]
+  userVouchers    UserVoucher[]
 
   @@index([isActive])
   @@index([isWelcome])
   @@index([startsAt, endsAt])
-}
-
-/// Danh mục phần thưởng đổi điểm: X điểm → cấp voucher Y cho user.
-model PointRewardCatalog {
-  id          String   @id @default(uuid()) @db.Uuid
-  name        String
-  description String?
-  /// Số điểm cần để đổi.
-  pointCost   Int
-  /// Voucher template cấp cho user khi đổi thành công.
-  voucherId   String   @db.Uuid
-  voucher     Voucher  @relation(fields: [voucherId], references: [id], onDelete: Restrict)
-  imageUrl    String?
-  isActive    Boolean  @default(true)
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([isActive])
-  @@index([sortOrder])
 }
 
 /// Voucher được cấp riêng cho từng user — túi voucher cá nhân.
@@ -1073,6 +1051,7 @@ model GroupOrder {
   shippingFee           Decimal                     @default(0) @db.Decimal(12, 2)
   shippingFeeMode       String                      @default("split")
   note                  String?
+  pointsToUse           Int                         @default(0)
   expiresAt             DateTime
   orderId               String?                     @unique @db.Uuid
   order                 Order?                      @relation(fields: [orderId], references: [id], onDelete: SetNull)

@@ -22,7 +22,6 @@ import { PosReleaseModule } from './modules/pos-release/pos-release.module';
 import { PublicPaymentConfigModule } from './modules/public-payment-config/public-payment-config.module';
 import { TableModule } from './modules/table/table.module';
 import { LoyaltyModule } from './modules/loyalty/loyalty.module';
-import { VoucherModule } from './modules/voucher/voucher.module';
 import { ReferralModule } from './modules/referral/referral.module';
 import { ShippingModule } from './modules/shipping/shipping.module';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -70,7 +69,6 @@ import { StoreModule } from './modules/store/store.module';
     PublicPaymentConfigModule,
     TableModule,
     LoyaltyModule,
-    VoucherModule,
     ReferralModule,
     ShippingModule,
     GroupOrderModule,
