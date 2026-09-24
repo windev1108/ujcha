@@ -32,7 +32,7 @@ import { useAuthStore } from "@/store/auth-store";
 import { env } from "@/config/env";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
 import { useReorderStore } from "@/store/reorder-store";
-import { buildReorderItemsFromGroupOrder, buildReorderItemsFromOrder } from "@/lib/reorder";
+import { extractReorderRequestFromGroupOrder, extractReorderRequestFromOrder, resolveReorderItems } from "@/lib/reorder";
 
 // ── formatters ────────────────────────────────────────────────────────────────
 
@@ -346,7 +346,9 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
   const isTerminal = order?.status === "completed" || order?.status === "cancelled";
   const isShipperActive = ["picked_up", "arrived", "delivering"].includes(order?.status ?? "");
   const setReorderItems = useReorderStore((s) => s.setItems);
-
+  const [reordering, setReordering] = useState(false);
+  const [reorderError, setReorderError] = useState<string | null>(null);
+  console.log({ reorderError })
   useOrderStatusSocket({
     onStatusChange: ({ orderId, status }) => {
       if (orderId === order?.id) {
@@ -359,18 +361,37 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
     enabled: !isTerminal,
   });
 
-  function handleReorder() {
-    if (!order) return;
-    const items =
-      order.isGroupOrder && groupOrder
-        ? buildReorderItemsFromGroupOrder(groupOrder)
-        : buildReorderItemsFromOrder(order);
-    if (items.length === 0) return;
+  async function handleReorder() {
+    if (!order || reordering) return;
+    setReorderError(null);
+    setReordering(true);
+    try {
+      const requests =
+        order.isGroupOrder && groupOrder
+          ? extractReorderRequestFromGroupOrder(groupOrder)
+          : extractReorderRequestFromOrder(order);
 
-    setReorderItems(items);
-    // Đơn bàn (table) không thể đặt lại đúng bàn cũ -> chuyển về tab pickup mặc định.
-    const tab = order.type === "delivery" ? "delivery" : "pickup";
-    router.push(`${ROUTES.CHECKOUT}?tab=${tab}&reorder=1`);
+      const { items, unavailableCount } = await resolveReorderItems(requests, locale);
+
+      if (items.length === 0) {
+        setReorderError(t("reorder_all_unavailable"));
+        return;
+      }
+
+      setReorderItems(items);
+      if (unavailableCount > 0) {
+        // món không còn bán vẫn được thông báo qua query string, trang checkout tự hiển thị banner
+        const tab = order.type === "delivery" ? "delivery" : "pickup";
+        router.push(`${ROUTES.CHECKOUT}?tab=${tab}&reorder=1&reorderSkipped=${unavailableCount}`);
+        return;
+      }
+      const tab = order.type === "delivery" ? "delivery" : "pickup";
+      router.push(`${ROUTES.CHECKOUT}?tab=${tab}&reorder=1`);
+    } catch {
+      setReorderError(t("reorder_failed"));
+    } finally {
+      setReordering(false);
+    }
   }
   const handlePaid = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: orderKeys.detail(paymentCode) });
@@ -597,16 +618,17 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
           </button>
 
           <div className="flex items-center gap-2">
-            {/* {canReorder && (
+            {canReorder && (
               <button
                 type="button"
                 onClick={handleReorder}
-                className="flex items-center gap-1.5 rounded-full bg-[#1a3c34] px-4 py-2 text-sm font-semibold text-white shadow-[0_2px_8px_-4px_rgba(0,0,0,0.15)] transition hover:opacity-90"
+                disabled={reordering}
+                className="flex items-center gap-1.5 rounded-full bg-[#1a3c34] px-4 py-2 text-sm font-semibold text-white shadow-[0_2px_8px_-4px_rgba(0,0,0,0.15)] transition hover:opacity-90 disabled:opacity-60"
               >
-                <RotateCcw className="size-3.5" />
+                {reordering ? <Loader2 className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />}
                 {t("reorder_cta")}
               </button>
-            )} */}
+            )}
             {canExportInvoice && (
               <button
                 type="button"

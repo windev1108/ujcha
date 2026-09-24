@@ -1,27 +1,24 @@
 import type { OrderDetail } from "@/services/order/api";
 import { fetchGroupOrder, type GroupOrderState } from "@/services/group-order/api";
+import { fetchProductsByIds } from "@/services/cart/api";
 import type { ApiCartItem, ApiCartProduct, ApiCartTopping } from "@/services/cart/types";
+import { normalizeOptionGroups } from "./product-options";
 
-type OptionDetail = { group: string; label: string; nameTranslation?: Record<string, string> };
-type ExtraJson = {
-  toppingId?: string;
-  name?: string;
-  price?: number | string;
-  nameTranslation?: Record<string, string>;
+type OptionDetail = { group: string; label: string };
+type ExtraJson = { toppingId?: string };
+
+export type ReorderRequestItem = {
+  productId: string;
+  quantity: number;
+  selectedOptions: Record<string, string>;
+  toppingIds: string[];
+  note?: string | null;
 };
 
-/**
- * Shape tối thiểu cần có để build 1 reorder item — khớp với record OrderItem
- * gốc của Prisma cộng phần `product` được select (id/name/nameTranslation/imageUrls).
- * Dùng chung được cho cả OrderDetail.items và UserOrder.items vì cả hai đều
- * lấy thẳng từ cùng model OrderItem, chỉ khác các field select trên `product`.
- */
 type ReorderableOrderItem = {
-  id: string;
   quantity: number;
-  price: string | number;
   note?: string | null;
-  product: { id: string; name: string; nameTranslation?: Record<string, string>; imageUrls: string[] };
+  product: { id: string };
   optionsJson?: unknown;
   optionDetailsJson?: unknown;
   extrasJson?: unknown;
@@ -38,110 +35,127 @@ function parseExtrasJson(raw: unknown): ExtraJson[] {
   return Array.isArray(raw) ? (raw as ExtraJson[]) : [];
 }
 
-/**
- * Snapshot sản phẩm cho item "đặt lại": `price`/`finalPrice` là đơn giá đã
- * CHỐT từ đơn cũ (gồm cả topping/option cũ), `optionGroups: []` để
- * `computeOptionSurcharge` ở trang checkout luôn trả 0 — tránh cộng phụ phí
- * option/topping thêm lần nữa lên trên đơn giá đã gộp sẵn.
- * Giá cuối cùng luôn được BE tính lại theo `product.price` hiện tại khi tạo
- * đơn thật (xem `buildOrderItemRows`), nên đây chỉ là số hiển thị tạm ở UI.
- */
-function buildProductSnapshot(
-  product: { id: string; name: string; nameTranslation?: Record<string, string>; imageUrls: string[] },
-  unitPrice: number,
-): ApiCartProduct {
+function toReorderRequest(item: ReorderableOrderItem): ReorderRequestItem {
+  const optionDetails = parseOptionDetailsJson(item.optionDetailsJson);
+  const selectedOptions =
+    optionDetails.length > 0
+      ? Object.fromEntries(optionDetails.map((d) => [d.group, d.label]))
+      : parseOptionsJson(item.optionsJson);
+
+  const extras = parseExtrasJson(item.extrasJson);
+  const toppingIds = extras.filter((e) => !!e.toppingId).map((e) => e.toppingId as string);
+
   return {
-    id: product.id,
-    name: product.name,
-    nameTranslation: product.nameTranslation,
-    slug: product.id,
-    price: String(unitPrice),
-    imageUrls: product.imageUrls ?? [],
-    discountPercent: 0,
-    finalPrice: unitPrice,
-    optionGroups: [],
-    category: { name: "", nameTranslation: {} },
+    productId: item.product.id,
+    quantity: item.quantity,
+    selectedOptions,
+    toppingIds,
+    note: item.note,
   };
 }
 
-function toppingsFromExtras(extras: ExtraJson[]): ApiCartTopping[] {
-  return extras
-    .filter((e): e is ExtraJson & { toppingId: string } => !!e.toppingId)
-    .map((e) => ({
-      toppingId: e.toppingId,
-      topping: {
-        id: e.toppingId,
-        name: e.name ?? "Topping",
-        price: String(e.price ?? 0),
-        nameTranslation: e.nameTranslation,
-      },
-    }));
+/** Đơn thường (OrderDetail.items) — dùng ở trang chi tiết đơn. */
+export function extractReorderRequestFromOrder(order: OrderDetail): ReorderRequestItem[] {
+  return (order.items as unknown as ReorderableOrderItem[]).map(toReorderRequest);
 }
 
-/** Hàm lõi — dùng chung cho items của cả OrderDetail lẫn UserOrder. */
-export function buildReorderItemsFromOrderItems(items: ReorderableOrderItem[]): ApiCartItem[] {
-  return items.map((item) => {
-    const optionDetails = parseOptionDetailsJson(item.optionDetailsJson);
-    const selectedOptions =
-      optionDetails.length > 0
-        ? Object.fromEntries(optionDetails.map((d) => [d.group, d.label]))
-        : parseOptionsJson(item.optionsJson);
-
-    const extras = parseExtrasJson(item.extrasJson);
-    const unitPrice = parseFloat(item.price as unknown as string);
-
-    return {
-      id: `reorder-${item.id}`,
-      cartId: "",
-      productId: item.product.id,
-      quantity: item.quantity,
-      selectedOptions,
-      toppings: toppingsFromExtras(extras),
-      product: buildProductSnapshot(item.product, unitPrice),
-      note: item.note ?? undefined,
-    };
-  });
-}
-
-/** Đơn thường (không phải group order) — dùng ở trang chi tiết đơn. */
-export function buildReorderItemsFromOrder(order: OrderDetail): ApiCartItem[] {
-  return buildReorderItemsFromOrderItems(order.items as unknown as ReorderableOrderItem[]);
+/** Đơn thường — dùng chung khi chỉ có mảng items (vd UserOrder.items ở trang danh sách). */
+export function extractReorderRequestFromOrderItems(items: ReorderableOrderItem[]): ReorderRequestItem[] {
+  return items.map(toReorderRequest);
 }
 
 /** Đơn nhóm — gộp món của tất cả thành viên thành một đơn cá nhân khi đặt lại. */
-export function buildReorderItemsFromGroupOrder(groupOrder: GroupOrderState): ApiCartItem[] {
-  const out: ApiCartItem[] = [];
+export function extractReorderRequestFromGroupOrder(groupOrder: GroupOrderState): ReorderRequestItem[] {
+  const out: ReorderRequestItem[] = [];
   for (const participant of groupOrder.participants) {
     for (const item of participant.items) {
-      const toppings: ApiCartTopping[] = (item.toppings ?? []).map((top) => ({
-        toppingId: top.toppingId,
-        topping: {
-          id: top.toppingId,
-          name: top.name,
-          price: String(top.price ?? 0),
-          nameTranslation: top.nameTranslation,
-        },
-      }));
-      const toppingTotal = toppings.reduce((s, t) => s + Number(t.topping.price), 0);
-      const unitPrice = Number(item.unitPrice ?? 0) + toppingTotal;
-
       out.push({
-        id: `reorder-${participant.id}-${item.id}`,
-        cartId: "",
         productId: item.product.id,
         quantity: item.quantity,
         selectedOptions: item.selectedOptions ?? {},
-        toppings,
-        // @ts-ignore
-        product: buildProductSnapshot(item.product, unitPrice),
-        note: item.note ?? undefined,
+        toppingIds: (item.toppings ?? []).map((t) => t.toppingId),
+        note: item.note,
       });
     }
   }
   return out;
 }
 
-export async function fetchAndBuildReorderItemsForGroupOrder(token: string): Promise<ApiCartItem[]> {
+/** Helper cho nơi chỉ có `groupOrderToken` (chưa fetch state) — vd trang danh sách đơn. */
+export async function extractReorderRequestForGroupOrderToken(token: string): Promise<ReorderRequestItem[]> {
   const state = await fetchGroupOrder(token);
-  return buildReorderItemsFromGroupOrder(state);
+  return extractReorderRequestFromGroupOrder(state);
+}
+
+/**
+ * Resolve các "yêu cầu đặt lại" (chỉ có productId/option/topping đã chọn) theo
+ * DỮ LIỆU SẢN PHẨM HIỆN TẠI (giá, khuyến mãi, option groups, toppings) — thay
+ * vì dùng giá snapshot cũ từ đơn hàng trước. Option/topping nào không còn tồn
+ * tại trên sản phẩm hiện tại sẽ bị bỏ qua thay vì gây lỗi ở bước checkout.
+ * Sản phẩm đã bị xoá/ngừng bán hoàn toàn sẽ bị loại khỏi kết quả, đếm ở
+ * `unavailableCount` để UI báo cho người dùng biết.
+ */
+
+function toProductArray(raw: unknown): ApiCartProduct[] {
+  if (Array.isArray(raw)) return raw as ApiCartProduct[];
+  if (raw && typeof raw === "object") {
+    const obj = raw as Record<string, unknown>;
+    if (Array.isArray(obj.items)) return obj.items as ApiCartProduct[];
+    if (Array.isArray(obj.data)) return obj.data as ApiCartProduct[];
+    return Object.values(obj) as ApiCartProduct[]; // record dạng { [id]: product }
+  }
+  return [];
+}
+
+export async function resolveReorderItems(
+  requests: ReorderRequestItem[],
+  locale: string,
+): Promise<{ items: ApiCartItem[]; unavailableCount: number }> {
+  const productIds = [...new Set(requests.map((r) => r.productId))];
+  if (productIds.length === 0) return { items: [], unavailableCount: 0 };
+
+  const raw: unknown = await fetchProductsByIds(productIds, locale);
+  const products = toProductArray(raw);
+  const productMap = new Map<string, ApiCartProduct>(products.map((p) => [p.id, p]));
+
+  const items: ApiCartItem[] = [];
+  let unavailableCount = 0;
+
+  requests.forEach((req, idx) => {
+    const product = productMap.get(req.productId);
+    if (!product) {
+      unavailableCount += 1;
+      return;
+    }
+
+    // Chỉ giữ lại option nhóm nào vẫn còn tồn tại trên sản phẩm hiện tại
+    const normalizedGroups = normalizeOptionGroups(product.optionGroups);
+    const validGroupNames = new Set(normalizedGroups.map((g) => g.name));
+    const selectedOptions = Object.fromEntries(
+      Object.entries(req.selectedOptions).filter(([group]) => validGroupNames.has(group)),
+    );
+
+    // Chỉ giữ lại topping còn active trên sản phẩm hiện tại
+    const currentToppingsById = new Map((product.toppings ?? []).map((tp) => [tp.id, tp]));
+    const toppings: ApiCartTopping[] = req.toppingIds
+      .map((id) => currentToppingsById.get(id))
+      .filter((tp): tp is NonNullable<typeof tp> => !!tp && tp.isActive !== false)
+      .map((tp) => ({
+        toppingId: tp.id,
+        topping: { id: tp.id, name: tp.name, price: String(tp.price), nameTranslation: tp.nameTranslation },
+      }));
+
+    items.push({
+      id: `reorder-${idx}-${req.productId}`,
+      cartId: "",
+      productId: req.productId,
+      quantity: req.quantity,
+      selectedOptions,
+      toppings,
+      product, // ← giá/khuyến mãi lấy theo hiện tại, không phải giá lúc đặt đơn cũ
+      note: req.note ?? undefined,
+    });
+  });
+
+  return { items, unavailableCount };
 }

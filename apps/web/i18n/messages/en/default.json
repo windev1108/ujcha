@@ -1272,5 +1272,6 @@
   "contact_info_subtitle": "Manage your personal and contact information",
   "group_point_discount": "Ujcha Points",
   "group_points_unsaved_warning": "Saving points, please wait a moment.",
-  "reorder_cta": "Reorder"
+  "reorder_cta": "Reorder",
+  "reorder_failed":  "Couldn't load this order's items. Please try again."
 }

@@ -15,8 +15,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { revealTransition, easeOutSmooth } from "@/app/[locale]/(landing)/components/RevealSection";
 import { ROUTES } from "@/lib/routes";
 import type { UserOrder, UserOrderItem, OrderStatus } from "@/services/order/api";
-import { buildReorderItemsFromOrderItems, fetchAndBuildReorderItemsForGroupOrder } from "@/lib/reorder";
 import { useReorderStore } from "@/store/reorder-store";
+import { extractReorderRequestForGroupOrderToken, extractReorderRequestFromOrderItems, resolveReorderItems } from "@/lib/reorder";
 
 function formatVnd(s: string | number) {
   const n = typeof s === "string" ? parseFloat(s) : s;
@@ -140,14 +140,19 @@ function OrderCard({ order, index = 0 }: { order: UserOrder; index?: number }) {
   const canReorder = order.status === "completed" || order.status === "cancelled" && !order.isGroupOrder;
 
   async function handleReorder(e: React.MouseEvent) {
-    e.stopPropagation(); 
+    e.stopPropagation();
     if (reordering) return;
     setReorderError(false);
     setReordering(true);
     try {
-      const items = order.isGroupOrder && order.groupOrderToken
-        ? await fetchAndBuildReorderItemsForGroupOrder(order.groupOrderToken)
-        : buildReorderItemsFromOrderItems(order.items as unknown as Parameters<typeof buildReorderItemsFromOrderItems>[0]);
+      const requests =
+        order.isGroupOrder && order.groupOrderToken
+          ? await extractReorderRequestForGroupOrderToken(order.groupOrderToken)
+          : extractReorderRequestFromOrderItems(
+            order.items as unknown as Parameters<typeof extractReorderRequestFromOrderItems>[0],
+          );
+
+      const { items, unavailableCount } = await resolveReorderItems(requests, locale);
 
       if (items.length === 0) {
         setReorderError(true);
@@ -155,13 +160,19 @@ function OrderCard({ order, index = 0 }: { order: UserOrder; index?: number }) {
       }
       setReorderItems(items);
       const tab = order.type === "delivery" ? "delivery" : "pickup";
-      router.push(`${ROUTES.CHECKOUT}?tab=${tab}&reorder=1`);
-    } catch {
+      router.push(
+        unavailableCount > 0
+          ? `${ROUTES.CHECKOUT}?tab=${tab}&reorder=1&reorderSkipped=${unavailableCount}`
+          : `${ROUTES.CHECKOUT}?tab=${tab}&reorder=1`,
+      );
+    } catch (err) {
+      console.error("[reorder] failed:", err);
       setReorderError(true);
     } finally {
       setReordering(false);
     }
   }
+
 
   return (
     <motion.div
@@ -256,9 +267,9 @@ function OrderCard({ order, index = 0 }: { order: UserOrder; index?: number }) {
         </div>
 
         {/* Row 5: Reorder — chỉ hiện với đơn đã hoàn thành/đã huỷ */}
-        {/* {canReorder && (
+        {canReorder && (
           <div className="flex mt-3 border-t border-black/5 pt-3 md:justify-end justify-center">
-            <div className="md:w-auto w-full">
+            <div className="md:w-auto w-full flex flex-col items-end">
               <button
                 type="button"
                 onClick={handleReorder}
@@ -279,7 +290,7 @@ function OrderCard({ order, index = 0 }: { order: UserOrder; index?: number }) {
               )}
             </div>
           </div>
-        )} */}
+        )}
 
       </div>
     </motion.div>

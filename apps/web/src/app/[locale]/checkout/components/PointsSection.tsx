@@ -77,10 +77,17 @@ export function PointsSection({
         }`}
     >
       <div className="flex items-center justify-between gap-3">
-        <button
-          type="button"
+        <div
+          role="button"
+          tabIndex={0}
           onClick={handleToggle}
-          className="flex flex-1 items-center gap-2.5 text-left"
+          onKeyDown={(e) => {
+            if (e.target !== e.currentTarget) return;
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              handleToggle();
+            }
+          }}
         >
           <div
             className={`flex size-8 shrink-0 items-center justify-center rounded-full ${usePoints ? "bg-kun-primary text-white" : "bg-surface-card text-foreground/50"
@@ -146,7 +153,7 @@ export function PointsSection({
               )}
             </p>
           </div>
-        </button>
+        </div>
         <Switch isSelected={usePoints} onChange={handleToggle}>
           <Switch.Content>
             <Switch.Control>

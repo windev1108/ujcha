@@ -1271,5 +1271,6 @@
   "contact_info_subtitle": "Quản lý thông tin cá nhân và liên hệ của bạn",
   "group_point_discount": "Điểm Ujcha",
   "group_points_unsaved_warning": "Đang lưu điểm, vui lòng đợi giây lát.",
-  "reorder_cta": "Đặt lại"
+  "reorder_cta": "Đặt lại",
+  "reorder_failed": "Không tải được món của đơn này. Vui lòng thử lại."
 }
