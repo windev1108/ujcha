@@ -33,6 +33,7 @@ import { env } from "@/config/env";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
 import { useReorderStore } from "@/store/reorder-store";
 import { extractReorderRequestFromGroupOrder, extractReorderRequestFromOrder, resolveReorderItems } from "@/lib/reorder";
+import { toast } from "sonner";
 
 // ── formatters ────────────────────────────────────────────────────────────────
 
@@ -347,8 +348,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
   const isShipperActive = ["picked_up", "arrived", "delivering"].includes(order?.status ?? "");
   const setReorderItems = useReorderStore((s) => s.setItems);
   const [reordering, setReordering] = useState(false);
-  const [reorderError, setReorderError] = useState<string | null>(null);
-  console.log({ reorderError })
+
   useOrderStatusSocket({
     onStatusChange: ({ orderId, status }) => {
       if (orderId === order?.id) {
@@ -363,7 +363,6 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
 
   async function handleReorder() {
     if (!order || reordering) return;
-    setReorderError(null);
     setReordering(true);
     try {
       const requests =
@@ -374,7 +373,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
       const { items, unavailableCount } = await resolveReorderItems(requests, locale);
 
       if (items.length === 0) {
-        setReorderError(t("reorder_all_unavailable"));
+        toast.error("reorder_all_unavailable")
         return;
       }
 
