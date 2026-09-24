@@ -1274,5 +1274,10 @@
   "reorder_cta": "Đặt lại",
   "reorder_failed": "Không tải được món của đơn này. Vui lòng thử lại.",
   "announcement_ok": "Đã hiểu",
-  "announcement_close": "Đóng"
+  "announcement_close": "Đóng",
+  "group_confirm_points_btn": "Xác nhận dùng điểm",
+  "group_points_confirmed": "Đã xác nhận điểm",
+  "group_confirming_points": "Đang xác nhận...",
+  "group_points_confirmed_toast": "Đã áp dụng điểm cho phần của bạn",
+  "group_confirm_points_required": "Vui lòng bấm xác nhận dùng điểm trước khi tiếp tục"
 }

@@ -485,6 +485,7 @@ function ParticipantRow({
   editSavingProductId,
   isKicking,
   cardMode,
+  pointDiscount,
   onConfirmPaid,
   onKick,
   onOpenPicker,
@@ -500,6 +501,7 @@ function ParticipantRow({
   editSavingProductId?: string | null;
   isKicking?: boolean;
   cardMode?: boolean;
+  pointDiscount?: number;
   onConfirmPaid?: (participantId: string) => void;
   onKick?: (participantId: string) => void;
   onOpenPicker?: () => void;
@@ -550,7 +552,12 @@ function ParticipantRow({
             </p>
             <p className="text-xs text-foreground/50">
               {participant.items.length} {t('dish')} ·{" "}
-              <span className="text-sm font-bold tabular-nums text-[#1a3c34]">{fmtVnd(participant.subtotal)}</span>
+              <span className="text-sm font-bold tabular-nums text-[#1a3c34]">{fmtVnd(participant.subtotal - Number(pointDiscount ?? 0))}</span>
+              {!!pointDiscount && pointDiscount > 0 && (
+                <span className="ml-1.5 inline-flex items-center rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200">
+                  -{fmtVnd(pointDiscount)} {t("points_label")}
+                </span>
+              )}
             </p>
           </div>
         </div>
@@ -1484,6 +1491,7 @@ export function GroupOrderPageShell() {
   const { data: pointConfig } = usePublicPointConfigQuery();
   const pointBalance = profile?.availablePoints ?? 0;
   const pointRate = pointConfig?.pointRate ?? 0;
+  const [syncingPoints, setSyncingPoints] = useState(false);
 
   // Base tính điểm (khớp BE): per-participant = phần của mình sau giảm giá nhóm
   const pointsBaseSubtotal = useMemo(() => {
@@ -1514,16 +1522,40 @@ export function GroupOrderPageShell() {
       ? me?.pointsReserved ?? 0
       : state?.pointsToUse ?? 0;
 
+  const hasUnsyncedPoints =
+    perParticipantPoints && canEditPoints && effectivePoints !== (me?.pointsToUse ?? 0);
+
+
   // Sau lock (per-participant) lấy số tiền giảm đã chốt từ server
   const appliedPointDiscount =
     perParticipantPoints && !canEditPoints
       ? me?.pointDiscountAmount ?? 0
       : effectivePoints * pointRate;
 
-  // Tổng giảm điểm hiển thị ở "Tổng cộng"
+  const aggregatedDraftPointDiscount = useMemo(() => {
+    if (!state || !perParticipantPoints) return 0;
+    return state.participants.reduce((sum, p) => {
+      if (!p.userId || p.items.length === 0) return sum;
+      const rawPoints = p.id === me?.id ? effectivePoints : (p.pointsToUse ?? 0);
+      return sum + rawPoints * pointRate;
+    }, 0);
+  }, [state, perParticipantPoints, me?.id, effectivePoints, pointRate]);
+
+  const getParticipantPointDiscount = useCallback(
+    (p: GroupOrderState["participants"][0]): number => {
+      if (!perParticipantPoints || !p.userId) return 0;
+      if (state?.status === "collecting") {
+        const rawPoints = p.id === me?.id ? effectivePoints : (p.pointsToUse ?? 0);
+        return rawPoints * pointRate;
+      }
+      return p.pointDiscountAmount ?? 0;
+    },
+    [perParticipantPoints, state?.status, me?.id, effectivePoints, pointRate],
+  );
+
   const groupPointDiscount = perParticipantPoints
     ? state?.status === "collecting"
-      ? appliedPointDiscount
+      ? aggregatedDraftPointDiscount   // ← sửa ở đây
       : (state?.participants.reduce((s, p) => s + (p.pointDiscountAmount ?? 0), 0) ?? 0)
     : appliedPointDiscount;
 
@@ -1539,6 +1571,8 @@ export function GroupOrderPageShell() {
     if (me.pointsToUse > 0) setPointsToUse(me.pointsToUse);
   }, [perParticipantPoints, me]);
 
+
+
   // Đồng bộ điểm của mình lên server (debounce)
   const syncMyPoints = useCallback(async () => {
     if (!perParticipantPoints || !canEditPoints || !sessionToken) return;
@@ -1547,11 +1581,40 @@ export function GroupOrderPageShell() {
     setState(ns);
   }, [perParticipantPoints, canEditPoints, sessionToken, effectivePoints, me?.pointsToUse, token]);
 
+  const handleConfirmPoints = useCallback(async () => {
+    if (!hasUnsyncedPoints) return;
+    setSyncingPoints(true);
+    try {
+      await syncMyPoints();
+      toast.success(t("group_points_confirmed_toast"));
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string | string[] } } };
+      const msg = err?.response?.data?.message ?? "Có lỗi xảy ra.";
+      toast.error(typeof msg === "string" ? msg : msg.join(", "));
+    } finally {
+      setSyncingPoints(false);
+    }
+  }, [hasUnsyncedPoints, syncMyPoints, t]);
+
+  // Safety net: nếu participant ĐÃ xác nhận sẵn sàng (isReady) rồi mới đổi điểm,
+  // tự động đồng bộ (debounce, không phải mỗi keystroke) để tránh trường hợp
+  // host chốt đơn ngay trong lúc điểm mới chưa kịp gửi lên server.
+  // Trước khi ready thì vẫn giữ đúng yêu cầu cũ: chỉ đồng bộ khi bấm nút xác nhận.
   useEffect(() => {
-    if (!perParticipantPoints || !canEditPoints || !profile) return;
-    const id = setTimeout(() => { void syncMyPoints().catch(() => { }); }, 600);
-    return () => clearTimeout(id);
-  }, [syncMyPoints, perParticipantPoints, canEditPoints, profile]);
+    if (!perParticipantPoints || !canEditPoints) return;
+    if (!me?.isReady) return;
+    if (!hasUnsyncedPoints) return;
+    setSyncingPoints(true);
+    const id = setTimeout(() => {
+      void syncMyPoints()
+        .catch(() => { })
+        .finally(() => setSyncingPoints(false));
+    }, 500);
+    return () => {
+      clearTimeout(id);
+      setSyncingPoints(false);
+    };
+  }, [perParticipantPoints, canEditPoints, me?.isReady, hasUnsyncedPoints, syncMyPoints]);
 
   // Per-participant amount for split mode (discount proportional, shipping per shippingFeeMode)
   const myAmountBreakdown = useMemo(() => {
@@ -1638,7 +1701,6 @@ export function GroupOrderPageShell() {
     if (!sessionToken) return;
     setLockLoading(true);
     try {
-      await syncMyPoints();
       const go = await lockGroupOrder(token, sessionToken, effectivePoints);
       setState(go);
     } catch (e: unknown) {
@@ -1972,6 +2034,11 @@ export function GroupOrderPageShell() {
                     toast.error(t("error_select_address_from_suggestion"));
                     return;
                   }
+
+                  if (hasUnsyncedPoints && groupPointDiscount > 0) {
+                    toast.error(t("group_confirm_points_required"));
+                    return;
+                  }
                   const unconfirmed = state.participants.filter((p) => !p.isReady);
                   if (unconfirmed.length > 0) {
                     setShowLockConfirm(true);
@@ -2025,12 +2092,13 @@ export function GroupOrderPageShell() {
                 <Button
                   className="flex-1 rounded-full bg-[#1a3c34] py-3 font-semibold text-white"
                   isDisabled={actionLoading || me.items.length === 0}
-                  onPress={() =>
-                    void withAction(async () => {
-                      await syncMyPoints();
-                      return markGroupOrderReady(token, sessionToken!);
-                    })
-                  }
+                  onPress={() => {
+                    if (hasUnsyncedPoints && groupPointDiscount > 0) {
+                      toast.error(t("group_confirm_points_required"));
+                      return;
+                    }
+                    void withAction(() => markGroupOrderReady(token, sessionToken!));
+                  }}
                 >
                   <CheckCircle2 className="mr-1 size-4" />
                   {t("group_confirm_ready")}
@@ -2086,6 +2154,7 @@ export function GroupOrderPageShell() {
                           groupStatus={state.status}
                           paymentMode={state.paymentMode}
                           cardMode
+                          pointDiscount={getParticipantPointDiscount(p)}
                           onConfirmPaid={(participantId) =>
                             void withAction(() => confirmParticipantPaid(token, sessionToken!, participantId))
                           }
@@ -2201,10 +2270,10 @@ export function GroupOrderPageShell() {
                             <span className="tabular-nums font-medium">-{fmtVnd(discountAmount)}</span>
                           </div>
                         )}
-                        {appliedPointDiscount > 0 && (
+                        {groupPointDiscount > 0 && (
                           <div className="flex justify-between text-emerald-700">
                             <span>{t("group_point_discount")}</span>
-                            <span className="tabular-nums font-medium">-{fmtVnd(appliedPointDiscount)}</span>
+                            <span className="tabular-nums font-medium">-{fmtVnd(groupPointDiscount)}</span>
                           </div>
                         )}
                         {(displayShippingFee > 0 || (isHost && state.status === "collecting" && localType === "delivery")) && (
@@ -2287,21 +2356,47 @@ export function GroupOrderPageShell() {
               </CardContent>
             </Card>
 
-            {/* Points — host only, collecting state */}
+            {/* Points — auth only, collecting state */}
             {!!me?.userId && state.status === "collecting" && pointBalance > 0 && (
               <div className="space-y-3 rounded-3xl border border-black/6 bg-white p-5 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.08)]">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
                   {t("points_label")}
                 </p>
-                {canEditPoints && pointBalance > 0 &&
-                  <PointsSection
-                    pointBalance={pointBalance}
-                    pointConfig={pointConfig ?? undefined}
-                    subtotal={pointsBaseSubtotal}
-                    pointsToUse={pointsToUse}
-                    onChange={setPointsToUse}
-                  />
-                }
+                {canEditPoints && pointBalance > 0 && (
+                  <>
+                    <PointsSection
+                      pointBalance={pointBalance}
+                      pointConfig={pointConfig ?? undefined}
+                      subtotal={pointsBaseSubtotal}
+                      pointsToUse={pointsToUse}
+                      onChange={setPointsToUse}
+                    />
+                    {Boolean(perParticipantPoints && pointsToUse > 0) && (
+                      <button
+                        type="button"
+                        disabled={!hasUnsyncedPoints || syncingPoints}
+                        onClick={() => void handleConfirmPoints()}
+                        className={`flex h-10 w-full items-center justify-center gap-2 rounded-full text-sm font-semibold transition-colors disabled:cursor-not-allowed ${hasUnsyncedPoints
+                          ? "bg-[#1a3c34] text-white hover:opacity-90 disabled:opacity-60"
+                          : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+                          }`}
+                      >
+                        {syncingPoints ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : hasUnsyncedPoints ? (
+                          <Check className="size-4" />
+                        ) : (
+                          <CheckCircle2 className="size-4" />
+                        )}
+                        {syncingPoints
+                          ? t("group_confirming_points")
+                          : hasUnsyncedPoints
+                            ? t("group_confirm_points_btn")
+                            : t("group_points_confirmed")}
+                      </button>
+                    )}
+                  </>
+                )}
               </div>
             )}
 
@@ -2426,20 +2521,103 @@ export function GroupOrderPageShell() {
             )}
           </motion.aside>
         </div>
-      </div>
+      </div >
 
       {/* Lock confirm + dissolve confirm modals */}
       <AnimatePresence>
-        {showLockConfirm && (() => {
-          const unconfirmed = state.participants.filter((p) => !p.isReady);
-          return (
+        {
+          showLockConfirm && (() => {
+            const unconfirmed = state.participants.filter((p) => !p.isReady);
+            return (
+              <motion.div
+                key="lock-confirm-modal"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm"
+                onClick={(e) => e.target === e.currentTarget && setShowLockConfirm(false)}
+              >
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 12 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 12 }}
+                  transition={{ type: "spring", damping: 24, stiffness: 380 }}
+                  className="w-full max-w-sm rounded-3xl border border-black/6 bg-white shadow-[0_4px_20px_-8px_rgba(0,0,0,0.18)]"
+                >
+                  <div className="px-6 pb-5 pt-8 text-center">
+                    <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-amber-50 ring-1 ring-amber-200">
+                      <Lock className="size-7 text-amber-500" />
+                    </div>
+                    <h3 className="text-base font-bold text-foreground">
+                      {t("group_lock_unconfirmed_title", { count: unconfirmed.length })}
+                    </h3>
+                    <p className="mt-1.5 text-sm text-muted">{t("group_lock_unconfirmed_desc")}</p>
+                    <div className="mt-4 max-h-[220px] overflow-y-auto overscroll-contain flex flex-col gap-1.5">
+                      {unconfirmed.map((p) => (
+                        <div key={p.id} className="flex items-center gap-2 rounded-xl bg-surface-soft px-3 py-2 text-left">
+                          <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-black/8 text-xs font-bold text-foreground/60">
+                            {p.name[0]?.toUpperCase()}
+                          </div>
+                          <span className="text-sm font-medium text-foreground">
+                            {p.name}
+                            {p.id === me?.id && (
+                              <span className="ml-1.5 text-[10px] font-bold uppercase tracking-wide text-[#1a3c34]">
+                                {t("group_you")}
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex divide-x divide-black/6 border-t border-black/6">
+                    <button
+                      type="button"
+                      disabled={lockLoading}
+                      onClick={() => setShowLockConfirm(false)}
+                      className="cursor-pointer flex h-13 flex-1 items-center justify-center rounded-bl-3xl text-sm font-semibold text-foreground/70 transition hover:bg-surface-soft disabled:opacity-50"
+                    >
+                      {t("cancel")}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={lockLoading}
+                      onClick={() => {
+                        if (hasUnsyncedPoints && groupPointDiscount > 0) {
+                          toast.error(t("group_confirm_points_required"));
+                          setShowLockConfirm(false);
+                          return;
+                        }
+                        setShowLockConfirm(false);
+                        if (state.paymentMode === "split" && (state.paymentType ?? "cash") === "cash") {
+                          void handleSplitCashCheckout();
+                        } else if (state.paymentMode === "host_pays" && (state.paymentType ?? "cash") !== "bank_transfer") {
+                          void handleHostCheckout();
+                        } else {
+                          void handleLockOrder();
+                        }
+                      }}
+                      className="cursor-pointer flex h-13 flex-1 items-center justify-center gap-1.5 rounded-br-3xl text-sm font-semibold text-[#1a3c34] transition hover:bg-[#f0faf6] disabled:opacity-50"
+                    >
+                      {lockLoading && <Loader2 className="size-3.5 animate-spin" />}
+                      {t("group_lock_unconfirmed_confirm")}
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            );
+          })()
+        }
+
+        {
+          showDissolveConfirm && (
             <motion.div
-              key="lock-confirm-modal"
+              key="dissolve-modal"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm"
-              onClick={(e) => e.target === e.currentTarget && setShowLockConfirm(false)}
+              onClick={(e) => e.target === e.currentTarget && setShowDissolveConfirm(false)}
             >
               <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 12 }}
@@ -2448,113 +2626,39 @@ export function GroupOrderPageShell() {
                 transition={{ type: "spring", damping: 24, stiffness: 380 }}
                 className="w-full max-w-sm rounded-3xl border border-black/6 bg-white shadow-[0_4px_20px_-8px_rgba(0,0,0,0.18)]"
               >
-                <div className="px-6 pb-5 pt-8 text-center">
-                  <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-amber-50 ring-1 ring-amber-200">
-                    <Lock className="size-7 text-amber-500" />
+                {/* Modal body */}
+                <div className="px-6 pb-6 pt-8 text-center">
+                  <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-red-50 ring-1 ring-red-200">
+                    <UserX className="size-7 text-red-500" />
                   </div>
-                  <h3 className="text-base font-bold text-foreground">
-                    {t("group_lock_unconfirmed_title", { count: unconfirmed.length })}
-                  </h3>
-                  <p className="mt-1.5 text-sm text-muted">{t("group_lock_unconfirmed_desc")}</p>
-                  <div className="mt-4 max-h-[220px] overflow-y-auto overscroll-contain flex flex-col gap-1.5">
-                    {unconfirmed.map((p) => (
-                      <div key={p.id} className="flex items-center gap-2 rounded-xl bg-surface-soft px-3 py-2 text-left">
-                        <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-black/8 text-xs font-bold text-foreground/60">
-                          {p.name[0]?.toUpperCase()}
-                        </div>
-                        <span className="text-sm font-medium text-foreground">
-                          {p.name}
-                          {p.id === me?.id && (
-                            <span className="ml-1.5 text-[10px] font-bold uppercase tracking-wide text-[#1a3c34]">
-                              {t("group_you")}
-                            </span>
-                          )}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                  <h3 className="text-base font-bold text-foreground">{t("group_dissolve_modal_title")}</h3>
+                  <p className="mt-1.5 text-sm text-muted">{t("group_dissolve_modal_desc")}</p>
                 </div>
+                {/* Modal footer — divider + side-by-side buttons */}
                 <div className="flex divide-x divide-black/6 border-t border-black/6">
                   <button
                     type="button"
-                    disabled={lockLoading}
-                    onClick={() => setShowLockConfirm(false)}
+                    disabled={actionLoading}
+                    onClick={() => setShowDissolveConfirm(false)}
                     className="cursor-pointer flex h-13 flex-1 items-center justify-center rounded-bl-3xl text-sm font-semibold text-foreground/70 transition hover:bg-surface-soft disabled:opacity-50"
                   >
                     {t("cancel")}
                   </button>
                   <button
                     type="button"
-                    disabled={lockLoading}
-                    onClick={() => {
-                      setShowLockConfirm(false);
-                      if (state.paymentMode === "split" && (state.paymentType ?? "cash") === "cash") {
-                        void handleSplitCashCheckout();
-                      } else if (state.paymentMode === "host_pays" && (state.paymentType ?? "cash") !== "bank_transfer") {
-                        void handleHostCheckout();
-                      } else {
-                        void handleLockOrder();
-                      }
-                    }}
-                    className="cursor-pointer flex h-13 flex-1 items-center justify-center gap-1.5 rounded-br-3xl text-sm font-semibold text-[#1a3c34] transition hover:bg-[#f0faf6] disabled:opacity-50"
+                    disabled={actionLoading}
+                    onClick={() => void handleDissolve()}
+                    className="cursor-pointer flex h-13 flex-1 items-center justify-center gap-1.5 rounded-br-3xl text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
                   >
-                    {lockLoading && <Loader2 className="size-3.5 animate-spin" />}
-                    {t("group_lock_unconfirmed_confirm")}
+                    {actionLoading && <Loader2 className="size-3.5 animate-spin" />}
+                    {actionLoading ? t("group_dissolving") : t("group_dissolve_confirm_btn")}
                   </button>
                 </div>
               </motion.div>
             </motion.div>
-          );
-        })()}
-
-        {showDissolveConfirm && (
-          <motion.div
-            key="dissolve-modal"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm"
-            onClick={(e) => e.target === e.currentTarget && setShowDissolveConfirm(false)}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 12 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 12 }}
-              transition={{ type: "spring", damping: 24, stiffness: 380 }}
-              className="w-full max-w-sm rounded-3xl border border-black/6 bg-white shadow-[0_4px_20px_-8px_rgba(0,0,0,0.18)]"
-            >
-              {/* Modal body */}
-              <div className="px-6 pb-6 pt-8 text-center">
-                <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-red-50 ring-1 ring-red-200">
-                  <UserX className="size-7 text-red-500" />
-                </div>
-                <h3 className="text-base font-bold text-foreground">{t("group_dissolve_modal_title")}</h3>
-                <p className="mt-1.5 text-sm text-muted">{t("group_dissolve_modal_desc")}</p>
-              </div>
-              {/* Modal footer — divider + side-by-side buttons */}
-              <div className="flex divide-x divide-black/6 border-t border-black/6">
-                <button
-                  type="button"
-                  disabled={actionLoading}
-                  onClick={() => setShowDissolveConfirm(false)}
-                  className="cursor-pointer flex h-13 flex-1 items-center justify-center rounded-bl-3xl text-sm font-semibold text-foreground/70 transition hover:bg-surface-soft disabled:opacity-50"
-                >
-                  {t("cancel")}
-                </button>
-                <button
-                  type="button"
-                  disabled={actionLoading}
-                  onClick={() => void handleDissolve()}
-                  className="cursor-pointer flex h-13 flex-1 items-center justify-center gap-1.5 rounded-br-3xl text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
-                >
-                  {actionLoading && <Loader2 className="size-3.5 animate-spin" />}
-                  {actionLoading ? t("group_dissolving") : t("group_dissolve_confirm_btn")}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )
+        }
+      </AnimatePresence >
 
       {isKicked && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
@@ -2577,35 +2681,38 @@ export function GroupOrderPageShell() {
             </button>
           </div>
         </div>
-      )}
+      )
+      }
 
-      {isDissolved && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.94, y: 12 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ type: "spring", damping: 22, stiffness: 280 }}
-            className="w-full max-w-sm rounded-3xl border border-black/6 bg-white p-8 text-center shadow-[0_4px_20px_-8px_rgba(0,0,0,0.18)]"
-          >
-            <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-amber-50 ring-1 ring-amber-200">
-              <Users className="size-8 text-amber-500" />
-            </div>
-            <h3 className="text-lg font-bold text-foreground">{t("group_dissolved_title")}</h3>
-            <p className="mt-2 text-sm text-muted">{t("group_dissolved_desc")}</p>
-            <div className="mt-5 flex items-center justify-center gap-2 text-sm text-foreground/45">
-              <Loader2 className="size-4 animate-spin" />
-              <span>{t("group_go_home")}…</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => router.push(ROUTES.HOME)}
-              className="mt-3 text-xs font-semibold text-[#1a3c34] underline underline-offset-2 hover:opacity-70"
+      {
+        isDissolved && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.94, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ type: "spring", damping: 22, stiffness: 280 }}
+              className="w-full max-w-sm rounded-3xl border border-black/6 bg-white p-8 text-center shadow-[0_4px_20px_-8px_rgba(0,0,0,0.18)]"
             >
-              {t("group_go_home_now")}
-            </button>
-          </motion.div>
-        </div>
-      )}
+              <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-amber-50 ring-1 ring-amber-200">
+                <Users className="size-8 text-amber-500" />
+              </div>
+              <h3 className="text-lg font-bold text-foreground">{t("group_dissolved_title")}</h3>
+              <p className="mt-2 text-sm text-muted">{t("group_dissolved_desc")}</p>
+              <div className="mt-5 flex items-center justify-center gap-2 text-sm text-foreground/45">
+                <Loader2 className="size-4 animate-spin" />
+                <span>{t("group_go_home")}…</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => router.push(ROUTES.HOME)}
+                className="mt-3 text-xs font-semibold text-[#1a3c34] underline underline-offset-2 hover:opacity-70"
+              >
+                {t("group_go_home_now")}
+              </button>
+            </motion.div>
+          </div>
+        )
+      }
 
       <StoreClosedDialog
         open={!!storeClosedInfo}

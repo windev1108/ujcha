@@ -1275,5 +1275,10 @@
   "reorder_cta": "Reorder",
   "reorder_failed":  "Couldn't load this order's items. Please try again.",
   "announcement_ok": "Got it",
-  "announcement_close": "Close"
+  "announcement_close": "Close",
+  "group_confirm_points_btn": "Confirm points",
+  "group_points_confirmed": "Points confirmed",
+  "group_confirming_points": "Confirming...",
+  "group_points_confirmed_toast": "Points applied to your share",
+  "group_confirm_points_required": "Please confirm your points usage before continuing"
 }
