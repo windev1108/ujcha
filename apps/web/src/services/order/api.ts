@@ -38,8 +38,7 @@ export interface CreateOrderPayload {
   scheduledDeliveryTime?: string
   tableId?: string
   items: CreateOrderItem[]
-  voucherCode?: string
-  discountAmount?: number
+  pointsToUse?: number;
   shippingFee?: number
   guestDeliveryAddress?: string
   guestDeliveryName?: string
@@ -140,6 +139,7 @@ export interface UserOrder {
   totalAmount: string
   discountAmount: string
   pointDiscountAmount: string
+  pointsConsumed: number | null
   shippingFee: string
   finalAmount: string
   paymentCode: string

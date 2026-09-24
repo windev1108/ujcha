@@ -9,6 +9,7 @@ import {
   CreditCard, ExternalLink, Info, Loader2, MapPin, MessageCircle, Package, Phone, Printer, QrCode, Star, StickyNote, Truck, Users, Utensils,
   Bike,
   UserPlus,
+  RotateCcw,
 } from "lucide-react";
 import { io } from "socket.io-client";
 import { ShipperLiveMap } from "./ShipperLiveMap";
@@ -30,6 +31,8 @@ import { usePublicPaymentConfigQuery } from "@/services/payment-config/hooks";
 import { useAuthStore } from "@/store/auth-store";
 import { env } from "@/config/env";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
+import { useReorderStore } from "@/store/reorder-store";
+import { buildReorderItemsFromGroupOrder, buildReorderItemsFromOrder } from "@/lib/reorder";
 
 // ── formatters ────────────────────────────────────────────────────────────────
 
@@ -342,6 +345,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
 
   const isTerminal = order?.status === "completed" || order?.status === "cancelled";
   const isShipperActive = ["picked_up", "arrived", "delivering"].includes(order?.status ?? "");
+  const setReorderItems = useReorderStore((s) => s.setItems);
 
   useOrderStatusSocket({
     onStatusChange: ({ orderId, status }) => {
@@ -355,6 +359,19 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
     enabled: !isTerminal,
   });
 
+  function handleReorder() {
+    if (!order) return;
+    const items =
+      order.isGroupOrder && groupOrder
+        ? buildReorderItemsFromGroupOrder(groupOrder)
+        : buildReorderItemsFromOrder(order);
+    if (items.length === 0) return;
+
+    setReorderItems(items);
+    // Đơn bàn (table) không thể đặt lại đúng bàn cũ -> chuyển về tab pickup mặc định.
+    const tab = order.type === "delivery" ? "delivery" : "pickup";
+    router.push(`${ROUTES.CHECKOUT}?tab=${tab}&reorder=1`);
+  }
   const handlePaid = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: orderKeys.detail(paymentCode) });
   }, [queryClient, paymentCode]);
@@ -557,6 +574,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
   function handlePrint() {
     printReceipt(toReceiptOrder(order!, locale), locale);
   }
+  const canReorder = order.status === "completed" || order.status === "cancelled" && !order.isGroupOrder;
 
   return (
     <div className="min-h-screen bg-surface-soft pb-20 pt-6 sm:pt-8">
@@ -577,16 +595,29 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
             <ArrowLeft className="size-4" />
             {accessToken ? t("order_history") : t("home")}
           </button>
-          {canExportInvoice && (
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="flex items-center gap-1.5 rounded-full border border-black/10 bg-white px-4 py-2 text-sm font-medium text-foreground/65 shadow-[0_2px_8px_-4px_rgba(0,0,0,0.08)] transition hover:bg-surface-soft hover:text-foreground"
-            >
-              <Printer className="size-3.5" />
-              {t("print_invoice")}
-            </button>
-          )}
+
+          <div className="flex items-center gap-2">
+            {canReorder && (
+              <button
+                type="button"
+                onClick={handleReorder}
+                className="flex items-center gap-1.5 rounded-full bg-[#1a3c34] px-4 py-2 text-sm font-semibold text-white shadow-[0_2px_8px_-4px_rgba(0,0,0,0.15)] transition hover:opacity-90"
+              >
+                <RotateCcw className="size-3.5" />
+                {t("reorder_cta")}
+              </button>
+            )}
+            {canExportInvoice && (
+              <button
+                type="button"
+                onClick={handlePrint}
+                className="flex items-center gap-1.5 rounded-full border border-black/10 bg-white px-4 py-2 text-sm font-medium text-foreground/65 shadow-[0_2px_8px_-4px_rgba(0,0,0,0.08)] transition hover:bg-surface-soft hover:text-foreground"
+              >
+                <Printer className="size-3.5" />
+                {t("print_invoice")}
+              </button>
+            )}
+          </div>
         </motion.div>
 
         {/* Guest account creation prompt */}
@@ -1594,7 +1625,7 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                     {pointDiscount > 0 && (
                       <div className="flex justify-between text-foreground/65">
                         <span>{t("points_label")}</span>
-                        <span className="tabular-nums font-medium text-kun-products-forest">-{fmtVnd(pointDiscount)}</span>
+                        <span className="tabular-nums font-medium text-kun-products-forest">{`-${fmtVnd(pointDiscount)}`}</span>
                       </div>
                     )}
                     {order.type === 'delivery' && (

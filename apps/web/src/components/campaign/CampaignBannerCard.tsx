@@ -83,7 +83,6 @@ export function CampaignBannerCard({ campaign }: { campaign: ActiveCampaign }) {
   const flowSteps = [
     { icon: ShoppingBag, label: t("order") },
     { icon: TrendingUp, label: t("accumulate_points") },
-    { icon: Coins, label: t("exchange_vouchers") },
     { icon: Gift, label: t("discount") },
   ];
 
@@ -146,7 +145,7 @@ export function CampaignBannerCard({ campaign }: { campaign: ActiveCampaign }) {
                   </div>
                   <span className="text-[9px] font-semibold text-white/50">{label}</span>
                 </div>
-                {i < 3 && <ChevronRight className="mb-3.5 size-3.5 shrink-0 text-white/20" />}
+                {i < 2 && <ChevronRight className="mb-3.5 size-3.5 shrink-0 text-white/20" />}
               </div>
             ))}
           </div>
@@ -160,14 +159,6 @@ export function CampaignBannerCard({ campaign }: { campaign: ActiveCampaign }) {
               >
                 <ShoppingBag className="mr-1.5 size-4" />
                 {t("order_points")}
-              </Button>
-              <Button
-                onClick={() => router.push(ROUTES.REWARDS)}
-                className="h-11 rounded-full border border-[#99d6b3]/40 bg-[#99d6b3]/15 px-6 font-semibold text-[#99d6b3] transition-opacity hover:opacity-90"
-              >
-                <Coins className="mr-1.5 size-4" />
-                {t("exchange_points_for_vouchers")}
-                <ArrowRight className="ml-1 size-4" />
               </Button>
             </div>
 

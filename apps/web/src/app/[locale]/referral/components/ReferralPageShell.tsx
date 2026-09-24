@@ -35,25 +35,21 @@ import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { useAuthStore } from "@/store/auth-store";
 import { useProfileQuery } from "@/services/profile/hooks";
-import { useMyVouchersQuery } from "@/services/voucher/hooks";
 import {
   useReferralStatsQuery,
   useReferralInvitationsQuery,
   useClaimedMilestonesQuery,
   useClaimMilestoneMutation,
-  useReferralLeaderboardQuery,
+  useReferralPublicConfigQuery,
 } from "@/services/referral/hooks";
-import type { MyVoucherItem } from "@/services/voucher/api";
 import type {
   ReferralInvitation,
   InvitationStatus,
   MilestoneTierId,
   ReferralPublicConfig,
-  LeaderboardEntry,
 } from "@/services/referral/api";
 import { ROUTES } from "@/lib/routes";
-
-// ── helpers ───────────────────────────────────────────────────────────────────
+import { usePublicPointConfigQuery } from "@/services/point/hooks";
 
 function fmtVnd(s: string | number) {
   const n = typeof s === "string" ? parseFloat(s) : s;
@@ -378,141 +374,6 @@ function InvitationsSection() {
   );
 }
 
-// ── leaderboard ───────────────────────────────────────────────────────────────
-
-const RANK_CONFIG: Record<number, { bg: string; border: string; nameCls: string; countCls: string; glow: string; icon: React.ElementType; iconCls: string }> = {
-  1: { bg: "bg-gradient-to-br from-amber-50 to-yellow-50", border: "border-amber-200", nameCls: "text-amber-900 font-bold", countCls: "text-amber-700 font-bold", glow: "shadow-[0_0_18px_-4px_rgba(251,191,36,0.55)]", icon: Crown, iconCls: "text-amber-500" },
-  2: { bg: "bg-gradient-to-br from-slate-50 to-zinc-50", border: "border-slate-200", nameCls: "text-slate-800 font-semibold", countCls: "text-slate-600 font-semibold", glow: "shadow-[0_0_14px_-4px_rgba(148,163,184,0.5)]", icon: Medal, iconCls: "text-slate-400" },
-  3: { bg: "bg-gradient-to-br from-orange-50 to-amber-50", border: "border-orange-200", nameCls: "text-orange-900 font-semibold", countCls: "text-orange-700 font-semibold", glow: "shadow-[0_0_14px_-4px_rgba(251,146,60,0.45)]", icon: Medal, iconCls: "text-orange-400" },
-};
-
-const TIER_BADGE: Record<MilestoneTierId, { labelKey: string; cls: string }> = {
-  diamond: { labelKey: "tier_diamond", cls: "bg-violet-100 text-violet-700" },
-  gold: { labelKey: "tier_gold", cls: "bg-yellow-100 text-yellow-700" },
-  silver: { labelKey: "tier_silver", cls: "bg-slate-100 text-slate-600" },
-  bronze: { labelKey: "tier_bronze", cls: "bg-amber-100 text-amber-700" },
-};
-
-function LeaderboardRow({ entry, isMe, index }: { entry: LeaderboardEntry; isMe: boolean; index: number }) {
-  const t = useTranslations();
-  const rank = entry.rank;
-  const top = RANK_CONFIG[rank];
-  const tierMeta = entry.tier ? TIER_BADGE[entry.tier] : null;
-  const isTop3 = rank <= 3;
-
-  const avatarFallbackCls =
-    rank === 1 ? "bg-amber-100 text-amber-700"
-      : rank === 2 ? "bg-slate-100 text-slate-600"
-        : rank === 3 ? "bg-orange-100 text-orange-700"
-          : "bg-surface-card text-foreground/60";
-
-  const AvatarNode = ({ size }: { size: "md" | "sm" }) => {
-    const cls = size === "md"
-      ? `size-10 text-sm font-bold ring-2 ring-white shadow-sm ${avatarFallbackCls}`
-      : `size-8 text-xs font-bold ${avatarFallbackCls}`;
-    if (entry.avatar) {
-      return <img src={entry.avatar} alt={entry.name} className={`shrink-0 rounded-full object-cover ring-2 ring-white shadow-sm ${size === "md" ? "size-10" : "size-8"}`} />;
-    }
-    return <div className={`flex shrink-0 items-center justify-center rounded-full ${cls}`}>{entry.name.charAt(0).toUpperCase()}</div>;
-  };
-
-  if (isTop3 && top) {
-    const RankIcon = top.icon;
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: index * 0.06 }}
-        className={`relative flex items-center gap-3 rounded-2xl border px-4 py-3.5 transition-all ${top.bg} ${top.border} ${top.glow} ${isMe ? "ring-2 ring-kun-primary ring-offset-1" : ""}`}
-      >
-        <div className="flex size-9 shrink-0 flex-col items-center justify-center rounded-xl bg-white/70 shadow-sm">
-          <RankIcon className={`size-4 ${top.iconCls}`} />
-          <span className="text-[9px] font-black leading-none text-foreground/50">#{rank}</span>
-        </div>
-        <AvatarNode size="md" />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <p className={`truncate text-sm ${top.nameCls}`}>{entry.name}</p>
-            {isMe && <span className="rounded-full bg-kun-primary/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-kun-primary">{t("you_label")}</span>}
-          </div>
-          {tierMeta && <span className={`mt-0.5 inline-flex rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${tierMeta.cls}`}>{t(tierMeta.labelKey as any)}</span>}
-        </div>
-        <div className="shrink-0 text-right">
-          <p className={`text-lg tabular-nums leading-none ${top.countCls}`}>{entry.successfulReferrals}</p>
-          <p className="mt-0.5 text-[10px] text-foreground/40">{t("referral_count_unit")}</p>
-        </div>
-        {rank === 1 && <div className="pointer-events-none absolute -top-px inset-x-4 h-px bg-gradient-to-r from-transparent via-amber-300/80 to-transparent" />}
-      </motion.div>
-    );
-  }
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.04 }}
-      className={`flex items-center gap-3 rounded-xl border border-black/[0.05] bg-surface-soft px-4 py-3 ${isMe ? "border-kun-primary/30 bg-kun-primary/[0.04] ring-1 ring-kun-primary/20" : ""}`}
-    >
-      <span className="w-6 shrink-0 text-center text-xs font-bold tabular-nums text-muted">#{rank}</span>
-      <AvatarNode size="sm" />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <p className="truncate text-sm font-medium text-foreground">{entry.name}</p>
-          {isMe && <span className="rounded-full bg-kun-primary/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-kun-primary">{t("you_label")}</span>}
-        </div>
-        {tierMeta && <span className={`mt-0.5 inline-flex rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${tierMeta.cls}`}>{t(tierMeta.labelKey as any)}</span>}
-      </div>
-      <div className="shrink-0 text-right">
-        <p className="text-sm font-semibold tabular-nums text-foreground">{entry.successfulReferrals}</p>
-        <p className="text-[10px] text-muted">{t("referral_count_unit")}</p>
-      </div>
-    </motion.div>
-  );
-}
-
-function LeaderboardSection({ myReferralCode }: { myReferralCode?: string }) {
-  const t = useTranslations();
-  const { data: entries = [], isLoading } = useReferralLeaderboardQuery();
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.08 }}
-      className="rounded-3xl border border-black/6 bg-white shadow-[0_4px_20px_-8px_rgba(0,0,0,0.08)] overflow-hidden"
-    >
-      <div className="flex items-center gap-3 px-5 py-4 sm:px-6">
-        <div className="flex size-9 items-center justify-center rounded-full bg-amber-50">
-          <Trophy className="size-4 text-amber-500" />
-        </div>
-        <div>
-          <p className="font-semibold text-foreground">{t("leaderboard")}</p>
-          <p className="text-[11px] text-muted">{t("leaderboard_subtitle")}</p>
-        </div>
-      </div>
-      <div className="px-4 pb-4 sm:px-5">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-10"><Loader2 className="size-5 animate-spin text-kun-primary" /></div>
-        ) : entries.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-10 text-center">
-            <div className="flex size-12 items-center justify-center rounded-full bg-surface-card"><Trophy className="size-5 text-muted" /></div>
-            <p className="text-sm font-medium text-foreground">{t("leaderboard_empty")}</p>
-            <p className="text-xs text-muted">{t("leaderboard_empty_desc")}</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {entries.map((entry, i) => (
-              <LeaderboardRow key={entry.referralCode} entry={entry} isMe={!!myReferralCode && entry.referralCode === myReferralCode} index={i} />
-            ))}
-          </div>
-        )}
-      </div>
-    </motion.div>
-  );
-}
-
-// ── CodeBox ───────────────────────────────────────────────────────────────────
-
 function CodeBox({ code }: { code: string }) {
   const t = useTranslations();
   const [copied, setCopied] = useState<"code" | "link" | null>(null);
@@ -672,30 +533,6 @@ function TierRewardCard({ tier, successfulReferrals, claimed, onClaim, isClaimin
   );
 }
 
-// ── VoucherPill ───────────────────────────────────────────────────────────────
-
-function VoucherPill({ item }: { item: MyVoucherItem }) {
-  const t = useTranslations();
-  const v = item.voucher;
-  const used = !!item.usedAt;
-  const expired = v.isExpired;
-  const available = !used && !expired && v.isActive;
-  const label = v.discountType === "percent" ? `Giảm ${v.discountValue}%` : `Giảm ${fmtVnd(v.discountValue)}`;
-
-  return (
-    <div className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${available ? "border-kun-primary/20 bg-kun-primary/5" : "border-black/6 bg-surface-soft opacity-55"}`}>
-      <Gift className={`size-4 shrink-0 ${available ? "text-kun-primary" : "text-muted"}`} />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-foreground">{v.name}</p>
-        <p className={`text-[11px] ${available ? "text-kun-primary font-semibold" : "text-muted"}`}>{label}</p>
-      </div>
-      {used && <span className="shrink-0 rounded-full bg-surface-card px-2 py-0.5 text-[10px] font-medium text-muted">{t("used")}</span>}
-      {!used && expired && <span className="shrink-0 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-500">{t("expired")}</span>}
-      {available && <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">{t("available")}</span>}
-    </div>
-  );
-}
-
 // ── RewardRulesSection ────────────────────────────────────────────────────────
 
 function RewardRulesSection({ cfg, rewardsToday, isLoggedIn }: { cfg: ReferralPublicConfig | null; rewardsToday: number; isLoggedIn: boolean }) {
@@ -742,7 +579,7 @@ function RewardRulesSection({ cfg, rewardsToday, isLoggedIn }: { cfg: ReferralPu
             <Gift className="size-5 text-amber-600" />
           </div>
           <div>
-            <p className="text-sm font-bold text-amber-900">{t("welcome_voucher")}</p>
+            <p className="text-sm font-bold text-amber-900">{t("points_ujcha", { count: cfg?.signupBonusPoints ?? 0 })}</p>
             <p className="mt-1 text-[11px] text-amber-700 leading-snug">{t("welcome_voucher_desc")}</p>
           </div>
         </div>
@@ -823,19 +660,15 @@ export function ReferralPageShell() {
   const accessToken = useAuthStore((s) => s.accessToken);
   const { data: profile, isLoading: profileLoading } = useProfileQuery();
   const { data: stats, isLoading: statsLoading } = useReferralStatsQuery();
-  const { data: vouchers = [] } = useMyVouchersQuery();
   const { data: claimedTiers = [] } = useClaimedMilestonesQuery();
   const claimMutation = useClaimMilestoneMutation();
   const [claimingTier, setClaimingTier] = useState<MilestoneTierId | null>(null);
   const [claimSuccess, setClaimSuccess] = useState<{ tier: string; points: number } | null>(null);
-
-  const referralVouchers = vouchers.filter((v) => v.source === "referral");
   const inviteCount = stats?.inviteCount ?? 0;
   const pointsEarned = stats?.pointsEarned ?? 0;
   const successfulReferrals = stats?.successfulReferrals ?? 0;
   const rewardsToday = stats?.rewardsToday ?? 0;
   const cfg = stats?.programConfig ?? null;
-
   const tiers = buildTiers(cfg);
   const currentTier = getCurrentTier(successfulReferrals, tiers);
   const isLoading = accessToken && (profileLoading || statsLoading);
@@ -1082,21 +915,6 @@ export function ReferralPageShell() {
               ))}
             </div>
           </div>
-
-          {/* Referral vouchers */}
-          {accessToken && referralVouchers.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 14 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-32px" }}
-              className="rounded-3xl border border-black/6 bg-white p-5 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.08)] sm:p-6"
-            >
-              <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{t("your_referral_vouchers")}</p>
-              <div className="space-y-2">
-                {referralVouchers.map((item) => <VoucherPill key={item.id} item={item} />)}
-              </div>
-            </motion.div>
-          )}
 
           {/* Terms */}
           <motion.div

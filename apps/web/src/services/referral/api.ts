@@ -15,6 +15,7 @@ export interface ReferralPublicConfig {
   goldPoints: number;
   diamondThreshold: number;
   diamondPoints: number;
+  signupBonusPoints: number;
 }
 
 export interface ReferralRecentReward {

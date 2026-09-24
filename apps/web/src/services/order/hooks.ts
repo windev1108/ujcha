@@ -113,6 +113,7 @@ export function useCreateOrderMutation() {
     mutationFn: (payload: CreateOrderPayload) => createOrder(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cart'] })
+      queryClient.invalidateQueries({ queryKey: ['profile'] })
       queryClient.invalidateQueries({ queryKey: ['my-vouchers'] })
     },
   })

@@ -85,7 +85,7 @@ function resolveHref(n: AppNotification): string | null {
     const orderId = n.data?.orderId as string | undefined;
     return orderId ? ROUTES.ORDERS : ROUTES.ORDERS;
   }
-  if (n.type === "reward") return ROUTES.REWARDS;
+  if (n.type === "reward") return ROUTES.PROFILE;
   return null;
 }
 

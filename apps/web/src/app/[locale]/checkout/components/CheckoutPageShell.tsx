@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, ArrowRight, Loader2, LogIn } from "lucide-react";
 import { CheckoutFulfillmentSection } from "./CheckoutFulfillmentSection";
 import { CheckoutHeader } from "./CheckoutHeader";
@@ -17,17 +17,19 @@ import {
 import { useProfileQuery } from "@/services/profile/hooks";
 import { usePublicStoreLocationQuery } from "@/services/store/hooks";
 import { useShippingEstimateQuery } from "@/services/shipping/hooks";
-import { fetchPublicTable, type PublicTableInfo, type VoucherPreviewResult, type CreatedOrder } from "@/services/order/api";
+import { fetchPublicTable, type PublicTableInfo, type CreatedOrder } from "@/services/order/api";
 import { saveGuestOrder } from "@/hooks/useGuestOrders";
 import { normalizeOptionGroups, computeOptionSurcharge } from "@/lib/product-options";
 import { useCartStore } from "@/store/cart-store";
 import { ROUTES } from "@/lib/routes";
 import { useAuthStore } from "@/store/auth-store";
-import { VoucherSection } from "./VoucherSection";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { extractErrorCode } from "@/lib/utils";
 import { StoreClosedDialog } from "@/components/common/StoreClosedDialog";
+import { usePublicPointConfigQuery } from "@/services/point/hooks";
+import { PointsSection } from "./PointsSection";
+import { useReorderStore } from "@/store/reorder-store";
 
 function formatVnd(amount: number) {
   return new Intl.NumberFormat("vi-VN").format(Math.round(amount)) + "đ";
@@ -75,7 +77,6 @@ export function CheckoutPageShell() {
   const createOrderMutation = useCreateOrderMutation();
   const { data: storeLocation } = usePublicStoreLocationQuery();
   const { data: profile } = useProfileQuery();
-
   const tableIdParam = searchParams.get("tableId") ?? null;
 
   const selectedItemIds = useMemo(() => {
@@ -109,6 +110,20 @@ export function CheckoutPageShell() {
       router.replace(`${pathname}?${q.toString()}`, { scroll: false });
     }
   }, [pathname, router, searchParams, tab]);
+
+  const isReorderMode = searchParams.get("reorder") === "1";
+  const reorderItems = useReorderStore((s) => s.items);
+  const clearReorderItems = useReorderStore((s) => s.clear);
+  const suppressReorderFallbackRef = useRef(false);
+
+  useEffect(() => {
+    if (suppressReorderFallbackRef.current) return;
+    if (isReorderMode && (!reorderItems || reorderItems.length === 0)) {
+      const q = new URLSearchParams(searchParams.toString());
+      q.delete("reorder");
+      router.replace(`${pathname}?${q.toString()}`, { scroll: false });
+    }
+  }, [isReorderMode, reorderItems, pathname, router, searchParams]);
 
   const [deliveryForm, setDeliveryForm] = useState<DeliveryForm>({
     fullAddress: "",
@@ -150,19 +165,18 @@ export function CheckoutPageShell() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [orderError, setOrderError] = useState<string | null>(null);
   const [storeClosedInfo, setStoreClosedInfo] = useState<{ code: string } | null>(null);
-  const [appliedVoucher, setAppliedVoucher] = useState<VoucherPreviewResult | null>(null);
+  const [pointsToUse, setPointsToUse] = useState(0);
 
   // Source of truth: guest = local Zustand, member = server cart
   const allServerItems = serverCart?.items ?? [];
   const allItems = isGuest ? localItems : allServerItems;
 
-  const items = useMemo(
-    () =>
-      selectedItemIds
-        ? allItems.filter((i) => selectedItemIds.has(i.id))
-        : allItems,
-    [allItems, selectedItemIds],
-  );
+  const items = useMemo(() => {
+    if (isReorderMode && reorderItems) return reorderItems;
+    return selectedItemIds
+      ? allItems.filter((i) => selectedItemIds.has(i.id))
+      : allItems;
+  }, [allItems, selectedItemIds, isReorderMode, reorderItems]);
 
   const subtotal = useMemo(
     () =>
@@ -204,14 +218,40 @@ export function CheckoutPageShell() {
   }, [isDelivery, isNewAddress, deliveryForm.lng, effectiveSavedAddresses, selectedAddressId]);
 
   const { data: shippingEstimate } = useShippingEstimateQuery(shippingLat, shippingLng, subtotal);
-
+  const { data: pointConfig } = usePublicPointConfigQuery();
   const shippingFee = isDelivery ? (shippingEstimate?.fee ?? 0) : 0;
   const shippingIsFree = isDelivery && (shippingEstimate?.isFree ?? false);
   const shippingIsOutOfRange = isDelivery && (shippingEstimate?.isOutOfRange ?? false);
   const shippingIsDisabled = !isDelivery || !shippingEstimate || (shippingEstimate?.isDisabled ?? true);
 
-  const voucherDiscount = appliedVoucher?.discountAmount ?? 0;
-  const total = Math.max(0, subtotal - voucherDiscount + shippingFee);
+  const pointBalance = profile?.availablePoints ?? 0;
+
+  const maxUsablePoints = useMemo(() => {
+    if (!pointConfig || pointConfig.pointRate <= 0) return pointBalance;
+    const maxMoney = subtotal * (pointConfig.maxUsagePercent / 100);
+    return Math.max(0, Math.min(pointBalance, Math.floor(maxMoney / pointConfig.pointRate)));
+  }, [pointConfig, subtotal, pointBalance]);
+
+  // Clamp lại nếu subtotal/pointBalance thay đổi làm pointsToUse hiện tại vượt mức cho phép
+  useEffect(() => {
+    setPointsToUse((prev) => Math.min(prev, maxUsablePoints));
+  }, [maxUsablePoints]);
+
+  const meetsMinOrderToSpend =
+    !pointConfig || subtotal >= pointConfig.minOrderAmountToSpend;
+
+  const estimatedPointDiscount = useMemo(() => {
+    if (isGuest || !pointConfig || pointsToUse <= 0 || !meetsMinOrderToSpend) return 0;
+    return Math.min(pointsToUse, maxUsablePoints) * pointConfig.pointRate;
+  }, [isGuest, pointConfig, pointsToUse, maxUsablePoints, meetsMinOrderToSpend]);
+
+  const total = Math.max(0, subtotal - estimatedPointDiscount + shippingFee);
+
+  // Chỉ gửi khi member, có nhập point > 0, và đơn đủ điều kiện tối thiểu để dùng điểm
+  const pointsToSend =
+    !isGuest && meetsMinOrderToSpend && pointsToUse > 0
+      ? Math.min(pointsToUse, maxUsablePoints)
+      : undefined;
 
   async function handleSubmitOrder() {
     setOrderError(null);
@@ -344,8 +384,7 @@ export function CheckoutPageShell() {
           paymentType: paymentMethod,
           tableId: tableId!,
           items: orderItems,
-          voucherCode: appliedVoucher?.code,
-          discountAmount: voucherDiscount > 0 ? voucherDiscount : undefined,
+          pointsToUse: pointsToSend,
         });
       } else if (tab === CHECKOUT_TAB.DELIVERY) {
         if (isGuest) {
@@ -360,7 +399,7 @@ export function CheckoutPageShell() {
             guestDeliveryPhone: deliveryForm.phone.trim() || undefined,
             items: orderItems,
             shippingFee: shippingFee > 0 ? shippingFee : undefined,
-            scheduledDeliveryTime
+            scheduledDeliveryTime,
           });
         } else if (isNewAddress) {
           // Member + new address: save to DB via inlineAddress
@@ -375,10 +414,9 @@ export function CheckoutPageShell() {
             guestDeliveryName: deliveryForm.name.trim() || undefined,
             guestDeliveryPhone: deliveryForm.phone.trim() || undefined,
             items: orderItems,
-            voucherCode: appliedVoucher?.code,
-            discountAmount: voucherDiscount > 0 ? voucherDiscount : undefined,
             shippingFee: shippingFee > 0 ? shippingFee : undefined,
-            scheduledDeliveryTime
+            scheduledDeliveryTime,
+            pointsToUse: pointsToSend,
           });
         } else {
           order = await createOrderMutation.mutateAsync({
@@ -386,10 +424,9 @@ export function CheckoutPageShell() {
             paymentType: paymentMethod,
             addressId: selectedAddressId!,
             items: orderItems,
-            voucherCode: appliedVoucher?.code,
-            discountAmount: voucherDiscount > 0 ? voucherDiscount : undefined,
             shippingFee: shippingFee > 0 ? shippingFee : undefined,
-            scheduledDeliveryTime
+            scheduledDeliveryTime,
+            pointsToUse: pointsToSend,
           });
         }
       } else {
@@ -405,23 +442,30 @@ export function CheckoutPageShell() {
           guestDeliveryName: pickupForm.name.trim() || undefined,
           guestDeliveryPhone: pickupForm.phone.trim() || undefined,
           items: orderItems,
-          voucherCode: appliedVoucher?.code,
-          discountAmount: voucherDiscount > 0 ? voucherDiscount : undefined,
+          pointsToUse: pointsToSend,
         });
       }
 
       // Clear cart after successful order
       if (isGuest) {
-        removeLocalItems(orderedItemIds);
+        if (!isReorderMode) removeLocalItems(orderedItemIds);
         saveGuestOrder({
           paymentCode: order.paymentCode,
           type: order.type as "delivery" | "pickup" | "table",
           totalAmount: parseFloat(order.totalAmount),
           createdAt: new Date().toISOString(),
         });
-      } else {
+      } else if (!isReorderMode) {
         await removeServerCartItems.mutateAsync(orderedItemIds);
       }
+
+      if (isReorderMode) {
+        suppressReorderFallbackRef.current = true; 
+        clearReorderItems();
+      }
+
+
+      if (isReorderMode) clearReorderItems();
 
       router.push(ROUTES.ORDER_DETAIL(order.paymentCode));
     } catch (err: unknown) {
@@ -477,17 +521,18 @@ export function CheckoutPageShell() {
               profilePhone={profile?.phone}
             />
 
-            {/* Vouchers: members only */}
-            {!isGuest && (
+            {/* Points: members only */}
+            {!isGuest && pointBalance > 0 && (
               <div className="mt-4 space-y-3 rounded-3xl border border-black/6 bg-white p-5 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.08)] sm:p-6">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-                  {t("offers")}
+                  {t("points_label")}
                 </p>
-                <VoucherSection
+                <PointsSection
+                  pointBalance={pointBalance}
+                  pointConfig={pointConfig ?? undefined}
                   subtotal={subtotal}
-                  applied={appliedVoucher}
-                  onApply={setAppliedVoucher}
-                  onRemove={() => setAppliedVoucher(null)}
+                  pointsToUse={pointsToUse}
+                  onChange={setPointsToUse}
                 />
               </div>
             )}
@@ -502,8 +547,8 @@ export function CheckoutPageShell() {
             <CheckoutOrderSummary
               items={items}
               subtotal={subtotal}
-              discount={voucherDiscount}
-              pointDiscount={0}
+              discount={0}
+              pointDiscount={estimatedPointDiscount}
               shippingFee={shippingFee}
               shippingIsFree={shippingIsFree}
               shippingIsOutOfRange={shippingIsOutOfRange}

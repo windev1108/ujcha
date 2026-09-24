@@ -8,9 +8,6 @@ import { useTranslations } from "next-intl";
 export function ProductionSecurityGuard() {
   const t = useTranslations("security.devTools");
 
-  const isDevelopment =
-    process.env.NODE_ENV === "development";
-
   const handleDetected = useCallback(() => {
     console.warn(
       "[Ujcha Security] Developer tools detected."
@@ -18,10 +15,7 @@ export function ProductionSecurityGuard() {
   }, []);
 
   const { isOpen } = useDevToolsDetection({
-    enabled: isDevelopment
-      ? true
-      : process.env.NODE_ENV === "production",
-
+    enabled: process.env.NODE_ENV === "production",
     onDetected: handleDetected,
   });
 

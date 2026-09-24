@@ -51,7 +51,6 @@ export function ReferralProgramSettingsTab() {
 
   const [minOrderAmount, setMinOrderAmount] = useState("");
   const [referrerCommissionPercent, setReferrerCommissionPercent] = useState("5");
-  const [welcomeVoucherId, setWelcomeVoucherId] = useState<string>("");
   const [maxReferrerRewardsPerDay, setMaxReferrerRewardsPerDay] = useState("");
   const [isActive, setIsActive] = useState(true);
   const [blockSameIp, setBlockSameIp] = useState(true);
@@ -64,6 +63,7 @@ export function ReferralProgramSettingsTab() {
   const [goldPoints, setGoldPoints] = useState("1000");
   const [diamondThreshold, setDiamondThreshold] = useState("100");
   const [diamondPoints, setDiamondPoints] = useState("3000");
+  const [signupBonusPoints, setSignupBonusPoints] = useState("0");
 
   const cfg = cfgQuery.data;
   const vouchers = vouchersQuery.data ?? [];
@@ -72,7 +72,6 @@ export function ReferralProgramSettingsTab() {
     if (!cfg) return;
     setMinOrderAmount(String(Number.parseFloat(cfg.minOrderAmount) || 0));
     setReferrerCommissionPercent(String(cfg.referrerCommissionPercent));
-    setWelcomeVoucherId(cfg.welcomeVoucherId ?? "");
     setMaxReferrerRewardsPerDay(String(cfg.maxReferrerRewardsPerDay));
     setIsActive(cfg.isActive);
     setBlockSameIp(cfg.blockSameIpAsReferrer);
@@ -85,6 +84,7 @@ export function ReferralProgramSettingsTab() {
     setGoldPoints(String(cfg.goldPoints));
     setDiamondThreshold(String(cfg.diamondThreshold));
     setDiamondPoints(String(cfg.diamondPoints));
+    setSignupBonusPoints(String(cfg.signupBonusPoints ?? 0));
   }, [cfg]);
 
   const saveMut = useMutation({
@@ -93,7 +93,7 @@ export function ReferralProgramSettingsTab() {
         isActive,
         minOrderAmount: Number.parseFloat(minOrderAmount) || 0,
         referrerCommissionPercent: Number.parseFloat(referrerCommissionPercent) || 0,
-        welcomeVoucherId: welcomeVoucherId || null,
+        signupBonusPoints: Number.parseInt(signupBonusPoints, 10) || 0,
         maxReferrerRewardsPerDay:
           Number.parseInt(maxReferrerRewardsPerDay, 10) || 1,
         blockSameIpAsReferrer: blockSameIp,
@@ -167,37 +167,26 @@ export function ReferralProgramSettingsTab() {
           </div>
           <div className={adminFieldStackLoose}>
             <Label className={adminLabelClass}>% Hoa hồng người mời (đơn đầu tiên)</Label>
-            <div className="relative">
-              <Input
-                className={adminInputClass}
-                value={referrerCommissionPercent}
-                onChange={(e) => setReferrerCommissionPercent(e.target.value)}
-                inputMode="decimal"
-              />
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-foreground/40">%</span>
-            </div>
+            <Input
+              className={adminInputClass}
+              value={referrerCommissionPercent}
+              onChange={(e) => setReferrerCommissionPercent(e.target.value)}
+              inputMode="decimal"
+            />
             <p className="text-[11px] text-foreground/45">
               Người mời nhận {Number.parseFloat(referrerCommissionPercent) || 0}% giá trị đơn đầu tiên của người được mời quy thành điểm UjCha.
             </p>
           </div>
           <div className={`sm:col-span-2 ${adminFieldStackLoose}`}>
-            <Label className={adminLabelClass}>Voucher chào mừng cho người đăng ký mới</Label>
-            <select
-              className="w-full rounded-lg border border-black/[0.1] bg-white px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[#1a3c34]/30"
-              value={welcomeVoucherId}
-              onChange={(e) => setWelcomeVoucherId(e.target.value)}
-            >
-              <option value="">— Dùng voucher có cờ isWelcome —</option>
-              {vouchers
-                .filter((v) => v.isActive)
-                .map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name} ({v.code}) — {v.discountType === "percent" ? `${v.discountValue}%` : `${Number(v.discountValue).toLocaleString("vi-VN")}đ`}
-                  </option>
-                ))}
-            </select>
+            <Label className={adminLabelClass}>Điểm UjCha thưởng khi đăng ký mới</Label>
+            <Input
+              className={adminInputClass}
+              value={signupBonusPoints}
+              onChange={(e) => setSignupBonusPoints(e.target.value)}
+              inputMode="numeric"
+            />
             <p className="text-[11px] text-foreground/45">
-              Voucher này sẽ được tặng tự động cho tất cả người dùng mới khi đăng ký.
+              Cộng thẳng vào ví điểm của user ngay khi đăng ký thành công (0 = tắt thưởng).
             </p>
           </div>
           <div className={adminFieldStackLoose}>

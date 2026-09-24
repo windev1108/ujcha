@@ -8,6 +8,8 @@ export interface UserProfileData {
   avatar: string | null
   referralCode: string
   pointBalance: number
+  lockedPoints: number
+  availablePoints: number
   emailMarketingEnabled: boolean
   lastAvatarUploadAt: string | null
 }

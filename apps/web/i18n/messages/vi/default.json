@@ -869,7 +869,7 @@
   "warn_same_ip_desc": "Bạn bè đăng ký từ cùng mạng WiFi hoặc IP với bạn sẽ không được tính phần thưởng. Hãy đảm bảo họ dùng mạng di động riêng hoặc mạng khác khi tạo tài khoản.",
   "warn_same_ip_title": "Lưu ý: Hệ thống chặn cùng địa chỉ mạng",
   "welcome_voucher": "Voucher chào mừng",
-  "welcome_voucher_desc": "Nhận ngay khi đăng ký thành công — áp dụng cho đơn hàng đầu tiên tại UjCha",
+  "welcome_voucher_desc": "Nhận ngay khi đăng ký thành công",
   "who_gets_what": "Ai nhận được gì?",
   "waiting_shipper_turn_on_location": "Chờ shipper bật định vị",
   "you_label": "Bạn",
@@ -1251,5 +1251,25 @@
       "description": "Developer Tools không được phép sử dụng trên trang này. Vui lòng đóng Developer Tools để tiếp tục sử dụng Ujcha.",
       "instruction": "Đóng Developer Tools và trang sẽ tự động hoạt động trở lại."
     }
-  }
+  },
+  "points_info_label": "Thông tin điểm",
+  "points_info_title": "Cách dùng điểm UjCha",
+  "points_info_rate": "1 điểm = {rate}",
+  "points_info_max_percent": "Giảm tối đa {percent}% giá trị đơn",
+  "points_info_min_order": "Áp dụng cho đơn từ {amount}",
+  "points_use_max": "Dùng tối đa",
+  "points_toggle_label": "Bật/tắt dùng điểm",
+  "points_below_min_order": "Đơn chưa đạt {amount} để dùng điểm",
+  "points_available": "{count} điểm khả dụng",
+  "points_locked_hint": "{count} điểm đang giữ cho đơn chưa xử lý",
+  "points_ujcha_title": "Điểm UjCha",
+  "points_ujcha_subtitle": "Điểm tích luỹ và có thể dùng để giảm giá đơn hàng",
+  "points_available_label": "Điểm khả dụng",
+  "points_locked_label": "Điểm đang khóa",
+  "points_locked_desc": "Đang dùng cho đơn chưa hoàn tất",
+  "points_total_label": "Tổng điểm",
+  "contact_info_subtitle": "Quản lý thông tin cá nhân và liên hệ của bạn",
+  "group_point_discount": "Điểm Ujcha",
+  "group_points_unsaved_warning": "Đang lưu điểm, vui lòng đợi giây lát.",
+  "reorder_cta": "Đặt lại"
 }

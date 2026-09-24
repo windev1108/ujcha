@@ -98,6 +98,7 @@ export function PointConfigTab({
   const [earnPercent, setEarnPercent] = useState("");
   const [maxUsagePercent, setMaxUsagePercent] = useState("");
   const [minOrderAmount, setMinOrderAmount] = useState("");
+  const [minOrderAmountToSpend, setMinOrderAmountToSpend] = useState("");
   const [delayHours, setDelayHours] = useState("");
   const [expireDays, setExpireDays] = useState("");
   const [isActive, setIsActive] = useState(true);
@@ -112,6 +113,7 @@ export function PointConfigTab({
     setEarnPercent(String(Number.parseFloat(cfg.earnPercent) || 0));
     setMaxUsagePercent(String(Number.parseFloat(cfg.maxUsagePercent) || 0));
     setMinOrderAmount(String(Number.parseFloat(cfg.minOrderAmount) || 0));
+    setMinOrderAmountToSpend(String(Number.parseFloat(cfg.minOrderAmountToSpend) || 0));
     setDelayHours(String(cfg.delayHours));
     setExpireDays(String(cfg.expireDays));
     setIsActive(cfg.isActive);
@@ -120,6 +122,7 @@ export function PointConfigTab({
       earnPercent: cfg.earnPercent,
       maxUsagePercent: cfg.maxUsagePercent,
       minOrderAmount: cfg.minOrderAmount,
+      minOrderAmountToSpend: cfg.minOrderAmountToSpend,
       delayHours: cfg.delayHours,
       expireDays: cfg.expireDays,
       isActive: cfg.isActive,
@@ -131,13 +134,17 @@ export function PointConfigTab({
       if (!cfg) throw new Error("no config");
       const pr = Number.parseInt(pointRate, 10);
       const ep = Number.parseFloat(earnPercent.replace(",", "."));
+      const mu = Number.parseFloat(maxUsagePercent.replace(",", "."));
       const minO = Number.parseFloat(minOrderAmount.replace(",", "."));
+      const minOS = Number.parseFloat(minOrderAmountToSpend.replace(",", "."));
       const dh = Number.parseInt(delayHours, 10);
       const ed = Number.parseInt(expireDays, 10);
       return updatePointConfig(cfg.id, {
         pointRate: pr,
         earnPercent: ep,
+        maxUsagePercent: mu,
         minOrderAmount: minO,
+        minOrderAmountToSpend: minOS,
         delayHours: dh,
         expireDays: ed,
         isActive,
@@ -169,6 +176,9 @@ export function PointConfigTab({
     setEarnPercent(String(Number.parseFloat(String(snapshot.earnPercent ?? cfg.earnPercent)) || 0));
     setMaxUsagePercent(String(Number.parseFloat(String(snapshot.maxUsagePercent ?? cfg.maxUsagePercent)) || 0));
     setMinOrderAmount(String(Number.parseFloat(String(snapshot.minOrderAmount ?? cfg.minOrderAmount)) || 0));
+    setMinOrderAmountToSpend(
+      String(Number.parseFloat(String(snapshot.minOrderAmountToSpend ?? cfg.minOrderAmountToSpend)) || 0),
+    );
     setDelayHours(String(snapshot.delayHours ?? cfg.delayHours));
     setExpireDays(String(snapshot.expireDays ?? cfg.expireDays));
     setIsActive(snapshot.isActive ?? cfg.isActive);
@@ -246,6 +256,7 @@ export function PointConfigTab({
                   className={adminInputClass}
                 />
               </div>
+
               <div className={`${adminFieldStackLoose}`}>
                 <Label className={adminLabelClass}>% tích điểm mỗi đơn</Label>
                 <Input
@@ -258,9 +269,26 @@ export function PointConfigTab({
                   className={adminInputClass}
                 />
               </div>
+
               <div className={`${adminFieldStackLoose}`}>
                 <Label className={adminLabelClass}>
-                  Đơn tối thiểu để tích điểm (VNĐ)
+                  % tối đa đơn được giảm bằng điểm
+                </Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="1"
+                  value={maxUsagePercent}
+                  onChange={(e) => setMaxUsagePercent(e.target.value)}
+                  className={adminInputClass}
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-foreground/40">%</span>
+              </div>
+
+              <div className={`${adminFieldStackLoose}`}>
+                <Label className={adminLabelClass}>
+                  Đơn tối thiểu để được TÍCH điểm (VNĐ)
                 </Label>
                 <Input
                   type="number"
@@ -271,6 +299,24 @@ export function PointConfigTab({
                   className={adminInputClass}
                 />
               </div>
+
+              <div className={`${adminFieldStackLoose}`}>
+                <Label className={adminLabelClass}>
+                  Đơn tối thiểu để được DÙNG điểm (VNĐ)
+                </Label>
+                <Description className="text-xs text-foreground/50">
+                  Đơn nhỏ hơn mức này sẽ không cho áp dụng giảm giá bằng điểm.
+                </Description>
+                <Input
+                  type="number"
+                  min={0}
+                  step="1000"
+                  value={minOrderAmountToSpend}
+                  onChange={(e) => setMinOrderAmountToSpend(e.target.value)}
+                  className={adminInputClass}
+                />
+              </div>
+
               <div className={`${adminFieldStackLoose}`}>
                 <Label className={adminLabelClass}>Thời gian chờ (giờ)</Label>
                 <Description className="text-xs text-foreground/50">

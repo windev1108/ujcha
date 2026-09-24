@@ -1,14 +1,12 @@
 "use client";
 
 import { Button } from "@heroui/react";
-import { Coins } from "lucide-react";
 import { useState } from "react";
 
 import { useAuthStore } from "@/store/auth-store";
 
 import { PointCampaignsTab } from "./PointCampaignsTab";
 import { PointConfigTab } from "./PointConfigTab";
-import { PointRewardsTab } from "./PointRewardsTab";
 import { PointTransactionsTab } from "./PointTransactionsTab";
 import { PointUsersTab } from "./PointUsersTab";
 
@@ -25,7 +23,6 @@ export function PointsPageClient() {
   const tabs: { id: PointsTabId; label: string; superOnly?: boolean }[] = [
     { id: "config", label: "Cấu hình", superOnly: true },
     { id: "campaigns", label: "Campaign", superOnly: true },
-    { id: "rewards", label: "Đổi điểm", superOnly: true },
     { id: "users", label: "Người dùng" },
     { id: "history", label: "Lịch sử giao dịch" },
   ];
@@ -80,7 +77,6 @@ export function PointsPageClient() {
 
       {tab === "config" && isSuper ? <PointConfigTab onGoCampaigns={() => setTab("campaigns")} onGoUsers={() => setTab("users")} onGoHistory={() => setTab("history")} /> : null}
       {tab === "campaigns" && isSuper ? <PointCampaignsTab /> : null}
-      {tab === "rewards" && isSuper ? <PointRewardsTab /> : null}
       {tab === "users" ? <PointUsersTab /> : null}
       {tab === "history" ? <PointTransactionsTab /> : null}
     </div>

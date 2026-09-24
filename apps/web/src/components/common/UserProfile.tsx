@@ -82,7 +82,7 @@ export const UserProfile = ({ onNavigate, isPastHero }: { onNavigate?: () => voi
   const name = user?.name?.trim() || "Tài khoản";
   const sub = user?.email?.trim() || user?.phone?.trim() || "";
   const initial = name.charAt(0).toUpperCase();
-  const points = profile?.pointBalance ?? 0;
+  const points = profile?.availablePoints ?? 0;
 
   return (
     <Dropdown>
@@ -119,11 +119,11 @@ export const UserProfile = ({ onNavigate, isPastHero }: { onNavigate?: () => voi
                 {points > 0 && (
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); router.push(ROUTES.REWARDS); }}
+                    onClick={(e) => { e.stopPropagation(); router.push(ROUTES.PROFILE); }}
                     className="cursor-pointer mt-2 flex w-fit items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 ring-1 ring-amber-200 transition hover:bg-amber-100"
                   >
                     <Star className="size-3 fill-amber-500 text-amber-500" />
-                    {points.toLocaleString("vi-VN")} điểm
+                    {t("points_ujcha", { count: points })}
                   </button>
                 )}
               </div>
@@ -169,26 +169,6 @@ export const UserProfile = ({ onNavigate, isPastHero }: { onNavigate?: () => voi
                         : t("sessions_badge_hours", { n: Math.floor(minMinsLeft / 60) })}
                   </span>
                 )}
-              </div>
-            </Dropdown.Item>
-            <Dropdown.Item
-              textValue={t('my_vouchers')}
-              onPress={() => router.push(ROUTES.VOUCHERS)}
-              className="cursor-pointer"
-            >
-              <div className="flex items-center gap-2.5 py-0.5 text-sm text-foreground">
-                <Ticket className="size-4 shrink-0 text-foreground/50" />
-                {t('my_vouchers')}
-              </div>
-            </Dropdown.Item>
-            <Dropdown.Item
-              textValue="Đổi điểm"
-              onPress={() => router.push(ROUTES.REWARDS)}
-              className="cursor-pointer"
-            >
-              <div className="flex items-center gap-2.5 py-0.5 text-sm text-foreground">
-                <StoreIcon className="size-4 shrink-0 text-foreground/50" />
-                {t('redeem_points')}
               </div>
             </Dropdown.Item>
             <Dropdown.Item

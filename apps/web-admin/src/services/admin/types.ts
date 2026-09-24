@@ -594,6 +594,7 @@ export type PointConfigSerialized = {
   earnPercent: string;
   maxUsagePercent: string;
   minOrderAmount: string;
+  minOrderAmountToSpend: string;
   delayHours: number;
   expireDays: number;
   isActive: boolean;
@@ -656,6 +657,7 @@ export type UpdatePointConfigBody = {
   earnPercent?: number;
   maxUsagePercent?: number;
   minOrderAmount?: number;
+  minOrderAmountToSpend?: number;
   delayHours?: number;
   expireDays?: number;
   isActive?: boolean;
@@ -784,7 +786,7 @@ export type AdminReferralProgramConfig = {
   isActive: boolean;
   minOrderAmount: string;
   referrerCommissionPercent: number;
-  welcomeVoucherId: string | null;
+  signupBonusPoints: number;
   maxReferrerRewardsPerDay: number;
   blockSameIpAsReferrer: boolean;
   blockSameDeviceAsReferrer: boolean;
@@ -803,7 +805,7 @@ export type UpdateReferralProgramBody = {
   isActive?: boolean;
   minOrderAmount?: number;
   referrerCommissionPercent?: number;
-  welcomeVoucherId?: string | null;
+  signupBonusPoints?: number;
   maxReferrerRewardsPerDay?: number;
   blockSameIpAsReferrer?: boolean;
   blockSameDeviceAsReferrer?: boolean;

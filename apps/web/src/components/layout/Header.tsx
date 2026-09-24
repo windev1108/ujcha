@@ -106,7 +106,7 @@ export function AppHeader() {
 
   const [guestOrders, removeGuestOrder, clearAllGuestOrders] = useGuestOrders();
 
-  const points = profile?.pointBalance ?? 0;
+  const points = profile?.availablePoints ?? 0;
   const name = user?.name?.trim() || "Tài khoản";
   const initial = name.charAt(0).toUpperCase();
 
@@ -150,8 +150,6 @@ export function AppHeader() {
 
           {/* Right actions */}
           <div className="flex items-center gap-1 sm:gap-2">
-            <SearchSection isPastHero={pathname === '/' ? isPastHero : true} />
-
             {/* Desktop only: lang */}
             <div className="hidden items-center gap-1.5 md:flex">
               <Suspense fallback={<div className="h-7 w-[58px] shrink-0" aria-hidden />}>
@@ -274,11 +272,11 @@ export function AppHeader() {
                       {points > 0 ? (
                         <button
                           type="button"
-                          onClick={() => { closeMenu(); router.push(ROUTES.REWARDS); }}
+                          onClick={() => { closeMenu(); router.push(ROUTES.PROFILE); }}
                           className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 ring-1 ring-amber-200 transition hover:bg-amber-100"
                         >
                           <Star className="size-2.5 fill-amber-500 text-amber-500" />
-                          {points.toLocaleString("vi-VN")} điểm
+                          {t("points_ujcha", { count: points })}
                         </button>
                       ) : (
                         <p className="truncate text-xs text-foreground/40">
@@ -355,8 +353,6 @@ export function AppHeader() {
                         { href: ROUTES.NOTIFICATIONS, label: t("notifications"), Icon: Bell },
                         { href: ROUTES.ADDRESSES, label: t("shipping_addresses"), Icon: MapPin },
                         { href: ROUTES.GROUP_ORDER_SESSIONS, label: t("group_order_session_title"), Icon: Users },
-                        { href: ROUTES.VOUCHERS, label: t("my_vouchers"), Icon: Ticket },
-                        { href: ROUTES.REWARDS, label: t("redeem_points"), Icon: StoreIcon },
                         { href: ROUTES.FEEDBACK, label: t("feedback"), Icon: MessageSquare },
                       ].map(({ href, label, Icon: Ic }) => (
                         <Link

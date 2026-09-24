@@ -1,9 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
-import { ArrowRight, ChevronRight, Coins, Gift, ShoppingBag, Tag, TrendingUp } from "lucide-react";
-import { useRouter } from "@/i18n/navigation";
-import { ROUTES } from "@/lib/routes";
+import { ChevronRight, Coins, Gift, ShoppingBag, Tag, TrendingUp } from "lucide-react";
 import { usePromotionsQuery } from "@/services/promotions/hooks";
 import { useTranslations } from "next-intl";
 import { easeOutSmooth } from "@/app/[locale]/(landing)/components/RevealSection";
@@ -12,11 +10,9 @@ import { CampaignBannerCard } from "@/components/campaign/CampaignBannerCard";
 function PointEarnStrip({
   earnPercent,
   pointRate,
-  onGoRewards,
 }: {
   earnPercent: string;
   pointRate: number;
-  onGoRewards: () => void;
 }) {
   const t = useTranslations();
   return (
@@ -48,7 +44,6 @@ function PointEarnStrip({
         {[
           { icon: ShoppingBag, label: t("order"), sub: t("complete_order") },
           { icon: TrendingUp, label: t("accumulate_points"), sub: `${earnPercent}%` },
-          { icon: Coins, label: t("exchange_vouchers"), sub: t("at_rewards_page") },
           { icon: Gift, label: t("use_voucher_label"), sub: t("at_checkout") },
         ].map(({ icon: Icon, label, sub }, i) => (
           <div key={label} className="flex items-center gap-2">
@@ -59,20 +54,10 @@ function PointEarnStrip({
               <p className="text-[10px] font-semibold text-foreground">{label}</p>
               <p className="hidden text-[9px] text-muted sm:block">{sub}</p>
             </div>
-            {i < 3 && <ChevronRight className="mb-4 size-3.5 shrink-0 text-foreground/20" />}
+            {i < 2 && <ChevronRight className="mb-4 size-3.5 shrink-0 text-foreground/20" />}
           </div>
         ))}
       </div>
-
-      <button
-        type="button"
-        onClick={onGoRewards}
-        className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-[#1a3c34] py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
-      >
-        <Coins className="size-4" />
-        {t("view_rewards_catalog")}
-        <ArrowRight className="size-4" />
-      </button>
     </motion.div>
   );
 }
@@ -113,7 +98,6 @@ function SkeletonStrip() {
 }
 
 export function PromotionsPageShell() {
-  const router = useRouter();
   const t = useTranslations();
   const { data, isLoading } = usePromotionsQuery();
 
@@ -191,7 +175,6 @@ export function PromotionsPageShell() {
                 <PointEarnStrip
                   earnPercent={data!.pointConfig.earnPercent}
                   pointRate={data!.pointConfig.pointRate}
-                  onGoRewards={() => router.push(ROUTES.REWARDS)}
                 />
               )}
             </div>

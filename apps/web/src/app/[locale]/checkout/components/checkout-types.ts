@@ -16,4 +16,8 @@ export type PickupForm = {
   phone: string;
 };
 
+export type PointsUsage = {
+  usePoints: boolean;
+};
+
 export type PaymentMethod = "cash" | "bank_transfer";

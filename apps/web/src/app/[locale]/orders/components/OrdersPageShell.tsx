@@ -6,7 +6,7 @@ import Image from "next/image";
 import { useRouter } from "@/i18n/navigation";
 import { useTranslations, useLocale } from "next-intl";
 import { getDisplayName } from "@/lib/product-name";
-import { ArrowLeft, ChevronLeft, ChevronRight, MapPin, Package, ShoppingBag, Star, Truck, Utensils, Users } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, MapPin, Package, ShoppingBag, Star, Truck, Utensils, Users, Loader2, RotateCcw } from "lucide-react";
 import { Button } from "@heroui/react";
 import { useMyOrdersQuery, orderKeys } from "@/services/order/hooks";
 import { useOrderStatusSocket } from "@/hooks/useOrderStatusSocket";
@@ -15,6 +15,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { revealTransition, easeOutSmooth } from "@/app/[locale]/(landing)/components/RevealSection";
 import { ROUTES } from "@/lib/routes";
 import type { UserOrder, UserOrderItem, OrderStatus } from "@/services/order/api";
+import { buildReorderItemsFromOrderItems, fetchAndBuildReorderItemsForGroupOrder } from "@/lib/reorder";
+import { useReorderStore } from "@/store/reorder-store";
 
 function formatVnd(s: string | number) {
   const n = typeof s === "string" ? parseFloat(s) : s;
@@ -99,6 +101,9 @@ function OrderCard({ order, index = 0 }: { order: UserOrder; index?: number }) {
   const t = useTranslations();
   const locale = useLocale();
   const router = useRouter();
+  const setReorderItems = useReorderStore((s) => s.setItems);
+  const [reordering, setReordering] = useState(false);
+  const [reorderError, setReorderError] = useState(false);
 
   const STATUS_CONFIG: Record<OrderStatus, { label: string; badge: string }> = {
     pending: { label: t("status_pending"), badge: "bg-amber-50 text-amber-700 ring-amber-200" },
@@ -131,6 +136,32 @@ function OrderCard({ order, index = 0 }: { order: UserOrder; index?: number }) {
   const fmtPoints = Number.isInteger(order.earnedPoints)
     ? order.earnedPoints
     : (order.earnedPoints as number).toFixed(1);
+
+  const canReorder = order.status === "completed" || order.status === "cancelled" && !order.isGroupOrder;
+
+  async function handleReorder(e: React.MouseEvent) {
+    e.stopPropagation(); 
+    if (reordering) return;
+    setReorderError(false);
+    setReordering(true);
+    try {
+      const items = order.isGroupOrder && order.groupOrderToken
+        ? await fetchAndBuildReorderItemsForGroupOrder(order.groupOrderToken)
+        : buildReorderItemsFromOrderItems(order.items as unknown as Parameters<typeof buildReorderItemsFromOrderItems>[0]);
+
+      if (items.length === 0) {
+        setReorderError(true);
+        return;
+      }
+      setReorderItems(items);
+      const tab = order.type === "delivery" ? "delivery" : "pickup";
+      router.push(`${ROUTES.CHECKOUT}?tab=${tab}&reorder=1`);
+    } catch {
+      setReorderError(true);
+    } finally {
+      setReordering(false);
+    }
+  }
 
   return (
     <motion.div
@@ -223,6 +254,33 @@ function OrderCard({ order, index = 0 }: { order: UserOrder; index?: number }) {
             )}
           </div>
         </div>
+
+        {/* Row 5: Reorder — chỉ hiện với đơn đã hoàn thành/đã huỷ */}
+        {canReorder && (
+          <div className="flex mt-3 border-t border-black/5 pt-3 md:justify-end justify-center">
+            <div className="md:w-auto w-full">
+              <button
+                type="button"
+                onClick={handleReorder}
+                disabled={reordering}
+                className="cursor-pointer flex md:w-40 w-full items-center justify-center gap-1.5 rounded-full bg-[#1a3c34]/8 px-4 py-2 text-xs font-semibold text-[#1a3c34] transition hover:bg-[#1a3c34]/12 disabled:opacity-60"
+              >
+                {reordering ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <RotateCcw className="size-3.5" />
+                )}
+                {t("reorder_cta")}
+              </button>
+              {reorderError && (
+                <p className="mt-1.5 text-center text-[11px] font-medium text-red-500">
+                  {t("reorder_failed")}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
       </div>
     </motion.div>
   );

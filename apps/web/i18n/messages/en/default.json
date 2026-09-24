@@ -1252,5 +1252,25 @@
       "description": "Developer Tools are not available on this page. Please close Developer Tools to continue using Ujcha.",
       "instruction": "Close Developer Tools and the page will automatically become available again."
     }
-  }
+  },
+  "points_info_label": "Point information",
+  "points_info_title": "How to use UjCha points",
+  "points_info_rate": "1 point = {rate}",
+  "points_info_max_percent": "Maximum discount of {percent}% of the order value",
+  "points_info_min_order": "Applies to orders from {amount}",
+  "points_use_max": "Use to the maximum",
+  "points_toggle_label": "Toggle point usage",
+  "points_below_min_order": "Order has not reached the {amount} required to use points.",
+  "points_available": "{count} available points",
+  "points_locked_hint": "{count} points held for a pending order",
+  "points_ujcha_title": "UjCha Points",
+  "points_ujcha_subtitle": "Points earned and usable for order discounts",
+  "points_available_label": "Available points",
+  "points_locked_label": "Held points",
+  "points_locked_desc": "Currently used by a pending order",
+  "points_total_label": "Total points",
+  "contact_info_subtitle": "Manage your personal and contact information",
+  "group_point_discount": "Ujcha Points",
+  "group_points_unsaved_warning": "Saving points, please wait a moment.",
+  "reorder_cta": "Reorder"
 }

@@ -6,7 +6,7 @@ const intlMiddleware = createMiddleware(routing);
 
 const PROTECTED_PREFIXES = [
   '/profile', '/orders',
-  '/notifications', '/vouchers', '/rewards', '/addresses',
+  '/notifications', '/addresses',
   '/group-order/sessions',
 ];
 const AUTH_PAGES = ['/login', '/register', '/forgot-password'];

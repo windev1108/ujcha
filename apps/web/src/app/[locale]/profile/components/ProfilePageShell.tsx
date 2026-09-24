@@ -7,7 +7,7 @@ import Image from "next/image";
 import {
   Camera, Check, CheckCircle2, ChevronRight, Coins, Copy, Gift, ImageOff, Link2,
   Lock,
-  LogOut, Mail, MonitorSmartphone, Pencil, Phone, ShieldCheck, X,
+  LogOut, Mail, MonitorSmartphone, Pencil, Phone, ShieldCheck, Wallet, X,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { ROUTES } from "@/lib/routes";
@@ -109,6 +109,8 @@ export function ProfilePageShell() {
   const avatarUrl = displayUser?.avatar ?? null;
   const referralCode = displayUser?.referralCode ?? "";
   const pointBalance = profile?.pointBalance ?? 0;
+  const lockedPoints = profile?.lockedPoints ?? 0;
+  const availablePoints = Math.max(0, pointBalance - lockedPoints);
   const emailMarketingEnabled = profile?.emailMarketingEnabled ?? false;
 
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
@@ -360,9 +362,16 @@ export function ProfilePageShell() {
           )}
 
           {/* Points badge */}
-          <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3.5 py-1 text-xs font-semibold text-white/80">
-            <Coins className="size-3.5 text-[#99d6b3]" />
-            {t("points_ujcha", { count: pointBalance.toLocaleString("vi-VN") })}
+          <div className="mt-2.5 flex flex-col items-center gap-1.5">
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3.5 py-1 text-xs font-semibold text-white/80">
+              <Coins className="size-3.5 text-[#99d6b3]" />
+              {t("points_available", { count: availablePoints.toLocaleString("vi-VN") })}
+            </div>
+            {lockedPoints > 0 && (
+              <p className="text-[11px] text-white/45">
+                {t("points_locked_hint", { count: lockedPoints.toLocaleString("vi-VN") })}
+              </p>
+            )}
           </div>
         </motion.div>
 
@@ -377,7 +386,7 @@ export function ProfilePageShell() {
       {/* ── Content ── */}
       <div className="bg-white px-5 pb-16">
         <motion.div
-          className="mx-auto max-w-sm space-y-5 pt-8"
+          className="mx-auto max-w-lg space-y-5 pt-8"
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.15 }}
@@ -385,19 +394,25 @@ export function ProfilePageShell() {
           {/* Contact info card */}
           <div className="rounded-3xl border border-black/[0.06] bg-white">
             <div className="flex items-center justify-between px-5 py-4">
-              <div className="flex items-center gap-2.5">
-                <Phone className="size-4 text-kun-primary" />
-                <span className="text-sm font-bold text-foreground">{t("contact_info")}</span>
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-kun-primary/10">
+                  <Phone className="size-4 text-kun-primary" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">{t("contact_info")}</p>
+                  <p className="text-[11px] text-muted">{t("contact_info_subtitle")}</p>
+                </div>
               </div>
               <button
                 type="button"
                 onClick={startEditEmail}
-                className="flex items-center gap-1 rounded-full border border-black/10 px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-surface-soft"
+                className="flex shrink-0 items-center gap-1 rounded-full border border-black/10 px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-surface-soft"
               >
                 <Pencil className="size-3" />
                 {t("edit")}
               </button>
             </div>
+
 
             <div className="divide-y divide-black/[0.05] border-t border-black/[0.05]">
               <div className="flex items-center gap-3 px-5 py-3.5">
@@ -485,15 +500,76 @@ export function ProfilePageShell() {
               </div>
             )}
           </div>
+          {/* Points card */}
+          <div className="rounded-3xl border border-black/[0.06] bg-white">
+            <div className="flex items-center gap-3 px-5 py-4">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-kun-primary/10">
+                <Coins className="size-4 text-kun-primary" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold text-foreground">{t("points_ujcha_title")}</p>
+                <p className="text-[11px] text-muted">{t("points_ujcha_subtitle")}</p>
+              </div>
+              <ChevronRight className="size-4 shrink-0 text-muted/50" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 border-t border-black/[0.05] px-5 py-4">
+              <div className="flex items-start gap-2.5">
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-kun-primary/10">
+                  <Wallet className="size-3.5 text-kun-primary" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted">
+                    {t("points_available_label")}
+                  </p>
+                  <p className="mt-0.5 text-lg font-bold tabular-nums text-foreground">
+                    {availablePoints.toLocaleString("vi-VN")}
+                  </p>
+                </div>
+              </div>
+
+              {lockedPoints > 0 && (
+                <div className="flex items-start gap-2.5">
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-amber-100">
+                    <Lock className="size-3.5 text-amber-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-foreground">
+                      {t("points_locked_label")}
+                    </p>
+                    <p className="mt-0.5 text-lg font-bold tabular-nums text-amber-600">
+                      {lockedPoints.toLocaleString("vi-VN")}
+                    </p>
+                    <p className="mt-0.5 text-[10px] leading-snug text-muted">
+                      {t("points_locked_desc")}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between border-t border-black/[0.05] px-5 py-3">
+              <p className="text-xs text-muted">{t("points_total_label")}</p>
+              <p className="text-xs font-semibold tabular-nums text-foreground/70">
+                {pointBalance.toLocaleString("vi-VN")}
+              </p>
+            </div>
+          </div>
+
 
           {/* Account security card */}
           <div className="rounded-3xl border border-black/[0.06] bg-white">
-            <div className="flex items-center gap-2.5 px-5 py-4">
-              <ShieldCheck className="size-4 text-kun-primary" />
-              <div>
-                <p className="text-sm font-bold text-foreground">{t("account_security")}</p>
-                <p className="text-[11px] text-muted">{t("account_security_subtitle")}</p>
+            <div className="flex items-center justify-between px-5 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-kun-primary/10">
+                  <ShieldCheck className="size-4 text-kun-primary" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">{t("account_security")}</p>
+                  <p className="text-[11px] text-muted">{t("account_security_subtitle")}</p>
+                </div>
               </div>
+              <ChevronRight className="size-4 shrink-0 text-muted/50" />
             </div>
 
             <div className="divide-y divide-black/[0.05] border-t border-black/[0.05]">
@@ -529,7 +605,9 @@ export function ProfilePageShell() {
           {referralCode && (
             <div className="rounded-3xl border border-black/[0.06] bg-white">
               <div className="flex items-center gap-2.5 px-5 py-4">
-                <Gift className="size-4 text-kun-primary" />
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-kun-primary/10">
+                  <Gift className="size-4 text-kun-primary" />
+                </div>
                 <div>
                   <p className="text-sm font-bold text-foreground">{t("ref_code_label")}</p>
                   <p className="text-[11px] text-muted">{t("ref_code_subtitle")}</p>

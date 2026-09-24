@@ -135,8 +135,9 @@ export async function markGroupOrderReady(
 export async function lockGroupOrder(
   token: string,
   sessionToken: string,
+  pointsToUse?: number
 ): Promise<GroupOrderState> {
-  const { data } = await api.post<GroupOrderState>(`/group-orders/${token}/lock`, { sessionToken })
+  const { data } = await api.post<GroupOrderState>(`/group-orders/${token}/lock`, { sessionToken, pointsToUse })
   return data
 }
 
@@ -242,8 +243,9 @@ export async function setGroupOrderFulfillment(
 export async function checkoutSplitCash(
   token: string,
   sessionToken: string,
+  pointsToUse?: number
 ): Promise<{ groupOrder: GroupOrderState; order: unknown }> {
-  const { data } = await api.post(`/group-orders/${token}/checkout-split-cash`, { sessionToken })
+  const { data } = await api.post(`/group-orders/${token}/checkout-split-cash`, { sessionToken, pointsToUse })
   return data
 }
 

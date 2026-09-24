@@ -47,13 +47,15 @@ import { useProductsQuery, useProductByIdQuery } from "@/services/product/hooks"
 import type { ApiProduct } from "@/services/product/types";
 import { useCategoriesQuery } from "@/services/category/hooks";
 import { ProductQuickAddModal, type GroupOrderDraftValue } from "@/components/product/ProductQuickAddModal";
-import { normalizeOptionGroups, computeOptionSurcharge, formatVnd, formatOptionLabel } from "@/lib/product-options";
+import { normalizeOptionGroups, formatVnd, formatOptionLabel } from "@/lib/product-options";
 
 import { useAddressesQuery } from "@/services/order/hooks";
 import { useShippingEstimateQuery, usePublicShippingConfigQuery } from "@/services/shipping/hooks";
 import { useProfileQuery } from "@/services/profile/hooks";
 import { usePublicStoreLocationQuery } from "@/services/store/hooks";
+import { usePublicPointConfigQuery } from "@/services/point/hooks";
 import { CheckoutFulfillmentSection } from "@/app/[locale]/checkout/components/CheckoutFulfillmentSection";
+import { PointsSection } from "@/app/[locale]/checkout/components/PointsSection";
 import { CHECKOUT_TAB } from "@/app/[locale]/checkout/components/checkout-tab";
 import type { DeliveryForm, PickupForm } from "@/app/[locale]/checkout/components/checkout-types";
 import { ShippingFeeTooltip } from "@/components/common/ShippingFeeTooltip";
@@ -145,305 +147,6 @@ function StatusBadge({ status }: { status: GroupOrderState["status"] }) {
 type ToppingDraft = { toppingId: string; name: string; price: number; nameTranslation?: Record<string, string> };
 type DraftValue = { quantity: number; selectedOptions: Record<string, string>; toppings: ToppingDraft[]; note?: string };
 type DraftItem = DraftValue & { productId: string };
-
-// function ProductCustomizeSheet({
-//   product,
-//   initial,
-//   onConfirm,
-//   onClose,
-// }: {
-//   product: ApiProduct;
-//   initial?: DraftValue;
-//   onConfirm: (value: DraftValue) => void;
-//   onClose: () => void;
-// }) {
-//   const locale = useLocale();
-//   const t = useTranslations();
-//   const optionGroups = normalizeOptionGroups(product.optionGroups);
-//   const toppings = (product.toppings ?? []).filter((t) => t.isActive !== false);
-//   const basePrice = product.finalPrice ?? parseFloat(product.price);
-
-//   const [quantity, setQuantity] = useState(initial?.quantity ?? 1);
-//   const [note, setNote] = useState(initial?.note ?? "");
-//   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>(() => {
-//     const opts: Record<string, string> = {};
-//     for (const grp of optionGroups) {
-//       opts[grp.name] = initial?.selectedOptions?.[grp.name] ?? grp.values[0]?.label ?? "";
-//     }
-//     return opts;
-//   });
-//   const [selectedToppings, setSelectedToppings] = useState<Set<string>>(
-//     () => new Set(initial?.toppings?.map((t) => t.toppingId) ?? []),
-//   );
-
-//   const optionSurcharge = computeOptionSurcharge(optionGroups, selectedOptions);
-//   const toppingTotal = toppings
-//     .filter((t) => selectedToppings.has(t.id))
-//     .reduce((s, t) => s + t.price, 0);
-//   const unitPrice = basePrice + optionSurcharge + toppingTotal;
-
-//   const toggleTopping = (id: string, checked: boolean) => {
-//     setSelectedToppings((prev) => {
-//       const next = new Set(prev);
-//       if (checked) {
-//         if (next.size >= 3) {
-//           const oldest = next.values().next().value;
-//           next.delete(oldest!);
-//         }
-//         next.add(id);
-//       } else {
-//         next.delete(id);
-//       }
-//       return next;
-//     });
-//   };
-
-//   const handleConfirm = () => {
-//     onConfirm({
-//       quantity,
-//       selectedOptions,
-//       toppings: toppings
-//         .filter((t) => selectedToppings.has(t.id))
-//         .map((t) => ({ toppingId: t.id, name: t.name, price: t.price, nameTranslation: t.nameTranslation })),
-//       note: note.trim() || undefined,
-//     });
-//   };
-
-//   const imageUrl = product.imageUrls[0] ?? null;
-//   const hasDiscount = product.discountPercent > 0;
-//   const displayName = getDisplayName(product, locale);
-
-//   return (
-//     <motion.div
-//       initial={{ opacity: 0 }}
-//       animate={{ opacity: 1 }}
-//       exit={{ opacity: 0 }}
-//       className="absolute inset-0 z-10 flex flex-col overflow-hidden rounded-t-3xl bg-white sm:flex-row sm:rounded-3xl"
-//     >
-//       {/* Desktop image panel */}
-//       <div
-//         className="hidden sm:block sm:w-[42%] sm:shrink-0 sm:rounded-l-3xl sm:overflow-hidden"
-//         style={{ backgroundColor: imageUrl ? undefined : "#1a3c34" }}
-//       >
-//         <div className="relative h-full">
-//           {imageUrl ? (
-//             <Image src={imageUrl} alt={displayName} fill className="object-cover" sizes="320px" />
-//           ) : (
-//             <div className="absolute inset-0 flex items-center justify-center">
-//               <span className="select-none text-7xl font-black text-white/15">
-//                 {displayName.charAt(0).toUpperCase()}
-//               </span>
-//             </div>
-//           )}
-//           <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/10" />
-//           {hasDiscount && (
-//             <span className="absolute left-4 top-4 rounded-full bg-red-500 px-2.5 py-1 text-[11px] font-bold text-white shadow">
-//               -{product.discountPercent}%
-//             </span>
-//           )}
-//         </div>
-//       </div>
-
-//       {/* Content panel */}
-//       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-//         {/* Mobile image strip */}
-//         <div
-//           className="relative h-44 w-full shrink-0 overflow-hidden sm:hidden"
-//           style={{ backgroundColor: imageUrl ? undefined : "#1a3c34" }}
-//         >
-//           {imageUrl ? (
-//             <Image src={imageUrl} alt={displayName} fill className="object-cover" sizes="100vw" />
-//           ) : (
-//             <div className="absolute inset-0 flex items-center justify-center">
-//               <span className="select-none text-6xl font-black text-white/15">
-//                 {displayName.charAt(0).toUpperCase()}
-//               </span>
-//             </div>
-//           )}
-//           <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" />
-//           {hasDiscount && (
-//             <span className="absolute left-4 top-4 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white shadow">
-//               -{product.discountPercent}%
-//             </span>
-//           )}
-//         </div>
-
-//         {/* Close button */}
-//         <button
-//           type="button"
-//           onClick={onClose}
-//           className="absolute right-4 top-4 z-10 flex size-8 items-center justify-center rounded-full bg-black/20 text-white backdrop-blur-sm transition-colors hover:bg-black/35 sm:bg-white/90 sm:text-foreground sm:shadow-sm"
-//         >
-//           <X className="size-4" />
-//         </button>
-
-//         {/* Scrollable body */}
-//         <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-4 pt-5">
-//           {/* Product header */}
-//           <div className="space-y-1">
-//             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted">
-//               {getDisplayName(product.category, locale)}
-//             </p>
-//             <h3 className="text-base font-semibold leading-snug text-foreground sm:text-lg">
-//               {displayName}
-//             </h3>
-//             <div className="flex items-baseline gap-2">
-//               <span className="text-lg font-black tabular-nums text-kun-products-forest">
-//                 {fmtVnd(unitPrice)}
-//               </span>
-//               {hasDiscount && (
-//                 <span className="text-xs tabular-nums text-muted line-through">
-//                   {fmtVnd(parseFloat(product.price))}
-//                 </span>
-//               )}
-//             </div>
-//           </div>
-
-//           <div className="my-4 h-px bg-black/[0.06]" />
-
-//           {/* Options */}
-//           {optionGroups.length > 0 && (
-//             <div className="space-y-4">
-//               {optionGroups.map((grp) => (
-//                 <div key={grp.id} className="space-y-2">
-//                   <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted">
-//                     {grp.nameTranslation?.[locale] ?? grp.name}
-//                   </p>
-//                   <div className="flex flex-wrap gap-2">
-//                     {grp.values.map((v) => {
-//                       const active = selectedOptions[grp.name] === v.label;
-//                       const displayLabel = v.nameTranslation?.[locale] ?? v.label;
-//                       return (
-//                         <button
-//                           key={v.label}
-//                           type="button"
-//                           onClick={() => setSelectedOptions((prev) => ({ ...prev, [grp.name]: v.label }))}
-//                           className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition-all ${active
-//                             ? "border-[#26634d]/40 bg-[#26634d]/10 text-[#26634d]"
-//                             : "border-black/10 bg-white text-foreground hover:border-black/20"
-//                             }`}
-//                         >
-//                           {displayLabel}
-//                           {v.priceDelta > 0 && (
-//                             <span className={`text-xs tabular-nums ${active ? "text-[#26634d]/70" : "text-muted"}`}>
-//                               +{formatVnd(v.priceDelta)}
-//                             </span>
-//                           )}
-//                         </button>
-//                       );
-//                     })}
-//                   </div>
-//                 </div>
-//               ))}
-//               <div className="my-3 h-px bg-black/[0.06]" />
-//             </div>
-//           )}
-
-//           {/* Toppings */}
-//           {toppings.length > 0 && (
-//             <div className="space-y-2.5">
-//               <div className="flex items-baseline justify-between">
-//                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted">
-//                   {t("extra_toppings")}
-//                 </p>
-//                 <div className="flex items-center gap-2">
-//                   <span className="text-[11px] font-semibold tabular-nums text-muted">
-//                     {selectedToppings.size}/2
-//                   </span>
-//                   {selectedToppings.size > 0 && (
-//                     <button
-//                       type="button"
-//                       onClick={() => setSelectedToppings(new Set())}
-//                       className="text-[11px] font-medium text-muted transition-colors hover:text-foreground"
-//                     >
-//                       {t("remove")}
-//                     </button>
-//                   )}
-//                 </div>
-//               </div>
-//               <div className="grid grid-cols-1 gap-1.5 overscroll-contain rounded-xl">
-//                 {toppings.map((top) => {
-//                   const active = selectedToppings.has(top.id);
-//                   return (
-//                     <button
-//                       key={top.id}
-//                       type="button"
-//                       onMouseDown={(e) => e.preventDefault()}
-//                       onClick={() => toggleTopping(top.id, !active)}
-//                       className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left transition-all ${active
-//                         ? "border-[#26634d]/40 bg-[#26634d]/8 text-[#26634d]"
-//                         : "border-black/[0.07] bg-surface-card/40 text-foreground hover:border-black/15"
-//                         }`}
-//                     >
-//                       <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
-//                         {top.nameTranslation?.[locale] ?? top.name}
-//                       </span>
-//                       <span className={`shrink-0 text-[12px] tabular-nums font-semibold ${active ? "text-[#26634d]" : "text-muted"}`}>
-//                         +{formatVnd(top.price)}
-//                       </span>
-//                     </button>
-//                   );
-//                 })}
-//               </div>
-//             </div>
-//           )}
-
-//           {/* Note */}
-//           <div className="mt-4 space-y-1.5">
-//             <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-muted">
-//               <StickyNote className="size-3" />
-//               {t("group_note_label")}
-//             </label>
-//             <input
-//               type="text"
-//               value={note}
-//               onChange={(e) => setNote(e.target.value)}
-//               placeholder={t("group_note_placeholder")}
-//               className="h-10 w-full rounded-xl border border-black/[0.09] bg-white px-3.5 text-[13px] text-foreground placeholder:text-muted/60 focus:border-[#1a3c34] focus:outline-none focus:ring-2 focus:ring-[#1a3c34]/20"
-//             />
-//           </div>
-//         </div>
-
-//         {/* Fixed bottom: qty + price + confirm */}
-//         <div className="shrink-0 border-t border-black/6 bg-white px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3">
-//           <div className="mb-3 flex items-center justify-between gap-4">
-//             <div className="flex items-center rounded-full border border-black/[0.09] bg-surface-card/40">
-//               <button
-//                 type="button"
-//                 onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-//                 disabled={quantity <= 1}
-//                 className="flex size-9 items-center justify-center rounded-full text-foreground transition-colors hover:bg-black/[0.05] disabled:opacity-35"
-//               >
-//                 <Minus className="size-3.5" />
-//               </button>
-//               <span className="w-8 text-center text-sm font-bold tabular-nums">{quantity}</span>
-//               <button
-//                 type="button"
-//                 onClick={() => setQuantity((q) => q + 1)}
-//                 className="flex size-9 items-center justify-center rounded-full text-foreground transition-colors hover:bg-black/[0.05]"
-//               >
-//                 <Plus className="size-3.5" />
-//               </button>
-//             </div>
-//             <div className="text-right">
-//               {quantity > 1 && (
-//                 <p className="text-[11px] text-muted tabular-nums">{quantity} × {fmtVnd(unitPrice)}</p>
-//               )}
-//               <p className="text-lg font-black tabular-nums text-[#26634d]">{fmtVnd(unitPrice * quantity)}</p>
-//             </div>
-//           </div>
-//           <Button
-//             className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#1a3c34] text-[14px] font-semibold text-white shadow-lg shadow-[#1a3c34]/20 hover:opacity-90"
-//             onPress={handleConfirm}
-//           >
-//             <Check className="size-4" />
-//             {initial ? t("group_update_item_btn") : t("group_add_item_btn")}
-//           </Button>
-//         </div>
-//       </div>
-//     </motion.div>
-//   );
-// }
 
 // ── ProductPickerDrawer ───────────────────────────────────────────────────────
 
@@ -687,11 +390,6 @@ function ProductPickerDrawer({
                               </span>
                             </motion.span>
                           )}
-                          {/* {qty > 0 && (
-                            <span className="absolute right-2 top-2 flex size-5 items-center justify-center rounded-full bg-[#1a3c34] text-[10px] font-bold text-white">
-                              {qty}
-                            </span>
-                          )} */}
                         </button>
 
                         <div className="flex flex-1 flex-col justify-between gap-2 p-2.5">
@@ -1176,6 +874,7 @@ type ShareBreakdown = {
   isHostPaysShipping: boolean;
   isHost: boolean;
   total: number;
+  pointDiscount: number;
 };
 
 function ShareBreakdownPopup({ bd }: { bd: ShareBreakdown }) {
@@ -1256,6 +955,12 @@ function ShareBreakdownPopup({ bd }: { bd: ShareBreakdown }) {
               <span className="tabular-nums">+{fmtVnd(bd.shippingShare)}</span>
             </span>
           ) : null}
+          {bd.pointDiscount > 0 && (
+            <span className="flex justify-between">
+              <span className="text-foreground/55">{t("group_point_discount")}</span>
+              <span className="tabular-nums text-emerald-600">-{fmtVnd(bd.pointDiscount)}</span>
+            </span>
+          )}
         </span>,
         document.body,
       )}
@@ -1339,7 +1044,6 @@ export function GroupOrderPageShell() {
     mode: "asap", scheduledTime: "", name: "", phone: "",
   });
   const splitCashConfirmRef = useRef(false);
-  // const autoSavePendingRef = useRef(false);
 
   const socketRef = useRef<Socket | null>(null);
 
@@ -1631,19 +1335,6 @@ export function GroupOrderPageShell() {
     }
   };
 
-  // Sync local form from server state (when group order first loads or changes)
-  useEffect(() => {
-    if (!state) return;
-    setLocalType((state.type === "table" ? "pickup" : state.type) as "delivery" | "pickup");
-    setLocalSelectedAddressId(state.address?.id ?? null);
-    setLocalDeliveryForm((p) => ({
-      ...p,
-      mode: state.scheduledDeliveryTime ? "scheduled" : "asap",
-      scheduledTime: state.scheduledDeliveryTime ?? "",
-    }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state?.id]);
-
   // Auto-select default address for delivery
   useEffect(() => {
     if (localType !== "delivery" || localSelectedAddressId !== null) return;
@@ -1695,72 +1386,11 @@ export function GroupOrderPageShell() {
   const localShippingIsOutOfRange = localType === "delivery" && (localShippingEstimate?.isOutOfRange ?? false);
   const localShippingDistance = localType === "delivery" ? (localShippingEstimate?.distanceKm ?? 0) : 0
 
-  // Mark auto-save pending whenever the user changes type, address, or payment
-  // useEffect(() => {
-  //   if (localType === "delivery") {
-  //     if (localShippingFetching || localShippingIsOutOfRange) return;
-  //     if (!localShowNewForm && !localSelectedAddressId) return;
-  //     if (localShowNewForm && !localDeliveryForm.lat) return;
-  //     if (localDeliveryForm.mode === "scheduled" && !localDeliveryForm.scheduledTime) return;
-  //   }
-  //   autoSavePendingRef.current = true;
-  // }, [localType, localSelectedAddressId, localDeliveryForm.mode, localDeliveryForm.scheduledTime]);
-
-  // Trigger auto-save once shipping estimate settles (or immediately for pickup)
-  // useEffect(() => {
-  //   if (!autoSavePendingRef.current || !isHost || state?.status !== "collecting" || !sessionToken) return;
-  //   if (localType === "delivery") {
-  //     if (localShippingFetching || localShippingIsOutOfRange) return;
-  //     if (!localShowNewForm && !localSelectedAddressId) return;
-  //     if (localShowNewForm && !localDeliveryForm.lat) return;
-  //   }
-  //   autoSavePendingRef.current = false;
-  //   void (async () => {
-  //     try {
-  //       let addressId: string | undefined;
-  //       let inlineAddress: { fullAddress: string; lat: number; lng: number } | undefined;
-
-  //       if (localType === "delivery") {
-  //         if (localShowNewForm) {
-  //           inlineAddress = {
-  //             fullAddress: localDeliveryForm.fullAddress.trim(),
-  //             lat: localDeliveryForm.lat ?? 0,
-  //             lng: localDeliveryForm.lng ?? 0,
-  //           };
-  //         } else {
-  //           addressId = localSelectedAddressId ?? undefined;
-  //         }
-  //       }
-  //       const pickupTime = localType === "pickup"
-  //         ? new Date(Date.now() + 20 * 60_000).toISOString()
-  //         : undefined;
-
-  //       const scheduledDeliveryTime =
-  //         localType === "delivery" && localDeliveryForm.mode === "scheduled" && localDeliveryForm.scheduledTime
-  //           ? new Date(localDeliveryForm.scheduledTime).toISOString()
-  //           : undefined;
-
-  //       const newState = await setGroupOrderFulfillment(token, sessionToken, {
-  //         type: localType,
-  //         addressId,
-  //         inlineAddress,
-  //         shippingFee: localType === "delivery" ? localShippingFee : 0,
-  //         pickupTime,
-  //         scheduledDeliveryTime,
-  //         shippingFeeMode: state?.shippingFeeMode,
-  //       });
-  //       setState(newState);
-  //     } catch {
-  //       // Silent fail — user can retry via the lock action
-  //     }
-  //   })();
-  //   // eslint-disable-next-line react-hooks/exhaustive-deps
-  // }, [localShippingFetching, localShippingFee]);
-
   useEffect(() => {
     setFulfillmentSaved(false);
   }, [localType, localSelectedAddressId, localDeliveryForm.mode, localDeliveryForm.scheduledTime, localDeliveryForm.fullAddress, localDeliveryForm.lat, localDeliveryForm.lng]);
 
+  // Sync local form from server state (when group order first loads or changes)
   useEffect(() => {
     if (!state) return;
     setLocalType((state.type === "table" ? "pickup" : state.type) as "delivery" | "pickup");
@@ -1843,6 +1473,41 @@ export function GroupOrderPageShell() {
     }
   }, [isHost, state?.status, state?.shippingFeeMode, sessionToken, token, localType, localShowNewForm, localSelectedAddressId, localDeliveryForm, localShippingFee, localShippingIsOutOfRange, t]);
 
+  // ── Points (host only) — chỉ giữ ở local state, gửi kèm khi lock/checkout ──
+  const [pointsToUse, setPointsToUse] = useState(0);
+  const { data: pointConfig } = usePublicPointConfigQuery();
+  const pointBalance = profile?.availablePoints ?? 0;
+  const pointRate = pointConfig?.pointRate ?? 0;
+
+  // Base tính điểm = tổng món - giảm giá nhóm (khớp BE)
+  const pointsBaseSubtotal = useMemo(() => {
+    if (!state) return 0;
+    const total = state.participants.reduce((s, p) => s + p.subtotal, 0);
+    const active = state.participants.filter((p) => p.items.length > 0).length;
+    return total - Math.round((total * resolveDiscount(active, config)) / 100);
+  }, [state, config]);
+
+  const maxUsablePoints = useMemo(() => {
+    if (!pointConfig || pointConfig.pointRate <= 0) return pointBalance;
+    const maxMoney = pointsBaseSubtotal * (pointConfig.maxUsagePercent / 100);
+    return Math.max(0, Math.min(pointBalance, Math.floor(maxMoney / pointConfig.pointRate)));
+  }, [pointConfig, pointsBaseSubtotal, pointBalance]);
+
+  const meetsMinOrderToSpend = !pointConfig || pointsBaseSubtotal >= pointConfig.minOrderAmountToSpend;
+  const canEditPoints = isHost && state?.status === "collecting";
+
+  // Điểm thực sự hiển thị / gửi đi. Sau khi lock thì lấy từ server.
+  const effectivePoints = canEditPoints
+    ? meetsMinOrderToSpend ? Math.min(pointsToUse, maxUsablePoints) : 0
+    : state?.pointsToUse ?? 0;
+  const appliedPointDiscount = effectivePoints * pointRate;
+
+  // Co input lại khi maxUsablePoints giảm (participant xóa món...). Chỉ chạy khi đã có profile + config.
+  useEffect(() => {
+    if (!pointConfig || !profile) return;
+    setPointsToUse((p) => Math.min(p, maxUsablePoints));
+  }, [pointConfig, profile, maxUsablePoints]);
+
   // Per-participant amount for split mode (discount proportional, shipping per shippingFeeMode)
   const myAmountBreakdown = useMemo(() => {
     if (!state || !me || state.paymentMode !== "split" || me.items.length === 0) return null;
@@ -1852,16 +1517,20 @@ export function GroupOrderPageShell() {
     const shippingShare = Math.round(shippingFeeMode === "host_pays"
       ? (isHost ? state.shippingFee : 0)
       : (activeCount > 0 ? state.shippingFee / activeCount : 0));
+    const pointDiscount = isHost
+      ? Math.min(appliedPointDiscount, Math.round(me.subtotal - discountAmt + shippingShare))
+      : 0;
     return {
       subtotal: me.subtotal,
       discountPct,
       discountAmt,
       shippingShare,
+      pointDiscount,
       isHostPaysShipping: shippingFeeMode === "host_pays",
       isHost,
-      total: Math.round(me.subtotal - discountAmt + shippingShare),
+      total: Math.round(me.subtotal - discountAmt + shippingShare - pointDiscount),
     };
-  }, [state, me, config, shippingFeeMode, isHost]);
+  }, [state, me, config, shippingFeeMode, isHost, appliedPointDiscount]);
   const myAmount = myAmountBreakdown?.total ?? 0;
 
   const handleHostCheckout = useCallback(async () => {
@@ -1870,7 +1539,7 @@ export function GroupOrderPageShell() {
     setLockLoading(true);
     try {
       if (state.status === "collecting") {
-        await lockGroupOrder(token, sessionToken);
+        await lockGroupOrder(token, sessionToken, effectivePoints);
       }
       const res = await checkoutHostPays(token, sessionToken, paymentType);
       const go = res.groupOrder;
@@ -1890,13 +1559,13 @@ export function GroupOrderPageShell() {
     } finally {
       setLockLoading(false);
     }
-  }, [sessionToken, state, token, router]);
+  }, [sessionToken, state, token, router, effectivePoints]);
 
   const handleSplitCashCheckout = useCallback(async () => {
     if (!sessionToken || !state) return;
     setLockLoading(true);
     try {
-      const res = await checkoutSplitCash(token, sessionToken);
+      const res = await checkoutSplitCash(token, sessionToken, effectivePoints);
       const go = res.groupOrder;
       setState(go);
       if (go.order?.paymentCode) {
@@ -1914,12 +1583,13 @@ export function GroupOrderPageShell() {
     } finally {
       setLockLoading(false);
     }
-  }, [sessionToken, state, token, router]);
+  }, [sessionToken, state, token, router, effectivePoints]);
+
   const handleLockOrder = async () => {
     if (!sessionToken) return;
     setLockLoading(true);
     try {
-      const go = await lockGroupOrder(token, sessionToken);
+      const go = await lockGroupOrder(token, sessionToken, effectivePoints);
       setState(go);
     } catch (e: unknown) {
       const code = extractErrorCode(e);
@@ -2433,7 +2103,7 @@ export function GroupOrderPageShell() {
                     )}
                   </div>
 
-                  {/* Payment type row — "Thay đổi" only here (not duplicated in left column) */}
+                  {/* Payment type row */}
                   <div className="flex items-center gap-2.5 px-3 py-2.5">
                     {state.paymentType === "cash" ? (
                       <Banknote className="size-3.5 shrink-0 text-foreground/45" />
@@ -2461,7 +2131,10 @@ export function GroupOrderPageShell() {
                   const displayShippingFee = isHost && state.status === "collecting"
                     ? localShippingFee
                     : state.shippingFee;
-                  const displayFinalAmount = totalAmount - discountAmount + displayShippingFee;
+                  const displayFinalAmount = Math.max(
+                    0,
+                    totalAmount - discountAmount - appliedPointDiscount + displayShippingFee,
+                  );
                   return (
                     <>
                       <div className="space-y-2 text-sm text-foreground/70">
@@ -2473,6 +2146,12 @@ export function GroupOrderPageShell() {
                           <div className="flex justify-between text-emerald-700">
                             <span>{t("group_group_discount", { pct: discountPercent })}</span>
                             <span className="tabular-nums font-medium">-{fmtVnd(discountAmount)}</span>
+                          </div>
+                        )}
+                        {appliedPointDiscount > 0 && (
+                          <div className="flex justify-between text-emerald-700">
+                            <span>{t("group_point_discount")}</span>
+                            <span className="tabular-nums font-medium">-{fmtVnd(appliedPointDiscount)}</span>
                           </div>
                         )}
                         {(displayShippingFee > 0 || (isHost && state.status === "collecting" && localType === "delivery")) && (
@@ -2554,6 +2233,22 @@ export function GroupOrderPageShell() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Points — host only, collecting state */}
+            {isHost && state.status === "collecting" && pointBalance > 0 && (
+              <div className="space-y-3 rounded-3xl border border-black/6 bg-white p-5 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.08)]">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
+                  {t("points_label")}
+                </p>
+                <PointsSection
+                  pointBalance={pointBalance}
+                  pointConfig={pointConfig ?? undefined}
+                  subtotal={pointsBaseSubtotal}
+                  pointsToUse={pointsToUse}
+                  onChange={setPointsToUse}
+                />
+              </div>
+            )}
 
             {/* Fulfillment form — host only, collecting state */}
             {isHost && state.status === "collecting" && (
@@ -2678,7 +2373,7 @@ export function GroupOrderPageShell() {
         </div>
       </div>
 
-      {/* Dissolve confirm modal */}
+      {/* Lock confirm + dissolve confirm modals */}
       <AnimatePresence>
         {showLockConfirm && (() => {
           const unconfirmed = state.participants.filter((p) => !p.isReady);
