@@ -2288,7 +2288,7 @@ export function GroupOrderPageShell() {
             </Card>
 
             {/* Points — host only, collecting state */}
-            {isHost && state.status === "collecting" && pointBalance > 0 && (
+            {state.status === "collecting" && pointBalance > 0 && (
               <div className="space-y-3 rounded-3xl border border-black/6 bg-white p-5 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.08)]">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
                   {t("points_label")}
