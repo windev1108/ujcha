@@ -548,12 +548,12 @@ export function ProfilePageShell() {
               )}
             </div>
 
-            <div className="flex items-center justify-between border-t border-black/[0.05] px-5 py-3">
+            {/* <div className="flex items-center justify-between border-t border-black/[0.05] px-5 py-3">
               <p className="text-xs text-muted">{t("points_total_label")}</p>
               <p className="text-xs font-semibold tabular-nums text-foreground/70">
                 {pointBalance.toLocaleString("vi-VN")}
               </p>
-            </div>
+            </div> */}
           </div>
 
 

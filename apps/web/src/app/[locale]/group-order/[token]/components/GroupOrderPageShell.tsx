@@ -1059,9 +1059,6 @@ export function GroupOrderPageShell() {
     (p) => (myParticipantId && p.id === myParticipantId) || (user?.id && p.userId === user.id),
   );
   const isHost = me?.isHost ?? false;
-  // split + bank_transfer: mỗi participant (có auth) dùng điểm cho phần của mình
-  const perParticipantPoints =
-    state?.paymentMode === "split" && (state?.paymentType ?? "cash") === "bank_transfer";
 
   const { permission: pushPermission, subscribe: subscribePush } =
     usePushSubscription(myParticipantId);
@@ -1495,16 +1492,18 @@ export function GroupOrderPageShell() {
 
   // Base tính điểm (khớp BE): per-participant = phần của mình sau giảm giá nhóm
   const pointsBaseSubtotal = useMemo(() => {
-    if (!state) return 0;
+    if (!state || !me) return 0;
     const active = state.participants.filter((p) => p.items.length > 0).length;
     const pct = resolveDiscount(active, config);
-    if (perParticipantPoints) {
-      const sub = me?.subtotal ?? 0;
-      return sub - Math.round((sub * pct) / 100);
+
+    if (state.paymentMode === "host_pays") {
+      const groupSub = state.participants.reduce((s, p) => s + p.subtotal, 0);
+      return groupSub - Math.round((groupSub * pct) / 100);
     }
-    const total = state.participants.reduce((s, p) => s + p.subtotal, 0);
-    return total - Math.round((total * pct) / 100);
-  }, [state, config, perParticipantPoints, me?.subtotal]);
+
+    const sub = me.subtotal ?? 0;
+    return sub - Math.round((sub * pct) / 100);
+  }, [state, config, me]);
 
   const maxUsablePoints = useMemo(() => {
     if (!pointConfig || pointConfig.pointRate <= 0) return pointBalance;
@@ -1512,52 +1511,49 @@ export function GroupOrderPageShell() {
     return Math.max(0, Math.min(pointBalance, Math.floor(maxMoney / pointConfig.pointRate)));
   }, [pointConfig, pointsBaseSubtotal, pointBalance]);
 
-  const meetsMinOrderToSpend = !pointConfig || pointsBaseSubtotal >= pointConfig.minOrderAmountToSpend;
-  const canEditPoints =
-    state?.status === "collecting" && !!me?.userId;
+  const meetsMinOrderToSpend = useMemo(() => {
+    if (!pointConfig || !state) return true;
+    const totalAmount = state.participants.reduce((s, p) => s + p.subtotal, 0);
+    const active = state.participants.filter((p) => p.items.length > 0).length;
+    const pct = resolveDiscount(active, config);
+    const groupBase = totalAmount - Math.round((totalAmount * pct) / 100);
+    return groupBase >= pointConfig.minOrderAmountToSpend;
+  }, [pointConfig, state, config]);
+
+
+  const canUsePoints =
+    state?.status === "collecting" &&
+    !!me?.userId &&
+    (state?.paymentMode === "split" || (state?.paymentMode === "host_pays" && isHost));
+
+  const canEditPoints = canUsePoints;
 
   const effectivePoints = canEditPoints
-    ? meetsMinOrderToSpend ? Math.min(pointsToUse, maxUsablePoints) : 0
-    : perParticipantPoints
-      ? me?.pointsReserved ?? 0
-      : state?.pointsToUse ?? 0;
+    ? Math.min(pointsToUse, maxUsablePoints)
+    : me?.pointsReserved ?? 0;
 
-  const hasUnsyncedPoints =
-    perParticipantPoints && canEditPoints && effectivePoints !== (me?.pointsToUse ?? 0);
+  const hasUnsyncedPoints = canEditPoints && effectivePoints !== (me?.pointsToUse ?? 0);
+  const hasAppliedPoints = (me?.pointsToUse ?? 0) > 0;
 
 
-  // Sau lock (per-participant) lấy số tiền giảm đã chốt từ server
-  const appliedPointDiscount =
-    perParticipantPoints && !canEditPoints
-      ? me?.pointDiscountAmount ?? 0
-      : effectivePoints * pointRate;
-
-  const aggregatedDraftPointDiscount = useMemo(() => {
-    if (!state || !perParticipantPoints) return 0;
-    return state.participants.reduce((sum, p) => {
-      if (!p.userId || p.items.length === 0) return sum;
-      const rawPoints = p.id === me?.id ? effectivePoints : (p.pointsToUse ?? 0);
-      return sum + rawPoints * pointRate;
-    }, 0);
-  }, [state, perParticipantPoints, me?.id, effectivePoints, pointRate]);
-
-  const getParticipantPointDiscount = useCallback(
+  const getConfirmedPointDiscount = useCallback(
     (p: GroupOrderState["participants"][0]): number => {
-      if (!perParticipantPoints || !p.userId) return 0;
+      if (!p.userId) return 0;
       if (state?.status === "collecting") {
-        const rawPoints = p.id === me?.id ? effectivePoints : (p.pointsToUse ?? 0);
-        return rawPoints * pointRate;
+        return (p.pointsToUse ?? 0) * pointRate;
       }
-      return p.pointDiscountAmount ?? 0;
+      return p.pointDiscountAmount ?? 0; // đã lock: dùng số tiền server đã chốt
     },
-    [perParticipantPoints, state?.status, me?.id, effectivePoints, pointRate],
+    [state?.status, pointRate],
   );
 
-  const groupPointDiscount = perParticipantPoints
-    ? state?.status === "collecting"
-      ? aggregatedDraftPointDiscount   // ← sửa ở đây
-      : (state?.participants.reduce((s, p) => s + (p.pointDiscountAmount ?? 0), 0) ?? 0)
-    : appliedPointDiscount;
+
+  const groupPointDiscount = useMemo(() => {
+    if (!state) return 0;
+    return state.participants
+      .filter((p) => p.userId && p.items.length > 0)
+      .reduce((sum, p) => sum + getConfirmedPointDiscount(p), 0);
+  }, [state, getConfirmedPointDiscount]);
 
   useEffect(() => {
     if (!pointConfig || !profile) return;
@@ -1566,27 +1562,33 @@ export function GroupOrderPageShell() {
 
   // Khôi phục số điểm đã lưu trên server (F5 / vào lại)
   useEffect(() => {
-    if (!perParticipantPoints || !me || pointsHydratedRef.current) return;
+    if (!me || pointsHydratedRef.current) return;
     pointsHydratedRef.current = true;
     if (me.pointsToUse > 0) setPointsToUse(me.pointsToUse);
-  }, [perParticipantPoints, me]);
+  }, [me]);
 
 
-
-  // Đồng bộ điểm của mình lên server (debounce)
-  const syncMyPoints = useCallback(async () => {
-    if (!perParticipantPoints || !canEditPoints || !sessionToken) return;
-    if (effectivePoints === (me?.pointsToUse ?? 0)) return;
-    const ns = await setParticipantPoints(token, sessionToken, effectivePoints);
-    setState(ns);
-  }, [perParticipantPoints, canEditPoints, sessionToken, effectivePoints, me?.pointsToUse, token]);
-
-  const handleConfirmPoints = useCallback(async () => {
-    if (!hasUnsyncedPoints) return;
+  const handleTogglePoints = useCallback(async () => {
+    if (!canEditPoints || !sessionToken) return;
     setSyncingPoints(true);
     try {
-      await syncMyPoints();
-      toast.success(t("group_points_confirmed_toast"));
+      if (hasUnsyncedPoints) {
+        const ns = await setParticipantPoints(token, sessionToken, effectivePoints);
+        setState(ns);
+        const updatedMe = ns.participants.find((p) => p.id === me?.id);
+        const appliedPoints = updatedMe?.pointsToUse ?? 0;
+        if (appliedPoints !== effectivePoints) {
+          setPointsToUse(appliedPoints);
+          toast.success(t("group_points_adjusted_toast", { points: appliedPoints }));
+        } else {
+          toast.success(t("group_points_confirmed_toast"));
+        }
+      } else if (hasAppliedPoints) {
+        const ns = await setParticipantPoints(token, sessionToken, 0);
+        setState(ns);
+        setPointsToUse(0);
+        toast.success(t("group_points_cancelled_toast"));
+      }
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string | string[] } } };
       const msg = err?.response?.data?.message ?? "Có lỗi xảy ra.";
@@ -1594,27 +1596,7 @@ export function GroupOrderPageShell() {
     } finally {
       setSyncingPoints(false);
     }
-  }, [hasUnsyncedPoints, syncMyPoints, t]);
-
-  // Safety net: nếu participant ĐÃ xác nhận sẵn sàng (isReady) rồi mới đổi điểm,
-  // tự động đồng bộ (debounce, không phải mỗi keystroke) để tránh trường hợp
-  // host chốt đơn ngay trong lúc điểm mới chưa kịp gửi lên server.
-  // Trước khi ready thì vẫn giữ đúng yêu cầu cũ: chỉ đồng bộ khi bấm nút xác nhận.
-  useEffect(() => {
-    if (!perParticipantPoints || !canEditPoints) return;
-    if (!me?.isReady) return;
-    if (!hasUnsyncedPoints) return;
-    setSyncingPoints(true);
-    const id = setTimeout(() => {
-      void syncMyPoints()
-        .catch(() => { })
-        .finally(() => setSyncingPoints(false));
-    }, 500);
-    return () => {
-      clearTimeout(id);
-      setSyncingPoints(false);
-    };
-  }, [perParticipantPoints, canEditPoints, me?.isReady, hasUnsyncedPoints, syncMyPoints]);
+  }, [canEditPoints, sessionToken, hasUnsyncedPoints, hasAppliedPoints, effectivePoints, me?.id, token, t]);
 
   // Per-participant amount for split mode (discount proportional, shipping per shippingFeeMode)
   const myAmountBreakdown = useMemo(() => {
@@ -1625,13 +1607,10 @@ export function GroupOrderPageShell() {
     const shippingShare = Math.round(shippingFeeMode === "host_pays"
       ? (isHost ? state.shippingFee : 0)
       : (activeCount > 0 ? state.shippingFee / activeCount : 0));
-    const pointDiscount = perParticipantPoints
-      ? me.userId
-        ? Math.min(appliedPointDiscount, Math.round(me.subtotal - discountAmt))
-        : 0
-      : isHost
-        ? Math.min(appliedPointDiscount, Math.round(me.subtotal - discountAmt + shippingShare))
-        : 0;
+    const myPointDiscount = getConfirmedPointDiscount(me);
+    const pointDiscount = me.userId
+      ? Math.min(myPointDiscount, Math.round(me.subtotal - discountAmt + shippingShare))
+      : 0;
     return {
       subtotal: me.subtotal,
       discountPct,
@@ -1642,8 +1621,8 @@ export function GroupOrderPageShell() {
       isHost,
       total: Math.round(me.subtotal - discountAmt + shippingShare - pointDiscount),
     };
-  }, [state, me, config, shippingFeeMode, isHost, appliedPointDiscount]);
-  const myAmount = myAmountBreakdown?.total ?? 0;
+  }, [state, me, config, shippingFeeMode, isHost, getConfirmedPointDiscount]);
+
 
   const handleHostCheckout = useCallback(async () => {
     if (!sessionToken || !state) return;
@@ -2035,7 +2014,7 @@ export function GroupOrderPageShell() {
                     return;
                   }
 
-                  if (hasUnsyncedPoints && groupPointDiscount > 0) {
+                  if (hasUnsyncedPoints) {
                     toast.error(t("group_confirm_points_required"));
                     return;
                   }
@@ -2093,7 +2072,7 @@ export function GroupOrderPageShell() {
                   className="flex-1 rounded-full bg-[#1a3c34] py-3 font-semibold text-white"
                   isDisabled={actionLoading || me.items.length === 0}
                   onPress={() => {
-                    if (hasUnsyncedPoints && groupPointDiscount > 0) {
+                    if (hasUnsyncedPoints) {
                       toast.error(t("group_confirm_points_required"));
                       return;
                     }
@@ -2154,7 +2133,7 @@ export function GroupOrderPageShell() {
                           groupStatus={state.status}
                           paymentMode={state.paymentMode}
                           cardMode
-                          pointDiscount={getParticipantPointDiscount(p)}
+                          pointDiscount={state.paymentMode === "split" ? getConfirmedPointDiscount(p) : undefined}
                           onConfirmPaid={(participantId) =>
                             void withAction(() => confirmParticipantPaid(token, sessionToken!, participantId))
                           }
@@ -2357,12 +2336,12 @@ export function GroupOrderPageShell() {
             </Card>
 
             {/* Points — auth only, collecting state */}
-            {!!me?.userId && state.status === "collecting" && pointBalance > 0 && (
+            {canUsePoints && pointBalance > 0 && (
               <div className="space-y-3 rounded-3xl border border-black/6 bg-white p-5 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.08)]">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
                   {t("points_label")}
                 </p>
-                {canEditPoints && pointBalance > 0 && (
+                {canEditPoints && (
                   <>
                     <PointsSection
                       pointBalance={pointBalance}
@@ -2371,28 +2350,39 @@ export function GroupOrderPageShell() {
                       pointsToUse={pointsToUse}
                       onChange={setPointsToUse}
                     />
-                    {Boolean(perParticipantPoints && pointsToUse > 0) && (
+                    {hasUnsyncedPoints && hasAppliedPoints && (
+                      <p className="text-center text-[11px] text-amber-600">
+                        {t("group_points_changed_reconfirm_hint")}
+                      </p>
+                    )}
+                    {hasUnsyncedPoints ? (
                       <button
                         type="button"
-                        disabled={!hasUnsyncedPoints || syncingPoints}
-                        onClick={() => void handleConfirmPoints()}
-                        className={`flex h-10 w-full items-center justify-center gap-2 rounded-full text-sm font-semibold transition-colors disabled:cursor-not-allowed ${hasUnsyncedPoints
-                          ? "bg-[#1a3c34] text-white hover:opacity-90 disabled:opacity-60"
-                          : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
-                          }`}
+                        disabled={syncingPoints}
+                        onClick={() => void handleTogglePoints()}
+                        className="flex h-10 w-full items-center justify-center gap-2 rounded-full bg-[#1a3c34] text-sm font-semibold text-white transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {syncingPoints ? (
-                          <Loader2 className="size-4 animate-spin" />
-                        ) : hasUnsyncedPoints ? (
-                          <Check className="size-4" />
-                        ) : (
-                          <CheckCircle2 className="size-4" />
-                        )}
-                        {syncingPoints
-                          ? t("group_confirming_points")
-                          : hasUnsyncedPoints
-                            ? t("group_confirm_points_btn")
-                            : t("group_points_confirmed")}
+                        {syncingPoints ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+                        {syncingPoints ? t("group_confirming_points") : t("group_confirm_points_btn")}
+                      </button>
+                    ) : hasAppliedPoints ? (
+                      <button
+                        type="button"
+                        disabled={syncingPoints}
+                        onClick={() => void handleTogglePoints()}
+                        className="flex h-10 w-full items-center justify-center gap-2 rounded-full bg-red-50 text-sm font-semibold text-red-600 ring-1 ring-red-200 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {syncingPoints ? <Loader2 className="size-4 animate-spin" /> : <X className="size-4" />}
+                        {syncingPoints ? t("group_cancelling_points") : t("group_cancel_points_btn")}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled
+                        className="flex h-10 w-full cursor-not-allowed items-center justify-center gap-2 rounded-full bg-surface-card text-sm font-semibold text-foreground/40"
+                      >
+                        <CheckCircle2 className="size-4" />
+                        {t("group_points_not_applied")}
                       </button>
                     )}
                   </>
@@ -2583,7 +2573,7 @@ export function GroupOrderPageShell() {
                       type="button"
                       disabled={lockLoading}
                       onClick={() => {
-                        if (hasUnsyncedPoints && groupPointDiscount > 0) {
+                        if (hasUnsyncedPoints) {
                           toast.error(t("group_confirm_points_required"));
                           setShowLockConfirm(false);
                           return;

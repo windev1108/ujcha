@@ -1280,5 +1280,12 @@
   "group_points_confirmed": "Points confirmed",
   "group_confirming_points": "Confirming...",
   "group_points_confirmed_toast": "Points applied to your share",
-  "group_confirm_points_required": "Please confirm your points usage before continuing"
+  "group_confirm_points_required": "Please confirm your points usage before continuing",
+  "group_points_changed_reconfirm_hint": "You changed the points amount — confirm to apply the new discount",
+  "group_points_cancelled_toast": "Points discount cancelled",
+  "group_cancel_points_btn": "Cancel points discount",
+  "group_cancelling_points": "Cancelling...",
+  "group_points_not_applied": "Points not applied",
+  "group_points_adjusted_toast": "Applied {points} points (adjusted to the allowed limit)",
+  "group_member_discount_breakdown": "Discount by member"
 }

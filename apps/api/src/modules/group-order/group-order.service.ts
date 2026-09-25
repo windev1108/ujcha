@@ -1791,12 +1791,6 @@ export class GroupOrderService {
         code: 'GROUP_ORDER_NOT_COLLECTING',
       });
     }
-    if (!this.isPerParticipantPoints(go)) {
-      throw new BadRequestException({
-        message: 'Chỉ áp dụng cho đơn nhóm chia tiền + chuyển khoản.',
-        code: 'GROUP_ORDER_POINTS_NOT_SUPPORTED',
-      });
-    }
     if (!participant.userId) {
       throw new ForbiddenException({
         message: 'Cần đăng nhập để dùng điểm.',
@@ -1804,12 +1798,52 @@ export class GroupOrderService {
       });
     }
 
-    const points = Number.isFinite(pointsToUse)
+    const requested = Number.isFinite(pointsToUse)
       ? Math.max(0, Math.floor(pointsToUse))
       : 0;
+
+    // Base tính điểm: PHẦN CỦA RIÊNG participant này sau giảm giá theo bậc số người —
+    // không phải tổng tiền cả đơn nhóm.
+    const goFull = await this.prisma.groupOrder.findUnique({
+      where: { id: go.id },
+      include: { participants: { include: { items: true } } },
+    });
+    const targetParticipant = goFull!.participants.find(
+      (p) => p.id === participant.id,
+    )!;
+    const activeParticipants = goFull!.participants.filter(
+      (p) => p.items.length > 0,
+    );
+    const discountPercent = await this.resolveGroupDiscount(
+      activeParticipants.length,
+    );
+    const mySub = this.participantSubtotal(targetParticipant);
+    const myBase = mySub.sub(
+      mySub.mul(discountPercent).div(100).toDecimalPlaces(0),
+    );
+
+    // Tổng cả nhóm (chỉ dùng để check điều kiện minOrderAmountToSpend)
+    let groupTotal = new Prisma.Decimal(0);
+    for (const p of activeParticipants) {
+      groupTotal = groupTotal.add(this.participantSubtotal(p));
+    }
+    const groupBase = groupTotal.sub(
+      groupTotal.mul(discountPercent).div(100).toDecimalPlaces(0),
+    );
+
+    // Validate/clamp thật sự qua PointConfig (rate, maxUsagePercent, minOrderAmountToSpend,
+    // số dư điểm khả dụng) — không tin số client gửi lên.
+    const { pointsToSpend } = await this.orderService.computePointsDiscount(
+      participant.userId,
+      myBase,
+      requested,
+      groupBase, // eligibility theo tổng nhóm
+    );
+
+
     await this.prisma.groupOrderParticipant.update({
       where: { id: participant.id },
-      data: { pointsToUse: points, isReady: false },
+      data: { pointsToUse: pointsToSpend },
     });
 
     const updated = await this.prisma.groupOrder.findUnique({

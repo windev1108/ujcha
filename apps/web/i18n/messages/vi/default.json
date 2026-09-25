@@ -1279,5 +1279,12 @@
   "group_points_confirmed": "Đã xác nhận điểm",
   "group_confirming_points": "Đang xác nhận...",
   "group_points_confirmed_toast": "Đã áp dụng điểm cho phần của bạn",
-  "group_confirm_points_required": "Vui lòng bấm xác nhận dùng điểm trước khi tiếp tục"
+  "group_confirm_points_required": "Vui lòng bấm xác nhận dùng điểm trước khi tiếp tục",
+  "group_points_changed_reconfirm_hint": "Bạn vừa đổi số điểm — bấm xác nhận để áp dụng mức giảm mới",
+  "group_points_cancelled_toast": "Đã hủy áp dụng điểm",
+  "group_cancel_points_btn": "Hủy áp dụng điểm",
+  "group_cancelling_points": "Đang hủy...",
+  "group_points_not_applied": "Chưa áp dụng điểm",
+  "group_points_adjusted_toast": "Đã áp dụng {points} điểm (điều chỉnh theo giới hạn cho phép)",
+  "group_member_discount_breakdown": "Giảm giá theo thành viên"
 }

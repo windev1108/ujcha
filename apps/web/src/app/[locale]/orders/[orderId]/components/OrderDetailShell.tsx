@@ -573,25 +573,35 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
 
   const isGroupBankTransfer = isGroupOrder && isPendingBankTransfer;
 
-  // Per-participant split amounts: subtract proportional discount, add equal shipping share
   const orderTotalItems = parseFloat(order.totalAmount);
   const orderDiscountAmt = parseFloat(order.discountAmount ?? '0');
+  const orderPointDiscountAmt = parseFloat(order.pointDiscountAmount ?? '0');
   const orderShipping = parseFloat(order.shippingFee ?? '0');
   const splitParticipants = groupOrder?.participants.filter((p) => p.items.length > 0) ?? [];
   const splitN = splitParticipants.length;
   const discountFraction = orderTotalItems > 0 ? orderDiscountAmt / orderTotalItems : 0;
+  // Điểm chỉ do một người dùng nhưng làm lợi cho cả đơn — suy ra phần mỗi
+  // thành viên được hưởng theo tỉ lệ subtotal, giống cách tính discountFraction.
+  const pointFraction = orderTotalItems > 0 ? orderPointDiscountAmt / orderTotalItems : 0;
   const perParticipantShipping = splitN > 0 ? Math.round(orderShipping / splitN) : 0;
   const splitShippingFeeMode = groupOrder?.shippingFeeMode ?? 'split';
+
+  // Ưu tiên số BE trả riêng cho từng participant nếu có; nếu không, suy ra theo tỉ lệ subtotal
+  function getPointShare(p: GroupOrderParticipant) {
+    return p.pointDiscountAmount != null
+      ? Math.round(p.pointDiscountAmount)
+      : Math.round(p.subtotal * pointFraction);
+  }
 
   function calcSplitAmount(p: GroupOrderParticipant) {
     const discountShare = Math.round(p.subtotal * discountFraction);
     const shippingShare = splitShippingFeeMode === 'host_pays'
       ? (p.isHost ? Math.round(orderShipping) : 0)
       : perParticipantShipping;
-    const pointShare = Math.round(p.pointDiscountAmount ?? 0);
+    const pointShare = getPointShare(p);
     const computed = Math.max(0, Math.round(p.subtotal - discountShare + shippingShare - pointShare));
     return {
-      total: p.amountDue != null ? Math.round(p.amountDue) : computed, // ưu tiên số server chốt
+      total: p.amountDue != null ? Math.round(p.amountDue) : computed,
       discountShare,
       shippingShare,
       pointShare,
@@ -1241,6 +1251,16 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                               })()}
                           </span>
                         </div>
+                        {(() => {
+                          const pointShare = getPointShare(myGroupParticipant);
+                          if (pointShare <= 0) return null;
+                          return (
+                            <div className="flex justify-between text-[11px]">
+                              <span className="text-foreground/50">{t("group_point_discount")}</span>
+                              <span className="font-semibold text-emerald-600">-{fmtVnd(pointShare)}</span>
+                            </div>
+                          );
+                        })()}
                         <div className="flex justify-between">
                           <span className="text-foreground/50">{t("group_transfer_note")}</span>
                           <span className="font-mono font-semibold">
@@ -1251,6 +1271,59 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                     )}
                   </div>
                 )}
+
+                {/* Host trả toàn bộ, nhưng vẫn minh bạch phần giảm giá mỗi thành viên được hưởng */}
+                {groupOrder.paymentMode === "host_pays" && (() => {
+                  const withItems = groupOrder.participants.filter((p) => p.items.length > 0);
+                  const rows = withItems
+                    .map((p) => ({
+                      p,
+                      discountShare: Math.round(p.subtotal * discountFraction),
+                      pointShare: getPointShare(p),
+                    }))
+                    .filter((r) => r.discountShare > 0 || r.pointShare > 0);
+                  if (rows.length === 0) return null;
+                  return (
+                    <div className="mb-5 space-y-2 rounded-2xl border border-black/6 bg-surface-soft px-4 py-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
+                        {t("group_member_discount_breakdown")}
+                      </p>
+                      <ul className="space-y-2">
+                        {rows.map(({ p, discountShare, pointShare }) => (
+                          <li key={p.id} className="flex items-center gap-2.5">
+                            {p.avatar ? (
+                              <div className="relative size-6 shrink-0 overflow-hidden rounded-full ring-1 ring-black/8">
+                                <Image src={p.avatar} alt={p.name} fill className="object-cover" sizes="24px" />
+                              </div>
+                            ) : (
+                              <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#1a3c34]/10 text-[10px] font-bold text-[#1a3c34]">
+                                {p.name[0]}
+                              </div>
+                            )}
+                            <span className="flex-1 min-w-0 truncate text-xs text-foreground">{p.name}</span>
+                            <span className="shrink-0 flex items-center gap-1 text-xs font-semibold tabular-nums text-emerald-600">
+                              -{fmtVnd(discountShare + pointShare)}
+                              <InfoPopup size="sm">
+                                {discountShare > 0 && (
+                                  <span className="flex justify-between">
+                                    <span className="text-foreground/60">{t("group_split_discount")}</span>
+                                    <span className="text-emerald-600">-{fmtVnd(discountShare)}</span>
+                                  </span>
+                                )}
+                                {pointShare > 0 && (
+                                  <span className="flex justify-between">
+                                    <span className="text-foreground/60">{t("group_point_discount")}</span>
+                                    <span className="text-emerald-600">-{fmtVnd(pointShare)}</span>
+                                  </span>
+                                )}
+                              </InfoPopup>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })()}
 
                 {/* Auto-cancel warning */}
                 {groupQrRemaining > 0 && (
@@ -1304,75 +1377,77 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                       <ul className="space-y-2">
                         {groupOrder.participants
                           .filter((p) => p.items.length > 0)
-                          .map((p) => (
-                            <li key={p.id} className="flex items-center gap-2.5">
-                              {p.avatar ? (
-                                <div className="relative size-7 shrink-0 overflow-hidden rounded-full ring-1 ring-black/8">
-                                  <Image src={p.avatar} alt={p.name} fill className="object-cover" sizes="28px" />
-                                </div>
-                              ) : (
-                                <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#1a3c34]/10 text-[11px] font-bold text-[#1a3c34]">
-                                  {p.name[0]}
-                                </div>
-                              )}
-                              <span className="flex-1 min-w-0 truncate text-sm text-foreground">
-                                {p.name}
-                                {p.id === myGroupParticipant?.id && (
-                                  <span className="ml-1 text-[11px] font-semibold text-[#1a3c34]">(bạn)</span>
+                          .map((p) => {
+                            const { total, discountShare, shippingShare, pointShare } = calcSplitAmount(p);
+                            return (
+                              <li key={p.id} className="flex items-center gap-2.5">
+                                {p.avatar ? (
+                                  <div className="relative size-7 shrink-0 overflow-hidden rounded-full ring-1 ring-black/8">
+                                    <Image src={p.avatar} alt={p.name} fill className="object-cover" sizes="28px" />
+                                  </div>
+                                ) : (
+                                  <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#1a3c34]/10 text-[11px] font-bold text-[#1a3c34]">
+                                    {p.name[0]}
+                                  </div>
                                 )}
-                              </span>
-                              {p.paymentStatus === "paid" ? (
-                                <span className="shrink-0 flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 ring-1 ring-emerald-200">
-                                  <CheckCircle2 className="size-3" />
-                                  {t("group_paid_label")}
+                                <span className="flex-1 min-w-0">
+                                  <span className="flex items-center gap-1 text-sm text-foreground">
+                                    <span className="truncate">{p.name}</span>
+                                    {p.id === myGroupParticipant?.id && (
+                                      <span className="shrink-0 text-[11px] font-semibold text-[#1a3c34]">(bạn)</span>
+                                    )}
+                                  </span>
+                                  {pointShare > 0 && (
+                                    <span className="block text-[10px] font-medium text-emerald-600">
+                                      {t("group_point_discount")}: -{fmtVnd(pointShare)}
+                                    </span>
+                                  )}
                                 </span>
-                              ) : (
-                                <span className="shrink-0 flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-600 ring-1 ring-amber-200">
-                                  <Loader2 className="size-3 animate-spin" />
-                                  {t("group_unpaid_label")}
+                                {p.paymentStatus === "paid" ? (
+                                  <span className="shrink-0 flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 ring-1 ring-emerald-200">
+                                    <CheckCircle2 className="size-3" />
+                                    {t("group_paid_label")}
+                                  </span>
+                                ) : (
+                                  <span className="shrink-0 flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-600 ring-1 ring-amber-200">
+                                    <Loader2 className="size-3 animate-spin" />
+                                    {t("group_unpaid_label")}
+                                  </span>
+                                )}
+                                <span className="shrink-0 flex items-center gap-1 text-sm font-medium tabular-nums text-foreground/60">
+                                  {fmtVnd(total)}
+                                  <InfoPopup size="sm">
+                                    <span className="flex justify-between">
+                                      <span className="text-foreground/60">{t("group_split_items")}</span>
+                                      <span>{fmtVnd(p.subtotal)}</span>
+                                    </span>
+                                    {discountShare > 0 && (
+                                      <span className="flex justify-between">
+                                        <span className="text-foreground/60">{t("group_split_discount")}</span>
+                                        <span className="text-emerald-600">-{fmtVnd(discountShare)}</span>
+                                      </span>
+                                    )}
+                                    {shippingShare > 0 && (
+                                      <span className="flex justify-between">
+                                        <span className="text-foreground/60">{t(splitShippingFeeMode === 'host_pays' ? "group_split_shipping_all" : "group_split_shipping")}</span>
+                                        <span>+{fmtVnd(shippingShare)}</span>
+                                      </span>
+                                    )}
+                                    {pointShare > 0 && (
+                                      <span className="flex justify-between">
+                                        <span className="text-foreground/60">{t("group_point_discount")}</span>
+                                        <span className="text-emerald-600">-{fmtVnd(pointShare)}</span>
+                                      </span>
+                                    )}
+                                    <span className="flex justify-between border-t border-black/6 pt-1.5 font-semibold text-foreground">
+                                      <span>{t("total")}</span>
+                                      <span>{fmtVnd(total)}</span>
+                                    </span>
+                                  </InfoPopup>
                                 </span>
-                              )}
-                              <span className="shrink-0 flex items-center gap-1 text-sm font-medium tabular-nums text-foreground/60">
-                                {(() => {
-                                  const { total, discountShare, shippingShare, pointShare } =
-                                    calcSplitAmount(p);
-                                  return (
-                                    <>
-                                      {fmtVnd(total)}
-                                      <InfoPopup size="sm">
-                                        <span className="flex justify-between">
-                                          <span className="text-foreground/60">{t("group_split_items")}</span>
-                                          <span>{fmtVnd(p.subtotal)}</span>
-                                        </span>
-                                        {discountShare > 0 && (
-                                          <span className="flex justify-between">
-                                            <span className="text-foreground/60">{t("group_split_discount")}</span>
-                                            <span className="text-emerald-600">-{fmtVnd(discountShare)}</span>
-                                          </span>
-                                        )}
-                                        {shippingShare > 0 && (
-                                          <span className="flex justify-between">
-                                            <span className="text-foreground/60">{t(splitShippingFeeMode === 'host_pays' ? "group_split_shipping_all" : "group_split_shipping")}</span>
-                                            <span>+{fmtVnd(shippingShare)}</span>
-                                          </span>
-                                        )}
-                                        {pointShare > 0 && (
-                                          <span className="flex justify-between">
-                                            <span className="text-foreground/60">{t("group_point_discount")}</span>
-                                            <span className="text-emerald-600">-{fmtVnd(pointShare)}</span>
-                                          </span>
-                                        )}
-                                        <span className="flex justify-between border-t border-black/6 pt-1.5 font-semibold text-foreground">
-                                          <span>{t("total")}</span>
-                                          <span>{fmtVnd(total)}</span>
-                                        </span>
-                                      </InfoPopup>
-                                    </>
-                                  );
-                                })()}
-                              </span>
-                            </li>
-                          ))}
+                              </li>
+                            );
+                          })}
                       </ul>
                       <div className="flex items-center justify-between border-t border-black/6 pt-2.5 text-sm">
                         <span className="font-semibold text-foreground/70">{t("total")}</span>
@@ -1386,6 +1461,8 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
               </div>
             </motion.div>
           )}
+
+
 
           {/* ── Items ─────────────────────────────────────────────── */}
           <motion.div
@@ -1424,10 +1501,23 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                                 </span>
                               )}
                             </div>
-                            <p className="text-xs text-foreground/50">
-                              {participant.items.length} {t("dish")} ·{" "}
-                              <span className="text-sm font-bold tabular-nums text-[#1a3c34]">{fmtVnd(participant.subtotal)}</span>
-                            </p>
+                            {(() => {
+                              const pointShare = getPointShare(participant);
+                              const displaySubtotal = Math.max(0, participant.subtotal - pointShare);
+                              return (
+                                <>
+                                  <p className="text-xs text-foreground/50">
+                                    {participant.items.length} {t("dish")} ·{" "}
+                                    <span className="text-sm font-bold tabular-nums text-[#1a3c34]">{fmtVnd(displaySubtotal)}</span>
+                                  </p>
+                                  {pointShare > 0 && (
+                                    <p className="mt-0.5 text-[11px] font-semibold text-emerald-600">
+                                      {t("group_point_discount")}: -{fmtVnd(pointShare)}
+                                    </p>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </div>
                         </div>
 

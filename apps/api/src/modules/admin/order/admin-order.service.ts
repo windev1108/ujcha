@@ -87,6 +87,8 @@ const adminOrderInclude = {
           guestName: true,
           isHost: true,
           paymentStatus: true,
+          pointsToUse: true,
+          pointDiscountAmount: true,
           user: { select: { id: true, name: true } },
           items: {
             select: {
@@ -420,8 +422,13 @@ export class AdminOrderService {
             include: adminOrderInclude,
           });
 
-          // Trường hợp hiếm: vừa paid vừa cancel cùng lúc trong 1 request —
-          // restorePointsForOrder sẽ hoàn lại pointsConsumed vừa spend ở trên (case 2 của nó)
+          if (dto.status === OrderStatus.completed) {
+            await this.orderService.spendGroupParticipantReservedPoints(
+              tx,
+              orderId,
+            );
+          }
+
           if (isCancelling) {
             await this.orderService.restorePointsForOrder(tx, orderId);
           }
@@ -512,6 +519,13 @@ export class AdminOrderService {
           data: dataUpdate,
           include: adminOrderInclude,
         });
+
+        if (dto.status === OrderStatus.completed) {
+          await this.orderService.spendGroupParticipantReservedPoints(
+            tx,
+            orderId,
+          );
+        }
 
         if (isCancelling) {
           await this.orderService.restorePointsForOrder(tx, orderId);

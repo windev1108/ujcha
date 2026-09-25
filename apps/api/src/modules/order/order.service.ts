@@ -186,7 +186,7 @@ export class OrderService {
     private readonly notificationService: NotificationService,
     private readonly inventoryService: InventoryService,
     private readonly storeStatus: StoreStatusService,
-  ) {}
+  ) { }
 
   calculateTotal(items: CreateOrderItemDto[]): Prisma.Decimal {
     let sum = new Prisma.Decimal(0);
@@ -289,7 +289,7 @@ export class OrderService {
         normalized: optionsNormalized,
         details: optionDetails,
       } = skipOptionValidation
-        ? {
+          ? {
             surcharge: new Prisma.Decimal(0),
             normalized: {} as Record<string, string>,
             details: [] as {
@@ -299,7 +299,7 @@ export class OrderService {
               nameTranslation?: Record<string, string>;
             }[],
           }
-        : validateOptionsAndSurcharge(optionGroupsResolved, item.options);
+          : validateOptionsAndSurcharge(optionGroupsResolved, item.options);
       unit = unit.add(optionSurcharge);
 
       // Merge client-provided nameTranslation as fallback for option values the product record may lack.
@@ -575,8 +575,8 @@ export class OrderService {
       const vatAmount =
         vatPercent > 0
           ? new Prisma.Decimal(
-              Math.round((Number(finalAmount) * vatPercent) / 100),
-            )
+            Math.round((Number(finalAmount) * vatPercent) / 100),
+          )
           : new Prisma.Decimal(0);
       const vatRate = new Prisma.Decimal(vatPercent);
 
@@ -989,20 +989,20 @@ export class OrderService {
     const [txns, groupLinks] = await Promise.all([
       orderIds.length > 0
         ? this.prisma.pointTransaction.findMany({
-            where: {
-              userId,
-              type: PointTransactionType.earn,
-              source: PointSource.order,
-              referenceId: { in: orderIds },
-            },
-            select: { referenceId: true, amount: true },
-          })
+          where: {
+            userId,
+            type: PointTransactionType.earn,
+            source: PointSource.order,
+            referenceId: { in: orderIds },
+          },
+          select: { referenceId: true, amount: true },
+        })
         : Promise.resolve([]),
       orderIds.length > 0
         ? this.prisma.groupOrder.findMany({
-            where: { orderId: { in: orderIds } },
-            select: { orderId: true, token: true },
-          })
+          where: { orderId: { in: orderIds } },
+          select: { orderId: true, token: true },
+        })
         : Promise.resolve([]),
     ]);
 
@@ -1250,6 +1250,30 @@ export class OrderService {
     }
   }
 
+  async spendGroupParticipantReservedPoints(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+  ): Promise<void> {
+    const participants = await tx.groupOrderParticipant.findMany({
+      where: { groupOrder: { orderId }, pointsReserved: { gt: 0 } },
+      select: { id: true, userId: true, pointsReserved: true },
+    });
+
+    for (const p of participants) {
+      if (!p.userId) continue;
+      await this.pointService.spendReservedPointsTx(
+        tx,
+        p.userId,
+        p.pointsReserved,
+        { source: PointSource.order, referenceId: orderId },
+      );
+      await tx.groupOrderParticipant.update({
+        where: { id: p.id },
+        data: { pointsConsumed: p.pointsReserved, pointsReserved: 0 },
+      });
+    }
+  }
+
   async restorePointsForOrder(
     tx: Prisma.TransactionClient,
     orderId: string,
@@ -1307,8 +1331,9 @@ export class OrderService {
 
   async computePointsDiscount(
     userId: string | null,
-    baseSubtotal: Prisma.Decimal,
+    redeemBase: Prisma.Decimal,
     pointsToUse: number,
+    eligibilityBase?: Prisma.Decimal,
   ): Promise<{ pointsToSpend: number; discountMoney: Prisma.Decimal }> {
     if (!userId || pointsToUse < 1) {
       return { pointsToSpend: 0, discountMoney: new Prisma.Decimal(0) };
@@ -1319,7 +1344,8 @@ export class OrderService {
       return { pointsToSpend: 0, discountMoney: new Prisma.Decimal(0) };
     }
 
-    if (baseSubtotal.lessThan(config.minOrderAmountToSpend)) {
+    const checkBase = eligibilityBase ?? redeemBase;
+    if (checkBase.lessThan(config.minOrderAmountToSpend)) {
       return { pointsToSpend: 0, discountMoney: new Prisma.Decimal(0) };
     }
 
@@ -1337,7 +1363,7 @@ export class OrderService {
     }
 
     const pointRate = new Prisma.Decimal(config.pointRate);
-    const maxUsable = baseSubtotal.mul(config.maxUsagePercent).div(100);
+    const maxUsable = redeemBase.mul(config.maxUsagePercent).div(100);
     const moneyFromPoints = pointRate.mul(availablePoints);
     const capped = moneyFromPoints.lessThan(maxUsable)
       ? moneyFromPoints
