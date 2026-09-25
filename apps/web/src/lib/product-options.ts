@@ -1,5 +1,6 @@
 export interface ProductOptionValue {
   label: string
+  isDefault?: boolean
   priceDelta: number
   nameTranslation?: Record<string, string>
 }
@@ -13,7 +14,7 @@ export interface ProductOptionGroup {
   values: ProductOptionValue[]
 }
 
-const NORMAL_KEYWORDS = ['bình thường', 'vừa']
+const NORMAL_KEYWORDS = ['bình thường', 'vừa', 'có đá']
 
 /**
  * Sort option values: cheapest first (priceDelta asc), with "bình thường"/"vừa"
@@ -21,12 +22,30 @@ const NORMAL_KEYWORDS = ['bình thường', 'vừa']
  */
 export function sortOptionValues(values: ProductOptionValue[]): ProductOptionValue[] {
   const isNormal = (v: ProductOptionValue) => {
-    const check = (s: string) => NORMAL_KEYWORDS.some((kw) => s.toLowerCase().includes(kw))
-    return check(v.label) || Object.values(v.nameTranslation ?? {}).some(check)
+    const check = (s: string) =>
+      NORMAL_KEYWORDS.some((kw) => s.toLowerCase().includes(kw))
+
+    return (
+      check(v.label) ||
+      Object.values(v.nameTranslation ?? {}).some(check)
+    )
   }
+
   return [...values].sort((a, b) => {
-    if (a.priceDelta !== b.priceDelta) return a.priceDelta - b.priceDelta
-    const an = isNormal(a), bn = isNormal(b)
+    // 1. Default luôn lên đầu
+    if (a.isDefault !== b.isDefault) {
+      return a.isDefault ? -1 : 1
+    }
+
+    // 2. Giá thấp hơn lên trước
+    if (a.priceDelta !== b.priceDelta) {
+      return a.priceDelta - b.priceDelta
+    }
+
+    // 3. "Bình thường" / "Vừa" / "Có đá" lên trước khi cùng giá
+    const an = isNormal(a)
+    const bn = isNormal(b)
+
     return an === bn ? 0 : an ? -1 : 1
   })
 }
@@ -56,7 +75,14 @@ export function normalizeOptionGroups(raw: unknown): ProductOptionGroup[] {
           const nt = v.nameTranslation && typeof v.nameTranslation === 'object'
             ? (v.nameTranslation as Record<string, string>)
             : undefined
-          values.push({ label, priceDelta: Number.isFinite(priceDelta) ? priceDelta : 0, ...(nt ? { nameTranslation: nt } : {}) })
+          const isDefault =
+            typeof v.isDefault === 'boolean' ? v.isDefault : undefined
+          values.push({
+            label,
+            priceDelta: Number.isFinite(priceDelta) ? priceDelta : 0,
+            ...(isDefault !== undefined ? { isDefault } : {}),
+            ...(nt ? { nameTranslation: nt } : {}),
+          })
         }
       }
     }
