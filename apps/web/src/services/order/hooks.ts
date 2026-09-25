@@ -114,7 +114,6 @@ export function useCreateOrderMutation() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cart'] })
       queryClient.invalidateQueries({ queryKey: ['profile'] })
-      queryClient.invalidateQueries({ queryKey: ['my-vouchers'] })
     },
   })
 }
