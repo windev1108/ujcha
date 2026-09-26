@@ -7,11 +7,18 @@ interface DevToolsDetectionOptions {
   threshold?: number;
   interval?: number;
   debuggerThreshold?: number;
-  /** Số lần phát hiện liên tiếp cần có trước khi coi là "đã mở" — chống nhiễu
-   *  do tab bị throttle khi ở nền, máy yếu, GC, v.v. */
   confirmCount?: number;
   onDetected?: () => void;
   onClosed?: () => void;
+}
+
+function isTouchDevice() {
+  if (typeof window === "undefined") return false;
+  return (
+    "ontouchstart" in window ||
+    navigator.maxTouchPoints > 0 ||
+    window.matchMedia?.("(pointer: coarse)").matches
+  );
 }
 
 export function useDevToolsDetection({
@@ -26,23 +33,47 @@ export function useDevToolsDetection({
   const [isOpen, setIsOpen] = useState(false);
   const previousState = useRef(false);
   const positiveStreak = useRef(0);
+  const isTouchRef = useRef(false);
+
+  useEffect(() => {
+    isTouchRef.current = isTouchDevice();
+  }, []);
 
   const check = useCallback(() => {
     if (!enabled || typeof window === "undefined") {
       return;
     }
 
-    // Tab đang ẩn/nền → timer bị browser throttle mạnh, phép đo debugger-timing
-    // bị lệch và báo sai. Bỏ qua hoàn toàn lần check này và reset streak.
     if (document.hidden) {
       positiveStreak.current = 0;
       return;
     }
 
-    // Method 1: docked DevTools
-    const widthDiff = window.outerWidth - window.innerWidth;
-    const heightDiff = window.outerHeight - window.innerHeight;
-    const sizeDetected = widthDiff > threshold || heightDiff > threshold;
+    // Bàn phím ảo đang mở (đang gõ trong input/textarea) → innerHeight co lại
+    // rất mạnh trên mobile, dễ trùng ngưỡng phát hiện docked DevTools.
+    // Bỏ qua hẳn lần check này để tránh false positive khi đang gõ.
+    const active = document.activeElement;
+    const isTypingContext =
+      active instanceof HTMLElement &&
+      (active.tagName === "INPUT" ||
+        active.tagName === "TEXTAREA" ||
+        active.isContentEditable);
+    if (isTypingContext) {
+      positiveStreak.current = 0;
+      return;
+    }
+
+    // Method 1: docked DevTools — chỉ đáng tin trên desktop. Trên mobile,
+    // DevTools thật (remote debug qua cáp) không hề đổi outerWidth/outerHeight
+    // của trang, trong khi thanh địa chỉ ẩn/hiện khi cuộn hoặc bàn phím ảo lại
+    // đổi rất nhiều → method này trên mobile chỉ sinh false positive, không
+    // có giá trị phát hiện thật. Vô hiệu hoá hẳn khi là touch device.
+    let sizeDetected = false;
+    if (!isTouchRef.current) {
+      const widthDiff = window.outerWidth - window.innerWidth;
+      const heightDiff = window.outerHeight - window.innerHeight;
+      sizeDetected = widthDiff > threshold || heightDiff > threshold;
+    }
 
     // Method 2: debugger timing
     const start = performance.now();
@@ -59,8 +90,6 @@ export function useDevToolsDetection({
       positiveStreak.current = 0;
     }
 
-    // Chỉ kết luận "đã mở" khi phát hiện liên tiếp đủ confirmCount lần —
-    // 1 lần đo lệch do CPU spike/GC/throttle sẽ không đủ để block UI.
     const detected = positiveStreak.current >= confirmCount;
 
     if (detected !== previousState.current) {
@@ -85,7 +114,6 @@ export function useDevToolsDetection({
     const timer = window.setInterval(check, interval);
     window.addEventListener("resize", check);
 
-    // Khi quay lại tab, reset streak để không cộng dồn từ lúc tab đang ẩn
     const handleVisibility = () => {
       if (!document.hidden) {
         positiveStreak.current = 0;

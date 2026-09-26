@@ -137,10 +137,11 @@ export function ChatBubble({ kind, hostName, roomId, enabled, fetchMessages, sen
         }
         // Badge trên tab trình duyệt — chỉ khi user không nhìn vào tab này
         if (typeof document !== "undefined" && document.visibilityState === "hidden") {
-          const senderName = kind === "group" ? hostName ?? msg.displayName : msg.displayName;
+          const senderName = msg.displayName;
+          const notiMessage = kind === "group" ? t("chat_group_new_message", { name: hostName ?? "" }) : t("chat_bg_new_message", { name: senderName ?? "" })
           useNotificationStore
             .getState()
-            .addBgNotif(t("chat_bg_new_message", { name: senderName ?? "" }));
+            .addBgNotif(notiMessage);
         }
       }
     },

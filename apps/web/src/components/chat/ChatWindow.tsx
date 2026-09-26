@@ -527,7 +527,7 @@ export function ChatWindow({
                                 const lastIdx = group.messages.length - 1;
                                 return (
                                     <div key={first.id} className="flex flex-col gap-1">
-                                        <p className={`px-1 text-[10px] font-medium text-foreground/35 ${group.mine ? "text-right" : ""}`}>
+                                        <p className={`px-1 text-xs font-medium text-foreground/35 ${group.mine ? "text-right" : ""}`}>
                                             {group.mine ? t("chat_you") : first.displayName} · {fmtTime(first.createdAt)}
                                         </p>
                                         <div className="flex flex-col gap-2">
@@ -580,7 +580,7 @@ export function ChatWindow({
                                                             </div>
                                                         ) : (
                                                             <div
-                                                                className={`w-fit max-w-[75%] whitespace-pre-wrap break-words rounded-2xl px-3 py-1.5 text-base leading-snug ${group.mine ? "bg-[#1a3c34] text-white" : "bg-black/6 text-foreground"
+                                                                className={`w-fit max-w-[75%] whitespace-pre-wrap break-words rounded-2xl px-3 py-1.5 text-sm leading-snug ${group.mine ? "bg-[#1a3c34] text-white" : "bg-black/6 text-foreground"
                                                                     }`}
                                                             >
                                                                 <EmojiText text={m.content} />
@@ -675,7 +675,8 @@ export function ChatWindow({
                                     disabled={CHAT_STICKERS.length === 0}
                                     className={`cursor-pointer absolute left-0 top-0 flex size-9 items-center justify-center rounded-full transition-all duration-200 disabled:opacity-30 ${hasText ? "pointer-events-none scale-75 opacity-0" : "scale-100 opacity-100"
                                         } ${activePopover === "sticker" ? "bg-[#1a3c34]/10 text-[#1a3c34]" : "text-foreground/45 hover:bg-black/6"}`}
-                                    aria-label="Chọn nhãn dán"
+                                    aria-label={t("chat_choose_sticker")}
+                                    title={t("chat_choose_sticker")}
                                 >
                                     <StickerIcon className="size-[18px]" />
                                 </button>
@@ -686,7 +687,8 @@ export function ChatWindow({
                                     disabled={uploadingImage}
                                     className={`cursor-pointer absolute left-10 top-0 flex size-9 items-center justify-center rounded-full text-foreground/45 transition-all duration-200 hover:bg-black/6 disabled:opacity-40 ${hasText ? "pointer-events-none scale-75 opacity-0" : "scale-100 opacity-100"
                                         }`}
-                                    aria-label="Gửi ảnh"
+                                    aria-label={t("chat_choose_sticker")}
+                                    title={t("chat_choose_sticker")}
                                 >
                                     {uploadingImage ? <Loader2 className="size-[18px] animate-spin" /> : <ImagePlus className="size-[18px]" />}
                                 </button>
@@ -696,6 +698,13 @@ export function ChatWindow({
                             <div className="flex min-w-0 flex-1 items-center rounded-full border border-black/10 bg-black/[0.03] pr-1 focus-within:border-[#1a3c34] focus-within:ring-2 focus-within:ring-[#1a3c34]/10">
                                 <input
                                     ref={inputRef}
+                                    type="text"
+                                    name="ujcha-chat-message"
+                                    autoComplete="off"
+                                    autoCorrect="off"
+                                    data-lpignore="true"
+                                    data-1p-ignore="true"
+                                    data-form-type="other"
                                     value={input}
                                     onChange={(e) => onInputChange(e.target.value)}
                                     placeholder={placeholder}
@@ -709,6 +718,7 @@ export function ChatWindow({
                                     onClick={() => openPopover("emoji")}
                                     className={`flex cursor-pointer size-7 shrink-0 items-center justify-center rounded-full transition-colors ${activePopover === "emoji" ? "text-[#1a3c34]" : "text-foreground/40 hover:text-foreground/60"}`}
                                     aria-label="Chọn emoji"
+                                    title={t("chat_choose_emoji")}
                                 >
                                     <Smile className="size-[18px]" />
                                 </button>
@@ -748,6 +758,7 @@ export function ChatWindow({
                 >
                     <button
                         type="button"
+                        title={t("chat_choose_sticker")}
                         onClick={() => {
                             setPlusMenuOpen(false);
                             openPopover("sticker", plusBtnRef.current);
@@ -760,6 +771,8 @@ export function ChatWindow({
                     </button>
                     <button
                         type="button"
+                        title={t("chat_send_image")}
+
                         onClick={() => {
                             setPlusMenuOpen(false);
                             fileInputRef.current?.click();
