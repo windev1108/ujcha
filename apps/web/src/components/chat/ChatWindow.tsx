@@ -687,8 +687,8 @@ export function ChatWindow({
                                     disabled={uploadingImage}
                                     className={`cursor-pointer absolute left-10 top-0 flex size-9 items-center justify-center rounded-full text-foreground/45 transition-all duration-200 hover:bg-black/6 disabled:opacity-40 ${hasText ? "pointer-events-none scale-75 opacity-0" : "scale-100 opacity-100"
                                         }`}
-                                    aria-label={t("chat_choose_sticker")}
-                                    title={t("chat_choose_sticker")}
+                                    aria-label={t("chat_send_image")}
+                                    title={t("chat_send_image")}
                                 >
                                     {uploadingImage ? <Loader2 className="size-[18px] animate-spin" /> : <ImagePlus className="size-[18px]" />}
                                 </button>
