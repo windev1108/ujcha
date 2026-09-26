@@ -1,12 +1,25 @@
 //shopee-partner-poller.ts
 import { BrowserWindow, net, session } from 'electron'
+import { createHash, randomUUID } from 'node:crypto'
 import { readSubConfig, writeSubConfig } from '../renderer/src/store/config-store'
 
 const SPF_API = 'https://gmerchant.deliverynow.vn'
 const PARTNER_API = 'https://api.partner.shopee.vn'
 const SPF_ORIGIN = 'https://partner.shopee.vn'
+// Merchant-food Hermes confirms the mobile order module uses this relative endpoint.
+// The exact API host is kept configurable because the APK analysis identified the
+// path but did not conclusively expose the runtime base URL.
+const SPF_MOBILE_API = process.env.SPF_MOBILE_API ?? SPF_API
+const SPF_MOBILE_ORDER_LIST_ENDPOINT = `${SPF_MOBILE_API}/api/v5/order/get_list`
+const SPF_ORDER_SOURCE: 'mobile' | 'web' | 'auto' =
+  process.env.SPF_ORDER_SOURCE === 'mobile'
+    ? 'mobile'
+    : 'web'
+const MOBILE_ORDER_PAGE_SIZE = 50
+const MOBILE_ORDER_MAX_PAGES = 5
+const MOBILE_ORDER_TIMEOUT_MS = 15_000
 const SPF_ORDER_LIST_PAGE = 'https://partner.shopee.vn/shopee-food/order-management'
-const DEFAULT_POLL_INTERVAL_MS = 30_000
+const DEFAULT_POLL_INTERVAL_MS = 5_000
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -53,6 +66,8 @@ interface SpfPartnerConfig {
   entityId?: string
   savedAt?: string
   pollIntervalMs?: number
+  mobileDeviceId?: string
+  mobileDeviceFingerprint?: string
 }
 
 // ─── Order types (get_list_with_pagination) ───────────────────────────────────
@@ -211,11 +226,27 @@ async function refreshDefaultRangeCache(force = false): Promise<void> {
     // cho bất kỳ range nào portal đang giữ sẵn.
     const toDate = vnDateStr(0)
     const fromDate = vnDateStr(29)
-    await withPortalLock(() => triggerPortalOrderFetch(fromDate, toDate))
+    await withPortalLock(async () => {
+      await triggerPortalOrderFetch(fromDate, toDate)
+
+      // Keep the portal request broad, but increase the UI page size so the
+      // cache contains enough recent orders for local today filtering.
+      if (_pollerWin && !_pollerWin.isDestroyed() && _lastPageSize < 50) {
+        const before = _lastInterceptedAt
+        const changed = await clickPageSizeOption(_pollerWin, 50)
+        if (changed) {
+          const deadline = Date.now() + 8000
+          while (Date.now() < deadline) {
+            if (_lastInterceptedAt > before) break
+            await new Promise(r => setTimeout(r, 200))
+          }
+        }
+      }
+    })
     if (_lastInterceptedOrderList) {
       _defaultRangeOrders = _lastInterceptedOrderList
       _defaultRangeFetchedAt = Date.now()
-      console.log(`[ShopeePartner] Default-range cache refreshed — ${_defaultRangeOrders.length} orders`)
+      console.log(`[ShopeePartner] Default-range cache refreshed — ${_defaultRangeOrders.length} orders (pageSize=${_lastPageSize})`)
     }
   })()
 
@@ -257,6 +288,7 @@ function saveConfig(patch: Partial<SpfPartnerConfig>) {
 // ─── Runtime state ────────────────────────────────────────────────────────────
 
 let cachedHeaders: Record<string, string> | null = null
+let capturedPortalOrderHeaders: Record<string, string> | null = null
 let cachedRestaurantId: string | null = null
 let cachedRestaurantName: string | null = null
 let cachedEntityId: string | null = null
@@ -271,6 +303,11 @@ let _pollerReady: Promise<void> | null = null
 // Được set trong Network.responseReceived handler của initPollerWin().
 let _lastInterceptedOrderList: SpfOrderFull[] | null = null
 let _lastInterceptedAt = 0
+// The Portal's own XHR is the stable transport: Shopee creates the per-request
+// auth/signature headers in the renderer. We replay that XHR through CDP instead
+// of copying those dynamic headers into net.request().
+let _lastOrderXhrRequestId: string | null = null
+let _lastSuccessfulOrderXhrRequestId: string | null = null
 
 // ─── Health tracking ──────────────────────────────────────────────────────────
 let _consecutiveFailures = 0
@@ -333,24 +370,127 @@ function getActiveHeaders(): Record<string, string> | null {
   return null
 }
 
-function buildHeaders(): Record<string, string> {
+function getHeaderCI(headers: Record<string, string>, ...names: string[]): string | undefined {
+  for (const name of names) {
+    const key = Object.keys(headers).find((k) => k.toLowerCase() === name.toLowerCase())
+    if (key && headers[key]) return headers[key]
+  }
+  return undefined
+}
+
+function getMobileDeviceId(): string {
+  const saved = getConfig().mobileDeviceId
+  if (saved) return saved
+
+  // Same wire format as Shopee's native deviceStore().l():
+  // four UUID-derived 64-bit values packed into 32 bytes and Base64 encoded.
+  const buffer = Buffer.alloc(32)
+  for (let i = 0; i < 4; i++) {
+    const hex = randomUUID().replace(/-/g, '')
+    const msb = BigInt(`0x${hex.slice(0, 16)}`)
+    const lsb = BigInt(`0x${hex.slice(16, 32)}`)
+    const xor = BigInt.asIntN(64, msb ^ lsb)
+    const value = xor < 0n ? -xor : xor
+    buffer.writeBigUInt64BE(value, i * 8)
+  }
+  const id = buffer.toString('base64')
+  saveConfig({ mobileDeviceId: id })
+  return id
+}
+
+function getMobileDeviceFingerprint(deviceId: string): string | null {
+  const saved = getConfig().mobileDeviceFingerprint
+  if (saved) return saved
+
+  // The real Android app gets this from deviceStore().m(), which depends on
+  // Android TelephonyManager/android_id/Build.SERIAL. Electron on Windows does
+  // not have those native values, so do not pretend this is the exact Android
+  // fingerprint. Generate a stable per-install fallback only when explicitly
+  // enabled for the mobile API. A captured real fingerprint always wins.
+  if (process.env.SPF_GENERATE_FINGERPRINT === '0') return null
+
+  const seed = [process.platform, process.arch, deviceId, getConfig().entityId ?? ''].join(':')
+  const fingerprint = createHash('sha256').update(seed).digest('hex')
+  saveConfig({ mobileDeviceFingerprint: fingerprint })
+  console.warn('[ShopeePartner] Using generated Electron fallback for X-SF-Device-Fingerprint; a native Android fingerprint is preferred')
+  return fingerprint
+}
+
+function getPortalOrderHeaders(): Record<string, string> {
+  const base = capturedPortalOrderHeaders ?? getActiveHeaders() ?? {}
+  const headers: Record<string, string> = {}
+  for (const [k, v] of Object.entries(base)) {
+    if (!v || k.startsWith('_')) continue
+    const lower = k.toLowerCase()
+    // Electron/net.request owns these transport/browser-managed headers.
+    if (lower === 'host' || lower === 'content-length' || lower === 'connection' ||
+      lower === 'cookie' || lower === 'origin' || lower === 'referer' ||
+      lower.startsWith('sec-fetch-') || lower === 'upgrade-insecure-requests') continue
+    headers[k] = v
+  }
+
+  // The web portal generates these per request. Keep the captured values for
+  // headers whose semantics are opaque, but refresh the merchant request id
+  // when possible so a replay is not needlessly tied to an old request.
+  const requestIdKey = Object.keys(headers).find(k => k.toLowerCase() === 'x-merchant-requestid')
+  if (requestIdKey) headers[requestIdKey] = randomUUID()
+
+  // Do not replay the portal page's Referer through Electron net.request.
+  // Chromium rejects this cross-origin referrer before the request reaches
+  // gmerchant.deliverynow.vn (ERR_BLOCKED_BY_CLIENT: invalid referrer).
+  // The browser request's authentication is carried by the session cookies
+  // and merchant/CSRF headers; the direct main-process request does not need
+  // a renderer Referer.
+  delete headers['origin']
+  delete headers['Origin']
+  delete headers['referer']
+  delete headers['Referer']
+  headers['accept'] = headers['accept'] ?? 'application/json, text/plain, */*'
+  headers['content-type'] = 'application/json'
+  return headers
+}
+
+function buildHeaders(url = ''): Record<string, string> {
   const base = getActiveHeaders() ?? {}
   const clean: Record<string, string> = {}
   for (const [k, v] of Object.entries(base)) {
     if (!k.startsWith('_')) clean[k] = v
   }
-  return {
+
+  const isMobileOrderRequest = /\/api\/v5\/order\/get_list(?:$|\?)/.test(url) && !url.includes('/get_list_with_pagination')
+  const headers: Record<string, string> = {
     accept: 'application/json, text/plain, */*',
     'accept-language': 'vi-VN,vi;q=0.9',
     origin: SPF_ORIGIN,
     referer: `${SPF_ORIGIN}/`,
-    'x-foody-api-version': '1',
-    'x-foody-app-type': '1025',
-    'x-foody-client-language': 'en',
-    'x-foody-client-type': '1',
-    'x-foody-client-version': '3.0.0',
     ...clean,
   }
+
+  if (!isMobileOrderRequest) return headers
+
+  const tobToken = getHeaderCI(clean, 'x-foody-access-token') ?? getCookieValue([], 'shopee_tob_token')
+  const entityId = getHeaderCI(clean, 'x-foody-entity-id') ?? cachedEntityId ?? getConfig().entityId
+  const deviceId = getMobileDeviceId()
+  const fingerprint = getMobileDeviceFingerprint(deviceId)
+
+  headers['x-foody-api-version'] = '1'
+  headers['x-foody-app-type'] = '1024'
+  headers['x-foody-client-id'] = getHeaderCI(clean, 'x-foody-client-id') ?? deviceId
+  headers['x-foody-client-language'] = getHeaderCI(clean, 'x-foody-client-language') ?? 'vi'
+  headers['x-foody-client-type'] = getHeaderCI(clean, 'x-foody-client-type') ?? 'default'
+  headers['x-foody-client-version'] = '3.0.0'
+  headers['operate-source'] = getHeaderCI(clean, 'operate-source') ?? 'partnerapp'
+  headers['x-sap-type'] = getHeaderCI(clean, 'x-sap-type') ?? 'Normal'
+  headers['x-sf-platform'] = getHeaderCI(clean, 'x-sf-platform') ?? 'ANDROID_APP'
+  headers['x-sf-app-type'] = getHeaderCI(clean, 'x-sf-app-type') ?? 'AppTypeShopeeMerchant'
+  headers['x-sf-trace-id'] = randomUUID()
+  headers['x-sf-request-id'] = randomUUID()
+
+  if (tobToken) headers['x-foody-access-token'] = tobToken
+  if (entityId) headers['x-foody-entity-id'] = entityId
+  if (fingerprint) headers['x-sf-device-fingerprint'] = fingerprint
+
+  return headers
 }
 
 function getPollIntervalMs(): number {
@@ -443,7 +583,7 @@ async function navigateToPage(win: BrowserWindow, targetPage: number): Promise<b
   return _lastRequestPageNum === targetPage
 }
 
-export async function fetchSpfOrderListPage(
+async function fetchSpfOrderListPageFromPortal(
   fromDate: string,
   toDate: string,
   pageNum: number,
@@ -530,7 +670,7 @@ function attachCdpInterceptor(win: BrowserWindow) {
       if (method === 'Network.requestWillBeSent') {
         const p = params as {
           requestId?: string
-          request?: { url?: string; method?: string; postData?: string }
+          request?: { url?: string; method?: string; postData?: string; headers?: Record<string, string> }
         }
         const url = p.request?.url ?? ''
         if (url.includes('gmerchant.deliverynow.vn') || url.includes('api.partner.shopee.vn')) {
@@ -541,6 +681,11 @@ function attachCdpInterceptor(win: BrowserWindow) {
         // không kèm sẵn trong sự kiện (một số trường hợp CDP không đính kèm
         // postData trực tiếp, phải gọi getRequestPostData riêng).
         if (url.includes('get_list_with_pagination')) {
+          if (p.requestId) _lastOrderXhrRequestId = p.requestId
+          if (p.request?.headers && Object.keys(p.request.headers).length > 0) {
+            capturedPortalOrderHeaders = { ...p.request.headers }
+            console.log('[ShopeePartner] Captured exact portal order headers:', Object.keys(capturedPortalOrderHeaders).join(', '))
+          }
           let postDataStr: string | undefined = p.request?.postData
           if (!postDataStr && p.requestId) {
             try {
@@ -574,6 +719,8 @@ function attachCdpInterceptor(win: BrowserWindow) {
         console.log('[ShopeePartner] order-list responseReceived, status:', p.response?.status, p.response?.statusText, '| requestId:', p.requestId)
         if (p.requestId) {
           pendingOrderListRequestId = p.requestId
+          _lastOrderXhrRequestId = p.requestId
+          if (p.response?.status === 200) _lastSuccessfulOrderXhrRequestId = p.requestId
         }
         return
       }
@@ -912,10 +1059,15 @@ async function triggerPortalOrderFetch(fromDate?: string, toDate?: string): Prom
 
     if (expectedFromTs === null || expectedToTs === null) return
 
+    const shortcutLabel = fromDate && toDate ? matchShortcutLabel(fromDate, toDate) : null
+    const rangeTolerance = shortcutLabel === '30 ngày qua'
+      ? 26 * 60 * 60
+      : DATE_MATCH_TOLERANCE_SEC
+
     if (
       _lastRequestRange &&
-      Math.abs(_lastRequestRange.from_time - expectedFromTs) <= DATE_MATCH_TOLERANCE_SEC &&
-      Math.abs(_lastRequestRange.to_time - expectedToTs) <= DATE_MATCH_TOLERANCE_SEC
+      Math.abs(_lastRequestRange.from_time - expectedFromTs) <= rangeTolerance &&
+      Math.abs(_lastRequestRange.to_time - expectedToTs) <= rangeTolerance
     ) {
       return
     }
@@ -933,7 +1085,9 @@ function sessionFetch(
   return new Promise((resolve, reject) => {
     const ses = session.fromPartition('persist:spf-partner')
     const req = net.request({ url, method, session: ses })
-    const hdrs = buildHeaders()
+    const hdrs = url === PORTAL_ORDER_LIST_ENDPOINT
+      ? getPortalOrderHeaders()
+      : buildHeaders(url)
     if (bodyObj) hdrs['content-type'] = 'application/json'
     for (const [k, v] of Object.entries(hdrs)) req.setHeader(k, v)
     req.on('response', (res) => {
@@ -949,6 +1103,314 @@ function sessionFetch(
     if (bodyObj) req.write(JSON.stringify(bodyObj))
     req.end()
   })
+}
+
+// Direct Portal API order fetch. BrowserWindow is only responsible for SSO/session
+// bootstrap; order polling itself runs in the Electron main process through the
+// persisted `persist:spf-partner` session. This avoids date-picker UI, CDP,
+// pagination clicks, and renderer/network scheduling delays.
+const PORTAL_ORDER_LIST_ENDPOINT = `${SPF_API}/api/v5/order/get_list_with_pagination`
+const PORTAL_ORDER_TIMEOUT_MS = 8_000
+const PORTAL_ORDER_PAGE_SIZE = 50
+const PORTAL_ORDER_MAX_PAGES = 5
+
+let portalOrderHeaderWarmupInFlight: Promise<boolean> | null = null
+
+async function waitForOrderListXHR(timeoutMs = 10_000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (_lastSuccessfulOrderXhrRequestId) return true
+    await new Promise(r => setTimeout(r, 100))
+  }
+  return false
+}
+
+async function warmupPortalOrderHeaders(force = false): Promise<boolean> {
+  if (!force && _lastSuccessfulOrderXhrRequestId) return true
+  if (portalOrderHeaderWarmupInFlight) return portalOrderHeaderWarmupInFlight
+
+  portalOrderHeaderWarmupInFlight = (async () => {
+    if (!_pollerWin || _pollerWin.isDestroyed()) return false
+
+    try {
+      console.log('[ShopeePartner] Portal order bootstrap: creating a real authenticated XHR')
+
+      if (force) {
+        _lastOrderXhrRequestId = null
+        _lastSuccessfulOrderXhrRequestId = null
+        _lastInterceptedAt = 0
+        await _pollerWin.loadURL(SPF_ORDER_LIST_PAGE)
+      } else if (!_pollerWin.webContents.getURL().startsWith(SPF_ORDER_LIST_PAGE)) {
+        await _pollerWin.loadURL(SPF_ORDER_LIST_PAGE)
+      }
+
+      // Give the portal SPA a short chance to issue its normal order request.
+      await new Promise(r => setTimeout(r, 1200))
+
+      let ready = await waitForOrderListXHR(4_000)
+
+      // Some portal versions only submit the list after the filter form is
+      // applied. This is startup/recovery only; normal polling never clicks UI.
+      if (!ready) {
+        const before = _lastInterceptedAt
+        const clicked = await clickApplyFilterButton()
+        if (clicked) {
+          await waitForOrderListXHR(8_000)
+          ready = _lastSuccessfulOrderXhrRequestId !== null && _lastInterceptedAt >= before
+        }
+      }
+
+      if (!ready) {
+        console.warn('[ShopeePartner] Portal did not produce a successful order-list XHR during bootstrap')
+        return false
+      }
+
+      // The default portal page size is often 10. Increase it once during
+      // bootstrap so each replay can reconcile more recent orders without
+      // touching pagination/date-picker UI on every poll.
+      if (_pollerWin && !_pollerWin.isDestroyed() && _lastPageSize < 50) {
+        const before = _lastInterceptedAt
+        const changed = await clickPageSizeOption(_pollerWin, 50)
+        if (changed) {
+          const deadline = Date.now() + 8_000
+          while (Date.now() < deadline) {
+            if (_lastInterceptedAt > before && _lastSuccessfulOrderXhrRequestId) break
+            await new Promise(r => setTimeout(r, 100))
+          }
+        }
+      }
+
+      return !!_lastSuccessfulOrderXhrRequestId
+    } catch (e) {
+      console.warn('[ShopeePartner] Portal order bootstrap failed:', e)
+      return false
+    } finally {
+      portalOrderHeaderWarmupInFlight = null
+    }
+  })()
+
+  return portalOrderHeaderWarmupInFlight
+}
+
+async function triggerPortalOrderSnapshot(timeoutMs = PORTAL_ORDER_TIMEOUT_MS): Promise<{
+  ok: boolean
+  orders: SpfOrderFull[]
+  totalCount: number
+  error?: string
+}> {
+  if (!_pollerWin || _pollerWin.isDestroyed()) {
+    return { ok: false, orders: [], totalCount: 0, error: 'Portal window chưa sẵn sàng' }
+  }
+
+  // IMPORTANT:
+  // Network.replayXHR cannot replay this request reliably because Shopee's
+  // order endpoint is issued by fetch(), not XMLHttpRequest. Chromium reports
+  // "Given id does not correspond to XHR" for the captured request.
+  //
+  // Instead, ask the already-authenticated Portal page to submit its own
+  // existing order form. The Portal creates a brand-new request and therefore
+  // generates fresh x-sap-ri/x-sap-sec/auth context itself. We do NOT change
+  // the date picker or navigate the page here.
+  const before = _lastInterceptedAt
+  const beforeRequestId = _lastOrderXhrRequestId
+
+  try {
+    const clicked = await _pollerWin.webContents.executeJavaScript(`
+      (() => {
+        const btn = document.querySelector(
+          'button.shopee-food-btn.shopee-food-btn-primary[type="submit"]'
+        );
+        if (!btn) return false;
+        const el = btn;
+        if (el.disabled) return false;
+        el.click();
+        return true;
+      })()
+    `)
+
+    if (!clicked) {
+      return {
+        ok: false,
+        orders: [],
+        totalCount: 0,
+        error: 'Không tìm thấy nút Apply của Portal',
+      }
+    }
+
+    const deadline = Date.now() + timeoutMs
+    while (Date.now() < deadline) {
+      // Prefer a newly observed successful response. _lastInterceptedAt is only
+      // advanced after the response body has been parsed successfully.
+      if (_lastInterceptedAt > before && _lastInterceptedOrderList) {
+        return {
+          ok: true,
+          orders: _lastInterceptedOrderList,
+          totalCount: _lastTotalCount,
+        }
+      }
+
+      // If a request was created but its response body is still being consumed,
+      // wait a little longer instead of starting another request.
+      if (_lastOrderXhrRequestId && _lastOrderXhrRequestId !== beforeRequestId) {
+        await new Promise(r => setTimeout(r, 50))
+      } else {
+        await new Promise(r => setTimeout(r, 75))
+      }
+    }
+
+    return {
+      ok: false,
+      orders: [],
+      totalCount: 0,
+      error: `Portal order request timeout after ${timeoutMs}ms`,
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      orders: [],
+      totalCount: 0,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
+
+async function fetchPortalOrderPageDirect(
+  fromTs: number,
+  toTs: number,
+  pageNum: number,
+  pageSize = PORTAL_ORDER_PAGE_SIZE,
+): Promise<{ ok: boolean; orders: SpfOrderFull[]; totalCount: number; error?: string }> {
+  const restaurantId = getRestaurantId()
+  if (!restaurantId) return { ok: false, orders: [], totalCount: 0, error: 'Chưa có Restaurant ID' }
+
+  const body = {
+    page_num: pageNum,
+    page_size: pageSize,
+    order_filter_type: 40,
+    restaurant_ids: [Number(restaurantId)],
+    from_time: fromTs,
+    to_time: toTs,
+  }
+
+  const startedAt = Date.now()
+  try {
+    const result = await withTimeout(
+      sessionFetch(PORTAL_ORDER_LIST_ENDPOINT, 'POST', body),
+      PORTAL_ORDER_TIMEOUT_MS,
+      `direct portal order-list page ${pageNum}`,
+    )
+
+    if (!result) {
+      return { ok: false, orders: [], totalCount: 0, error: `Portal order API timeout after ${PORTAL_ORDER_TIMEOUT_MS}ms` }
+    }
+
+    console.log('[ShopeePartner] Direct order-list:', {
+      status: result.status,
+      latencyMs: Date.now() - startedAt,
+      pageNum,
+      pageSize,
+    })
+
+    if (!result.ok) {
+      if (result.status === 403 && !capturedPortalOrderHeaders) {
+        const warmed = await warmupPortalOrderHeaders()
+        if (warmed) {
+          const retry = await withTimeout(
+            sessionFetch(PORTAL_ORDER_LIST_ENDPOINT, 'POST', body),
+            PORTAL_ORDER_TIMEOUT_MS,
+            `direct portal order-list retry page ${pageNum}`,
+          )
+          if (retry?.ok) {
+            result.body = retry.body
+            result.ok = true
+            result.status = retry.status
+          }
+        }
+      }
+      if (!result.ok) {
+        return {
+          ok: false,
+          orders: [],
+          totalCount: 0,
+          error: `Portal order API HTTP ${result.status}`,
+        }
+      }
+    }
+
+    let bodyJson: unknown
+    try {
+      bodyJson = JSON.parse(result.body)
+    } catch {
+      return { ok: false, orders: [], totalCount: 0, error: 'Portal order API returned invalid JSON' }
+    }
+
+    if (!isRecord(bodyJson)) {
+      return { ok: false, orders: [], totalCount: 0, error: 'Portal order API returned invalid payload' }
+    }
+
+    const code = Number(bodyJson.code ?? -1)
+    const data = isRecord(bodyJson.data) ? bodyJson.data : null
+    const rawOrders = data && Array.isArray(data.orders) ? data.orders : []
+    const orders = rawOrders as SpfOrderFull[]
+    const totalCount = Number(data?.total_count ?? orders.length)
+
+    if (code !== 0) {
+      return {
+        ok: false,
+        orders: [],
+        totalCount,
+        error: String(bodyJson.msg ?? `Portal order API code ${code}`),
+      }
+    }
+
+    for (const order of orders) {
+      if (order?.code) _lastOrdersCache.set(order.code, order)
+    }
+
+    _lastTotalCount = totalCount
+    _lastPageSize = pageSize
+    return { ok: true, orders, totalCount }
+  } catch (error) {
+    return {
+      ok: false,
+      orders: [],
+      totalCount: 0,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
+
+async function fetchPortalOrdersDirect(
+  fromDate: string,
+  toDate: string,
+): Promise<{ ok: boolean; orders: SpfOrderFull[]; totalCount: number; resultCount: number; error?: string }> {
+  const fromTs = Math.floor(new Date(fromDate + 'T00:00:00+07:00').getTime() / 1000)
+  const toTs = Math.floor(new Date(toDate + 'T23:59:59+07:00').getTime() / 1000)
+  const allOrders: SpfOrderFull[] = []
+  let totalCount = 0
+
+  for (let pageNum = 1; pageNum <= PORTAL_ORDER_MAX_PAGES; pageNum++) {
+    const page = await fetchPortalOrderPageDirect(fromTs, toTs, pageNum)
+    if (!page.ok) {
+      if (pageNum === 1) {
+        return { ok: false, orders: [], totalCount: 0, resultCount: 0, error: page.error }
+      }
+      break
+    }
+
+    totalCount = page.totalCount
+    allOrders.push(...page.orders)
+
+    if (page.orders.length < PORTAL_ORDER_PAGE_SIZE || allOrders.length >= totalCount) break
+  }
+
+  const unique = new Map<string, SpfOrderFull>()
+  for (const order of allOrders) {
+    if (order.code) unique.set(order.code, order)
+  }
+  const orders = [...unique.values()].filter(o => o.order_time >= fromTs && o.order_time <= toTs)
+
+  return { ok: true, orders, totalCount, resultCount: orders.length }
 }
 
 // ─── Order list ─────────────────────────────────────────────────────────────
@@ -1076,6 +1538,311 @@ async function clickOutsidePopup(win: BrowserWindow) {
 }
 
 
+// ─── Mobile merchant-food order source ────────────────────────────────────────
+//
+// Static Hermes analysis of merchant-food.android.hermes shows:
+//   POST /api/v5/order/get_list
+//   formatOrderListParams -> nextItemId / requestCount / requestActionType
+//   RequestActionType.BizPolling = 1
+//   response VM reads orders / nextItemId / hasMore
+//
+// The login flow is intentionally NOT moved here. BrowserWindow remains the
+// SSO/session bootstrap. After login, Electron's main-process net.request uses
+// the same persist:spf-partner session, so order polling does not depend on
+// browser CORS or a visible portal page.
+
+type MobileOrderListResponse = {
+  code?: number
+  msg?: string
+  message?: string
+  data?: unknown
+  orders?: unknown
+  nextItemId?: string | number | null
+  hasMore?: boolean
+  [key: string]: unknown
+}
+
+interface MobileOrderFetchResult {
+  ok: boolean
+  orders: SpfOrderFull[]
+  nextItemId: string
+  hasMore: boolean
+  status?: number
+  error?: string
+  authError?: boolean
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function normalizeMobileOrder(value: unknown): SpfOrderFull | null {
+  if (!isRecord(value)) return null
+
+  // The mobile VM and the existing Partner web API can expose slightly
+  // different envelopes. Keep the original object intact whenever it already
+  // has the fields Ujcha consumes, while accepting common aliases for code/id.
+  const code = String(value.code ?? value.orderCode ?? value.order_code ?? '')
+  const idRaw = value.id ?? value.orderId ?? value.order_id
+  const id = Number(idRaw ?? 0)
+  if (!code && !id) return null
+
+  const normalized = value as unknown as SpfOrderFull
+  if (!normalized.code && code) normalized.code = code
+  if (!normalized.id && id) normalized.id = id
+  return normalized
+}
+
+function extractMobileOrderEnvelope(body: unknown): {
+  orders: SpfOrderFull[]
+  nextItemId: string
+  hasMore: boolean
+} | null {
+  const candidates: unknown[] = [body]
+  if (isRecord(body)) {
+    if (body.data !== undefined) candidates.push(body.data)
+    if (isRecord(body.data)) {
+      if (body.data.data !== undefined) candidates.push(body.data.data)
+      if (body.data.result !== undefined) candidates.push(body.data.result)
+    }
+  }
+
+  for (const candidate of candidates) {
+    if (!isRecord(candidate)) continue
+
+    const rawOrders = candidate.orders ?? candidate.list ?? candidate.items ?? candidate.orderList
+    if (!Array.isArray(rawOrders)) continue
+
+    const orders = rawOrders.map(normalizeMobileOrder).filter((o): o is SpfOrderFull => !!o)
+    const nextRaw = candidate.nextItemId ?? candidate.next_item_id ?? candidate.nextId ?? '0'
+    const nextItemId = String(nextRaw ?? '0')
+    const hasMore = Boolean(candidate.hasMore ?? candidate.has_more ?? (nextItemId !== '0' && nextItemId !== ''))
+    return { orders, nextItemId, hasMore }
+  }
+
+  return null
+}
+
+function isAuthLikeStatus(status: number): boolean {
+  return status === 401 || status === 403 || status === 419 || status === 440
+}
+
+function sanitizeMobileError(status: number, body: string): string {
+  // Never include response bodies in errors/logs: they may contain merchant or
+  // customer data. Keep only the HTTP status and a generic classification.
+  if (isAuthLikeStatus(status)) return `Mobile order API authentication rejected (HTTP ${status})`
+  if (status >= 500) return `Mobile order API server error (HTTP ${status})`
+  return `Mobile order API request failed (HTTP ${status})`
+}
+
+function buildMobileOrderListBody(nextItemId = '0', pageSize = MOBILE_ORDER_PAGE_SIZE): Record<string, unknown> {
+  // These names/values are directly supported by the Hermes disassembly.
+  // BizPolling is enum value 1. NewOngoing is the list filter used by the
+  // merchant-food order screen for the active order listing.
+  return {
+    nextItemId: String(nextItemId || '0'),
+    requestCount: pageSize,
+    requestActionType: 1,
+    filterType: 'NewOngoing',
+  }
+}
+
+async function fetchSpfMobileOrderListPage(
+  nextItemId = '0',
+  pageSize = MOBILE_ORDER_PAGE_SIZE,
+): Promise<MobileOrderFetchResult> {
+  const headers = getActiveHeaders()
+  if (!headers) {
+    return { ok: false, orders: [], nextItemId: '0', hasMore: false, error: 'Chưa kết nối ShopeeFood Partner', authError: true }
+  }
+
+  const restaurantId = getRestaurantId()
+  if (!restaurantId) {
+    return { ok: false, orders: [], nextItemId: '0', hasMore: false, error: 'Chưa có Restaurant ID' }
+  }
+
+  const body = buildMobileOrderListBody(nextItemId, pageSize)
+  const startedAt = Date.now()
+
+  try {
+    const result = await withTimeout(
+      sessionFetch(SPF_MOBILE_ORDER_LIST_ENDPOINT, 'POST', body),
+      MOBILE_ORDER_TIMEOUT_MS,
+      'mobile order-list request',
+    )
+
+    if (!result) {
+      return {
+        ok: false,
+        orders: [],
+        nextItemId: '0',
+        hasMore: false,
+        error: `Mobile order API timeout after ${MOBILE_ORDER_TIMEOUT_MS}ms`,
+      }
+    }
+
+    console.log('[ShopeePartner] Mobile order-list:', {
+      status: result.status,
+      latencyMs: Date.now() - startedAt,
+      endpoint: SPF_MOBILE_ORDER_LIST_ENDPOINT,
+    })
+
+    if (!result.ok) {
+      return {
+        ok: false,
+        orders: [],
+        nextItemId: '0',
+        hasMore: false,
+        status: result.status,
+        error: sanitizeMobileError(result.status, result.body),
+        authError: isAuthLikeStatus(result.status),
+      }
+    }
+
+    let bodyJson: unknown
+    try {
+      bodyJson = JSON.parse(result.body) as MobileOrderListResponse
+    } catch {
+      return { ok: false, orders: [], nextItemId: '0', hasMore: false, status: result.status, error: 'Mobile order API returned invalid JSON' }
+    }
+
+    if (isRecord(bodyJson)) {
+      const code = typeof bodyJson.code === 'number' ? bodyJson.code : undefined
+      if (code !== undefined && code !== 0) {
+        const msg = String(bodyJson.msg ?? bodyJson.message ?? 'request rejected')
+        const authError = /auth|login|token|session|unauthor/i.test(msg)
+        return {
+          ok: false,
+          orders: [],
+          nextItemId: '0',
+          hasMore: false,
+          status: result.status,
+          error: authError ? 'Mobile order API authentication rejected' : `Mobile order API rejected request (code ${code})`,
+          authError,
+        }
+      }
+    }
+
+    const parsed = extractMobileOrderEnvelope(bodyJson)
+    if (!parsed) {
+      return {
+        ok: false,
+        orders: [],
+        nextItemId: '0',
+        hasMore: false,
+        status: result.status,
+        error: 'Mobile order API response schema did not contain an order list',
+      }
+    }
+
+    for (const order of parsed.orders) {
+      if (order.code) _lastOrdersCache.set(order.code, order)
+    }
+
+    return {
+      ok: true,
+      orders: parsed.orders,
+      nextItemId: parsed.nextItemId || '0',
+      hasMore: parsed.hasMore,
+      status: result.status,
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      orders: [],
+      nextItemId: '0',
+      hasMore: false,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
+
+async function fetchSpfMobileOrderList(): Promise<{
+  ok: boolean
+  orders: SpfOrderFull[]
+  totalCount: number
+  resultCount: number
+  error?: string
+  authError?: boolean
+}> {
+  const allOrders = new Map<string, SpfOrderFull>()
+  let cursor = '0'
+  let lastError: string | undefined
+  let authError = false
+
+  for (let page = 0; page < MOBILE_ORDER_MAX_PAGES; page++) {
+    const result = await fetchSpfMobileOrderListPage(cursor, MOBILE_ORDER_PAGE_SIZE)
+    if (!result.ok) {
+      lastError = result.error
+      authError = result.authError === true
+      break
+    }
+
+    for (const order of result.orders) {
+      const key = order.code || String(order.id)
+      if (key) allOrders.set(key, order)
+    }
+
+    if (!result.hasMore || !result.nextItemId || result.nextItemId === '0' || result.nextItemId === cursor) break
+    cursor = result.nextItemId
+  }
+
+  if (lastError && allOrders.size === 0) {
+    return { ok: false, orders: [], totalCount: 0, resultCount: 0, error: lastError, authError }
+  }
+
+  const orders = [...allOrders.values()]
+  return { ok: true, orders, totalCount: orders.length, resultCount: orders.length }
+}
+
+// ─── Order list public API ────────────────────────────────────────────────────
+// Mobile merchant-food is primary. The old portal/CDP implementation remains
+// available as a fallback so an existing installation can continue operating
+// while the mobile endpoint/base URL is being verified.
+
+export async function fetchSpfOrderListPage(
+  fromDate: string,
+  toDate: string,
+  pageNum: number,
+  pageSize: number,
+): Promise<{ ok: boolean; orders: SpfOrderFull[]; totalCount: number; pageSize: number; pageNum: number; error?: string }> {
+  if (SPF_ORDER_SOURCE === 'mobile') {
+    const mobile = await fetchSpfMobileOrderList()
+    return {
+      ok: mobile.ok,
+      orders: mobile.orders,
+      totalCount: mobile.totalCount,
+      pageSize: MOBILE_ORDER_PAGE_SIZE,
+      pageNum: 1,
+      error: mobile.error,
+    }
+  }
+
+  // Web order data is obtained from the authenticated Portal XHR and replayed
+  // through Chromium. Never fall back to net.request() here: that loses the
+  // Portal's dynamic x-sap-ri/x-sap-sec request context and commonly returns 403.
+  const result = await fetchSpfOrderListFromPortal(fromDate, toDate)
+  if (!result.ok) {
+    return {
+      ok: false,
+      orders: [],
+      totalCount: 0,
+      pageSize,
+      pageNum,
+      error: result.error,
+    }
+  }
+
+  const startIndex = Math.max(0, (pageNum - 1) * pageSize)
+  return {
+    ok: true,
+    orders: result.orders.slice(startIndex, startIndex + pageSize),
+    totalCount: result.resultCount,
+    pageSize,
+    pageNum,
+  }
+}
+
 export async function fetchSpfOrderList(
   fromDate: string,
   toDate: string,
@@ -1083,55 +1850,104 @@ export async function fetchSpfOrderList(
   const headers = getActiveHeaders()
   if (!headers) return { ok: false, orders: [], totalCount: 0, resultCount: 0, error: 'Chưa kết nối ShopeeFood Partner' }
 
-  const restaurantId = getRestaurantId()
-  if (!restaurantId) return { ok: false, orders: [], totalCount: 0, resultCount: 0, error: 'Chưa có Restaurant ID' }
+  if (!getRestaurantId()) {
+    return { ok: false, orders: [], totalCount: 0, resultCount: 0, error: 'Chưa có Restaurant ID' }
+  }
 
+  // Production order polling uses the already-authenticated Portal BrowserWindow.
+  // The renderer submits its own order form so Shopee generates fresh request
+  // authentication/signature headers. The Electron main process does not replay
+  // or reconstruct the protected request itself.
+  if (SPF_ORDER_SOURCE === 'web') {
+    return fetchSpfOrderListFromPortal(fromDate, toDate)
+  }
+
+  const mobile = await fetchSpfMobileOrderList()
+  if (mobile.ok) return mobile
+
+  return {
+    ok: false,
+    orders: [],
+    totalCount: 0,
+    resultCount: 0,
+    error: mobile.error ?? 'Mobile order API failed',
+  }
+}
+
+async function fetchSpfOrderListFromPortal(
+  fromDate: string,
+  toDate: string,
+): Promise<{ ok: boolean; orders: SpfOrderFull[]; totalCount: number; resultCount: number; error?: string }> {
   if (!_pollerWin || _pollerWin.isDestroyed()) {
-    return { ok: false, orders: [], totalCount: 0, resultCount: 0, error: 'Cửa sổ portal chưa sẵn sàng' }
+    return { ok: false, orders: [], totalCount: 0, resultCount: 0, error: 'Portal window chưa sẵn sàng' }
+  }
+
+  // Bootstrap exactly once (or after a recovery). The bootstrap may navigate to
+  // the order page and submit the existing filter, but normal polling below
+  // never touches the date picker or calls loadURL().
+  if (!_lastSuccessfulOrderXhrRequestId) {
+    const warmed = await warmupPortalOrderHeaders(false)
+    if (!warmed || !_lastSuccessfulOrderXhrRequestId) {
+      return {
+        ok: false,
+        orders: [],
+        totalCount: 0,
+        resultCount: 0,
+        error: 'Không tạo được request order-list hợp lệ từ Portal',
+      }
+    }
+  }
+
+  // The request captured during bootstrap is a fetch() request, so
+  // Network.replayXHR is not supported for it. Trigger the Portal's own Apply
+  // handler instead. This creates a fresh authenticated request with fresh
+  // dynamic headers on every poll while keeping the current date range.
+  let result = await triggerPortalOrderSnapshot()
+
+  // If the Portal page was navigated/reloaded or its DOM became stale, rebuild
+  // the authenticated page once and retry. This is recovery only, not the
+  // normal 5-second polling path.
+  if (!result.ok) {
+    console.warn('[ShopeePartner] Portal order request failed — rebuilding authenticated page:', result.error)
+    const warmed = await warmupPortalOrderHeaders(true)
+    if (warmed) result = await triggerPortalOrderSnapshot()
+  }
+
+  if (!result.ok) {
+    return {
+      ok: false,
+      orders: [],
+      totalCount: 0,
+      resultCount: 0,
+      error: result.error,
+    }
   }
 
   const fromTs = Math.floor(new Date(fromDate + 'T00:00:00+07:00').getTime() / 1000)
   const toTs = Math.floor(new Date(toDate + 'T23:59:59+07:00').getTime() / 1000)
 
-  // ─── Trong mốc 30 ngày → dùng cache default-range, filter bằng JS, KHÔNG trigger portal event ───
-  if (isWithinDefaultWindow(fromTs)) {
-    await refreshDefaultRangeCache()
-    const orders = _defaultRangeOrders.filter(o => o.order_time >= fromTs && o.order_time <= toTs)
-    return { ok: true, orders, totalCount: orders.length, resultCount: orders.length }
-  }
+  // The Portal keeps its existing broad date range. Ujcha only needs today's
+  // orders for the polling path, so filter locally and avoid touching the
+  // date-picker UI on every tick.
+  const filtered = result.orders.filter((o) =>
+    typeof o.order_time === 'number' &&
+    o.order_time >= fromTs &&
+    o.order_time <= toTs,
+  )
 
-  // ─── Ngoài mốc 30 ngày → data không có trong default cache, phải trigger filter thật trên portal ───
   const cacheKey = rangeCacheKey(fromDate, toDate)
-  const cached = _rangeCache.get(cacheKey)
-  if (cached && Date.now() - cached.at < RANGE_CACHE_TTL_MS) {
-    return { ok: true, orders: cached.orders, totalCount: cached.orders.length, resultCount: cached.orders.length }
+  _rangeCache.set(cacheKey, { orders: filtered, at: Date.now() })
+  _defaultRangeOrders = result.orders
+  _defaultRangeFetchedAt = Date.now()
+
+  return {
+    ok: true,
+    orders: filtered,
+    totalCount: result.totalCount,
+    resultCount: filtered.length,
   }
-
-  await withPortalLock(() => triggerPortalOrderFetch(fromDate, toDate))
-
-  if (!_lastInterceptedOrderList) {
-    return {
-      ok: false, orders: [], totalCount: 0, resultCount: 0,
-      error: 'Portal không trả về dữ liệu — có thể session đã hết hạn, cần đăng nhập lại',
-    }
-  }
-
-  const rangeMismatch = !_lastRequestRange ||
-    Math.abs(_lastRequestRange.from_time - fromTs) > DATE_MATCH_TOLERANCE_SEC ||
-    Math.abs(_lastRequestRange.to_time - toTs) > DATE_MATCH_TOLERANCE_SEC
-
-  const orders = _lastInterceptedOrderList.filter(o => o.order_time >= fromTs && o.order_time <= toTs)
-
-  if (rangeMismatch && orders.length === 0) {
-    return {
-      ok: false, orders: [], totalCount: 0, resultCount: 0,
-      error: 'Không set được filter ngày trên portal sau nhiều lần thử — vui lòng bấm Tải lại',
-    }
-  }
-
-  _rangeCache.set(cacheKey, { orders, at: Date.now() })
-  return { ok: true, orders, totalCount: orders.length, resultCount: orders.length }
 }
+
 // ─── Polling ──────────────────────────────────────────────────────────────────
 let _pollBusy = false
 
@@ -1224,17 +2040,12 @@ export function startSpfPartnerPolling() {
 function beginPolling() {
   if (pollTimer) return
 
-  void initPollerWin().then(async () => {
-    if (_pollerWin && !_pollerWin.isDestroyed()) {
-      console.log('[ShopeePartner] Initial portal navigation:', SPF_ORDER_LIST_PAGE)
-      const result = await withTimeout(refreshDefaultRangeCache(true), 25_000, 'initial refreshDefaultRangeCache')
-      if (result === null) await forceRecreatePollerWin()
-      console.log('[ShopeePartner] Initial default-range orders:', _defaultRangeOrders.length)
-    }
-    void runPoll()
-    pollTimer = setInterval(() => void runPoll(), getPollIntervalMs())
-    console.log(`[ShopeePartner] Polling started, interval=${getPollIntervalMs() / 1000}s`)
-  })
+  // BrowserWindow is the authenticated Chromium transport for web polling.
+  // Normal ticks submit the existing Portal order form in-place; they do not
+  // navigate, touch the date picker, or issue a direct net.request() to gmerchant.
+  void runPoll()
+  pollTimer = setInterval(() => void runPoll(), getPollIntervalMs())
+  console.log(`[ShopeePartner] Polling started, source=${SPF_ORDER_SOURCE}, interval=${getPollIntervalMs() / 1000}s`)
 }
 export function stopSpfPartnerPolling() {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
@@ -1248,6 +2059,8 @@ export function resumeSpfPartnerPolling() {
 export function resetSpfPartnerSession() {
   stopSpfPartnerPolling()
   cachedHeaders = null
+  capturedPortalOrderHeaders = null
+  portalOrderHeaderWarmupInFlight = null
   cachedRestaurantId = null
   cachedRestaurantName = null
   cachedEntityId = null
@@ -1255,9 +2068,12 @@ export function resetSpfPartnerSession() {
   seeded = false
   _lastInterceptedOrderList = null
   _lastInterceptedAt = 0
+  _lastOrderXhrRequestId = null
+  _lastSuccessfulOrderXhrRequestId = null
   _rangeCache.clear()
   _defaultRangeOrders = []
   _defaultRangeFetchedAt = 0
+  _fetchQueue = Promise.resolve()
   _consecutiveFailures = 0
   _lastPollOk = true
   _lastPollError = null
