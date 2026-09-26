@@ -266,3 +266,12 @@ body {
 .kun-prose th { text-align: left; font-weight: 600; padding: 0.5rem 0.75rem; border-bottom: 2px solid rgba(0,0,0,0.1); }
 .kun-prose td { padding: 0.5rem 0.75rem; border-bottom: 1px solid rgba(0,0,0,0.06); }
 .kun-prose tr:last-child td { border-bottom: none; }
+
+
+.emoji-inline {
+  height: 1.2em;
+  width: 1.2em;
+  margin: 0 0.05em 0 0.1em;
+  vertical-align: -0.2em;
+  display: inline-block;
+}

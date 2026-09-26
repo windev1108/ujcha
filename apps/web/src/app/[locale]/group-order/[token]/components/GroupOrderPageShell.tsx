@@ -1,3 +1,4 @@
+// web/src/app/[locale]/group-order/[token]/components/GroupOrderPageShell.tsx
 "use client";
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
@@ -86,6 +87,8 @@ import { getDeviceId } from "@/hooks/useDeviceId";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
 import { extractErrorCode } from "@/lib/utils";
 import { StoreClosedDialog } from "@/components/common/StoreClosedDialog";
+import { fetchGroupChatMessages, sendGroupChatMessage } from "@/services/chat/api";
+import { ChatBubble } from "@/components/chat/ChatBubble";
 
 const SESSION_KEY = (token: string) => `group_order_session_${token}`;
 const PARTICIPANT_KEY = (token: string) => `group_order_participant_${token}`;
@@ -1058,6 +1061,7 @@ export function GroupOrderPageShell() {
   const me = state?.participants.find(
     (p) => (myParticipantId && p.id === myParticipantId) || (user?.id && p.userId === user.id),
   );
+  const host = state?.participants?.find((x) => x.isHost === true)
   const isHost = me?.isHost ?? false;
 
   const { permission: pushPermission, subscribe: subscribePush } =
@@ -1510,15 +1514,6 @@ export function GroupOrderPageShell() {
     const maxMoney = pointsBaseSubtotal * (pointConfig.maxUsagePercent / 100);
     return Math.max(0, Math.min(pointBalance, Math.floor(maxMoney / pointConfig.pointRate)));
   }, [pointConfig, pointsBaseSubtotal, pointBalance]);
-
-  const meetsMinOrderToSpend = useMemo(() => {
-    if (!pointConfig || !state) return true;
-    const totalAmount = state.participants.reduce((s, p) => s + p.subtotal, 0);
-    const active = state.participants.filter((p) => p.items.length > 0).length;
-    const pct = resolveDiscount(active, config);
-    const groupBase = totalAmount - Math.round((totalAmount * pct) / 100);
-    return groupBase >= pointConfig.minOrderAmountToSpend;
-  }, [pointConfig, state, config]);
 
 
   const canUsePoints =
@@ -2334,7 +2329,18 @@ export function GroupOrderPageShell() {
                 )}
               </CardContent>
             </Card>
-
+            {/* ── Chat ──────────────────────────────────────────────── */}
+            {sessionToken && (
+              <ChatBubble
+                kind="group"
+                hostName={host?.name ?? 'Đơn hàng nhóm'}
+                roomId={state.id}
+                enabled={state.status !== "completed" && state.status !== "cancelled"}
+                fetchMessages={(opts) => fetchGroupChatMessages(token, sessionToken, opts)}
+                sendMessage={(content, type) => sendGroupChatMessage(token, sessionToken, content, type)}
+                myId={me?.id}
+              />
+            )}
             {/* Points — auth only, collecting state */}
             {canUsePoints && pointBalance > 0 && (
               <div className="space-y-3 rounded-3xl border border-black/6 bg-white p-5 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.08)]">

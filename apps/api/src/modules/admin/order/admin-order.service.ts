@@ -30,6 +30,7 @@ import type { BulkUpdateOrderStatusDto } from './dto/bulk-update-order-status.dt
 import { withGuestAddressFallback } from '../../../helper/utils';
 import { PushService } from '../../push/push.service';
 import { InventoryService } from '../inventory/inventory.service';
+import { ChatService } from '../../chat/chat.service';
 
 const VN_TZ = '+07:00';
 function vnStartOfDay(d: string): Date {
@@ -166,7 +167,8 @@ export class AdminOrderService {
     private readonly groupOrderService: GroupOrderService,
     private readonly pushService: PushService,
     private readonly inventoryService: InventoryService,
-  ) {}
+    private readonly chatService: ChatService,
+  ) { }
 
   async findAll(query: AdminOrderListQueryDto) {
     const page = query.page ?? 1;
@@ -481,7 +483,14 @@ export class AdminOrderService {
           )
           .catch((err: unknown) => this.logger.error(err));
       }
-
+      if (
+        dto.status === OrderStatus.completed ||
+        dto.status === OrderStatus.cancelled
+      ) {
+        void this.chatService
+          .closeRoomForOrder(orderId)
+          .catch((err: unknown) => this.logger.error(err));
+      }
       return this.withTypeDisplay(updated);
     }
 
@@ -622,7 +631,14 @@ export class AdminOrderService {
         });
       }
     }
-
+    if (
+      dto.status === OrderStatus.completed ||
+      dto.status === OrderStatus.cancelled
+    ) {
+      void this.chatService
+        .closeRoomForOrder(orderId)
+        .catch((err: unknown) => this.logger.error(err));
+    }
     return this.withTypeDisplay(updated);
   }
 
@@ -678,17 +694,17 @@ export class AdminOrderService {
 
     const points = ownerId
       ? await this.prisma.pointTransaction
-          .findFirst({
-            where: {
-              userId: ownerId,
-              source: PointSource.order,
-              referenceId: orderId,
-              type: PointTransactionType.earn,
-            },
-            select: { amount: true },
-          })
-          .then((t) => t?.amount ?? 0)
-          .catch(() => 0)
+        .findFirst({
+          where: {
+            userId: ownerId,
+            source: PointSource.order,
+            referenceId: orderId,
+            type: PointTransactionType.earn,
+          },
+          select: { amount: true },
+        })
+        .then((t) => t?.amount ?? 0)
+        .catch(() => 0)
       : 0;
 
     await Promise.allSettled(
@@ -815,6 +831,14 @@ export class AdminOrderService {
       void this.pushService
         .notifyOrderStatusToParticipants(o.id, dto.status, o.paymentCode)
         .catch((err: unknown) => this.logger.error(err));
+      if (
+        dto.status === OrderStatus.completed ||
+        dto.status === OrderStatus.cancelled
+      ) {
+        void this.chatService
+          .closeRoomForOrder(o.id)
+          .catch((err: unknown) => this.logger.error(err));
+      }
       if (dto.status === OrderStatus.completed) {
         this.fireOrderCompletionSideEffects(o.id, o.userId, o.paymentCode);
       } else {
@@ -881,20 +905,20 @@ export class AdminOrderService {
     const [byPhone, byUser] = await Promise.all([
       phones.length
         ? this.prisma.order.findMany({
-            where: {
-              guestDeliveryPhone: { in: phones },
-              status: OrderStatus.completed,
-            },
-            select: { guestDeliveryPhone: true },
-            distinct: ['guestDeliveryPhone'],
-          })
+          where: {
+            guestDeliveryPhone: { in: phones },
+            status: OrderStatus.completed,
+          },
+          select: { guestDeliveryPhone: true },
+          distinct: ['guestDeliveryPhone'],
+        })
         : [],
       userIds.length
         ? this.prisma.order.findMany({
-            where: { userId: { in: userIds }, status: OrderStatus.completed },
-            select: { userId: true },
-            distinct: ['userId'],
-          })
+          where: { userId: { in: userIds }, status: OrderStatus.completed },
+          select: { userId: true },
+          distinct: ['userId'],
+        })
         : [],
     ]);
     return {
@@ -989,28 +1013,28 @@ export class AdminOrderService {
     const typeDisplay =
       orderWithAddress.type === OrderType.delivery
         ? {
-            kind: 'delivery' as const,
-            delivery: {
-              shipperId: orderWithAddress.shipperId,
-              shipper: orderWithAddress.shipper,
-              address: orderWithAddress.address,
-              guestDeliveryAddress: orderWithAddress.guestDeliveryAddress,
-              guestDeliveryPhone: orderWithAddress.guestDeliveryPhone,
-              guestDeliveryName: orderWithAddress.guestDeliveryName,
-            },
-          }
+          kind: 'delivery' as const,
+          delivery: {
+            shipperId: orderWithAddress.shipperId,
+            shipper: orderWithAddress.shipper,
+            address: orderWithAddress.address,
+            guestDeliveryAddress: orderWithAddress.guestDeliveryAddress,
+            guestDeliveryPhone: orderWithAddress.guestDeliveryPhone,
+            guestDeliveryName: orderWithAddress.guestDeliveryName,
+          },
+        }
         : orderWithAddress.type === OrderType.table
           ? {
-              kind: 'table' as const,
-              table: {
-                tableId: orderWithAddress.tableId,
-                table: orderWithAddress.table,
-              },
-            }
+            kind: 'table' as const,
+            table: {
+              tableId: orderWithAddress.tableId,
+              table: orderWithAddress.table,
+            },
+          }
           : {
-              kind: 'pickup' as const,
-              pickup: { pickupTime: orderWithAddress.pickupTime },
-            };
+            kind: 'pickup' as const,
+            pickup: { pickupTime: orderWithAddress.pickupTime },
+          };
 
     return { ...orderWithAddress, typeDisplay };
   }

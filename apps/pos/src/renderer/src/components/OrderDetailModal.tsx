@@ -1,3 +1,4 @@
+// pos/src/render/src/components/OrderDetailModal.tsx
 import {
     ArrowLeft, X, Printer, Tag, CheckCircle2, Loader2, AlertCircle,
     MapPin, Clock, ShoppingBag, Copy, Check as CheckIcon,
@@ -21,6 +22,9 @@ import { RecipeChecklist } from './RecipeChecklist'
 import { useShowRecipe } from '@/hooks/useShowRecipe'
 import { RecipeToggleButton } from './RecipeToggleButton'
 import { Avatar, Button, Card, Chip, ListBox, Tooltip, Select } from '@heroui/react'
+import { ChatTab } from './ChatTab'
+import { useChatNotifyStore } from '@/store/chat-notify-store'
+import { ChatBubble } from './chat/ChatBubble'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const eAPI = (window as any).electronAPI as import('../../../preload').ElectronAPI | undefined
@@ -294,6 +298,11 @@ export function OrderDetailModal({
     const [mapFullscreen, setMapFullscreen] = useState(false)
     const [copiedField, setCopiedField] = useState<'code' | 'phone' | null>(null)
     const headerMenuRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        useChatNotifyStore.getState().clearUnread(order.id)
+    }, [order.id])
+
     useEffect(() => {
         const requestItems: RecipeResolveRequestItem[] = order.groupOrder
             ? order.groupOrder.participants.flatMap((p) =>
@@ -922,7 +931,9 @@ export function OrderDetailModal({
                                 {staffName && <InfoRow label="Nhân viên xử lý">{staffName}</InfoRow>}
                             </div>
                         </div>
-
+                        {!(['completed', 'cancelled'] as OrderStatus[]).includes(localStatus) && (
+                            <ChatBubble kind="order" id={order.id} guestName={deliveryName!} />
+                        )}
                         {cancellable && onStatusChange && (
                             <button
                                 onClick={() => void handleModalStatus('cancelled')}

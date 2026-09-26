@@ -1,3 +1,4 @@
+// web/src/app/[locale]/orders/[orderId]/components/OrderDetailShell.tsx
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -34,6 +35,8 @@ import { usePushSubscription } from "@/hooks/usePushSubscription";
 import { useReorderStore } from "@/store/reorder-store";
 import { extractReorderRequestFromGroupOrder, extractReorderRequestFromOrder, resolveReorderItems } from "@/lib/reorder";
 import { toast } from "sonner";
+import { fetchOrderChatMessages, sendOrderChatMessage } from "@/services/chat/api";
+import { ChatBubble } from "@/components/chat/ChatBubble";
 
 // ── formatters ────────────────────────────────────────────────────────────────
 
@@ -477,6 +480,17 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
       ? localStorage.getItem(`group_order_participant_${groupToken}`)
       : null;
     return storedId === host.id;
+  }, [groupOrder, groupToken, authUser?.id]);
+
+  const isGroupOrderHost = useMemo(() => {
+    if (!groupOrder) return false;
+    const hostParticipant = groupOrder.participants.find((p) => p.isHost);
+    if (!hostParticipant) return false;
+    if (authUser?.id && hostParticipant.userId === authUser.id) return true;
+    const storedId = typeof window !== "undefined"
+      ? localStorage.getItem(`group_order_participant_${groupToken}`)
+      : null;
+    return storedId === hostParticipant.id;
   }, [groupOrder, groupToken, authUser?.id]);
 
   // Identify the current viewer's participant — must be before early returns (Rules of Hooks)
@@ -1731,6 +1745,15 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                 )}
               </div>
             </motion.div>
+          )}
+          {(!isGroupOrder || isGroupOrderHost) && (
+            <ChatBubble
+              kind="order"
+              roomId={order.id}
+              enabled={!isTerminal}
+              fetchMessages={(opts) => fetchOrderChatMessages(order.paymentCode, opts)}
+              sendMessage={(content, type) => sendOrderChatMessage(order.paymentCode, content, type)}
+            />
           )}
 
           {/* ── Payment summary ───────────────────────────────────── */}

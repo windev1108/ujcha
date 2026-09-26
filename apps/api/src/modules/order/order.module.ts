@@ -14,11 +14,31 @@ import { GroupOrderModule } from '../group-order/group-order.module';
 import { MailService } from '../mail/mail.service';
 import { InventoryModule } from '../admin/inventory/inventory.module';
 import { StoreModule } from '../store/store.module';
+import { ChatModule } from '../chat/chat.module';
+import { UploadModule } from '../upload/upload.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, EventsModule, PointModule, ReferralModule, NotificationModule, GroupOrderModule, InventoryModule, StoreModule],
+  imports: [
+    PrismaModule,
+    AuthModule,
+    EventsModule,
+    PointModule,
+    ReferralModule,
+    NotificationModule,
+    GroupOrderModule,
+    InventoryModule,
+    StoreModule,
+    ChatModule,
+    UploadModule,
+  ],
   controllers: [OrderController],
-  providers: [OrderService, OrderValidationService, OrderPointApplyService, OrderExpiryCronService, MailService],
+  providers: [
+    OrderService,
+    OrderValidationService,
+    OrderPointApplyService,
+    OrderExpiryCronService,
+    MailService,
+  ],
   exports: [OrderService, OrderPointApplyService, MailService],
 })
-export class OrderModule { }
+export class OrderModule {}

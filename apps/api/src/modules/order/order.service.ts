@@ -31,6 +31,7 @@ import {
 import { InventoryService } from '../admin/inventory/inventory.service';
 import { StoreStatusService } from '../store/store-status.service';
 import { PointPolicyService } from '../point/point-policy.service';
+import { ChatService } from '../chat/chat.service';
 
 export type OrderDetail = Prisma.OrderGetPayload<{
   include: {
@@ -186,6 +187,7 @@ export class OrderService {
     private readonly notificationService: NotificationService,
     private readonly inventoryService: InventoryService,
     private readonly storeStatus: StoreStatusService,
+    private readonly chatService: ChatService,
   ) { }
 
   calculateTotal(items: CreateOrderItemDto[]): Prisma.Decimal {
@@ -789,7 +791,14 @@ export class OrderService {
           updated.paymentCode,
         );
       }
-
+      if (
+        dto.status === OrderStatus.completed ||
+        dto.status === OrderStatus.cancelled
+      ) {
+        void this.chatService
+          .closeRoomForOrder(orderId)
+          .catch((err: unknown) => this.logger.error(err));
+      }
       return updated;
     }
 
@@ -833,7 +842,14 @@ export class OrderService {
         maxWait: 10000,
       },
     );
-
+    if (
+      dto.status === OrderStatus.completed ||
+      dto.status === OrderStatus.cancelled
+    ) {
+      void this.chatService
+        .closeRoomForOrder(orderId)
+        .catch((err: unknown) => this.logger.error(err));
+    }
     if (shouldRewardPoints) {
       this.fireOrderCompletionSideEffects(updated.id, updated.userId);
     }

@@ -15,6 +15,9 @@ import { PointOrderRewardService } from '../point/point-order-reward.service';
 import { PointPolicyService } from '../point/point-policy.service';
 import { ReferralRewardProcessingService } from '../referral/referral-reward-processing.service';
 import { InventoryService } from '../admin/inventory/inventory.service';
+import { ChatService } from '../chat/chat.service';
+import { ChatGateway } from '../chat/chat.gateway';
+import { UploadModule } from '../upload/upload.module';
 
 @Module({
   imports: [
@@ -23,6 +26,7 @@ import { InventoryService } from '../admin/inventory/inventory.service';
     EventsModule,
     NotificationModule,
     StoreModule,
+    UploadModule,
   ],
   controllers: [GroupOrderController],
   providers: [
@@ -36,6 +40,8 @@ import { InventoryService } from '../admin/inventory/inventory.service';
     PointPolicyService,
     ReferralRewardProcessingService,
     InventoryService,
+    ChatService,
+    ChatGateway,
   ],
   exports: [GroupOrderService, GroupOrderGateway, MailService],
 })

@@ -1,3 +1,4 @@
+// pos/src/renderer/src/api.ts
 import axios from 'axios'
 import { usePosStore } from './store/pos-store'
 import { RecipeResolveRequestItem, ResolvedRecipeMap } from './types/common'
@@ -132,3 +133,66 @@ export const resolveRecipeBatch = (items: RecipeResolveRequestItem[]) =>
   api
     .post<ResolvedRecipeMap>('/admin/products/recipe/resolve-batch', { items })
     .then((r) => r.data)
+
+
+
+// ── Chat ─────────────────────────────────────────────────────────────────
+export type ChatMessageType = 'text' | 'sticker' | 'image'
+
+export interface ChatMessage {
+  id: string
+  senderType: 'customer' | 'guest' | 'staff'
+  displayName: string
+  avatar: string | null
+  content: string
+  type: ChatMessageType
+  senderId: string
+  createdAt: string
+}
+export async function fetchActiveChatRooms(): Promise<Array<{
+  kind: 'order' | 'group'
+  id: string
+  lastMessage: ChatMessage | null
+  paymentCode?: string
+  groupOrderToken?: string
+  customerName: string
+}>> {
+  const { data } = await api.get('/chat/admin/rooms')
+  return data
+}
+export interface FetchMessagesOpts {
+  limit?: number
+  beforeId?: string
+}
+export interface ChatMessagePage {
+  messages: ChatMessage[]
+  hasMore: boolean
+}
+
+export async function fetchAdminRoomMessages(
+  kind: 'order' | 'group',
+  id: string,
+  opts: FetchMessagesOpts = {},
+): Promise<ChatMessagePage> {
+  const { data } = await api.get<ChatMessagePage>(`/chat/admin/rooms/${kind}/${id}/messages`, { params: opts })
+  return data
+}
+
+export async function sendAdminRoomMessage(
+  kind: 'order' | 'group',
+  id: string,
+  content: string,
+  type: ChatMessageType = 'text',
+) {
+  const { data } = await api.post<ChatMessage>(`/chat/admin/rooms/${kind}/${id}/messages`, { content, type })
+  return data
+}
+
+export async function uploadChatImage(file: File): Promise<string> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const { data } = await api.post<{ url: string }>('/upload/tmp-file', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return data.url
+}

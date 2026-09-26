@@ -11,6 +11,8 @@ import { AdminOrderController } from './admin-order.controller';
 import { AdminOrderService } from './admin-order.service';
 import { PushModule } from '../../push/push.module';
 import { InventoryModule } from '../inventory/inventory.module';
+import { ChatModule } from '../../chat/chat.module';
+import { UploadModule } from '../../upload/upload.module';
 
 @Module({
   imports: [
@@ -24,6 +26,8 @@ import { InventoryModule } from '../inventory/inventory.module';
     GroupOrderModule,
     PushModule,
     InventoryModule,
+    ChatModule,
+    UploadModule,
   ],
   controllers: [AdminOrderController],
   providers: [AdminOrderService],

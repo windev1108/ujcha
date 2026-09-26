@@ -1,4 +1,13 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -46,10 +55,7 @@ export class ProfileController {
   @Post('avatar')
   @ApiOperation({ summary: 'Lưu URL avatar sau khi đã upload lên Cloudinary' })
   @ApiResponse({ status: 429, description: 'Đã upload hôm nay rồi' })
-  uploadAvatar(
-    @CurrentUserId() userId: string,
-    @Body() dto: UploadAvatarDto,
-  ) {
+  uploadAvatar(@CurrentUserId() userId: string, @Body() dto: UploadAvatarDto) {
     return this.profileService.uploadAvatar(userId, dto.url);
   }
 }

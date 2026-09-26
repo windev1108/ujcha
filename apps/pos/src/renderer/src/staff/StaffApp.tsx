@@ -29,6 +29,8 @@ import { AIOrderPanel } from '../components/AIOrderPanel'
 import { UpdateModal, type UpdateInfo } from '../components/UpdateModal'
 import { learnEaterInfo, pruneEaterCacheNow } from '../../../shared/grab-eater-cache'
 import { useScheduledDeliveryAlerts } from '@/hooks/useScheduledDeliveryAlerts'
+import { useGlobalChatNotifications } from '@/hooks/useGlobalChatNotifications'
+import { disconnectAllSockets, getSocket } from '@/socket'
 
 const eAPI = (window as unknown as {
   electronAPI?: {
@@ -86,6 +88,7 @@ export function StaffApp() {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
   const [appVersion, setAppVersion] = useState('')
   const [socketConnected, setSocketConnected] = useState(false)
+  useGlobalChatNotifications(isLoggedIn)
 
   // ── Auto-print dedup: track order IDs already printed this session ─────────
   const autoPrintedIdsRef = useRef<Set<string>>(new Set())
@@ -275,6 +278,7 @@ export function StaffApp() {
       stopGrabAudioOnly()
       eAPI?.customer.update({ type: 'ai-mode', enabled: false, name: 'UjCha' })
       eAPI?.customer.update({ type: 'idle' })
+      disconnectAllSockets()
     }
     return () => { stopAlert(); stopGrabAudioOnly() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -397,7 +401,7 @@ export function StaffApp() {
   // ── Socket: real-time events ────────────────────────────────────────────────
   useEffect(() => {
     if (!isLoggedIn) return
-    const socket = io(API_URL, { transports: ['polling', 'websocket'], reconnectionAttempts: Infinity, reconnectionDelay: 2000 })
+    const socket = getSocket(API_URL)
 
     socket.on('connect', () => {
       setSocketConnected(true)
@@ -445,7 +449,16 @@ export function StaffApp() {
       }).catch(() => { })
     })
 
-    return () => { socket.disconnect() }
+    return () => {
+      socket.off('connect')
+      socket.off('disconnect')
+      socket.off('connect_error')
+      socket.off('order:new')
+      socket.off('order:status')
+      socket.off('order:external')
+      socket.off('order:paid')
+      socket.io.off('reconnect')
+    }
   }, [isLoggedIn])
 
   // ── Sync cart to customer display ──────────────────────────────────────────

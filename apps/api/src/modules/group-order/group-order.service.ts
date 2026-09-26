@@ -30,6 +30,7 @@ import { MailService } from '../mail/mail.service';
 import { StoreStatusService } from '../store/store-status.service';
 import { OrderService } from '../order/order.service';
 import { PointService } from '../point/point.service';
+import { ChatService } from '../chat/chat.service';
 
 const GROUP_ORDER_CONFIG_KEY = 'ujcha:group-order:config';
 const GROUP_ORDER_CONFIG_TTL = 60; // 60 seconds
@@ -66,6 +67,7 @@ export class GroupOrderService {
     private readonly storeStatus: StoreStatusService,
     private readonly orderService: OrderService,
     private readonly pointService: PointService,
+    private readonly chatService: ChatService,
   ) { }
 
   private fullInclude() {
@@ -297,6 +299,9 @@ export class GroupOrderService {
         data: { status: GroupOrderStatus.cancelled },
         include: this.fullInclude(),
       });
+      void this.chatService
+        .closeRoomForGroupOrder(go.id)
+        .catch((err: unknown) => this.logger.error(err));
       return this.serialize(cancelled);
     }
 
@@ -355,10 +360,10 @@ export class GroupOrderService {
 
   async findAllActive() {
     const rows = await this.prisma.groupOrder.findMany({
-      where: {
-        status: { in: ['collecting', 'locked'] },
-        expiresAt: { gt: new Date() },
-      },
+      // where: {
+      //   status: { in: ['collecting', 'locked'] },
+      //   expiresAt: { gt: new Date() },
+      // },
       select: {
         id: true,
         token: true,
@@ -415,6 +420,9 @@ export class GroupOrderService {
       data: { status: GroupOrderStatus.cancelled },
       include: this.fullInclude(),
     });
+    void this.chatService
+      .closeRoomForGroupOrder(go.id)
+      .catch((err: unknown) => this.logger.error(err));
     return this.serialize(updated);
   }
 
@@ -786,7 +794,9 @@ export class GroupOrderService {
     });
 
     const order = await this.createFinalOrder(goFull!, paymentType as any);
-
+    if (goFull?.id) {
+      await this.chatService.closeRoomForGroupOrder(goFull?.id);
+    }
     await this.prisma.groupOrder.update({
       where: { token },
       data: { status: GroupOrderStatus.completed, orderId: order.id },
@@ -1149,15 +1159,29 @@ export class GroupOrderService {
 
   @Cron(CronExpression.EVERY_10_MINUTES)
   async cleanupExpiredGroupOrders() {
-    const deleted = await this.prisma.groupOrder.deleteMany({
+    const expired = await this.prisma.groupOrder.findMany({
       where: {
         expiresAt: { lt: new Date() },
         status: { in: [GroupOrderStatus.collecting, GroupOrderStatus.locked] },
       },
+      select: { id: true },
     });
-    if (deleted.count > 0) {
-      this.logger.log(`Cleaned up ${deleted.count} expired group order(s).`);
-    }
+
+    if (expired.length === 0) return;
+
+    const ids = expired.map((g) => g.id);
+
+    await this.prisma.groupOrder.updateMany({
+      where: { id: { in: ids } },
+      data: { status: GroupOrderStatus.cancelled },
+    });
+
+    // ← THÊM: đóng toàn bộ phòng chat + dọn ảnh Cloudinary cho các nhóm vừa hết hạn
+    await Promise.allSettled(
+      ids.map((id) => this.chatService.closeRoomForGroupOrder(id)),
+    );
+
+    this.logger.log(`Cleaned up ${ids.length} expired group order(s).`);
   }
 
   private async resolveGroupDiscount(
@@ -1698,7 +1722,9 @@ export class GroupOrderService {
 
     // Cash delivery: shipper collects on arrival → paymentStatus = pending on the Order
     const order = await this.createFinalOrder(goForOrder!, 'cash', false);
-
+    if (goForOrder?.id) {
+      await this.chatService.closeRoomForGroupOrder(goForOrder?.id);
+    }
     await this.prisma.groupOrder.update({
       where: { token },
       data: { status: GroupOrderStatus.completed, orderId: order.id },
@@ -1840,7 +1866,6 @@ export class GroupOrderService {
       groupBase, // eligibility theo tổng nhóm
     );
 
-
     await this.prisma.groupOrderParticipant.update({
       where: { id: participant.id },
       data: { pointsToUse: pointsToSpend },
@@ -1872,6 +1897,9 @@ export class GroupOrderService {
         }
       },
       { timeout: 30000, maxWait: 10000 },
+    );
+    await Promise.allSettled(
+      groupIds.map((id) => this.chatService.closeRoomForGroupOrder(id)),
     );
   }
 }

@@ -1,8 +1,10 @@
+// pos/src/render/src/components/OrdersModal.tsx
 import { useEffect, useRef, useState } from 'react'
 import {
   ArrowLeft, Bell, Clock, CheckCircle2, XCircle, RefreshCw,
   ShoppingBag, CreditCard, ChevronRight, Search,
   Loader2, Calendar, Check, ListChecks, X, Bike, Truck, Utensils, Users, Sparkles, UserCheck,
+  MessageCircle,
 } from 'lucide-react'
 import { io } from 'socket.io-client'
 import { fetchOrders, updateOrderStatus, bulkUpdateOrderStatus, fetchShippers, assignShipper, fetchReturningCustomers, API_URL } from '../api'
@@ -13,6 +15,7 @@ import { OrderDetailModal } from './OrderDetailModal'
 import { DateField, DateRangePicker, Label, Pagination, RangeCalendar } from '@heroui/react'
 import { parseDate, type DateValue } from '@internationalized/date'
 import { I18nProvider } from '@react-aria/i18n';
+import { useChatNotifyStore } from '@/store/chat-notify-store'
 
 
 function fmt(n: string | number) { return Number(n).toLocaleString('vi-VN') + 'đ' }
@@ -232,6 +235,7 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
   const [pageSize, setPageSize] = useState<number>(100)
   const [page, setPage] = useState(1)
   const [totalOrders, setTotalOrders] = useState<number | null>(null)
+  const chatUnreadIds = useChatNotifyStore((s) => s.unreadOrderIds)
 
   // Set of phone/userId strings that have at least one past completed order
   const [returningSet, setReturningSet] = useState<Set<string>>(new Set())
@@ -779,13 +783,18 @@ export function OrdersModal({ onClose }: { onClose: () => void }) {
                   <OrderCard
                     key={order.id}
                     order={order}
-                    onOpen={() => { setSelectedOrder(order); clearScheduledAlert([order.id]) }}
+                    onOpen={() => {
+                      setSelectedOrder(order);
+                      clearScheduledAlert([order.id])
+                      useChatNotifyStore.getState().clearUnread(order.id)
+                    }}
                     onStatusChange={handleStatusOrAssign}
                     isBusy={busyIds.has(order.id)}
                     isSelected={selectedIds.has(order.id)}
                     onToggleSelect={() => toggleSelect(order.id)}
                     isReturning={getReturningStatus(order)}
                     isJustAlerted={highlightedIds.has(order.id)}
+                    isChatUnread={chatUnreadIds.has(order.id)}
                   />
                 ))}
               </div>
@@ -935,7 +944,8 @@ function OrderCard({
   isSelected,
   onToggleSelect,
   isReturning,
-  isJustAlerted
+  isJustAlerted,
+  isChatUnread,
 }: {
   order: AdminOrder
   onOpen: () => void
@@ -945,6 +955,7 @@ function OrderCard({
   onToggleSelect: () => void
   isReturning?: boolean
   isJustAlerted?: boolean
+  isChatUnread: boolean
 }) {
   const typeInfo = ORDER_TYPE_LABEL[order.type] ?? { label: order.type, Icon: ShoppingBag }
   const totalQty = order.items.reduce((s, i) => s + i.quantity, 0)
@@ -1046,6 +1057,11 @@ function OrderCard({
               <span className="inline-flex items-center gap-0.5 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-bold text-purple-700">
                 <Users className="size-2.5" />
                 {order.groupOrder.paymentMode === 'split' ? 'Nhóm · Chia đều' : 'Nhóm · Chủ trả'}
+              </span>
+            )}
+            {isChatUnread && (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-pink-100 px-2 py-0.5 text-[10px] font-bold text-pink-700 animate-pulse">
+                <MessageCircle className="size-2.5" /> Tin nhắn mới
               </span>
             )}
           </div>
