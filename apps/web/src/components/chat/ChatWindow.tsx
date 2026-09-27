@@ -15,7 +15,7 @@ import {
     ImageOff,
     Plus,
 } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@heroui/react";
+import { Avatar, AvatarFallback, AvatarImage, Tooltip } from "@heroui/react";
 import { Categories, EmojiStyle, type EmojiClickData } from "emoji-picker-react";
 import { EmojiIcon, EmojiSyncInput, EmojiText } from "./EmojiText";
 import { useTranslations } from "next-intl";
@@ -544,7 +544,7 @@ export function ChatWindow({
                     <p className="truncate text-sm font-bold text-foreground">{title}</p>
                 </div>
                 <button onClick={onClose} aria-label="Đóng"
-                    className="flex size-7 items-center justify-center rounded-full text-foreground/40 hover:bg-black/6">
+                    className="cursor-pointer flex size-7 items-center justify-center rounded-full text-foreground/40 hover:bg-black/6">
                     <X className="size-4" />
                 </button>
             </div>
@@ -783,15 +783,16 @@ export function ChatWindow({
                                     {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
                                 </button>
                             ) : (
+
                                 <button
                                     type="button"
                                     onClick={handleQuickEmoji}
                                     disabled={sending || uploadingImage}
                                     className="cursor-pointer flex size-9 shrink-0 items-center justify-center rounded-full text-2xl leading-none transition-transform hover:scale-110 disabled:opacity-40"
-                                    aria-label="Gửi nhanh biểu cảm"
                                 >
                                     <EmojiIcon emoji={QUICK_EMOJI} size={30} />
                                 </button>
+
                             )}
                         </div>
                     </form>
@@ -805,33 +806,45 @@ export function ChatWindow({
                     style={plusMenuStyle}
                     className="w-48 overflow-hidden rounded-2xl border border-black/8 bg-white py-1 shadow-2xl"
                 >
-                    <button
-                        type="button"
-                        title={t("chat_choose_sticker")}
-                        onClick={() => {
-                            setPlusMenuOpen(false);
-                            openPopover("sticker", plusBtnRef.current);
-                        }}
-                        disabled={stickers.length === 0}
-                        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-foreground hover:bg-black/5 disabled:opacity-40"
-                    >
-                        <StickerIcon className="size-4 text-foreground/50" />
-                        {t("chat_choose_sticker")}
-                    </button>
-                    <button
-                        type="button"
-                        title={t("chat_send_image")}
+                    <Tooltip delay={0.1}>
+                        <Tooltip.Content >
+                            {t("chat_choose_sticker")}
+                        </Tooltip.Content>
+                        <Tooltip.Trigger className="w-full">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setPlusMenuOpen(false);
+                                    openPopover("sticker", plusBtnRef.current);
+                                }}
+                                disabled={stickers.length === 0}
+                                className=" cursor-pointer flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-foreground hover:bg-black/5 disabled:opacity-40"
+                            >
+                                <StickerIcon className="size-4 text-foreground/50" />
+                                {t("chat_choose_sticker")}
+                            </button>
+                        </Tooltip.Trigger>
+                    </Tooltip>
+                    <Tooltip delay={0.1}>
+                        <Tooltip.Content >
+                            {t("chat_send_image")}
+                        </Tooltip.Content>
+                        <Tooltip.Trigger className="w-full">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setPlusMenuOpen(false);
+                                    fileInputRef.current?.click();
+                                }}
+                                disabled={uploadingImage}
+                                className="cursor-pointer flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-foreground hover:bg-black/5 disabled:opacity-40"
+                            >
+                                <ImagePlus className="size-4 text-foreground/50" />
+                                {t("chat_send_image")}
+                            </button>
+                        </Tooltip.Trigger>
+                    </Tooltip>
 
-                        onClick={() => {
-                            setPlusMenuOpen(false);
-                            fileInputRef.current?.click();
-                        }}
-                        disabled={uploadingImage}
-                        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-foreground hover:bg-black/5 disabled:opacity-40"
-                    >
-                        <ImagePlus className="size-4 text-foreground/50" />
-                        {t("chat_send_image")}
-                    </button>
                 </div>,
                 document.body,
             )}
@@ -876,16 +889,16 @@ export function ChatWindow({
                                 )}
                             </div>
 
-                            <div className="grid grid-cols-4 gap-2 p-3 flex-1 md:max-h-[500px] max-h-[90vh] overflow-y-auto ">
+                            <div className="grid grid-cols-4 gap-2 p-2 flex-1 md:max-h-[360px] max-h-[70vh] overflow-y-auto overflow-x-hidden">
                                 {filteredStickers.map((s) => (
                                     <button
                                         key={s.id}
                                         type="button"
                                         onClick={() => handleStickerClick(s.url)}
-                                        className="h-24 w-24 cursor-pointer flex items-center justify-center rounded-xl p-1.5 transition hover:bg-black/6"
+                                        className="h-26 w-26 cursor-pointer flex items-center justify-center rounded-xl p-1 transition hover:bg-black/6"
                                         title={s.alt}
                                     >
-                                        <Image width={200} height={200} src={s.url} alt={s.alt} className="size-15 object-contain" draggable={false} />
+                                        <Image width={150} height={150} src={s.url} alt={s.alt} className="size-22 object-contain" draggable={false} />
                                     </button>
                                 ))}
                             </div>

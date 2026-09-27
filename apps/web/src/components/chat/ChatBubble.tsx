@@ -68,9 +68,10 @@ export function ChatBubble({ kind, hostName, roomId, enabled, fetchMessages, sen
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   useEffect(() => {
+    if (kind === 'group') return
     audioRef.current = new Audio(NEW_MESSAGE_SOUND_SRC);
     audioRef.current.volume = NEW_MESSAGE_SOUND_VOLUME;
-  }, []);
+  }, [kind]);
 
   const loadInitial = useCallback(async () => {
     if (!enabled || !roomId) return;
@@ -137,7 +138,9 @@ export function ChatBubble({ kind, hostName, roomId, enabled, fetchMessages, sen
         return [...prev, msg];
       });
       if (!isMine(msg, myId)) {
-        audioRef.current?.play().catch(() => { });
+        if (kind !== 'group') {
+          audioRef.current?.play().catch(() => { });
+        }
         if (!openRef.current) {
           setUnreadCount((c) => c + 1);
         }
@@ -271,7 +274,7 @@ export function ChatBubble({ kind, hostName, roomId, enabled, fetchMessages, sen
         type="button"
         onClick={toggleOpen}
         aria-label={t("chat_bubble_aria_label")}
-        className="relative flex size-14 items-center justify-center rounded-full bg-[#1a3c34] text-white shadow-[0_8px_24px_-6px_rgba(26,60,52,0.5)] transition hover:opacity-90"
+        className="relative cursor-pointer flex size-14 items-center justify-center rounded-full bg-[#1a3c34] text-white shadow-[0_8px_24px_-6px_rgba(26,60,52,0.5)] transition hover:opacity-90"
       >
         <AnimatePresence mode="wait" initial={false}>
           {open ? (

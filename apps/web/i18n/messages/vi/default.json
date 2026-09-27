@@ -1294,7 +1294,7 @@
   "chat_closed_notice": "Đơn đã kết thúc — cuộc trò chuyện đã đóng",
   "chat_placeholder": "Nhập tin nhắn…",
   "chat_bubble_aria_label": "Mở khung chat",
-  "chat_group_order_title": "Đơn hàng của {host}",
+  "chat_group_order_title": "Đơn hàng nhóm của {host}",
   "chat_group_order_eyebrow": "Trò chuyện nhóm",
   "chat_bg_new_message": "Tin nhắn mới từ {name}",
   "chat_group_new_message": "Tin nhắn mới trong đơn nhóm của {name}",
