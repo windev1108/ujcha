@@ -1313,5 +1313,6 @@
   "chat_guest_fallback": "Khách",
   "chat_sticker_misc_category": "Khác",
   "chat_emoji_search_placeholder": "Tìm emoji…",
-  "chat_sticker_all_category": "Tất cả"
+  "chat_sticker_all_category": "Tất cả",
+  "chat_sticker_more_categories": "Thêm danh mục"
 }

@@ -1,15 +1,5 @@
 import { api } from "@/config/server";
 
-export interface AdminSticker {
-    id: string;
-    url: string;
-    alt: string;
-    sortOrder: number;
-    isActive: boolean;
-    createdAt: string;
-    updatedAt: string;
-}
-
 export async function fetchStickers(): Promise<AdminSticker[]> {
     const { data } = await api.get<AdminSticker[]>("/admin/chat-widget/stickers");
     return data;

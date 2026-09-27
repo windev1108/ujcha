@@ -129,7 +129,7 @@ function ChatMessageImage({
 const GROUP_WINDOW_MS = 60_000;
 const NEAR_BOTTOM_PX = 120;
 const LOAD_MORE_TRIGGER_PX = 80;
-
+const MAX_VISIBLE_STICKER_TABS = 4;
 interface MessageGroup {
     senderId: string;
     mine: boolean;
@@ -246,9 +246,31 @@ export function ChatWindow({
     const fileInputRef = useRef<HTMLInputElement>(null);
     const stickerBtnRef = useRef<HTMLButtonElement>(null);
     const [activeStickerAlbum, setActiveStickerAlbum] = useState<string | "all" | "none">("all");
+    const [albumOverflowOpen, setAlbumOverflowOpen] = useState(false);
+    const albumMoreBtnRef = useRef<HTMLButtonElement>(null);
+    const albumMorePanelRef = useRef<HTMLDivElement>(null);
     // ── Preview ảnh trước khi gửi (blob URL local) ──────────────────────
     const [pendingImage, setPendingImage] = useState<{ file: File; previewUrl: string } | null>(null);
     const pendingImageRef = useRef(pendingImage);
+
+
+    useEffect(() => {
+        if (!albumOverflowOpen) return;
+        const handleClickOutside = (e: MouseEvent) => {
+            const target = e.target as Node;
+            if (albumMorePanelRef.current?.contains(target)) return;
+            if (albumMoreBtnRef.current?.contains(target)) return;
+            setAlbumOverflowOpen(false);
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, [albumOverflowOpen]);
+
+    // Đóng dropdown "+" khi cả popover sticker đóng lại, tránh trạng thái treo
+    useEffect(() => {
+        if (activePopover !== "sticker") setAlbumOverflowOpen(false);
+    }, [activePopover]);
+
     useEffect(() => {
         pendingImageRef.current = pendingImage;
     }, [pendingImage]);
@@ -310,6 +332,10 @@ export function ChatWindow({
         }
         return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
     }, [stickers]);
+    const visibleStickerAlbums = stickerAlbums.slice(0, MAX_VISIBLE_STICKER_TABS);
+    const overflowStickerAlbums = stickerAlbums.slice(MAX_VISIBLE_STICKER_TABS);
+    const isActiveAlbumInOverflow = overflowStickerAlbums.some((a) => a.id === activeStickerAlbum);
+
 
     const filteredStickers = useMemo(() => {
         if (activeStickerAlbum === "all") return stickers;
@@ -404,7 +430,7 @@ export function ChatWindow({
     const openPopover = (which: "emoji" | "sticker", anchor?: HTMLElement | null) => {
         const btn = anchor ?? (which === "emoji" ? emojiBtnRef.current : plusBtnRef.current);
         if (!btn) return;
-        const width = which === "emoji" ? 300 : 400; // đổi 260 → 400, khớp width thật của popover sticker
+        const width = which === "emoji" ? 360 : 400; // khớp width={360} mới của EmojiPicker
         setPopoverStyle(computeAnchoredStyle(btn, width));
         setActivePopover((prev) => (prev === which ? null : which));
     };
@@ -856,18 +882,24 @@ export function ChatWindow({
                         <EmojiPicker
                             onEmojiClick={handleEmojiClick}
                             autoFocusSearch={false}
-                            height={360}
-                            width={300}
+                            height={420}
+                            width={360}
                             emojiStyle={EmojiStyle.FACEBOOK}
                             customEmojis={customEmojis}
                             categories={emojiCategories}
                             searchPlaceholder={t("chat_emoji_search_placeholder")}
+                            style={
+                                {
+                                    "--epr-emoji-size": "32px",
+                                    "--epr-emoji-gap": "8px",
+                                } as React.CSSProperties
+                            }
                         />
                     ) : (
                         <div className="relative flex flex-col md:w-[400px] w-[95vw] overflow-hidden">
                             <div className="flex">
                                 {stickerAlbums.length > 0 && (
-                                    <div className="flex gap-1.5 overflow-x-auto  border-b border-black/6 px-3 py-2">
+                                    <div className="flex flex-wrap items-center gap-1.5 border-b border-black/6 px-3 py-2">
                                         <button
                                             type="button"
                                             onClick={() => setActiveStickerAlbum("all")}
@@ -875,7 +907,8 @@ export function ChatWindow({
                                         >
                                             {t("chat_sticker_all_category")}
                                         </button>
-                                        {stickerAlbums.map((album) => (
+
+                                        {visibleStickerAlbums.map((album) => (
                                             <button
                                                 key={album.id}
                                                 type="button"
@@ -885,6 +918,50 @@ export function ChatWindow({
                                                 {album.name}
                                             </button>
                                         ))}
+
+                                        {overflowStickerAlbums.length > 0 && (
+                                            <div className="relative shrink-0">
+                                                <button
+                                                    type="button"
+                                                    ref={albumMoreBtnRef}
+                                                    onClick={() => setAlbumOverflowOpen((v) => !v)}
+                                                    aria-label={t("chat_sticker_more_categories")}
+                                                    title={t("chat_sticker_more_categories")}
+                                                    className={`flex size-7 items-center justify-center rounded-full transition ${isActiveAlbumInOverflow || albumOverflowOpen ? "bg-[#1a3c34] text-white" : "bg-black/[0.05] text-foreground/60 hover:bg-black/[0.09]"}`}
+                                                >
+                                                    <Plus className="size-3.5" />
+                                                </button>
+
+                                                {albumOverflowOpen && (
+                                                    <div
+                                                        ref={albumMorePanelRef}
+                                                        className="absolute right-0 top-full z-10 mt-1 max-h-60 w-40 overflow-y-auto rounded-xl border border-black/8 bg-white py-1 shadow-2xl"
+                                                    >
+                                                        {overflowStickerAlbums.map((album) => (
+                                                            <button
+                                                                key={album.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setActiveStickerAlbum(album.id);
+                                                                    setAlbumOverflowOpen(false);
+                                                                }}
+                                                                className={`flex w-full items-center px-3 py-2 text-left text-xs font-medium transition ${activeStickerAlbum === album.id ? "bg-[#1a3c34]/10 text-[#1a3c34]" : "text-foreground/70 hover:bg-black/5"}`}
+                                                            >
+                                                                {album.name}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* <button
+                                            type="button"
+                                            onClick={() => setActiveStickerAlbum("none")}
+                                            className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold transition ${activeStickerAlbum === "none" ? "bg-[#1a3c34] text-white" : "bg-black/[0.05] text-foreground/60 hover:bg-black/[0.09]"}`}
+                                        >
+                                            {t("chat_sticker_misc_category")}
+                                        </button> */}
                                     </div>
                                 )}
                             </div>
