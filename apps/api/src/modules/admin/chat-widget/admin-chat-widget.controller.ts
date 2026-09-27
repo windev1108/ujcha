@@ -93,12 +93,12 @@ export class AdminChatWidgetController {
     return this.chatWidgetService.updateAlbum(id, dto);
   }
 
-  @Delete('sticker/albums/:id')
+  @Delete('stickers/albums/:id')
   deleteAlbum(@Param('id') id: string) {
     return this.chatWidgetService.deleteAlbum(id);
   }
 
-  @Post('sticker/albums/reorder')
+  @Post('stickers/albums/reorder')
   reorderAlbums(@Body() dto: ReorderAlbumsDto) {
     return this.chatWidgetService.reorderAlbums(dto.ids);
   }
