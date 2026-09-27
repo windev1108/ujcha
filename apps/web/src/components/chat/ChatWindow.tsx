@@ -328,7 +328,7 @@ export function ChatWindow({
             names: [s.alt || "sticker"],
             imgUrl: s.url,
             group: s.albumId ?? undefined, // không có album → rơi vào bucket "Custom" mặc định
-        }));
+        }))
 
         const categories: any[] = [
             Categories.SUGGESTED,
@@ -838,7 +838,7 @@ export function ChatWindow({
 
             {/* Popover emoji / sticker */}
             {activePopover && typeof document !== "undefined" && createPortal(
-                <div ref={panelRef} style={popoverStyle} className="overflow-hidden rounded-2xl border border-black/8 bg-white shadow-2xl">
+                <div ref={panelRef} style={popoverStyle} className="max-h-120 overflow-hidden rounded-2xl border border-black/8 bg-white shadow-2xl">
                     {activePopover === "emoji" ? (
                         <EmojiPicker
                             onEmojiClick={handleEmojiClick}
@@ -851,39 +851,41 @@ export function ChatWindow({
                             searchPlaceholder={t("chat_emoji_search_placeholder")}
                         />
                     ) : (
-                        <div className="flex flex-col md:w-[400px] w-[95vw]">
-                            {stickerAlbums.length > 0 && (
-                                <div className="flex gap-1.5 overflow-x-auto border-b border-black/6 px-3 py-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => setActiveStickerAlbum("all")}
-                                        className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold transition ${activeStickerAlbum === "all" ? "bg-[#1a3c34] text-white" : "bg-black/[0.05] text-foreground/60 hover:bg-black/[0.09]"}`}
-                                    >
-                                        {t("chat_sticker_all_category")}
-                                    </button>
-                                    {stickerAlbums.map((album) => (
+                        <div className="relative flex flex-col md:w-[400px] w-[95vw] overflow-hidden">
+                            <div className="flex">
+                                {stickerAlbums.length > 0 && (
+                                    <div className="flex gap-1.5 overflow-x-auto  border-b border-black/6 px-3 py-2">
                                         <button
-                                            key={album.id}
                                             type="button"
-                                            onClick={() => setActiveStickerAlbum(album.id)}
-                                            className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold transition ${activeStickerAlbum === album.id ? "bg-[#1a3c34] text-white" : "bg-black/[0.05] text-foreground/60 hover:bg-black/[0.09]"}`}
+                                            onClick={() => setActiveStickerAlbum("all")}
+                                            className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold transition ${activeStickerAlbum === "all" ? "bg-[#1a3c34] text-white" : "bg-black/[0.05] text-foreground/60 hover:bg-black/[0.09]"}`}
                                         >
-                                            {album.name}
+                                            {t("chat_sticker_all_category")}
                                         </button>
-                                    ))}
-                                </div>
-                            )}
+                                        {stickerAlbums.map((album) => (
+                                            <button
+                                                key={album.id}
+                                                type="button"
+                                                onClick={() => setActiveStickerAlbum(album.id)}
+                                                className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold transition ${activeStickerAlbum === album.id ? "bg-[#1a3c34] text-white" : "bg-black/[0.05] text-foreground/60 hover:bg-black/[0.09]"}`}
+                                            >
+                                                {album.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
 
-                            <div className="grid grid-cols-4 gap-2 p-3">
+                            <div className="grid grid-cols-4 gap-2 p-3 flex-1 md:max-h-[500px] max-h-[90vh] overflow-y-auto ">
                                 {filteredStickers.map((s) => (
                                     <button
                                         key={s.id}
                                         type="button"
                                         onClick={() => handleStickerClick(s.url)}
-                                        className="cursor-pointer flex items-center justify-center rounded-xl p-1.5 transition hover:bg-black/6"
+                                        className="h-24 w-24 cursor-pointer flex items-center justify-center rounded-xl p-1.5 transition hover:bg-black/6"
                                         title={s.alt}
                                     >
-                                        <img src={s.url} alt={s.alt} className="size-15 object-contain" draggable={false} />
+                                        <Image width={200} height={200} src={s.url} alt={s.alt} className="size-15 object-contain" draggable={false} />
                                     </button>
                                 ))}
                             </div>

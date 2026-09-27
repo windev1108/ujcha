@@ -2,8 +2,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { MessageCircle, X } from 'lucide-react'
 import { ChatWindow } from './ChatWindow'
-import { ChatMessage, ChatMessageType, fetchAdminRoomMessages, sendAdminRoomMessage, uploadChatImage } from '@/api';
+import { ChatMessage, ChatMessageType, ChatStickerDto, fetchAdminRoomMessages, fetchChatStickers, sendAdminRoomMessage, uploadChatImage } from '@/api';
 import { useChatSocket } from '@/hooks/useChatSocket';
+import { ChatSticker } from '@/lib/constants';
 
 const PAGE_SIZE = 25
 const MAX_IMAGE_MB = 8
@@ -23,6 +24,7 @@ export function ChatBubble({ kind, id, disabled, guestName }: { kind: 'order' | 
     const [uploadingImage, setUploadingImage] = useState(false)
     const [closed, setClosed] = useState(false)
     const [unreadCount, setUnreadCount] = useState(0)
+    const [stickers, setStickers] = useState<ChatStickerDto[]>([])
 
     const messagesRef = useRef<ChatMessage[]>([])
     messagesRef.current = messages
@@ -45,6 +47,8 @@ export function ChatBubble({ kind, id, disabled, guestName }: { kind: 'order' | 
             const res = await fetchAdminRoomMessages(kind, id, { limit: PAGE_SIZE })
             setMessages(sortAsc(res.messages))
             setHasMore(res.hasMore)
+            const stickersRes = await fetchChatStickers()
+            setStickers(stickersRes)
         } catch (err) {
             console.error('[pos-chat] fetch failed:', err)
         } finally {
@@ -180,7 +184,6 @@ export function ChatBubble({ kind, id, disabled, guestName }: { kind: 'order' | 
                 <div className="w-[440px] overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-150">
                     <ChatWindow
                         key={`${kind}:${id}`}
-                        guestName={guestName}
                         messages={messages}
                         loading={initialLoading}
                         hasMore={hasMore}
@@ -196,6 +199,7 @@ export function ChatBubble({ kind, id, disabled, guestName }: { kind: 'order' | 
                         sending={sending}
                         onClose={() => setOpen(false)}
                         myId="staff"
+                        stickers={stickers}
                     />
                 </div>
             )}

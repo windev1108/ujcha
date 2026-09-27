@@ -196,3 +196,16 @@ export async function uploadChatImage(file: File): Promise<string> {
   })
   return data.url
 }
+
+export interface ChatStickerDto {
+  id: string;
+  url: string;
+  alt: string;
+  albumId: string | null;
+  album: { name: string }
+}
+
+export async function fetchChatStickers(): Promise<ChatStickerDto[]> {
+  const { data } = await api.get<ChatStickerDto[]>("/store/stickers");
+  return data;
+}

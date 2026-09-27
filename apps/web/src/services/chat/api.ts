@@ -78,7 +78,7 @@ export interface ChatStickerDto {
   url: string;
   alt: string;
   albumId: string | null;
-  albumName: string | null;
+  album: { name: string }
 }
 
 export async function fetchChatStickers(): Promise<ChatStickerDto[]> {
