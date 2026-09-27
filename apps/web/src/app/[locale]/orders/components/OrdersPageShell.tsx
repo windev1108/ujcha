@@ -377,9 +377,9 @@ export function OrdersPageShell() {
   });
 
   const fmtBalance = profile
-    ? Number.isInteger(profile.pointBalance)
-      ? profile.pointBalance.toLocaleString("vi-VN")
-      : (profile.pointBalance as number).toFixed(1)
+    ? Number.isInteger(profile.availablePoints)
+      ? profile.availablePoints.toLocaleString("vi-VN")
+      : (profile.availablePoints as number).toFixed(1)
     : null;
 
   return (
