@@ -366,11 +366,11 @@ export function ChatWindow({
             Categories.OBJECTS,
             Categories.SYMBOLS,
             Categories.FLAGS,
-            ...Array.from(albumMap.entries()).map(([group, name]) => ({
-                category: Categories.CUSTOM,
-                group,
-                name,
-            })),
+            // ...Array.from(albumMap.entries()).map(([group, name]) => ({
+            //     category: Categories.CUSTOM,
+            //     group,
+            //     name,
+            // })),
             { category: Categories.CUSTOM, name: t("chat_sticker_misc_category") }, // sticker chưa gắn album
         ];
 
