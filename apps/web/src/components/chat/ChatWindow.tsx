@@ -343,39 +343,39 @@ export function ChatWindow({
         return stickers.filter((s) => s.albumId === activeStickerAlbum);
     }, [stickers, activeStickerAlbum]);
 
-    const { customEmojis, emojiCategories } = useMemo(() => {
-        const albumMap = new Map<string, string>(); // albumId -> tên album
-        for (const s of stickers) {
-            if (s.albumId && s.album?.name) albumMap.set(s.albumId, s.album?.name);
-        }
+    // const { customEmojis, emojiCategories } = useMemo(() => {
+    //     const albumMap = new Map<string, string>(); // albumId -> tên album
+    //     for (const s of stickers) {
+    //         if (s.albumId && s.album?.name) albumMap.set(s.albumId, s.album?.name);
+    //     }
 
-        const emojis = stickers.map((s) => ({
-            id: s.id,
-            names: [s.alt || "sticker"],
-            imgUrl: s.url,
-            group: s.albumId ?? undefined, // không có album → rơi vào bucket "Custom" mặc định
-        }))
+    //     const emojis = stickers.map((s) => ({
+    //         id: s.id,
+    //         names: [s.alt || "sticker"],
+    //         imgUrl: s.url,
+    //         group: s.albumId ?? undefined, // không có album → rơi vào bucket "Custom" mặc định
+    //     }))
 
-        const categories: any[] = [
-            Categories.SUGGESTED,
-            Categories.SMILEYS_PEOPLE,
-            Categories.ANIMALS_NATURE,
-            Categories.FOOD_DRINK,
-            Categories.TRAVEL_PLACES,
-            Categories.ACTIVITIES,
-            Categories.OBJECTS,
-            Categories.SYMBOLS,
-            Categories.FLAGS,
-            // ...Array.from(albumMap.entries()).map(([group, name]) => ({
-            //     category: Categories.CUSTOM,
-            //     group,
-            //     name,
-            // })),
-            { category: Categories.CUSTOM, name: t("chat_sticker_misc_category") }, // sticker chưa gắn album
-        ];
+    //     const categories: any[] = [
+    //         Categories.SUGGESTED,
+    //         Categories.SMILEYS_PEOPLE,
+    //         Categories.ANIMALS_NATURE,
+    //         Categories.FOOD_DRINK,
+    //         Categories.TRAVEL_PLACES,
+    //         Categories.ACTIVITIES,
+    //         Categories.OBJECTS,
+    //         Categories.SYMBOLS,
+    //         Categories.FLAGS,
+    //         ...Array.from(albumMap.entries()).map(([group, name]) => ({
+    //             category: Categories.CUSTOM,
+    //             group,
+    //             name,
+    //         })),
+    //         { category: Categories.CUSTOM, name: t("chat_sticker_misc_category") }, // sticker chưa gắn album
+    //     ];
 
-        return { customEmojis: emojis, emojiCategories: categories };
-    }, [stickers, t]);
+    //     return { customEmojis: emojis, emojiCategories: categories };
+    // }, [stickers, t]);
 
     // ── Paste ảnh từ clipboard ────────────────────────────────────────────
     useEffect(() => {
@@ -885,8 +885,8 @@ export function ChatWindow({
                             height={420}
                             width={360}
                             emojiStyle={EmojiStyle.FACEBOOK}
-                            customEmojis={customEmojis}
-                            categories={emojiCategories}
+                            // customEmojis={customEmojis}
+                            // categories={emojiCategories}
                             searchPlaceholder={t("chat_emoji_search_placeholder")}
                             style={
                                 {
