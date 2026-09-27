@@ -34,7 +34,7 @@ export class UploadController {
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
-      limits: { fileSize: 8 * 1024 * 1024 }, // 8MB
+      limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
     }),
   )
   async uploadImage(@UploadedFile() file: MulterFile) {
