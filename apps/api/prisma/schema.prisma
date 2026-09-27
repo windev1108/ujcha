@@ -1170,3 +1170,31 @@ model GlobalAnnouncement {
   version   Int                   @default(1)
   updatedAt DateTime              @updatedAt
 }
+model StickerAlbum {
+  id        String    @id @default(uuid()) @db.Uuid
+  name      String
+  sortOrder Int       @default(0)
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  stickers  Sticker[]
+
+  @@index([isActive])
+  @@index([sortOrder])
+}
+
+model Sticker {
+  id        String        @id @default(uuid()) @db.Uuid
+  url       String
+  alt       String        @default("")
+  sortOrder Int           @default(0)
+  isActive  Boolean       @default(true)
+  albumId   String?       @db.Uuid
+  album     StickerAlbum? @relation(fields: [albumId], references: [id], onDelete: SetNull)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([isActive])
+  @@index([sortOrder])
+  @@index([albumId])
+}

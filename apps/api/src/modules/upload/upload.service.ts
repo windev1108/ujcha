@@ -7,17 +7,17 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-const CHAT_TEMP_FOLDER = 'chat-temp';
-
 @Injectable()
 export class UploadService {
   private readonly logger = new Logger(UploadService.name);
+  private readonly CHAT_TEMP_FOLDER = 'chat-temp';
+  private readonly CHAT_STICKER_FOLDER = 'chat-stickers';
 
   async uploadTempImage(buffer: Buffer, _filename: string): Promise<string> {
     return new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
         {
-          folder: CHAT_TEMP_FOLDER,
+          folder: this.CHAT_TEMP_FOLDER,
           tags: ['chat-temp'],
           resource_type: 'image',
         },
@@ -27,6 +27,30 @@ export class UploadService {
               new BadRequestException({
                 message: 'Tải ảnh lên thất bại.',
                 code: 'CHAT_IMAGE_UPLOAD_FAILED',
+              }),
+            );
+          }
+          resolve(result.secure_url);
+        },
+      );
+      stream.end(buffer);
+    });
+  }
+
+  async uploadStickerImage(buffer: Buffer, _filename: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          folder: this.CHAT_STICKER_FOLDER,
+          tags: ['chat-sticker'],
+          resource_type: 'image',
+        },
+        (error, result) => {
+          if (error || !result) {
+            return reject(
+              new BadRequestException({
+                message: 'Tải ảnh sticker lên thất bại.',
+                code: 'STICKER_UPLOAD_FAILED',
               }),
             );
           }
