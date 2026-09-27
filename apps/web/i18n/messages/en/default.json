@@ -1311,5 +1311,8 @@
   "chat_send_sticker_failed": "Failed to send sticker, please try again",
   "chat_image_too_large": "Image exceeds {maxMb}MB",
   "chat_send_image_failed": "Failed to send image, please try again",
-  "chat_guest_fallback": "Guest"
+  "chat_guest_fallback": "Guest",
+  "chat_sticker_misc_category": "Other",
+  "chat_emoji_search_placeholder": "Search emoji…",
+  "chat_sticker_all_category": "All"
 }

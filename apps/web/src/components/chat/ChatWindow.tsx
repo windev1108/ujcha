@@ -16,18 +16,17 @@ import {
     Plus,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@heroui/react";
-import { EmojiStyle, type EmojiClickData } from "emoji-picker-react";
-import { CHAT_STICKERS } from "@/constants/chat-stickers";
-import { EmojiIcon, EmojiText } from "./EmojiText";
+import { Categories, EmojiStyle, type EmojiClickData } from "emoji-picker-react";
+import { EmojiIcon, EmojiSyncInput, EmojiText } from "./EmojiText";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
 
 const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false });
 
-const MAX_IMAGE_MB = 8;
+const MAX_IMAGE_MB = 10;
 const QUICK_EMOJI = "👍"; // đổi sang emoji bạn muốn dùng làm nút gửi nhanh mặc định
 const LOGO_URL = "/logo-only.png";
-
+const MAX_JUMBO_EMOJI_COUNT = 12; // tin nhắn toàn emoji, không quá số này thì hiển thị to + không nền
 export interface ChatWindowMessage {
     id: string;
     senderId: string;
@@ -97,7 +96,7 @@ function ChatMessageImage({
     onClick: () => void;
 }) {
     const [errored, setErrored] = useState(false);
-
+    const t = useTranslations()
     if (errored) {
         return (
             <div className="flex h-[180px] w-[180px] flex-col items-center justify-center gap-1 rounded-2xl bg-black/5 text-foreground/35">
@@ -119,7 +118,7 @@ function ChatMessageImage({
                 width={400}
                 height={400}
                 sizes="220px"
-                className="block h-auto max-h-[220px] min-h-[100px] w-auto max-w-[220px] min-w-[100px] object-contain"
+                className="block h-auto max-h-[220px] min-h-[200px] w-auto max-w-[220px] min-w-[200px] object-cover"
                 onError={() => setErrored(true)}
                 onLoad={onLoad}
             />
@@ -181,6 +180,7 @@ export function ChatWindow({
     closedLabel = "Cuộc trò chuyện đã kết thúc",
     placeholder = "Nhập tin nhắn…",
     myId,
+    stickers = []
 }: {
     title?: string;
     eyebrow?: string;
@@ -206,6 +206,7 @@ export function ChatWindow({
     closedLabel?: string;
     placeholder?: string;
     myId?: string;
+    stickers?: { id: string; url: string; alt: string; albumId: string | null; album: { name: string | null } }[];
 }) {
     const t = useTranslations()
     const listRef = useRef<HTMLDivElement>(null);
@@ -244,7 +245,7 @@ export function ChatWindow({
     const plusMenuRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const stickerBtnRef = useRef<HTMLButtonElement>(null);
-
+    const [activeStickerAlbum, setActiveStickerAlbum] = useState<string | "all" | "none">("all");
     // ── Preview ảnh trước khi gửi (blob URL local) ──────────────────────
     const [pendingImage, setPendingImage] = useState<{ file: File; previewUrl: string } | null>(null);
     const pendingImageRef = useRef(pendingImage);
@@ -302,6 +303,53 @@ export function ChatWindow({
         const file = e.dataTransfer.files?.[0];
         if (file) setImage(file);
     };
+    const stickerAlbums = useMemo(() => {
+        const map = new Map<string, string>(); // albumId -> tên album
+        for (const s of stickers) {
+            if (s.albumId && s.album?.name) map.set(s.albumId, s.album.name);
+        }
+        return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+    }, [stickers]);
+
+    const filteredStickers = useMemo(() => {
+        if (activeStickerAlbum === "all") return stickers;
+        if (activeStickerAlbum === "none") return stickers.filter((s) => !s.albumId);
+        return stickers.filter((s) => s.albumId === activeStickerAlbum);
+    }, [stickers, activeStickerAlbum]);
+
+    const { customEmojis, emojiCategories } = useMemo(() => {
+        const albumMap = new Map<string, string>(); // albumId -> tên album
+        for (const s of stickers) {
+            if (s.albumId && s.album?.name) albumMap.set(s.albumId, s.album?.name);
+        }
+
+        const emojis = stickers.map((s) => ({
+            id: s.id,
+            names: [s.alt || "sticker"],
+            imgUrl: s.url,
+            group: s.albumId ?? undefined, // không có album → rơi vào bucket "Custom" mặc định
+        }));
+
+        const categories: any[] = [
+            Categories.SUGGESTED,
+            Categories.SMILEYS_PEOPLE,
+            Categories.ANIMALS_NATURE,
+            Categories.FOOD_DRINK,
+            Categories.TRAVEL_PLACES,
+            Categories.ACTIVITIES,
+            Categories.OBJECTS,
+            Categories.SYMBOLS,
+            Categories.FLAGS,
+            ...Array.from(albumMap.entries()).map(([group, name]) => ({
+                category: Categories.CUSTOM,
+                group,
+                name,
+            })),
+            { category: Categories.CUSTOM, name: t("chat_sticker_misc_category") }, // sticker chưa gắn album
+        ];
+
+        return { customEmojis: emojis, emojiCategories: categories };
+    }, [stickers, t]);
 
     // ── Paste ảnh từ clipboard ────────────────────────────────────────────
     useEffect(() => {
@@ -356,7 +404,7 @@ export function ChatWindow({
     const openPopover = (which: "emoji" | "sticker", anchor?: HTMLElement | null) => {
         const btn = anchor ?? (which === "emoji" ? emojiBtnRef.current : plusBtnRef.current);
         if (!btn) return;
-        const width = which === "emoji" ? 300 : 260; // trùng width picker/sticker grid
+        const width = which === "emoji" ? 300 : 400; // đổi 260 → 400, khớp width thật của popover sticker
         setPopoverStyle(computeAnchoredStyle(btn, width));
         setActivePopover((prev) => (prev === which ? null : which));
     };
@@ -369,6 +417,11 @@ export function ChatWindow({
         setPlusMenuOpen((prev) => !prev);
     };
     const handleEmojiClick = (emojiData: EmojiClickData) => {
+        if ((emojiData as any).isCustom) {
+            setActivePopover(null);
+            onSendSticker(emojiData.imageUrl as string);
+            return;
+        }
         onInputChange(input + emojiData.emoji);
         inputRef.current?.focus();
     };
@@ -536,11 +589,12 @@ export function ChatWindow({
                                                 const isSticker = m.type === "sticker";
                                                 const isImage = m.type === "image";
                                                 // Tin chỉ chứa 1 emoji ngắn (gửi nhanh) → hiển thị to như Messenger
+                                                const trimmedContent = m.content.trim();
                                                 const isJumboEmoji =
                                                     !isSticker &&
                                                     !isImage &&
-                                                    m.content.trim().length > 0 &&
-                                                    [...m.content.trim()].length <= 3 &&
+                                                    trimmedContent.length > 0 &&
+                                                    [...trimmedContent].length <= MAX_JUMBO_EMOJI_COUNT &&
                                                     /^\p{Extended_Pictographic}+$/u.test(m.content.trim());
                                                 return (
                                                     <div key={m.id} className={`flex items-end gap-2 ${group.mine ? "flex-row-reverse" : ""}`}>
@@ -563,8 +617,8 @@ export function ChatWindow({
                                                             <ChatImage
                                                                 src={m.content}
                                                                 alt="sticker"
-                                                                className="h-24 w-24 select-none object-contain"
-                                                                fallbackClassName="h-24 w-24"
+                                                                className="h-28 w-28 select-none object-contain"
+                                                                fallbackClassName="h-28 w-28"
                                                                 onLoad={handleMediaLoad}
                                                             />
                                                         ) : isImage ? (
@@ -575,9 +629,10 @@ export function ChatWindow({
                                                                 onClick={() => setPreviewSrc(m.content)}
                                                             />
                                                         ) : isJumboEmoji ? (
-                                                            <div className="text-5xl leading-none">
-                                                                <EmojiText text={m.content} />
-                                                            </div>
+                                                            <EmojiText
+                                                                text={m.content}
+                                                                className="flex flex-wrap items-center gap-1.5 text-5xl leading-none"
+                                                            />
                                                         ) : (
                                                             <div
                                                                 className={`w-fit max-w-[75%] whitespace-pre-wrap break-words rounded-2xl px-3 py-1.5 text-sm leading-snug ${group.mine ? "bg-[#1a3c34] text-white" : "bg-black/6 text-foreground"
@@ -619,10 +674,12 @@ export function ChatWindow({
                         {pendingImage && (
                             <div className="flex items-center gap-2 rounded-xl bg-black/[0.03] px-2 py-1.5">
                                 <div className="relative shrink-0">
-                                    <img
+                                    <Image
+                                        width={100}
+                                        height={100}
                                         src={pendingImage.previewUrl}
                                         alt="Ảnh sắp gửi"
-                                        className="size-14 rounded-lg object-cover ring-1 ring-black/10"
+                                        className="size-18 rounded-lg object-cover ring-1 ring-black/10"
                                     />
                                     <button
                                         type="button"
@@ -672,7 +729,7 @@ export function ChatWindow({
                                     type="button"
                                     ref={stickerBtnRef}
                                     onClick={() => openPopover("sticker")}
-                                    disabled={CHAT_STICKERS.length === 0}
+                                    disabled={stickers.length === 0}
                                     className={`cursor-pointer absolute left-0 top-0 flex size-9 items-center justify-center rounded-full transition-all duration-200 disabled:opacity-30 ${hasText ? "pointer-events-none scale-75 opacity-0" : "scale-100 opacity-100"
                                         } ${activePopover === "sticker" ? "bg-[#1a3c34]/10 text-[#1a3c34]" : "text-foreground/45 hover:bg-black/6"}`}
                                     aria-label={t("chat_choose_sticker")}
@@ -696,21 +753,13 @@ export function ChatWindow({
 
                             {/* Pill input — giãn hết chỗ trống, emoji nằm trong pill */}
                             <div className="flex min-w-0 flex-1 items-center rounded-full border border-black/10 bg-black/[0.03] pr-1 focus-within:border-[#1a3c34] focus-within:ring-2 focus-within:ring-[#1a3c34]/10">
-                                <input
-                                    ref={inputRef}
-                                    type="text"
-                                    name="ujcha-chat-message"
-                                    autoComplete="off"
-                                    autoCorrect="off"
-                                    data-lpignore="true"
-                                    data-1p-ignore="true"
-                                    data-form-type="other"
+                                <EmojiSyncInput
+                                    inputRef={inputRef}
                                     value={input}
-                                    onChange={(e) => onInputChange(e.target.value)}
+                                    onChange={onInputChange}
                                     placeholder={placeholder}
                                     maxLength={2000}
                                     disabled={sending}
-                                    className="min-w-0 flex-1 bg-transparent px-3.5 py-2 text-sm outline-none disabled:opacity-60"
                                 />
                                 <button
                                     type="button"
@@ -763,7 +812,7 @@ export function ChatWindow({
                             setPlusMenuOpen(false);
                             openPopover("sticker", plusBtnRef.current);
                         }}
-                        disabled={CHAT_STICKERS.length === 0}
+                        disabled={stickers.length === 0}
                         className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-foreground hover:bg-black/5 disabled:opacity-40"
                     >
                         <StickerIcon className="size-4 text-foreground/50" />
@@ -797,20 +846,47 @@ export function ChatWindow({
                             height={360}
                             width={300}
                             emojiStyle={EmojiStyle.FACEBOOK}
+                            customEmojis={customEmojis}
+                            categories={emojiCategories}
+                            searchPlaceholder={t("chat_emoji_search_placeholder")}
                         />
                     ) : (
-                        <div className="grid w-[260px] grid-cols-4 gap-2 p-3">
-                            {CHAT_STICKERS.map((s) => (
-                                <button
-                                    key={s.id}
-                                    type="button"
-                                    onClick={() => handleStickerClick(s.url)}
-                                    className="flex items-center justify-center rounded-xl p-1.5 transition hover:bg-black/6"
-                                    title={s.alt}
-                                >
-                                    <img src={s.url} alt={s.alt} className="size-12 object-contain" draggable={false} />
-                                </button>
-                            ))}
+                        <div className="flex flex-col md:w-[400px] w-[95vw]">
+                            {stickerAlbums.length > 0 && (
+                                <div className="flex gap-1.5 overflow-x-auto border-b border-black/6 px-3 py-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveStickerAlbum("all")}
+                                        className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold transition ${activeStickerAlbum === "all" ? "bg-[#1a3c34] text-white" : "bg-black/[0.05] text-foreground/60 hover:bg-black/[0.09]"}`}
+                                    >
+                                        {t("chat_sticker_all_category")}
+                                    </button>
+                                    {stickerAlbums.map((album) => (
+                                        <button
+                                            key={album.id}
+                                            type="button"
+                                            onClick={() => setActiveStickerAlbum(album.id)}
+                                            className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold transition ${activeStickerAlbum === album.id ? "bg-[#1a3c34] text-white" : "bg-black/[0.05] text-foreground/60 hover:bg-black/[0.09]"}`}
+                                        >
+                                            {album.name}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-4 gap-2 p-3">
+                                {filteredStickers.map((s) => (
+                                    <button
+                                        key={s.id}
+                                        type="button"
+                                        onClick={() => handleStickerClick(s.url)}
+                                        className="cursor-pointer flex items-center justify-center rounded-xl p-1.5 transition hover:bg-black/6"
+                                        title={s.alt}
+                                    >
+                                        <img src={s.url} alt={s.alt} className="size-15 object-contain" draggable={false} />
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     )}
                 </div>,

@@ -37,4 +37,5 @@ export const ROUTES = {
     SHIPPING: '/shipping',
     GROUP_ORDERS: '/group-orders',
     INVENTORY: '/inventory',
+    CHAT_WIDGET: '/chat-widget',
 } as const

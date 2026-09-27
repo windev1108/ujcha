@@ -28,6 +28,7 @@ import {
   UsersRound,
   type LucideIcon,
   StoreIcon,
+  Sticker,
 } from "lucide-react";
 
 import { useAuthStore } from "@/store/auth-store";
@@ -72,6 +73,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { href: ROUTES.FEEDBACK, label: "Phản hồi KH", icon: MessageSquare, permission: "feedback" },
   { href: ROUTES.SMS, label: "Nhật ký SMS", icon: MessageSquareDot, permission: "sms" },
   { href: ROUTES.SHIPPING, label: "Phí vận chuyển", icon: MapPin, permission: "shipping" },
+  { href: ROUTES.CHAT_WIDGET, label: "Tiện ích Chat", icon: Sticker, permission: "chat-widget" },
 ];
 
 function initialsFromName(nameOrPhone: string | null | undefined) {

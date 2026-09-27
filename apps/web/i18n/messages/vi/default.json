@@ -1310,5 +1310,8 @@
   "chat_send_sticker_failed": "Gửi sticker thất bại, thử lại nhé",
   "chat_image_too_large": "Ảnh vượt quá {maxMb}MB",
   "chat_send_image_failed": "Gửi ảnh thất bại, thử lại nhé",
-  "chat_guest_fallback": "Khách"
+  "chat_guest_fallback": "Khách",
+  "chat_sticker_misc_category": "Khác",
+  "chat_emoji_search_placeholder": "Tìm emoji…",
+  "chat_sticker_all_category": "Tất cả"
 }

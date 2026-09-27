@@ -6,10 +6,11 @@ import { MessageCircle, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useChatSocket } from "@/hooks/useChatSocket";
 import type { ChatMessage, FetchMessagesOpts, ChatMessagePage, ChatMessageType } from "@/services/chat/api";
-import { uploadChatImage } from "@/services/chat/api";
+import { fetchChatStickers, uploadChatImage } from "@/services/chat/api";
 import { ChatWindow } from "./ChatWindow";
 import { toast } from "sonner";
 import { useNotificationStore } from "@/store/notification-store";
+import { useQuery } from "@tanstack/react-query";
 
 const PAGE_SIZE = 25;
 const MAX_IMAGE_MB = 8;
@@ -51,6 +52,11 @@ export function ChatBubble({ kind, hostName, roomId, enabled, fetchMessages, sen
   const [uploadingImage, setUploadingImage] = useState(false);
   const [closed, setClosed] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const { data: stickers = [] } = useQuery({
+    queryKey: ["chat-stickers"],
+    queryFn: fetchChatStickers,
+    staleTime: 5 * 60 * 1000, // sticker ít đổi, cache 5 phút
+  });
 
   const messagesRef = useRef<ChatMessage[]>([]);
   messagesRef.current = messages;
@@ -233,6 +239,7 @@ export function ChatBubble({ kind, hostName, roomId, enabled, fetchMessages, sen
           >
             <ChatWindow
               key={roomId ?? "none"}
+              stickers={stickers}
               title={kind === 'group' ? t("chat_group_order_title", { host: hostName ?? 'Guest' }) : t("chat_title")}
               eyebrow={kind === 'group' ? t("chat_group_order_eyebrow") : t("chat_eyebrow")}
               messages={messages}

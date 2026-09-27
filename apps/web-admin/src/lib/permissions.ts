@@ -22,7 +22,8 @@ export const PERMISSIONS = {
   POS_RELEASE: "pos-release",
   SMS: "sms",
   SHIPPING: "shipping",
-  GROUP_ORDERS: "group-orders"
+  GROUP_ORDERS: "group-orders",
+  CHAT_WIDGET: "chat-widget"
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -52,7 +53,8 @@ export const ALL_PERMISSIONS: Permission[] = [
   "pos-release",
   "sms",
   "shipping",
-  "group-orders"
+  "group-orders",
+  "chat-widget"
 ];
 
 export const PERMISSION_LABELS: Record<Permission, string> = {
@@ -79,7 +81,8 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "pos-release": "Cập nhật POS",
   "shipping": "Phí vận chuyển",
   sms: "Nhật ký SMS",
-  "group-orders": "Đơn nhóm"
+  "group-orders": "Đơn nhóm",
+  "chat-widget": "Cấu hình Chat",
 };
 
 /**

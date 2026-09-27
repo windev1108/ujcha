@@ -165,4 +165,5 @@ export const adminKeys = {
   activeGroupOrders: ["admin", "group-orders", "active"] as const,
   groupOrderDetail: (token: string) => ["admin", "group-orders", token] as const,
   ingredients: ["admin", "ingredients"] as const,
+  chat_widget: ["admin", "chat_widget"] as const,
 };
