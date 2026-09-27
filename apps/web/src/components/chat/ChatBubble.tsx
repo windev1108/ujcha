@@ -15,7 +15,7 @@ import { useQuery } from "@tanstack/react-query";
 const PAGE_SIZE = 25;
 const MAX_IMAGE_MB = 10;
 const NEW_MESSAGE_SOUND_SRC = "/mp3/new-message.mp3";
-const NEW_MESSAGE_SOUND_VOLUME = 0.05;
+const NEW_MESSAGE_SOUND_VOLUME = 0.1;
 
 interface ChatBubbleProps {
   kind: "order" | "group";
