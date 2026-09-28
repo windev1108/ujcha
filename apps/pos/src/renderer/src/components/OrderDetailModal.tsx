@@ -945,16 +945,7 @@ export function OrderDetailModal({
                                 <MessageCircle className="size-4" /> Nhắn tin với khách
                             </button>
                         )}
-                        {cancellable && onStatusChange && (
-                            <button
-                                onClick={() => void handleModalStatus('cancelled')}
-                                disabled={actionBusy}
-                                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 py-3 text-sm font-bold text-red-600 hover:bg-red-100 disabled:opacity-50 transition-colors"
-                            >
-                                {actionBusy ? <Loader2 className="size-4 animate-spin" /> : <XCircle className="size-4" />}
-                                Huỷ đơn hàng
-                            </button>
-                        )}
+
 
                         {onStatusChange && (['pending', 'confirmed', 'preparing', 'ready', 'delivering', 'arrived'] as OrderStatus[]).includes(localStatus) && (
                             <div className="rounded-2xl border border-gray-100 bg-white p-4">
@@ -979,6 +970,16 @@ export function OrderDetailModal({
                                     )}
                                     {(localStatus === 'delivering' || localStatus === 'arrived') && (
                                         <ActionBtn color="emerald" icon={<CheckCircle2 className="size-3.5" />} label="Hoàn thành" busy={actionBusy} onClick={() => void handleModalStatus('completed')} />
+                                    )}
+                                    {cancellable && (
+                                        <button
+                                            onClick={() => void handleModalStatus('cancelled')}
+                                            disabled={actionBusy}
+                                            className="cursor-pointer flex w-1/2 items-center justify-center gap-2 rounded-full border border-red-200 bg-red-50 py-3 text-xs font-bold text-red-600 hover:bg-red-100 disabled:opacity-50 transition-colors"
+                                        >
+                                            {actionBusy ? <Loader2 className="size-4 animate-spin" /> : <XCircle className="size-4" />}
+                                            Huỷ đơn hàng
+                                        </button>
                                     )}
                                 </div>
                             </div>
@@ -1276,7 +1277,7 @@ function ActionBtn({ color, icon, label, busy, onClick }: {
         <button
             onClick={onClick}
             disabled={busy}
-            className={`flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-bold transition-colors disabled:opacity-50 ${ACTION_BTN_CLS[color]}`}
+            className={`cursor-pointer flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-bold transition-colors disabled:opacity-50 ${ACTION_BTN_CLS[color]}`}
         >
             {busy ? <Loader2 className="size-3.5 animate-spin" /> : icon}
             {label}

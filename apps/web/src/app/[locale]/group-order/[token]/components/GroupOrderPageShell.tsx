@@ -1562,6 +1562,11 @@ export function GroupOrderPageShell() {
     if (me.pointsToUse > 0) setPointsToUse(me.pointsToUse);
   }, [me]);
 
+  const weatherFee =
+    isHost && state?.status === "collecting"
+      ? (localShippingEstimate?.weatherSurchargeFee ?? 0)
+      : (shippingConfig?.weatherSurchargeActive ? shippingConfig.weatherSurchargeFee : 0);
+
 
   const handleTogglePoints = useCallback(async () => {
     if (!canEditPoints || !sessionToken) return;
@@ -2281,11 +2286,11 @@ export function GroupOrderPageShell() {
                               {t("free_ship_within_km", { km: shippingConfig.freeShipDistanceKm })}
                             </div>
                           )}
-                        {displayShippingFee > 0 && shippingConfig?.weatherSurchargeActive && shippingConfig.weatherSurchargeFee > 0 && (
+                        {displayShippingFee > 0 && weatherFee > 0 && (
                           <div className="flex justify-end">
                             <p className="flex items-center gap-1 text-[11px] text-sky-700">
                               <CloudRainWindIcon className="size-3 shrink-0" />
-                              {t("weather_surcharge_note", { amount: fmtVnd(shippingConfig.weatherSurchargeFee) })}
+                              {t("weather_surcharge_note", { amount: fmtVnd(weatherFee) })}
                             </p>
                           </div>
                         )}
