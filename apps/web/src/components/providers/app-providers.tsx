@@ -43,7 +43,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       <AuthPersistHydration />
       <Suspense fallback={null}><RefCodeCapture /></Suspense>
       <Toaster position="top-right" richColors />
-      <ProductionSecurityGuard />
+      {/* <ProductionSecurityGuard /> */}
       <QueryClientProvider client={queryClient}>
         <StoreStatusModal />
         <GlobalAnnouncementModal />
