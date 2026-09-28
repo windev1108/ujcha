@@ -216,9 +216,11 @@ export function ChatBubble({ kind, hostName, roomId, enabled, fetchMessages, sen
     setUploadingImage(true);
     try {
       const url = await uploadChatImage(file);
-      const msg = await sendMessage(url, "image");
-      appendMessage(msg);
-      void syncLatest();
+      if (url) {
+        const msg = await sendMessage(url!, "image");
+        appendMessage(msg);
+        void syncLatest();
+      }
     } catch (err) {
       console.error("[chat] upload image failed:", err);
       toast.error(t("chat_send_image_failed"));

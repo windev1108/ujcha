@@ -896,7 +896,7 @@ export function ChatWindow({
                             }
                         />
                     ) : (
-                        <div className="relative flex flex-col md:w-[400px] w-[95vw] overflow-hidden">
+                        <div className="relative flex h-[460px] max-h-[70vh] w-[95vw] flex-col overflow-hidden md:w-[400px]">
                             <div className="flex">
                                 {stickerAlbums.length > 0 && (
                                     <div className="flex flex-wrap items-center gap-1.5 border-b border-black/6 px-3 py-2">
