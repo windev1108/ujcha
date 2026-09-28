@@ -14,7 +14,7 @@ import {
     ImageOff,
     Plus,
 } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@heroui/react";
+import { Avatar, AvatarFallback, AvatarImage, Tooltip } from "@heroui/react";
 import { Categories, EmojiStyle, type EmojiClickData } from "emoji-picker-react";
 import { EmojiIcon, EmojiSyncInput, EmojiText } from "./EmojiText";
 import EmojiPicker from "emoji-picker-react"
@@ -22,6 +22,7 @@ import EmojiPicker from "emoji-picker-react"
 const MAX_IMAGE_MB = 10;
 const QUICK_EMOJI = "👍"; // đổi sang emoji bạn muốn dùng làm nút gửi nhanh mặc định
 const LOGO_URL = "/logo-only.png";
+const MAX_VISIBLE_STICKER_TABS = 4;
 const MAX_JUMBO_EMOJI_COUNT = 12; // tin nhắn toàn emoji, không quá số này thì hiển thị to + không nền
 export interface ChatWindowMessage {
     id: string;
@@ -95,7 +96,7 @@ function ChatMessageImage({
         return (
             <div className="flex h-[180px] w-[180px] flex-col items-center justify-center gap-1 rounded-2xl bg-black/5 text-foreground/35">
                 <ImageOff className="size-5" />
-                <span className="text-[10px] font-medium">{t("chat_image_load_error")}</span>
+                <span className="text-[10px] font-medium">{"Tải ảnh lỗi"}</span>
             </div>
         );
     }
@@ -174,6 +175,7 @@ export function ChatWindow({
     closedLabel = "Cuộc trò chuyện đã kết thúc",
     placeholder = "Nhập tin nhắn…",
     myId,
+    header,
     stickers = []
 }: {
     title?: string;
@@ -200,6 +202,7 @@ export function ChatWindow({
     closedLabel?: string;
     placeholder?: string;
     myId?: string;
+    header?: React.ReactNode;
     stickers?: { id: string; url: string; alt: string; albumId: string | null; album: { name: string | null } }[];
 }) {
     const listRef = useRef<HTMLDivElement>(null);
@@ -239,7 +242,26 @@ export function ChatWindow({
     const fileInputRef = useRef<HTMLInputElement>(null);
     const stickerBtnRef = useRef<HTMLButtonElement>(null);
     const [activeStickerAlbum, setActiveStickerAlbum] = useState<string | "all" | "none">("all");
-    // ── Preview ảnh trước khi gửi (blob URL local) ──────────────────────
+    const [albumOverflowOpen, setAlbumOverflowOpen] = useState(false);
+    const albumMoreBtnRef = useRef<HTMLButtonElement>(null);
+    const albumMorePanelRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!albumOverflowOpen) return;
+        const handleClickOutside = (e: MouseEvent) => {
+            const target = e.target as Node;
+            if (albumMorePanelRef.current?.contains(target)) return;
+            if (albumMoreBtnRef.current?.contains(target)) return;
+            setAlbumOverflowOpen(false);
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, [albumOverflowOpen]);
+
+    useEffect(() => {
+        if (activePopover !== "sticker") setAlbumOverflowOpen(false);
+    }, [activePopover]);
+
     const [pendingImage, setPendingImage] = useState<{ file: File; previewUrl: string } | null>(null);
     const pendingImageRef = useRef(pendingImage);
     useEffect(() => {
@@ -303,7 +325,9 @@ export function ChatWindow({
         }
         return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
     }, [stickers]);
-
+    const visibleStickerAlbums = stickerAlbums.slice(0, MAX_VISIBLE_STICKER_TABS);
+    const overflowStickerAlbums = stickerAlbums.slice(MAX_VISIBLE_STICKER_TABS);
+    const isActiveAlbumInOverflow = overflowStickerAlbums.some((a) => a.id === activeStickerAlbum);
     const filteredStickers = useMemo(() => {
         if (activeStickerAlbum === "all") return stickers;
         if (activeStickerAlbum === "none") return stickers.filter((s) => !s.albumId);
@@ -397,7 +421,7 @@ export function ChatWindow({
     const openPopover = (which: "emoji" | "sticker", anchor?: HTMLElement | null) => {
         const btn = anchor ?? (which === "emoji" ? emojiBtnRef.current : plusBtnRef.current);
         if (!btn) return;
-        const width = which === "emoji" ? 300 : 400; // đổi 260 → 400, khớp width thật của popover sticker
+        const width = which === "emoji" ? 360 : 400;
         setPopoverStyle(computeAnchoredStyle(btn, width));
         setActivePopover((prev) => (prev === which ? null : which));
     };
@@ -530,18 +554,20 @@ export function ChatWindow({
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
         >
-            <div className="flex items-center gap-2 border-b border-black/6 px-4 py-3">
-                <MessageCircle className="size-4 text-[#1a3c34]" />
-                <div className="min-w-0 flex-1">
-                    {eyebrow && <p className="text-[10px] font-semibold uppercase tracking-widest text-foreground/40">{eyebrow}</p>}
-                    <p className="truncate text-sm font-bold text-foreground">{title}</p>
-                </div>
-                <button onClick={onClose} aria-label="Đóng"
-                    className="flex size-7 items-center justify-center rounded-full text-foreground/40 hover:bg-black/6">
-                    <X className="size-4" />
-                </button>
-            </div>
 
+            {header ?? (
+                <div className="flex items-center gap-2 border-b border-black/6 px-4 py-3">
+                    <MessageCircle className="size-4 text-[#1a3c34]" />
+                    <div className="min-w-0 flex-1">
+                        {eyebrow && <p className="text-[10px] font-semibold uppercase tracking-widest text-foreground/40">{eyebrow}</p>}
+                        <p className="truncate text-sm font-bold text-foreground">{title}</p>
+                    </div>
+                    <button onClick={onClose} aria-label="Đóng"
+                        className="cursor-pointer flex size-7 items-center justify-center rounded-full text-foreground/40 hover:bg-black/6">
+                        <X className="size-4" />
+                    </button>
+                </div>
+            )}
             <div className="relative flex-1 min-h-0">
                 <div
                     ref={listRef}
@@ -683,7 +709,7 @@ export function ChatWindow({
                                         <X className="size-3" />
                                     </button>
                                 </div>
-                                <p className="text-xs text-foreground/40">{t("chat_pending_image_note")}</p>
+                                <p className="text-xs text-foreground/40">{"Ảnh sẽ được gửi khi bạn bấm gửi"}</p>
                             </div>
                         )}
 
@@ -798,33 +824,40 @@ export function ChatWindow({
                     style={plusMenuStyle}
                     className="w-48 overflow-hidden rounded-2xl border border-black/8 bg-white py-1 shadow-2xl"
                 >
-                    <button
-                        type="button"
-                        title={"Chọn nhãn dán"}
-                        onClick={() => {
-                            setPlusMenuOpen(false);
-                            openPopover("sticker", plusBtnRef.current);
-                        }}
-                        disabled={stickers.length === 0}
-                        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-foreground hover:bg-black/5 disabled:opacity-40"
-                    >
-                        <StickerIcon className="size-4 text-foreground/50" />
-                        {"Chọn nhãn dán"}
-                    </button>
-                    <button
-                        type="button"
-                        title={'Gửi ảnh'}
-
-                        onClick={() => {
-                            setPlusMenuOpen(false);
-                            fileInputRef.current?.click();
-                        }}
-                        disabled={uploadingImage}
-                        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-foreground hover:bg-black/5 disabled:opacity-40"
-                    >
-                        <ImagePlus className="size-4 text-foreground/50" />
-                        {'Gửi ảnh'}
-                    </button>
+                    <Tooltip delay={0.1}>
+                        <Tooltip.Content>Chọn nhãn dán</Tooltip.Content>
+                        <Tooltip.Trigger className="w-full">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setPlusMenuOpen(false);
+                                    openPopover("sticker", plusBtnRef.current);
+                                }}
+                                disabled={stickers.length === 0}
+                                className="flex w-full cursor-pointer items-center gap-2.5 px-3 py-2.5 text-left text-sm text-foreground hover:bg-black/5 disabled:opacity-40"
+                            >
+                                <StickerIcon className="size-4 text-foreground/50" />
+                                Chọn nhãn dán
+                            </button>
+                        </Tooltip.Trigger>
+                    </Tooltip>
+                    <Tooltip delay={0.1}>
+                        <Tooltip.Content>Gửi ảnh</Tooltip.Content>
+                        <Tooltip.Trigger className="w-full">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setPlusMenuOpen(false);
+                                    fileInputRef.current?.click();
+                                }}
+                                disabled={uploadingImage}
+                                className="flex w-full cursor-pointer items-center gap-2.5 px-3 py-2.5 text-left text-sm text-foreground hover:bg-black/5 disabled:opacity-40"
+                            >
+                                <ImagePlus className="size-4 text-foreground/50" />
+                                Gửi ảnh
+                            </button>
+                        </Tooltip.Trigger>
+                    </Tooltip>
                 </div>,
                 document.body,
             )}
@@ -836,49 +869,86 @@ export function ChatWindow({
                         <EmojiPicker
                             onEmojiClick={handleEmojiClick}
                             autoFocusSearch={false}
-                            height={360}
-                            width={300}
+                            height={420}
+                            width={360}
                             emojiStyle={EmojiStyle.FACEBOOK}
-                            customEmojis={customEmojis}
-                            categories={emojiCategories}
-                            searchPlaceholder={"Tìm emoji"}
+                            searchPlaceholder="Tìm emoji"
+                            style={{
+                                "--epr-emoji-size": "32px",
+                                "--epr-emoji-gap": "8px",
+                            } as React.CSSProperties}
                         />
                     ) : (
-                        <div className="relative flex flex-col md:w-[400px] w-[95vw] overflow-hidden">
-                            <div className="flex">
-                                {stickerAlbums.length > 0 && (
-                                    <div className="flex gap-1.5 overflow-x-auto  border-b border-black/6 px-3 py-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => setActiveStickerAlbum("all")}
-                                            className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold transition ${activeStickerAlbum === "all" ? "bg-[#1a3c34] text-white" : "bg-black/[0.05] text-foreground/60 hover:bg-black/[0.09]"}`}
-                                        >
-                                            {"Tất cả"}
-                                        </button>
-                                        {stickerAlbums.map((album) => (
-                                            <button
-                                                key={album.id}
-                                                type="button"
-                                                onClick={() => setActiveStickerAlbum(album.id)}
-                                                className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold transition ${activeStickerAlbum === album.id ? "bg-[#1a3c34] text-white" : "bg-black/[0.05] text-foreground/60 hover:bg-black/[0.09]"}`}
-                                            >
-                                                {album.name}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
+                        <div className="relative flex h-[460px] max-h-[70vh] w-[95vw] flex-col overflow-hidden md:w-[400px]">
+                            {stickerAlbums.length > 0 && (
+                                <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-black/6 px-3 py-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveStickerAlbum("all")}
+                                        className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold transition ${activeStickerAlbum === "all" ? "bg-[#1a3c34] text-white" : "bg-black/[0.05] text-foreground/60 hover:bg-black/[0.09]"}`}
+                                    >
+                                        Tất cả
+                                    </button>
 
-                            <div className="grid grid-cols-4 gap-2 p-3 flex-1 md:max-h-[500px] max-h-[90vh] overflow-y-auto ">
+                                    {visibleStickerAlbums.map((album) => (
+                                        <button
+                                            key={album.id}
+                                            type="button"
+                                            onClick={() => setActiveStickerAlbum(album.id)}
+                                            className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold transition ${activeStickerAlbum === album.id ? "bg-[#1a3c34] text-white" : "bg-black/[0.05] text-foreground/60 hover:bg-black/[0.09]"}`}
+                                        >
+                                            {album.name}
+                                        </button>
+                                    ))}
+
+                                    {overflowStickerAlbums.length > 0 && (
+                                        <div className="relative shrink-0">
+                                            <button
+                                                type="button"
+                                                ref={albumMoreBtnRef}
+                                                onClick={() => setAlbumOverflowOpen((v) => !v)}
+                                                aria-label="Thêm danh mục"
+                                                title="Thêm danh mục"
+                                                className={`flex size-7 items-center justify-center rounded-full transition ${isActiveAlbumInOverflow || albumOverflowOpen ? "bg-[#1a3c34] text-white" : "bg-black/[0.05] text-foreground/60 hover:bg-black/[0.09]"}`}
+                                            >
+                                                <Plus className="size-3.5" />
+                                            </button>
+
+                                            {albumOverflowOpen && (
+                                                <div
+                                                    ref={albumMorePanelRef}
+                                                    className="absolute right-0 top-full z-10 mt-1 max-h-60 w-40 overflow-y-auto rounded-xl border border-black/8 bg-white py-1 shadow-2xl"
+                                                >
+                                                    {overflowStickerAlbums.map((album) => (
+                                                        <button
+                                                            key={album.id}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setActiveStickerAlbum(album.id);
+                                                                setAlbumOverflowOpen(false);
+                                                            }}
+                                                            className={`flex w-full items-center px-3 py-2 text-left text-xs font-medium transition ${activeStickerAlbum === album.id ? "bg-[#1a3c34]/10 text-[#1a3c34]" : "text-foreground/70 hover:bg-black/5"}`}
+                                                        >
+                                                            {album.name}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="grid min-h-0 flex-1 grid-cols-4 content-start gap-2 overflow-y-auto overflow-x-hidden p-2">
                                 {filteredStickers.map((s) => (
                                     <button
                                         key={s.id}
                                         type="button"
                                         onClick={() => handleStickerClick(s.url)}
-                                        className="h-24 w-24 cursor-pointer flex items-center justify-center rounded-xl p-1.5 transition hover:bg-black/6"
+                                        className="flex h-26 w-26 cursor-pointer items-center justify-center rounded-xl p-1 transition hover:bg-black/6"
                                         title={s.alt}
                                     >
-                                        <img src={s.url} alt={s.alt} className="size-15 object-contain" draggable={false} />
+                                        <img src={s.url} alt={s.alt} className="size-22 object-contain" draggable={false} />
                                     </button>
                                 ))}
                             </div>
@@ -887,7 +957,6 @@ export function ChatWindow({
                 </div>,
                 document.body,
             )}
-
             {/* Modal xem ảnh phóng to */}
             {previewSrc && typeof document !== "undefined" && createPortal(
                 <div
@@ -908,7 +977,6 @@ export function ChatWindow({
                         <img
                             src={previewSrc}
                             alt={'preview'}
-                            fill
                             sizes="90vw"
                             className="object-contain"
                         />

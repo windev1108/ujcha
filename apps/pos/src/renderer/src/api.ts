@@ -68,6 +68,10 @@ export const fetchTtsConfig = () =>
 export const fetchOrders = (page = 1, pageSize = 100, from?: string, to?: string) =>
   api.get('/admin/orders', { params: { page, pageSize, ...(from && { from }), ...(to && { to }) } }).then((r) => r.data)
 
+export const fetchOrderById = (id: string) =>
+  api.get(`/admin/orders/${id}`).then((r) => r.data)
+
+
 export const createOrder = (body: unknown) =>
   api.post<import('./types/common').AdminOrder>('/admin/orders', body).then((r) => r.data)
 

@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { ClipboardList, Settings, Monitor, LogOut, Bell, Bot } from 'lucide-react'
 import { io } from 'socket.io-client'
 import { usePosStore } from '../store/pos-store'
-import { fetchCategories, fetchProducts, fetchTables, fetchPaymentConfig, API_URL, fetchTtsConfig, fetchOrders } from '../api'
+import { fetchCategories, fetchProducts, fetchTables, fetchPaymentConfig, API_URL, fetchTtsConfig, fetchOrders, updateOrderStatus } from '../api'
 import type { Product, PosConfig, CustomerUpdate, AdminOrder } from '../types/common'
 import { DEFAULT_CONFIG, DEFAULT_BILL_CONFIG, DEFAULT_LABEL_CONFIG } from '../types/common'
 import type { BillConfig, LabelConfig } from '../../../preload'
@@ -31,6 +31,9 @@ import { learnEaterInfo, pruneEaterCacheNow } from '../../../shared/grab-eater-c
 import { useScheduledDeliveryAlerts } from '@/hooks/useScheduledDeliveryAlerts'
 import { useGlobalChatNotifications } from '@/hooks/useGlobalChatNotifications'
 import { disconnectAllSockets, getSocket } from '@/socket'
+import { useChatDockStore } from '@/store/chat-dock-store'
+import { OrderDetailModal } from '@/components/OrderDetailModal'
+import { ChatDock } from '@/components/chat/ChatDock'
 
 const eAPI = (window as unknown as {
   electronAPI?: {
@@ -88,6 +91,7 @@ export function StaffApp() {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
   const [appVersion, setAppVersion] = useState('')
   const [socketConnected, setSocketConnected] = useState(false)
+  const [detailOrder, setDetailOrder] = useState<AdminOrder | null>(null)
   useGlobalChatNotifications(isLoggedIn)
 
   // ── Auto-print dedup: track order IDs already printed this session ─────────
@@ -278,6 +282,8 @@ export function StaffApp() {
       stopGrabAudioOnly()
       eAPI?.customer.update({ type: 'ai-mode', enabled: false, name: 'UjCha' })
       eAPI?.customer.update({ type: 'idle' })
+      useChatDockStore.getState().reset()
+      setDetailOrder(null)
       disconnectAllSockets()
     }
     return () => { stopAlert(); stopGrabAudioOnly() }
@@ -667,6 +673,26 @@ export function StaffApp() {
           onCheckout={(pm) => { setAiPaymentMethod(pm); setCheckoutOpen(true) }}
           onListeningChange={setAiListening}
           onRegisterClearSession={(fn) => { clearAiSessionRef.current = fn }}
+        />
+      )}
+      {isLoggedIn && (
+        <ChatDock
+          rightOffset={aiPanelOpen ? 416 : 16}   // né AI panel rộng 400px
+          onOpenOrder={setDetailOrder}
+        />
+      )}
+
+      {detailOrder && (
+        <OrderDetailModal
+          order={detailOrder}
+          onClose={() => setDetailOrder(null)}
+          onStatusChange={async (id, status) => {
+            const autoPay = status === 'completed' && detailOrder.paymentStatus !== 'paid' ? 'paid' : undefined
+            await updateOrderStatus(id, status, autoPay)
+            setDetailOrder((prev) => prev && prev.id === id
+              ? { ...prev, status, ...(autoPay ? { paymentStatus: 'paid' as const } : {}) }
+              : prev)
+          }}
         />
       )}
 

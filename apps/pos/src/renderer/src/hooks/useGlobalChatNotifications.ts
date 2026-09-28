@@ -4,6 +4,7 @@ import { getSocket } from '@/socket'
 import { API_URL } from '../api'
 import newMessageMp3 from '../assets/mp3/new-message.mp3'
 import { useChatNotifyStore } from '@/store/chat-notify-store'
+import { useChatDockStore } from '@/store/chat-dock-store'
 
 interface ChatNewMessagePayload {
     kind: 'order' | 'group'
@@ -44,7 +45,15 @@ export function useGlobalChatNotifications(enabled: boolean) {
 
         const handleNewMessage = (payload: ChatNewMessagePayload) => {
             if (payload.kind !== 'order') return
+
+            const dock = useChatDockStore.getState()
+            const isOpenNow = dock.openKey === `order:${payload.id}`
+
+            if (isOpenNow) return
+
             useChatNotifyStore.getState().markUnread(payload.id)
+            dock.notify(payload)
+
             const audio = audioRef.current
             if (!audio) return
             audio.currentTime = 0

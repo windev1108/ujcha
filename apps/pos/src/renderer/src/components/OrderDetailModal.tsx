@@ -7,6 +7,7 @@ import {
     Maximize2,
     BanknoteIcon,
     CreditCardIcon,
+    MessageCircle,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { DEFAULT_BILL_CONFIG, DEFAULT_LABEL_CONFIG, RecipeResolveRequestItem, ResolvedRecipe, ResolvedRecipeMap, type AdminOrder, type OrderStatus } from '../types/common'
@@ -22,9 +23,8 @@ import { RecipeChecklist } from './RecipeChecklist'
 import { useShowRecipe } from '@/hooks/useShowRecipe'
 import { RecipeToggleButton } from './RecipeToggleButton'
 import { Avatar, Button, Card, Chip, ListBox, Tooltip, Select } from '@heroui/react'
-import { ChatTab } from './ChatTab'
 import { useChatNotifyStore } from '@/store/chat-notify-store'
-import { ChatBubble } from './chat/ChatBubble'
+import { useChatDockStore } from '@/store/chat-dock-store'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const eAPI = (window as any).electronAPI as import('../../../preload').ElectronAPI | undefined
@@ -932,7 +932,18 @@ export function OrderDetailModal({
                             </div>
                         </div>
                         {!(['completed', 'cancelled'] as OrderStatus[]).includes(localStatus) && (
-                            <ChatBubble kind="order" id={order.id} guestName={deliveryName!} />
+                            <button
+                                onClick={() => useChatDockStore.getState().openConversation({
+                                    kind: 'order',
+                                    id: order.id,
+                                    orderId: order.id,
+                                    customerName: deliveryName ?? 'Khách',
+                                    orderCode: order.paymentCode ?? order.orderRef ?? null,
+                                })}
+                                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white py-3 text-sm font-bold text-gray-700 transition-colors hover:border-brand hover:text-brand"
+                            >
+                                <MessageCircle className="size-4" /> Nhắn tin với khách
+                            </button>
                         )}
                         {cancellable && onStatusChange && (
                             <button
