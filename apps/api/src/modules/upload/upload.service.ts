@@ -1,5 +1,6 @@
 import {
   BadGatewayException,
+  BadRequestException,
   GatewayTimeoutException,
   Injectable,
   Logger,
@@ -80,16 +81,24 @@ export class UploadService {
   }
 
   private mapError(e?: { http_code?: number; message?: string }) {
-    if (e?.http_code === 499 || /timeout/i.test(e?.message ?? '')) {
+    const msg = e?.message ?? '';
+    if (e?.http_code === 499 || /timeout/i.test(msg)) {
       return new GatewayTimeoutException({
         message: 'Tải ảnh quá lâu, vui lòng thử lại.',
         code: 'UPLOAD_TIMEOUT',
       });
     }
-    if (/file size too large|too large/i.test(e?.message ?? '')) {
+    if (/too large/i.test(msg)) {
       return new PayloadTooLargeException({
         message: 'Ảnh quá lớn.',
         code: 'IMAGE_TOO_LARGE',
+      });
+    }
+    // 400 từ Cloudinary = ảnh hỏng/không hợp lệ, lỗi của người dùng chứ không phải của server
+    if (e?.http_code === 400) {
+      return new BadRequestException({
+        message: 'Ảnh không hợp lệ, vui lòng chọn ảnh khác.',
+        code: 'IMAGE_INVALID',
       });
     }
     return new BadGatewayException({
