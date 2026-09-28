@@ -1,6 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import type { UpdateShippingConfigDto } from './dto/update-shipping-config.dto';
+import {
+  normalizeTiers,
+  resolveWeatherSurcharge,
+  SHIPPING_CONFIG_CACHE_KEY,
+  ShippingConfigView,
+  toConfigView,
+} from '../../helper/weather.utilt';
+import { RedisService } from '../redis/redis.service';
+import { Prisma } from '@prisma/client';
 
 export type ShippingEstimate = {
   distanceKm: number;
@@ -11,6 +20,7 @@ export type ShippingEstimate = {
   freeShipDistanceKm: number;
   weatherSurchargeActive: boolean;
   weatherSurchargeFee: number;
+  weatherSurchargeLabel: string | null;
 };
 
 export type PublicShippingConfig = {
@@ -21,24 +31,38 @@ export type PublicShippingConfig = {
   maxDistanceKm: number;
   freeThreshold: number;
   freeShipDistanceKm: number;
+  /** Trạng thái phụ phí đang áp dụng thực tế (manual hoặc auto). */
   weatherSurchargeActive: boolean;
   weatherSurchargeFee: number;
+  weatherSurchargeLabel: string | null;
 };
 
+const CONFIG_CACHE_TTL_S = 60;
 @Injectable()
 export class ShippingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
+  ) { }
 
-  async getConfig() {
-    return this.prisma.shippingConfig.upsert({
+  async getConfig(): Promise<ShippingConfigView> {
+    const cached = await this.redis.get<Parameters<typeof toConfigView>[0]>(
+      SHIPPING_CONFIG_CACHE_KEY,
+    );
+    if (cached) return toConfigView(cached);
+
+    const row = await this.prisma.shippingConfig.upsert({
       where: { id: 'default' },
       create: {},
       update: {},
     });
+    await this.redis.set(SHIPPING_CONFIG_CACHE_KEY, row, CONFIG_CACHE_TTL_S);
+    return toConfigView(row);
   }
 
   async getPublicConfig(): Promise<PublicShippingConfig> {
     const cfg = await this.getConfig();
+    const weather = resolveWeatherSurcharge(cfg);
     return {
       isActive: cfg.isActive,
       baseFee: cfg.baseFee,
@@ -47,17 +71,39 @@ export class ShippingService {
       maxDistanceKm: cfg.maxDistanceKm,
       freeThreshold: cfg.freeThreshold,
       freeShipDistanceKm: cfg.freeShipDistanceKm,
-      weatherSurchargeActive: cfg.weatherSurchargeActive,
-      weatherSurchargeFee: cfg.weatherSurchargeFee,
+      weatherSurchargeActive: weather.active,
+      weatherSurchargeFee: weather.fee,
+      weatherSurchargeLabel: weather.label,
     };
   }
 
-  async updateConfig(dto: UpdateShippingConfigDto) {
-    return this.prisma.shippingConfig.upsert({
+  async updateConfig(
+    dto: UpdateShippingConfigDto,
+  ): Promise<ShippingConfigView> {
+    const { weatherRainTiersJson, weatherWindTiersJson, ...rest } = dto;
+    const data = {
+      ...rest,
+      ...(weatherRainTiersJson && {
+        weatherRainTiersJson: normalizeTiers(
+          weatherRainTiersJson,
+          [],
+        ) as unknown as Prisma.InputJsonValue,
+      }),
+      ...(weatherWindTiersJson && {
+        weatherWindTiersJson: normalizeTiers(
+          weatherWindTiersJson,
+          [],
+        ) as unknown as Prisma.InputJsonValue,
+      }),
+    };
+
+    const row = await this.prisma.shippingConfig.upsert({
       where: { id: 'default' },
-      create: { ...dto },
-      update: { ...dto },
+      create: data,
+      update: data,
     });
+    await this.redis.del(SHIPPING_CONFIG_CACHE_KEY);
+    return toConfigView(row);
   }
 
   /** Haversine distance in km between two coordinates. */
@@ -87,55 +133,36 @@ export class ShippingService {
       this.prisma.storeLocation.findFirst(),
     ]);
 
-    // Phụ phí thời tiết xấu chỉ có ý nghĩa khi giao hàng thực sự diễn ra
-    // (không áp dụng khi isDisabled / isOutOfRange).
-    const weatherSurchargeFee = cfg.weatherSurchargeActive
-      ? cfg.weatherSurchargeFee
-      : 0;
+    const weather = resolveWeatherSurcharge(cfg);
 
-    if (!cfg.isActive) {
-      return {
-        distanceKm: 0,
-        fee: 0,
-        isFree: false,
-        isOutOfRange: false,
-        isDisabled: true,
-        freeShipDistanceKm: cfg.freeShipDistanceKm,
-        weatherSurchargeActive: cfg.weatherSurchargeActive,
-        weatherSurchargeFee: 0,
-      };
-    }
+    // Không giao được (tắt / chưa có toạ độ quán / ngoài bán kính) → không có phụ phí thời tiết.
+    const notDeliverable = (
+      extra: Partial<ShippingEstimate>,
+    ): ShippingEstimate => ({
+      distanceKm: 0,
+      fee: 0,
+      isFree: false,
+      isOutOfRange: false,
+      isDisabled: false,
+      freeShipDistanceKm: cfg.freeShipDistanceKm,
+      weatherSurchargeActive: false,
+      weatherSurchargeFee: 0,
+      weatherSurchargeLabel: null,
+      ...extra,
+    });
+
+    if (!cfg.isActive) return notDeliverable({ isDisabled: true });
 
     const storeLat = store?.lat ?? 0;
     const storeLng = store?.lng ?? 0;
-
-    if (storeLat === 0 && storeLng === 0) {
-      return {
-        distanceKm: 0,
-        fee: 0,
-        isFree: false,
-        isOutOfRange: false,
-        isDisabled: true,
-        freeShipDistanceKm: cfg.freeShipDistanceKm,
-        weatherSurchargeActive: cfg.weatherSurchargeActive,
-        weatherSurchargeFee: 0,
-      };
-    }
+    if (storeLat === 0 && storeLng === 0)
+      return notDeliverable({ isDisabled: true });
 
     const distanceKm = this.haversineKm(lat, lng, storeLat, storeLng);
 
-    if (distanceKm > cfg.maxDistanceKm) {
-      return {
-        distanceKm,
-        fee: 0,
-        isFree: false,
-        isOutOfRange: true,
-        isDisabled: false,
-        freeShipDistanceKm: cfg.freeShipDistanceKm,
-        weatherSurchargeActive: cfg.weatherSurchargeActive,
-        weatherSurchargeFee: 0,
-      };
-    }
+    // Chỉ tracking/áp phụ phí trong bán kính giao hàng (maxDistanceKm).
+    if (distanceKm > cfg.maxDistanceKm)
+      return notDeliverable({ distanceKm, isOutOfRange: true });
 
     const extraKm = Math.max(0, distanceKm - cfg.baseKm);
     const rawFee = cfg.baseFee + Math.round(extraKm) * cfg.feePerKm;
@@ -145,10 +172,9 @@ export class ShippingService {
       cfg.freeShipDistanceKm > 0 && distanceKm <= cfg.freeShipDistanceKm;
     const isFree = isFreeByAmount || isFreeByDistance;
 
-    // Phụ phí thời tiết xấu cộng thêm bất kể đơn có được freeship hay không —
-    // đây là phụ phí do điều kiện giao hàng khó khăn, không phải phí theo khoảng cách/giá trị đơn.
-    // Nếu muốn freeship miễn luôn phụ phí này, đổi thành: isFree ? 0 : weatherSurchargeFee
-    const fee = (isFree ? 0 : rawFee) + weatherSurchargeFee;
+    // Phụ phí thời tiết cộng thêm bất kể freeship (giữ nguyên hành vi cũ).
+    // Muốn freeship miễn luôn: isFree ? 0 : weather.fee
+    const fee = (isFree ? 0 : rawFee) + weather.fee;
 
     return {
       distanceKm,
@@ -157,8 +183,9 @@ export class ShippingService {
       isOutOfRange: false,
       isDisabled: false,
       freeShipDistanceKm: cfg.freeShipDistanceKm,
-      weatherSurchargeActive: cfg.weatherSurchargeActive,
-      weatherSurchargeFee,
+      weatherSurchargeActive: weather.active,
+      weatherSurchargeFee: weather.fee,
+      weatherSurchargeLabel: weather.label,
     };
   }
 }

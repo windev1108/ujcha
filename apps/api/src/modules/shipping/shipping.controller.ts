@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ShippingService } from './shipping.service';
 
@@ -14,7 +14,10 @@ export class ShippingController {
   }
 
   @Get('estimate')
-  @ApiOperation({ summary: 'Ước tính phí giao hàng theo toạ độ GPS' })
+  @ApiOperation({
+    summary:
+      'Ước tính phí giao hàng theo toạ độ GPS (đã gồm phụ phí thời tiết)',
+  })
   @ApiQuery({ name: 'lat', type: Number })
   @ApiQuery({ name: 'lng', type: Number })
   @ApiQuery({ name: 'amount', type: Number, required: false })
@@ -23,10 +26,19 @@ export class ShippingController {
     @Query('lng') lng: string,
     @Query('amount') amount?: string,
   ) {
-    return this.shippingService.estimateFee(
-      parseFloat(lat),
-      parseFloat(lng),
-      amount ? parseFloat(amount) : 0,
-    );
+    const latN = Number(lat);
+    const lngN = Number(lng);
+    const amountN = amount ? Number(amount) : 0;
+    if (
+      !Number.isFinite(latN) ||
+      !Number.isFinite(lngN) ||
+      Math.abs(latN) > 90 ||
+      Math.abs(lngN) > 180 ||
+      !Number.isFinite(amountN) ||
+      amountN < 0
+    ) {
+      throw new BadRequestException('Toạ độ hoặc giá trị đơn không hợp lệ');
+    }
+    return this.shippingService.estimateFee(latN, lngN, amountN);
   }
 }

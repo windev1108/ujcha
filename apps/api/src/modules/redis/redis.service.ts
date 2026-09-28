@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 
@@ -7,16 +12,23 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
   private client: Redis | null = null;
 
-  constructor(private readonly config: ConfigService) { }
+  constructor(private readonly config: ConfigService) {}
 
   onModuleInit() {
     const url = this.config.get<string>('REDIS_URL');
     if (!url) {
-      this.logger.warn('REDIS_URL not set — caching disabled, falling back to DB only.');
+      this.logger.warn(
+        'REDIS_URL not set — caching disabled, falling back to DB only.',
+      );
       return;
     }
-    this.client = new Redis(url, { lazyConnect: true, enableOfflineQueue: false });
-    this.client.on('error', (err) => this.logger.error('Redis error', err.message));
+    this.client = new Redis(url, {
+      lazyConnect: true,
+      enableOfflineQueue: false,
+    });
+    this.client.on('error', (err) =>
+      this.logger.error('Redis error', err.message),
+    );
     this.client.connect().catch((err) => {
       this.logger.error('Redis connect failed', err.message);
       this.client = null;
@@ -24,7 +36,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleDestroy() {
-    await this.client?.quit().catch(() => { });
+    await this.client?.quit().catch(() => {});
   }
 
   get isAvailable() {
@@ -66,7 +78,13 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     try {
       let cursor = '0';
       do {
-        const [next, keys] = await this.client!.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+        const [next, keys] = await this.client!.scan(
+          cursor,
+          'MATCH',
+          pattern,
+          'COUNT',
+          100,
+        );
         cursor = next;
         if (keys.length > 0) await this.client!.del(...keys);
       } while (cursor !== '0');

@@ -955,24 +955,39 @@ model Feedback {
 
 /// Cấu hình phí vận chuyển — singleton id = "default".
 model ShippingConfig {
-  id                     String   @id @default("default")
-  isActive               Boolean  @default(true)
-  /// Phí cơ bản (VND) cho baseKm km đầu tiên.
-  baseFee                Int      @default(15000)
-  /// Số km miễn phí đầu tiên trong baseFee.
-  baseKm                 Float    @default(2)
-  /// Phí mỗi km vượt quá baseKm (VND/km).
-  feePerKm               Int      @default(5000)
-  /// Khoảng cách tối đa hỗ trợ giao hàng (km).
-  maxDistanceKm          Float    @default(15)
-  /// Giá trị đơn tối thiểu để miễn phí giao hàng (0 = không có). VND.
-  freeThreshold          Int      @default(200000)
-  /// Khoảng cách tối đa được miễn phí giao hàng (km). 0 = không có. Default 1km.
-  freeShipDistanceKm     Float    @default(1)
-  weatherSurchargeActive Boolean  @default(false)
-  /// Số tiền phụ phí thời tiết xấu (VND), cộng thẳng vào phí ship khi weatherSurchargeActive = true.
-  weatherSurchargeFee    Int      @default(0)
-  updatedAt              DateTime @updatedAt
+  id                 String  @id @default("default")
+  isActive           Boolean @default(true)
+  baseFee            Int     @default(15000)
+  baseKm             Float   @default(2)
+  feePerKm           Int     @default(5000)
+  maxDistanceKm      Float   @default(15)
+  freeThreshold      Int     @default(200000)
+  freeShipDistanceKm Float   @default(1)
+
+  /// Công tắc tổng phụ phí thời tiết (bật = có thể tính phụ phí).
+  weatherSurchargeActive Boolean @default(false)
+  /// Số tiền phụ phí ở chế độ THỦ CÔNG (VND).
+  weatherSurchargeFee    Int     @default(0)
+
+  /// false = thủ công (dùng weatherSurchargeFee); true = tự động theo Open-Meteo (cronjob).
+  weatherAutoMode        Boolean @default(false)
+  /// Mốc mưa: [{ label, minValue (mm), fee }]. null = dùng mốc mặc định trong code.
+  weatherRainTiersJson   Json?
+  /// Mốc gió giật: [{ label, minValue (km/h), fee }]. null = dùng mốc mặc định trong code.
+  weatherWindTiersJson   Json?
+  /// Phụ phí tối thiểu khi có dông (weather_code 95/96/99).
+  weatherThunderstormFee Int     @default(8000)
+  /// Dữ liệu thời tiết cũ hơn N phút thì bỏ qua phụ phí tự động (phòng API lỗi kéo dài).
+  weatherStaleMinutes    Int     @default(45)
+
+  // ── Trạng thái do cronjob ghi (không sửa tay) ──
+  weatherAutoFee      Int       @default(0)
+  weatherLabel        String?
+  weatherLowerStreak  Int       @default(0)
+  weatherSnapshotJson Json?
+  weatherCheckedAt    DateTime?
+
+  updatedAt DateTime @updatedAt
 }
 
 /// Nhật ký SMS gửi qua TextBee — dùng để theo dõi và debug OTP.
@@ -1170,6 +1185,7 @@ model GlobalAnnouncement {
   version   Int                   @default(1)
   updatedAt DateTime              @updatedAt
 }
+
 model StickerAlbum {
   id        String    @id @default(uuid()) @db.Uuid
   name      String
