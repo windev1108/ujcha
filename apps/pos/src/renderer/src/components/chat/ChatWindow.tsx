@@ -678,7 +678,7 @@ export function ChatWindow({
                         className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full bg-[#1a3c34] px-3 py-1.5 text-xs font-semibold text-white shadow-lg transition hover:opacity-90"
                     >
                         <ChevronDown className="size-3.5" />
-                        {t("chat_new_messages")}
+                        {"Tin nhắn mới"}
                     </button>
                 )}
             </div>

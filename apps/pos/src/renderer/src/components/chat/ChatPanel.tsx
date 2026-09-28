@@ -7,7 +7,8 @@ import {
     fetchAdminRoomMessages, fetchChatStickers, sendAdminRoomMessage, uploadChatImage,
 } from '@/api'
 import { useChatSocket } from '@/hooks/useChatSocket'
-import type { DockConversation } from '@/store/chat-dock-store'
+import { useChatDockStore, type DockConversation } from '@/store/chat-dock-store'
+import { mergeMessages } from '@/lib/chat-messages'
 
 const PAGE_SIZE = 20
 const MAX_IMAGE_MB = 8
@@ -38,6 +39,8 @@ export function ChatPanel({
     const [stickers, setStickers] = useState<ChatStickerDto[]>(stickersCache ?? [])
 
     const messagesRef = useRef<ChatMessage[]>([])
+    const seenIdsRef = useRef(new Set<string>())
+
     messagesRef.current = messages
     const hasMoreRef = useRef(false)
     hasMoreRef.current = hasMore
@@ -59,7 +62,7 @@ export function ChatPanel({
             if (!mountedRef.current) return
             stickersCache = st
             setStickers(st)
-            setMessages(sortAsc(res.messages))
+            setMessages((prev) => mergeMessages(prev, res.messages))
             setHasMore(res.hasMore)
         } catch (err) {
             console.error('[pos-chat] fetch failed:', err)
@@ -78,8 +81,7 @@ export function ChatPanel({
         setLoadingMore(true)
         try {
             const res = await fetchAdminRoomMessages(kind, id, { limit: PAGE_SIZE, beforeId: oldest.id })
-            const fresh = res.messages.filter((m) => !messagesRef.current.some((e) => e.id === m.id))
-            if (fresh.length > 0) setMessages((prev) => [...sortAsc(fresh), ...prev])
+            setMessages((prev) => mergeMessages(prev, res.messages))
             setHasMore(res.hasMore)
         } catch (err) {
             console.error('[pos-chat] load more failed:', err)
@@ -92,24 +94,37 @@ export function ChatPanel({
     const syncLatest = useCallback(async () => {
         try {
             const res = await fetchAdminRoomMessages(kind, id, { limit: PAGE_SIZE })
-            const fresh = res.messages.filter((m) => !messagesRef.current.some((e) => e.id === m.id))
-            if (fresh.length === 0) return
-            setMessages((prev) => sortAsc([...prev, ...fresh]))
+            setMessages((prev) => mergeMessages(prev, res.messages))
         } catch (err) {
             console.error('[pos-chat] sync failed:', err)
         }
     }, [kind, id])
 
+    const patchConversation = useChatDockStore((s) => s.patch)
+
+    useEffect(() => {
+        const cust = [...messages].reverse().find((m) => m.senderType !== 'staff')
+        if (!cust) return
+        const name = cust.displayName || conversation.customerName
+        const avatar = cust.avatar ?? conversation.avatar
+        if (name === conversation.customerName && avatar === conversation.avatar) return
+        patchConversation(conversation.key, { customerName: name, avatar })
+    }, [messages, conversation.key, conversation.customerName, conversation.avatar, patchConversation])
+
     useChatSocket({
         kind, id, enabled: true,
-        onMessage: (msg) => setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg])),
+        onMessage: (msg) => {
+            if (seenIdsRef.current.has(msg.id)) return
+            seenIdsRef.current.add(msg.id)
+            setMessages((prev) => mergeMessages(prev, [msg]))
+        },
         onRoomClosed: () => setClosed(true),
         onSynced: () => void syncLatest(),
     })
 
     const appendMessage = (msg: ChatMessage) => {
         if (!mountedRef.current) return
-        setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]))
+        setMessages((prev) => mergeMessages(prev, [msg]))
     }
 
     const handleSend = async () => {

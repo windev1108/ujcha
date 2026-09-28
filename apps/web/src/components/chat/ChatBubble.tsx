@@ -11,6 +11,7 @@ import { ChatWindow } from "./ChatWindow";
 import { toast } from "sonner";
 import { useNotificationStore } from "@/store/notification-store";
 import { useQuery } from "@tanstack/react-query";
+import { mergeMessages } from "@/lib/chat-messages";
 
 const PAGE_SIZE = 25;
 const MAX_IMAGE_MB = 10;
@@ -65,6 +66,7 @@ export function ChatBubble({ kind, hostName, roomId, enabled, fetchMessages, sen
   const loadingMoreRef = useRef(false);
   const openRef = useRef(open);
   openRef.current = open;
+  const seenIdsRef = useRef(new Set<string>())
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   useEffect(() => {
@@ -79,7 +81,7 @@ export function ChatBubble({ kind, hostName, roomId, enabled, fetchMessages, sen
     setLoadError(false);
     try {
       const res = await fetchMessages({ limit: PAGE_SIZE });
-      setMessages(sortAsc(res.messages));
+      setMessages((prev) => mergeMessages(prev, res.messages))
       setHasMore(res.hasMore);
     } catch {
       setLoadError(true);
@@ -101,11 +103,8 @@ export function ChatBubble({ kind, hostName, roomId, enabled, fetchMessages, sen
     setLoadingMore(true);
     try {
       const res = await fetchMessages({ limit: PAGE_SIZE, beforeId: oldest.id });
-      const fresh = res.messages.filter(
-        (m) => !messagesRef.current.some((existing) => existing.id === m.id)
-      );
-      if (fresh.length > 0) setMessages((prev) => [...sortAsc(fresh), ...prev]);
-      setHasMore(res.hasMore);
+      setMessages((prev) => mergeMessages(prev, res.messages))
+      setHasMore(res.hasMore)
     } catch {
       // im lặng — user scroll lại là retry được
     } finally {
@@ -118,11 +117,7 @@ export function ChatBubble({ kind, hostName, roomId, enabled, fetchMessages, sen
     if (!enabled || !roomId) return;
     try {
       const res = await fetchMessages({ limit: PAGE_SIZE });
-      const fresh = res.messages.filter(
-        (m) => !messagesRef.current.some((existing) => existing.id === m.id)
-      );
-      if (fresh.length === 0) return;
-      setMessages((prev) => sortAsc([...prev, ...fresh]));
+      setMessages((prev) => mergeMessages(prev, res.messages))
     } catch {
       // sẽ retry ở lần onSynced kế tiếp
     }
@@ -133,10 +128,9 @@ export function ChatBubble({ kind, hostName, roomId, enabled, fetchMessages, sen
     id: enabled ? roomId : null,
     enabled: enabled && !!roomId,
     onMessage: (msg) => {
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === msg.id)) return prev;
-        return [...prev, msg];
-      });
+      if (seenIdsRef.current.has(msg.id)) return
+      seenIdsRef.current.add(msg.id)
+      setMessages((prev) => mergeMessages(prev, [msg]))
       if (!isMine(msg, myId)) {
         if (kind !== 'group') {
           audioRef.current?.play().catch(() => { });
@@ -167,10 +161,7 @@ export function ChatBubble({ kind, hostName, roomId, enabled, fetchMessages, sen
   }, []);
 
   const appendMessage = (msg: ChatMessage) => {
-    setMessages((prev) => {
-      if (prev.some((m) => m.id === msg.id)) return prev;
-      return [...prev, msg];
-    });
+    setMessages((prev) => mergeMessages(prev, [msg]))
   };
 
   const handleSend = async () => {

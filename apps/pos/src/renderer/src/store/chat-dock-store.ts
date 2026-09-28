@@ -42,6 +42,7 @@ interface State {
   openConversation: (p: OpenInput) => void
   toggle: (key: string) => void
   close: () => void
+  patch: (key: string, p: Partial<Pick<DockConversation, 'customerName' | 'avatar' | 'orderCode'>>) => void
   dismiss: (key: string) => void
   reset: () => void
 }
@@ -79,18 +80,20 @@ export const useChatDockStore = create<State>((set, get) => {
     const patch: Partial<DockConversation> = {}
 
     try {
-      const res = await fetchAdminRoomMessages(c.kind, c.id, { limit: 1 })
-      const last = [...res.messages].sort(
+      const res = await fetchAdminRoomMessages(c.kind, c.id, { limit: 10 })
+      const sorted = [...res.messages].sort(
         (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-      ).pop()
+      )
+      const last = sorted[sorted.length - 1]
+      const lastCustomer = [...sorted].reverse().find((m) => m.senderType !== 'staff')
       if (last) {
         patch.lastMessage = previewOf(last)
         patch.lastAt = last.createdAt
         patch.lastMessageId = last.id
-        if (last.senderType !== 'staff') {
-          if (last.displayName) patch.customerName = last.displayName
-          if (last.avatar) patch.avatar = last.avatar
-        }
+      }
+      if (lastCustomer) {
+        if (lastCustomer.displayName) patch.customerName = lastCustomer.displayName
+        if (lastCustomer.avatar) patch.avatar = lastCustomer.avatar
       }
     } catch { /* ignore */ }
 
@@ -177,7 +180,14 @@ export const useChatDockStore = create<State>((set, get) => {
     },
 
     close: () => set({ openKey: null }),
-
+    patch: (key, p) =>
+      set((s) => {
+        const c = s.conversations[key]
+        if (!c) return s
+        const next = { ...c, ...p }
+        if (next.customerName === c.customerName && next.avatar === c.avatar && next.orderCode === c.orderCode) return s
+        return { conversations: { ...s.conversations, [key]: next } }
+      }),
     dismiss: (key) =>
       set((s) => {
         const { [key]: _removed, ...rest } = s.conversations
