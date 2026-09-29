@@ -22,6 +22,7 @@ import { NotificationService } from '../notification/notification.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import type {
+  AdminListGroupOrdersQueryDto,
   CreateGroupOrderDto,
   GroupOrderItemDto,
   JoinGroupOrderDto,
@@ -355,47 +356,100 @@ export class GroupOrderService {
   }
 
   async adminDelete(token: string) {
-    await this.prisma.groupOrder.delete({ where: { token } });
+    const go = await this.prisma.groupOrder.findUnique({
+      where: { token },
+      select: { id: true, orderId: true },
+    });
+    if (!go) throw new NotFoundException('Không tìm thấy đơn nhóm.');
+
+    await this.prisma.groupOrder.delete({ where: { id: go.id } });
+    await this.chatService
+      .closeRoomForGroupOrder(go.id)
+      .catch((err: unknown) => this.logger.error(err));
   }
 
-  async findAllActive() {
-    const rows = await this.prisma.groupOrder.findMany({
-      // where: {
-      //   status: { in: ['collecting', 'locked'] },
-      //   expiresAt: { gt: new Date() },
-      // },
-      select: {
-        id: true,
-        token: true,
-        status: true,
-        paymentMode: true,
-        paymentType: true,
-        type: true,
-        expiresAt: true,
-        createdAt: true,
-        _count: { select: { participants: true } },
-        participants: {
-          where: { isHost: true },
-          take: 1,
-          select: { user: { select: { name: true } }, guestName: true },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+  async findAllForAdmin(q: AdminListGroupOrdersQueryDto) {
+    const page = q.page ?? 1;
+    const pageSize = q.pageSize ?? 20;
 
-    return rows.map((r) => ({
-      id: r.id,
-      token: r.token,
-      status: r.status,
-      paymentMode: r.paymentMode,
-      paymentType: r.paymentType ?? 'cash',
-      type: r.type,
-      expiresAt: r.expiresAt.toISOString(),
-      createdAt: r.createdAt.toISOString(),
-      participantCount: r._count.participants,
-      hostName:
-        r.participants[0]?.user?.name ?? r.participants[0]?.guestName ?? null,
-    }));
+    const createdAt: Prisma.DateTimeFilter = {};
+    if (q.from) createdAt.gte = new Date(`${q.from.slice(0, 10)}T00:00:00+07:00`);
+    if (q.to) {
+      const end = new Date(`${q.to.slice(0, 10)}T00:00:00+07:00`);
+      end.setDate(end.getDate() + 1);
+      createdAt.lt = end; // inclusive hết ngày "to"
+    }
+
+    const search = q.search?.trim();
+
+    const where: Prisma.GroupOrderWhereInput = {
+      ...(q.status && { status: q.status as GroupOrderStatus }),
+      ...(q.paymentMode && { paymentMode: q.paymentMode as any }),
+      ...(q.type && { type: q.type as OrderType }),
+      ...(q.paymentType && { paymentType: q.paymentType as any }),
+      ...(Object.keys(createdAt).length > 0 && { createdAt }),
+      ...(search && {
+        OR: [
+          { token: { contains: search, mode: 'insensitive' } },
+          {
+            participants: {
+              some: {
+                isHost: true,
+                OR: [
+                  { guestName: { contains: search, mode: 'insensitive' } },
+                  { user: { name: { contains: search, mode: 'insensitive' } } },
+                ],
+              },
+            },
+          },
+        ],
+      }),
+    };
+
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.groupOrder.findMany({
+        where,
+        select: {
+          id: true,
+          token: true,
+          status: true,
+          paymentMode: true,
+          paymentType: true,
+          type: true,
+          expiresAt: true,
+          createdAt: true,
+          _count: { select: { participants: true } },
+          participants: {
+            where: { isHost: true },
+            take: 1,
+            select: { user: { select: { name: true } }, guestName: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.groupOrder.count({ where }),
+    ]);
+
+    return {
+      data: rows.map((r) => ({
+        id: r.id,
+        token: r.token,
+        status: r.status,
+        paymentMode: r.paymentMode,
+        paymentType: r.paymentType ?? 'cash',
+        type: r.type,
+        expiresAt: r.expiresAt.toISOString(),
+        createdAt: r.createdAt.toISOString(),
+        participantCount: r._count.participants,
+        hostName:
+          r.participants[0]?.user?.name ?? r.participants[0]?.guestName ?? null,
+      })),
+      total,
+      page,
+      pageSize,
+    };
   }
 
   async dissolveGroupOrder(token: string, sessionToken: string) {

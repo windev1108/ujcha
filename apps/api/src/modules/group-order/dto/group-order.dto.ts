@@ -1,11 +1,14 @@
 import {
   IsArray,
+  IsDateString,
   IsEnum,
+  IsIn,
   IsInt,
   IsNumber,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
   Min,
   ValidateNested,
@@ -248,3 +251,50 @@ export type GroupOrderFull = Prisma.GroupOrderGetPayload<{
     order: { select: { id: true; paymentCode: true; status: true } };
   };
 }>;
+
+
+export class AdminListGroupOrdersQueryDto {
+  @IsOptional()
+  @IsIn(['collecting', 'locked', 'completed', 'cancelled'])
+  status?: 'collecting' | 'locked' | 'completed' | 'cancelled';
+
+  @IsOptional()
+  @IsIn(['split', 'host_pays'])
+  paymentMode?: 'split' | 'host_pays';
+
+  @IsOptional()
+  @IsIn(['delivery', 'pickup', 'table'])
+  type?: 'delivery' | 'pickup' | 'table';
+
+  @IsOptional()
+  @IsIn(['cash', 'bank_transfer'])
+  paymentType?: 'cash' | 'bank_transfer';
+
+  /** Tìm theo token hoặc tên host */
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  search?: string;
+
+  /** YYYY-MM-DD (theo giờ VN), lọc theo createdAt */
+  @IsOptional()
+  @IsDateString()
+  from?: string;
+
+  @IsOptional()
+  @IsDateString()
+  to?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  pageSize?: number;
+}

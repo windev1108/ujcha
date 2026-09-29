@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -20,6 +21,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { AdminRole } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
 import {
+  BatchUpdateStickersDto,
   CreateStickerAlbumDto,
   CreateStickerByUrlDto,
   ReorderAlbumsDto,
@@ -86,6 +88,11 @@ export class AdminChatWidgetController {
   @Post('stickers/albums')
   createAlbum(@Body() dto: CreateStickerAlbumDto) {
     return this.chatWidgetService.createAlbum(dto.name);
+  }
+
+  @Put('stickers/batch')
+  batchUpdate(@Body() dto: BatchUpdateStickersDto) {
+    return this.chatWidgetService.batchUpdate(dto);
   }
 
   @Patch('stickers/albums/:id')

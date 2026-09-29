@@ -1,4 +1,5 @@
 // sticker/dto/index.ts
+import { Type } from 'class-transformer';
 import {
   ArrayNotEmpty,
   IsArray,
@@ -7,6 +8,7 @@ import {
   IsString,
   IsUrl,
   IsUUID,
+  ValidateNested,
 } from 'class-validator';
 
 
@@ -51,4 +53,32 @@ export class ReorderStickersDto {
   @ArrayNotEmpty()
   @IsString({ each: true })
   ids: string[];
+}
+
+export class StickerChangeDto {
+  @IsUUID()
+  id: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  /** null = bỏ khỏi album (IsOptional bỏ qua validate khi null) */
+  @IsOptional()
+  @IsUUID()
+  albumId?: string | null;
+}
+
+export class BatchUpdateStickersDto {
+  /** Toàn bộ id sticker theo thứ tự mới. Bỏ trống nếu không đổi thứ tự. */
+  @IsOptional()
+  @IsArray()
+  @IsUUID('all', { each: true })
+  order?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => StickerChangeDto)
+  changes?: StickerChangeDto[];
 }

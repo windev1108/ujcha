@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -16,6 +17,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { GroupOrderService } from '../../group-order/group-order.service';
 import {
+  AdminListGroupOrdersQueryDto,
   AdminUpdateStatusDto,
   UpdateGroupOrderConfigDto,
 } from '../../group-order/dto/group-order.dto';
@@ -26,12 +28,12 @@ import {
 @Roles(AdminRole.super_admin, AdminRole.staff)
 @Controller('admin/group-orders')
 export class AdminGroupOrderController {
-  constructor(private readonly groupOrderService: GroupOrderService) {}
+  constructor(private readonly groupOrderService: GroupOrderService) { }
 
   @Get()
   @ApiOperation({ summary: 'Danh sách đơn nhóm đang mở' })
-  findAllActive() {
-    return this.groupOrderService.findAllActive();
+  list(@Query() query: AdminListGroupOrdersQueryDto) {
+    return this.groupOrderService.findAllForAdmin(query);
   }
 
   @Get('config')
