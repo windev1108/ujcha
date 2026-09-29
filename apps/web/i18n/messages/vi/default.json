@@ -1315,5 +1315,22 @@
   "chat_emoji_search_placeholder": "Tìm emoji…",
   "chat_sticker_all_category": "Tất cả",
   "chat_sticker_more_categories": "Thêm danh mục",
-  "group_more_categories": "Xem thêm"
+  "group_more_categories": "Xem thêm",
+  "pickup_scheduler": {
+  "month_year": "{month}, {year}",
+  "selected": "{weekday}, {day}/{month}/{year} lúc {time}",
+  "months": {
+    "m1": "Tháng 1", "m2": "Tháng 2", "m3": "Tháng 3", "m4": "Tháng 4",
+    "m5": "Tháng 5", "m6": "Tháng 6", "m7": "Tháng 7", "m8": "Tháng 8",
+    "m9": "Tháng 9", "m10": "Tháng 10", "m11": "Tháng 11", "m12": "Tháng 12"
+  },
+  "weekday_short": {
+    "sun": "CN", "mon": "T2", "tue": "T3", "wed": "T4",
+    "thu": "T5", "fri": "T6", "sat": "T7"
+  },
+  "weekday_long": {
+    "sun": "Chủ nhật", "mon": "Thứ Hai", "tue": "Thứ Ba", "wed": "Thứ Tư",
+    "thu": "Thứ Năm", "fri": "Thứ Sáu", "sat": "Thứ Bảy"
+  }
+}
 }

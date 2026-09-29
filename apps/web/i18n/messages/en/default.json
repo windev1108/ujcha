@@ -1316,5 +1316,22 @@
   "chat_emoji_search_placeholder": "Search emoji…",
   "chat_sticker_all_category": "All",
   "chat_sticker_more_categories": "More categories",
-  "group_more_categories": "View more"
+  "group_more_categories": "View more",
+  "pickup_scheduler": {
+  "month_year": "{month} {year}",
+  "selected": "{weekday}, {day}/{month}/{year} at {time}",
+  "months": {
+    "m1": "January", "m2": "February", "m3": "March", "m4": "April",
+    "m5": "May", "m6": "June", "m7": "July", "m8": "August",
+    "m9": "September", "m10": "October", "m11": "November", "m12": "December"
+  },
+  "weekday_short": {
+    "sun": "Sun", "mon": "Mon", "tue": "Tue", "wed": "Wed",
+    "thu": "Thu", "fri": "Fri", "sat": "Sat"
+  },
+  "weekday_long": {
+    "sun": "Sunday", "mon": "Monday", "tue": "Tuesday", "wed": "Wednesday",
+    "thu": "Thursday", "fri": "Friday", "sat": "Saturday"
+  }
+}
 }

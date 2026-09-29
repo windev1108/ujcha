@@ -1,31 +1,78 @@
 "use client";
 
 import { ChevronLeft, ChevronRight, Clock } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useStoreStatusQuery } from "@/services/store/hooks";
+
+// ── constants ────────────────────────────────────────────────────────────────
+
+// Thứ tự khớp với Date.getDay() (0 = Chủ nhật)
+const WEEKDAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
+
+const SLOT_STEP_MIN = 30; // bước mỗi slot
+const PREP_AFTER_OPEN_MIN = 30; // sau giờ mở cửa 30p mới nhận (thời gian chuẩn bị)
+const CUTOFF_BEFORE_CLOSE_MIN = 30; // trước giờ đóng cửa 30p thì ngừng nhận
+const LEAD_TIME_MIN = 15; // đặt sớm nhất sau bây giờ 15p
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-const VI_DAYS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"] as const;
+const pad = (n: number) => String(n).padStart(2, "0");
 
-function isoDate(d: Date) {
-  return d.toISOString().slice(0, 10); // "YYYY-MM-DD"
+/** "YYYY-MM-DD" theo giờ LOCAL (không dùng toISOString để tránh lệch UTC) */
+function localDateStr(d: Date) {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 function todayDate() {
-  return isoDate(new Date());
+  return localDateStr(new Date());
 }
 
-/** All 30-min slots 07:00 → 21:30 */
-function buildTimeSlots(): string[] {
+/** Tạo Date local từ "YYYY-MM-DD" + phút trong ngày */
+function dateAtMinutes(dateStr: string, minutes: number): Date {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d, Math.floor(minutes / 60), minutes % 60, 0, 0);
+}
+
+function minutesToHHmm(min: number) {
+  return `${pad(Math.floor(min / 60))}:${pad(min % 60)}`;
+}
+
+function hhmmToMinutes(hhmm: string) {
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
+}
+
+/**
+ * Sinh các slot hợp lệ trong khoảng:
+ *   [openMinutes + 30, closeMinutes - 30], bước 30p, canh theo mốc :00 / :30
+ */
+function buildTimeSlots(openMinutes: number, closeMinutes: number): string[] {
+  const earliest = openMinutes + PREP_AFTER_OPEN_MIN;
+  const latest = closeMinutes - CUTOFF_BEFORE_CLOSE_MIN;
+
+  const first = Math.ceil(earliest / SLOT_STEP_MIN) * SLOT_STEP_MIN;
   const slots: string[] = [];
-  for (let h = 7; h <= 21; h++) {
-    slots.push(`${String(h).padStart(2, "0")}:00`);
-    if (h < 22) slots.push(`${String(h).padStart(2, "0")}:30`);
+  for (let m = first; m <= latest; m += SLOT_STEP_MIN) {
+    slots.push(minutesToHHmm(m));
   }
   return slots;
 }
-const TIME_SLOTS = buildTimeSlots();
+
+/** Slot của 1 ngày cụ thể + trạng thái disabled (nếu là hôm nay thì chặn slot đã qua / < now + 15p) */
+function getSlotsForDate(
+  dateStr: string,
+  baseSlots: string[],
+  minMs: number,
+): Array<{ time: string; disabled: boolean }> {
+  const isToday = dateStr === todayDate();
+  return baseSlots.map((time) => {
+    const disabled = isToday
+      ? dateAtMinutes(dateStr, hhmmToMinutes(time)).getTime() < minMs
+      : false;
+    return { time, disabled };
+  });
+}
 
 /** First weekday (0=Sun) of a month */
 function firstWeekday(year: number, month: number): number {
@@ -37,16 +84,6 @@ function daysInMonth(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate();
 }
 
-/** Human-readable: "Thứ Ba, 20/05/2026 lúc 14:30" */
-function formatSelected(dateStr: string, timeStr: string): string {
-  const d = new Date(`${dateStr}T${timeStr}`);
-  const dow = ["Chủ nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"][d.getDay()];
-  const day = String(d.getDate()).padStart(2, "0");
-  const mon = String(d.getMonth() + 1).padStart(2, "0");
-  const yr = d.getFullYear();
-  return `${dow}, ${day}/${mon}/${yr} lúc ${timeStr}`;
-}
-
 // ── component ─────────────────────────────────────────────────────────────────
 
 type Props = {
@@ -56,49 +93,66 @@ type Props = {
 
 export function PickupScheduler({ value, onChange }: Props) {
   const t = useTranslations();
+  const { data: storeStatus } = useStoreStatusQuery();
+
+  const openMinutes = storeStatus?.openMinutes;
+  const closeMinutes = storeStatus?.closeMinutes;
+
   const now = new Date();
-  const minMs = now.getTime() + 15 * 60_000; // earliest valid time
+  const minMs = now.getTime() + LEAD_TIME_MIN * 60_000; // earliest valid time
 
   // parse existing value
-  const initDate = value ? isoDate(new Date(value)) : "";
-  const initTime = value
-    ? new Date(value).toTimeString().slice(0, 5)
-    : "";
+  const initDate = value ? localDateStr(new Date(value)) : "";
+  const initTime = value ? new Date(value).toTimeString().slice(0, 5) : "";
 
   const [viewYear, setViewYear] = useState(() => now.getFullYear());
   const [viewMonth, setViewMonth] = useState(() => now.getMonth()); // 0-based
   const [selDate, setSelDate] = useState(initDate);
   const [selTime, setSelTime] = useState(initTime);
 
+  // ── slot hợp lệ theo giờ mở/đóng cửa ───────────────────────────────────────
+  const baseSlots = useMemo(() => {
+    if (openMinutes == null || closeMinutes == null) return [];
+    return buildTimeSlots(openMinutes, closeMinutes);
+  }, [openMinutes, closeMinutes]);
+
   // ── calendar grid ──────────────────────────────────────────────────────────
   const calDays = useMemo(() => {
-    const pad = firstWeekday(viewYear, viewMonth);
+    const padCells = firstWeekday(viewYear, viewMonth);
     const total = daysInMonth(viewYear, viewMonth);
+    const today = todayDate();
     const cells: Array<{ day: number; dateStr: string; disabled: boolean } | null> = [];
-    for (let i = 0; i < pad; i++) cells.push(null);
+    for (let i = 0; i < padCells; i++) cells.push(null);
     for (let d = 1; d <= total; d++) {
-      const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-      const date = new Date(dateStr);
-      // disable if before today
-      const disabled = isoDate(date) < todayDate();
+      const dateStr = `${viewYear}-${pad(viewMonth + 1)}-${pad(d)}`;
+      let disabled = dateStr < today;
+      // hôm nay mà không còn slot nào hợp lệ → khoá luôn ngày
+      if (!disabled && dateStr === today) {
+        disabled = getSlotsForDate(dateStr, baseSlots, minMs).every((s) => s.disabled);
+      }
       cells.push({ day: d, dateStr, disabled });
     }
     return cells;
-  }, [viewYear, viewMonth]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewYear, viewMonth, baseSlots]);
 
   // ── time slots for selected date ───────────────────────────────────────────
   const availableSlots = useMemo(() => {
-    return TIME_SLOTS.map((t) => {
-      let disabled = false;
-      if (selDate === todayDate()) {
-        const [hh, mm] = t.split(":").map(Number);
-        const slotMs = new Date(selDate).setHours(hh, mm, 0, 0);
-        disabled = slotMs < minMs;
-      }
-      return { time: t, disabled };
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selDate]);
+    if (!selDate) return [];
+    return getSlotsForDate(selDate, baseSlots, minMs);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selDate, baseSlots]);
+
+  // Nếu giờ mở/đóng cửa đổi (admin sửa) hoặc slot đang chọn không còn hợp lệ → bỏ chọn
+  useEffect(() => {
+    if (!storeStatus || !selDate || !selTime) return;
+    const slot = availableSlots.find((s) => s.time === selTime);
+    if (!slot || slot.disabled) {
+      setSelTime("");
+      onChange("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableSlots, selTime, selDate, storeStatus]);
 
   // ── handlers ──────────────────────────────────────────────────────────────
   function prevMonth() {
@@ -113,29 +167,37 @@ export function PickupScheduler({ value, onChange }: Props) {
 
   function pickDate(dateStr: string) {
     setSelDate(dateStr);
-    // if previously selected time is now invalid on the new date, clear it
-    if (dateStr === todayDate() && selTime) {
-      const [hh, mm] = selTime.split(":").map(Number);
-      const slotMs = new Date(dateStr).setHours(hh, mm, 0, 0);
-      if (slotMs < minMs) setSelTime("");
-    }
+    // slot đã chọn có còn hợp lệ ở ngày mới không sẽ do useEffect phía trên xử lý
   }
 
   function pickTime(time: string) {
     const next = selTime === time ? "" : time;
     setSelTime(next);
     if (selDate && next) {
-      const [hh, mm] = next.split(":").map(Number);
-      const d = new Date(selDate);
-      d.setHours(hh, mm, 0, 0);
-      onChange(d.toISOString());
+      onChange(dateAtMinutes(selDate, hhmmToMinutes(next)).toISOString());
     } else {
       onChange("");
     }
   }
 
-  const monthLabel = `Tháng ${viewMonth + 1}, ${viewYear}`;
+  const monthLabel = t("pickup_scheduler.month_year", {
+    month: t(`pickup_scheduler.months.m${viewMonth + 1}`),
+    year: viewYear,
+  });
+
+  /** Vi: "Thứ Ba, 20/05/2026 lúc 14:30" · En: "Tuesday, 20/05/2026 at 14:30" */
+  function formatSelected(dateStr: string, timeStr: string): string {
+    const d = dateAtMinutes(dateStr, hhmmToMinutes(timeStr));
+    return t("pickup_scheduler.selected", {
+      weekday: t(`pickup_scheduler.weekday_long.${WEEKDAY_KEYS[d.getDay()]}`),
+      day: pad(d.getDate()),
+      month: pad(d.getMonth() + 1),
+      year: d.getFullYear(),
+      time: timeStr,
+    });
+  }
   const canGoPrev = !(viewYear === now.getFullYear() && viewMonth === now.getMonth());
+  const today = todayDate();
 
   return (
     <div className="mt-3 space-y-4">
@@ -163,9 +225,9 @@ export function PickupScheduler({ value, onChange }: Props) {
 
         {/* Day-of-week headers */}
         <div className="mb-1 grid grid-cols-7 text-center">
-          {VI_DAYS.map((d) => (
-            <span key={d} className="py-1 text-[10px] font-semibold uppercase text-foreground/40">
-              {d}
+          {WEEKDAY_KEYS.map((k) => (
+            <span key={k} className="py-1 text-[10px] font-semibold uppercase text-foreground/40">
+              {t(`pickup_scheduler.weekday_short.${k}`)}
             </span>
           ))}
         </div>
@@ -175,7 +237,7 @@ export function PickupScheduler({ value, onChange }: Props) {
           {calDays.map((cell, i) => {
             if (!cell) return <span key={`e-${i}`} />;
             const isSelected = cell.dateStr === selDate;
-            const isToday = cell.dateStr === todayDate();
+            const isToday = cell.dateStr === today;
             return (
               <button
                 key={cell.dateStr}
@@ -205,26 +267,33 @@ export function PickupScheduler({ value, onChange }: Props) {
               {t("select_time")}
             </span>
           </div>
-          <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6">
-            {availableSlots.map(({ time, disabled }) => {
-              const isSelected = selTime === time;
-              return (
-                <button
-                  key={time}
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => pickTime(time)}
-                  className={`rounded-xl px-2 py-2 text-sm font-medium transition-colors
-                    ${disabled ? "cursor-not-allowed text-foreground/20" : ""}
-                    ${isSelected ? "bg-kun-products-forest text-white shadow-sm" : ""}
-                    ${!isSelected && !disabled ? "bg-kun-filter-pill-bg text-foreground hover:bg-kun-mint/30" : ""}
-                  `}
-                >
-                  {time}
-                </button>
-              );
-            })}
-          </div>
+
+          {availableSlots.length === 0 ? (
+            <p className="text-xs text-foreground/45">
+              {storeStatus ? t("no_pickup_slots") : t("loading")}
+            </p>
+          ) : (
+            <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6">
+              {availableSlots.map(({ time, disabled }) => {
+                const isSelected = selTime === time;
+                return (
+                  <button
+                    key={time}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => pickTime(time)}
+                    className={`rounded-xl px-2 py-2 text-sm font-medium transition-colors
+                      ${disabled ? "cursor-not-allowed text-foreground/20" : ""}
+                      ${isSelected ? "bg-kun-products-forest text-white shadow-sm" : ""}
+                      ${!isSelected && !disabled ? "bg-kun-filter-pill-bg text-foreground hover:bg-kun-mint/30" : ""}
+                    `}
+                  >
+                    {time}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -236,7 +305,7 @@ export function PickupScheduler({ value, onChange }: Props) {
         </div>
       )}
 
-      {selDate && !selTime && (
+      {selDate && !selTime && availableSlots.length > 0 && (
         <p className="text-xs text-foreground/45">{t("select_time_above")}</p>
       )}
     </div>
