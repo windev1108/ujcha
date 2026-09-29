@@ -1315,5 +1315,6 @@
   "chat_sticker_misc_category": "Other",
   "chat_emoji_search_placeholder": "Search emoji…",
   "chat_sticker_all_category": "All",
-  "chat_sticker_more_categories": "More categories"
+  "chat_sticker_more_categories": "More categories",
+  "group_more_categories": "View more"
 }

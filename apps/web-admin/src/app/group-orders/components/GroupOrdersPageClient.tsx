@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AxiosError } from "axios";
 import {
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Crown,
   ExternalLink,
@@ -14,8 +16,10 @@ import {
   Plus,
   RefreshCw,
   Save,
+  Search,
   Trash2,
   Users,
+  X,
   Zap,
 } from "lucide-react";
 import Link from "next/link";
@@ -25,8 +29,14 @@ import {
   CardContent,
   Description,
   Label,
+  ListBox,
   Switch,
   Text,
+  Select,
+  DateRangePicker,
+  DateField,
+  RangeCalendar,
+  Input,
 } from "@heroui/react";
 
 import { adminKeys } from "@/services/admin/keys";
@@ -36,8 +46,11 @@ import {
   fetchActiveGroupOrders,
   type GroupDiscountTier,
   type ActiveGroupOrder,
+  GroupOrderListParams,
+  GroupOrderStatus,
 } from "@/services/admin/group-order-api";
 import { adminInputClass, adminLabelClass } from "@/lib/admin-form-classes";
+import { parseDate } from "@internationalized/date";
 
 type TabId = "active" | "config";
 
@@ -70,55 +83,325 @@ function timeLeft(iso: string): string {
   return h > 0 ? `${h}g ${m % 60}p` : `${m}p`;
 }
 
-const STATUS_MAP: Record<string, { label: string; cls: string }> = {
+const STATUS_MAP: Record<GroupOrderStatus, { label: string; cls: string }> = {
   collecting: { label: "Đang chọn món", cls: "bg-blue-50 text-blue-700 ring-blue-200" },
   locked: { label: "Đã chốt", cls: "bg-amber-50 text-amber-700 ring-amber-200" },
+  completed: { label: "Hoàn thành", cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
+  cancelled: { label: "Đã hủy", cls: "bg-red-50 text-red-600 ring-red-200" },
 };
 
-// ── Active Orders Tab ──────────────────────────────────────────────────────────
+const STATUS_TABS: { value: GroupOrderStatus | ""; label: string }[] = [
+  { value: "", label: "Tất cả" },
+  { value: "collecting", label: "Đang chọn món" },
+  { value: "locked", label: "Đã chốt" },
+  { value: "completed", label: "Hoàn thành" },
+  { value: "cancelled", label: "Đã hủy" },
+];
+
+const PAGE_SIZE = 20;
+
+function useDebounced<T>(value: T, ms = 400): T {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return v;
+}
+
+
+const ALL = "all";
+
+function FilterSelect<T extends string>({
+  label,
+  allLabel,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  allLabel: string;
+  value: T | undefined;
+  options: { id: T; label: string }[];
+  onChange: (v: T | undefined) => void;
+}) {
+  const items = [{ id: ALL, label: allLabel }, ...options];
+  return (
+    <Select
+      aria-label={label}
+      className="w-full"
+      placeholder={allLabel}
+      value={value ?? ALL}
+      onChange={(key) => onChange(key === ALL || key == null ? undefined : (key as T))}
+    >
+      <Select.Trigger>
+        <Select.Value />
+        <Select.Indicator />
+      </Select.Trigger>
+      <Select.Popover>
+        <ListBox>
+          {items.map((o) => (
+            <ListBox.Item key={o.id} id={o.id} textValue={o.label}>
+              {o.label}
+              <ListBox.ItemIndicator />
+            </ListBox.Item>
+          ))}
+        </ListBox>
+      </Select.Popover>
+    </Select>
+  );
+}
+
+function DateRangeFilter({
+  from,
+  to,
+  onChange,
+}: {
+  from?: string;
+  to?: string;
+  onChange: (from?: string, to?: string) => void;
+}) {
+  const value = from && to ? { start: parseDate(from), end: parseDate(to) } : null;
+
+  return (
+    <DateRangePicker
+      aria-label="Khoảng ngày tạo"
+      className="w-full"
+      value={value}
+      onChange={(range) => onChange(range?.start.toString(), range?.end.toString())}
+    >
+      <DateField.Group fullWidth>
+        <DateField.Input slot="start">
+          {(segment) => <DateField.Segment segment={segment} />}
+        </DateField.Input>
+        <DateRangePicker.RangeSeparator />
+        <DateField.Input slot="end">
+          {(segment) => <DateField.Segment segment={segment} />}
+        </DateField.Input>
+        <DateField.Suffix>
+          <DateRangePicker.Trigger>
+            <DateRangePicker.TriggerIndicator />
+          </DateRangePicker.Trigger>
+        </DateField.Suffix>
+      </DateField.Group>
+      <DateRangePicker.Popover>
+        <RangeCalendar aria-label="Khoảng ngày tạo">
+          <RangeCalendar.Header>
+            <RangeCalendar.NavButton slot="previous" />
+            <RangeCalendar.Heading />
+            <RangeCalendar.NavButton slot="next" />
+          </RangeCalendar.Header>
+          <RangeCalendar.Grid>
+            <RangeCalendar.GridHeader>
+              {(day) => <RangeCalendar.HeaderCell>{day}</RangeCalendar.HeaderCell>}
+            </RangeCalendar.GridHeader>
+            <RangeCalendar.GridBody>
+              {(date) => <RangeCalendar.Cell date={date} />}
+            </RangeCalendar.GridBody>
+          </RangeCalendar.Grid>
+        </RangeCalendar>
+      </DateRangePicker.Popover>
+    </DateRangePicker>
+  );
+}
+
+type Filters = Omit<GroupOrderListParams, "page" | "pageSize" | "search">;
+
+// ── List Tab ───────────────────────────────────────────────────────────────────
 
 function ActiveGroupOrdersTab() {
-  const { data = [], isLoading, refetch, isFetching } = useQuery({
-    queryKey: adminKeys.activeGroupOrders,
-    queryFn: fetchActiveGroupOrders,
+  const [filters, setFilters] = useState<Filters>({});
+  const [searchInput, setSearchInput] = useState("");
+  const [page, setPage] = useState(1);
+  const search = useDebounced(searchInput.trim());
+
+  const setFilter = <K extends keyof Filters>(key: K, value: Filters[K] | "") => {
+    setFilters((f) => ({ ...f, [key]: value || undefined }));
+    setPage(1);
+  };
+
+  const params = useMemo<GroupOrderListParams>(
+    () => ({ ...filters, search: search || undefined, page, pageSize: PAGE_SIZE }),
+    [filters, search, page],
+  );
+
+  const hasFilter = Object.values(filters).some(Boolean) || searchInput !== "";
+
+  const resetFilters = () => {
+    setFilters({});
+    setSearchInput("");
+    setPage(1);
+  };
+
+  const { data, isLoading, refetch, isFetching } = useQuery({
+    queryKey: [...adminKeys.activeGroupOrders, params],
+    queryFn: () => fetchActiveGroupOrders(params),
     refetchInterval: 30_000,
+    placeholderData: keepPreviousData,
   });
+
+  const items = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Status chips */}
+      <div className="flex flex-wrap gap-2">
+        {STATUS_TABS.map((s) => {
+          const active = (filters.status ?? "") === s.value;
+          return (
+            <button
+              key={s.value || "all"}
+              type="button"
+              onClick={() => setFilter("status", s.value)}
+              className={`rounded-full px-3.5 py-1.5 text-xs font-semibold ring-1 transition ${active
+                ? "bg-[#1a3c34] text-white ring-[#1a3c34]"
+                : "bg-white text-foreground/70 ring-black/10 hover:bg-black/4"
+                }`}
+            >
+              {s.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Filter bar */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+        <div className="relative sm:col-span-2">
+          <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-3.5 -translate-y-1/2 text-foreground/40" />
+          <Input
+            aria-label="Tìm kiếm"
+            className="w-full pl-9"
+            placeholder="Tìm mã nhóm / tên host..."
+            value={searchInput}
+            onChange={(e) => {
+              setSearchInput(e.target.value);
+              setPage(1);
+            }}
+          />
+        </div>
+
+        <FilterSelect
+          label="Chế độ trả tiền"
+          allLabel="Mọi chế độ trả tiền"
+          value={filters.paymentMode}
+          onChange={(v) => setFilter("paymentMode", v)}
+          options={[
+            { id: "host_pays", label: "Chủ trả" },
+            { id: "split", label: "Chia tiền" },
+          ]}
+        />
+
+        <FilterSelect
+          label="Hình thức"
+          allLabel="Mọi hình thức"
+          value={filters.type}
+          onChange={(v) => setFilter("type", v)}
+          options={[
+            { id: "delivery", label: "Giao hàng" },
+            { id: "pickup", label: "Mang về" },
+            { id: "table", label: "Tại bàn" },
+          ]}
+        />
+
+        <FilterSelect
+          label="Thanh toán"
+          allLabel="Mọi thanh toán"
+          value={filters.paymentType}
+          onChange={(v) => setFilter("paymentType", v)}
+          options={[
+            { id: "cash", label: "Tiền mặt" },
+            { id: "bank_transfer", label: "Chuyển khoản" },
+          ]}
+        />
+
+        <div className="sm:col-span-2 lg:col-span-2">
+          <DateRangeFilter
+            from={filters.from}
+            to={filters.to}
+            onChange={(from, to) => {
+              setFilters((f) => ({ ...f, from, to }));
+              setPage(1);
+            }}
+          />
+        </div>
+      </div>
+      {/* Summary row */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-foreground/55">
-          {isLoading ? "Đang tải..." : `${data.length} đơn nhóm đang hoạt động`}
+          {isLoading ? "Đang tải..." : `${total} đơn nhóm`}
         </p>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="gap-1.5 rounded-full text-foreground/70"
-          onPress={() => void refetch()}
-          isDisabled={isFetching}
-        >
-          <RefreshCw className={`size-3.5 ${isFetching ? "animate-spin" : ""}`} />
-          Làm mới
-        </Button>
+        <div className="flex items-center gap-2">
+          {hasFilter && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="gap-1.5 rounded-full text-foreground/70"
+              onPress={resetFilters}
+            >
+              <X className="size-3.5" />
+              Xóa bộ lọc
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="gap-1.5 rounded-full text-foreground/70"
+            onPress={() => void refetch()}
+            isDisabled={isFetching}
+          >
+            <RefreshCw className={`size-3.5 ${isFetching ? "animate-spin" : ""}`} />
+            Làm mới
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
         <div className="flex h-40 items-center justify-center">
           <Loader2 className="size-6 animate-spin text-[#1a3c34]" />
         </div>
-      ) : data.length === 0 ? (
+      ) : items.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-black/10 py-16 text-center">
           <Users className="size-10 text-foreground/20" />
           <div>
-            <p className="text-sm font-semibold text-foreground/50">Không có đơn nhóm nào đang mở</p>
-            <p className="mt-1 text-xs text-foreground/35">Các đơn nhóm đang chọn món hoặc đã chốt sẽ hiển thị ở đây</p>
+            <p className="text-sm font-semibold text-foreground/50">
+              {hasFilter ? "Không có đơn nhóm nào khớp bộ lọc" : "Chưa có đơn nhóm nào"}
+            </p>
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {data.map((go) => (
+        <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 ${isFetching ? "opacity-70" : ""}`}>
+          {items.map((go) => (
             <ActiveGroupOrderCard key={go.id} go={go} />
           ))}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="rounded-full"
+            isDisabled={page <= 1}
+            onPress={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            <ChevronLeft className="size-4" />
+          </Button>
+          <span className="text-sm text-foreground/60">
+            {page} / {totalPages}
+          </span>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="rounded-full"
+            isDisabled={page >= totalPages}
+            onPress={() => setPage((p) => Math.min(totalPages, p + 1))}
+          >
+            <ChevronRight className="size-4" />
+          </Button>
         </div>
       )}
     </div>
@@ -127,8 +410,9 @@ function ActiveGroupOrdersTab() {
 
 function ActiveGroupOrderCard({ go }: { go: ActiveGroupOrder }) {
   const status = STATUS_MAP[go.status] ?? { label: go.status, cls: "bg-gray-50 text-gray-700 ring-gray-200" };
+  const isOpen = go.status === "collecting" || go.status === "locked";
   const diff = new Date(go.expiresAt).getTime() - Date.now();
-  const expiringSoon = diff > 0 && diff < 15 * 60_000;
+  const expiringSoon = isOpen && diff > 0 && diff < 15 * 60_000;
 
   return (
     <Link href={`/group-orders/${go.token}`} className="block">
@@ -167,10 +451,12 @@ function ActiveGroupOrderCard({ go }: { go: ActiveGroupOrder }) {
           </div>
 
           {/* Expiry */}
-          <div className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium ${expiringSoon ? "bg-red-50 text-red-600" : "bg-[#f9fafb] text-foreground/55"}`}>
-            <Clock className="size-3.5 shrink-0" />
-            <span>Hết hạn {timeLeft(go.expiresAt)} · {fmtTime(go.expiresAt)}</span>
-          </div>
+          {isOpen && (
+            <div className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium ${expiringSoon ? "bg-red-50 text-red-600" : "bg-[#f9fafb] text-foreground/55"}`}>
+              <Clock className="size-3.5 shrink-0" />
+              <span>Hết hạn {timeLeft(go.expiresAt)} · {fmtTime(go.expiresAt)}</span>
+            </div>
+          )}
 
           {/* Footer */}
           <div className="flex items-center justify-between pt-0.5">
@@ -445,7 +731,7 @@ export function GroupOrdersPageClient() {
   const [tab, setTab] = useState<TabId>("active");
 
   const tabs: { id: TabId; label: string }[] = [
-    { id: "active", label: "Đơn nhóm đang mở" },
+    { id: "active", label: "Danh sách đơn nhóm" },
     { id: "config", label: "Cấu hình" },
   ];
 

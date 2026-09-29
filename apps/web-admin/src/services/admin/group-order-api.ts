@@ -25,10 +25,12 @@ export async function updateGroupOrderConfig(
   return data;
 }
 
+export type GroupOrderStatus = "collecting" | "locked" | "completed" | "cancelled";
+
 export interface ActiveGroupOrder {
   id: string;
   token: string;
-  status: "collecting" | "locked";
+  status: GroupOrderStatus;
   paymentMode: "split" | "host_pays";
   paymentType: string;
   type: string;
@@ -38,8 +40,34 @@ export interface ActiveGroupOrder {
   hostName: string | null;
 }
 
-export async function fetchActiveGroupOrders(): Promise<ActiveGroupOrder[]> {
-  const { data } = await api.get<ActiveGroupOrder[]>("/admin/group-orders");
+export interface GroupOrderListParams {
+  status?: GroupOrderStatus;
+  paymentMode?: "split" | "host_pays";
+  type?: "delivery" | "pickup" | "table";
+  paymentType?: "cash" | "bank_transfer";
+  search?: string;
+  from?: string; // YYYY-MM-DD
+  to?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface PaginatedGroupOrders {
+  data: ActiveGroupOrder[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export async function fetchActiveGroupOrders(
+  params: GroupOrderListParams = {},
+): Promise<PaginatedGroupOrders> {
+  const clean = Object.fromEntries(
+    Object.entries(params).filter(([, v]) => v !== undefined && v !== ""),
+  );
+  const { data } = await api.get<PaginatedGroupOrders>("/admin/group-orders", {
+    params: clean,
+  });
   return data;
 }
 

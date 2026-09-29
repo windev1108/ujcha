@@ -6,20 +6,34 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AxiosError } from "axios";
 import {
-    ArrowDown, ArrowUp, ImageOff, ImagePlus, Link as LinkIcon,
-    Loader2, Pencil, Plus, Search, Sticker as StickerIcon,
+    ArrowDown, ArrowUp, GripVertical, ImageOff, ImagePlus, Link as LinkIcon,
+    Loader2, Pencil, Plus, RotateCcw, Save, Search, Sticker as StickerIcon,
     Trash2, Upload, X,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useAppDialog } from "@/components/common/app-dialog-provider";
 import { adminFieldStack, adminInputClass, adminLabelClass } from "@/lib/admin-form-classes";
 import { adminKeys } from "@/services/admin/keys";
 import {
+    AdminSticker,
+    AdminStickerAlbum,
+    batchUpdateStickers,
     createStickerAlbum, createStickerByUrl, deleteSticker, deleteStickerAlbum,
-    fetchStickerAlbums, fetchStickers, reorderStickers, updateSticker,
+    fetchStickerAlbums, fetchStickers, reorderStickerAlbums,
     updateStickerAlbum, uploadStickerFile,
 } from "@/services/admin/chat-widget-api";
+import { Reorder, useDragControls } from "motion/react";
+import { mergeSubsetOrder, reconcile, sameOrder } from "@/lib/functions";
+import {
+    DndContext, DragOverlay, KeyboardSensor, MouseSensor, TouchSensor, closestCenter,
+    useSensor, useSensors, type DragEndEvent, type DragStartEvent,
+} from "@dnd-kit/core";
+import {
+    SortableContext, arrayMove, rectSortingStrategy,
+    sortableKeyboardCoordinates, useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 function axiosMessage(e: unknown): string {
     const err = e as AxiosError<{ message?: string | string[] }>;
@@ -33,7 +47,12 @@ function axiosMessage(e: unknown): string {
 }
 
 type AddMode = "upload" | "url";
+type StickerEdit = { isActive?: boolean; albumId?: string | null };
+
 const UNASSIGNED = "__unassigned__";
+const ALBUMS_KEY = ["admin", "sticker-albums"] as const;
+const EMPTY_STICKERS: AdminSticker[] = [];
+const EMPTY_ALBUMS: AdminStickerAlbum[] = [];
 
 // ── Select chọn album, dùng chung cho card sticker + form thêm sticker ─────
 function AlbumSelect({
@@ -71,26 +90,111 @@ function AlbumSelect({
     );
 }
 
+function AlbumChip({
+    id, label, count, active, onSelect,
+}: { id: string; label: string; count: number; active: boolean; onSelect: () => void }) {
+    const controls = useDragControls();
+    return (
+        <Reorder.Item
+            as="div"
+            value={id}
+            dragListener={false}
+            dragControls={controls}
+            whileDrag={{ scale: 1.06, boxShadow: "0 8px 20px rgba(0,0,0,0.18)", zIndex: 10 }}
+            className={`flex shrink-0 select-none items-center gap-0.5 rounded-full py-1 pl-1 pr-3 text-xs font-semibold transition-colors ${active ? "bg-[#1a3c34] text-white" : "bg-black/[0.04] text-foreground/60 hover:bg-black/[0.08]"
+                }`}
+        >
+            <span
+                onPointerDown={(e) => controls.start(e)}
+                aria-label="Kéo để sắp xếp"
+                className="flex size-6 cursor-grab touch-none items-center justify-center opacity-50 hover:opacity-100 active:cursor-grabbing"
+            >
+                <GripVertical className="size-3.5" />
+            </span>
+            <button type="button" onClick={onSelect} className="whitespace-nowrap">
+                {label}
+                <span className="ml-1 font-normal opacity-60">{count}</span>
+            </button>
+        </Reorder.Item>
+    );
+}
+
+function StickerCard({
+    s, albums, edited, onPatch, onDelete,
+}: {
+    s: AdminSticker;
+    albums: { id: string; name: string }[];
+    edited: boolean;
+    onPatch: (patch: StickerEdit) => void;
+    onDelete: () => void;
+}) {
+    const {
+        attributes, listeners, setNodeRef, setActivatorNodeRef,
+        transform, transition, isDragging,
+    } = useSortable({ id: s.id });
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={{ transform: CSS.Translate.toString(transform), transition }}
+            className={`relative flex min-w-0 flex-col gap-2 rounded-2xl border bg-white p-2.5 ${edited ? "border-amber-300 ring-1 ring-amber-200" : "border-black/8"
+                }  ${isDragging ? "opacity-30" : ""}`}
+        >
+            {/* Ảnh lớn */}
+            <div className={`relative aspect-square w-full overflow-hidden rounded-xl bg-[#fafafa] ${s.isActive ? "" : "opacity-50"}`}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={s.url} alt={s.alt || "sticker"} draggable={false} className="size-full object-contain p-3" />
+
+                <button
+                    type="button"
+                    ref={setActivatorNodeRef}
+                    {...attributes}
+                    {...listeners}
+                    aria-label="Kéo để sắp xếp"
+                    className="absolute left-1.5 top-1.5 flex size-8 cursor-grab touch-none items-center justify-center rounded-full bg-white/90 text-foreground/50 shadow-sm ring-1 ring-black/5 hover:text-foreground active:cursor-grabbing"
+                >
+                    <GripVertical className="size-4" />
+                </button>
+
+                <button
+                    type="button"
+                    onClick={onDelete}
+                    aria-label="Xoá"
+                    className="absolute right-1.5 top-1.5 flex size-8 items-center justify-center rounded-full bg-white/90 text-foreground/40 shadow-sm ring-1 ring-black/5 hover:bg-red-50 hover:text-red-600"
+                >
+                    <Trash2 className="size-3.5" />
+                </button>
+            </div>
+
+            <p className="truncate px-0.5 text-center text-xs text-foreground/55" title={s.alt}>
+                {s.alt || <span className="text-foreground/25">Không mô tả</span>}
+            </p>
+
+            <AlbumSelect
+                value={s.albumId ?? UNASSIGNED}
+                onChange={(id) => onPatch({ albumId: id === UNASSIGNED ? null : id })}
+                albums={albums}
+                className="h-8 w-full text-[11px]"
+            />
+
+            <div className="flex items-center justify-between px-0.5">
+                <span className="text-[11px] text-foreground/45">{s.isActive ? "Đang hiện" : "Đã ẩn"}</span>
+                <Switch size="sm" isSelected={s.isActive} onChange={(v) => onPatch({ isActive: v })}>
+                    <Switch.Control><Switch.Thumb /></Switch.Control>
+                </Switch>
+            </div>
+        </div>
+    );
+}
+
 export function ChatWidgetConfigClient() {
     const qc = useQueryClient();
     const { showAlert } = useAppDialog();
 
-    const { data: albums = [] } = useQuery({
-        queryKey: ["admin", "sticker-albums"],
-        queryFn: fetchStickerAlbums,
-    });
-    const { data: stickers = [], isLoading } = useQuery({
-        queryKey: adminKeys.chat_widget,
-        queryFn: fetchStickers,
-    });
-
-    const [activeAlbumId, setActiveAlbumId] = useState<string | "all" | "none">("all");
-    const [search, setSearch] = useState("");
-
-    const [newAlbumName, setNewAlbumName] = useState("");
-    const [editingAlbumId, setEditingAlbumId] = useState<string | null>(null);
-    const [editingAlbumName, setEditingAlbumName] = useState("");
-
+    const albumsQuery = useQuery({ queryKey: ALBUMS_KEY, queryFn: fetchStickerAlbums });
+    const stickersQuery = useQuery({ queryKey: adminKeys.chat_widget, queryFn: fetchStickers });
+    const albums = albumsQuery.data ?? EMPTY_ALBUMS;
+    const stickers = stickersQuery.data ?? EMPTY_STICKERS;
     const [addMode, setAddMode] = useState<AddMode>("upload");
     const [urlInput, setUrlInput] = useState("");
     const [altInput, setAltInput] = useState("");
@@ -98,10 +202,170 @@ export function ChatWidgetConfigClient() {
     const [previewFile, setPreviewFile] = useState<{ file: File; previewUrl: string } | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const [confirmTarget, setConfirmTarget] = useState<{ type: "sticker"; id: string; label: string } | { type: "album"; id: string; label: string } | null>(null);
+    // ── UI state ──
+    const [activeAlbumId, setActiveAlbumId] = useState<string>("all"); // "all" | "none" | albumId
+    const [search, setSearch] = useState("");
+    const [addingAlbum, setAddingAlbum] = useState(false);
+    const [newAlbumName, setNewAlbumName] = useState("");
+    const [renaming, setRenaming] = useState(false);
+    const [renameValue, setRenameValue] = useState("");
+
+    // ── Draft state (chỉ gửi server khi bấm Lưu) ──
+    const [orderDraft, setOrderDraft] = useState<string[] | null>(null);
+    const [albumOrderDraft, setAlbumOrderDraft] = useState<string[] | null>(null);
+    const [edits, setEdits] = useState<Record<string, StickerEdit>>({});
+
+    const [confirmTarget, setConfirmTarget] = useState<
+        { type: "sticker" | "album"; id: string; label: string } | null
+    >(null);
 
     const invalidate = () => qc.invalidateQueries({ queryKey: adminKeys.chat_widget });
-    const invalidateAlbums = () => qc.invalidateQueries({ queryKey: ["admin", "sticker-albums"] });
+    const invalidateAlbums = () => qc.invalidateQueries({ queryKey: ALBUMS_KEY });
+
+    // ── Derived: album ──
+    const albumMap = useMemo(() => new Map(albums.map((a) => [a.id, a])), [albums]);
+    const serverAlbumOrder = useMemo(() => albums.map((a) => a.id), [albums]);
+    const albumOrder = useMemo(() => reconcile(albumOrderDraft, serverAlbumOrder), [albumOrderDraft, serverAlbumOrder]);
+    const albumOrderDirty = !sameOrder(albumOrder, serverAlbumOrder);
+    const orderedAlbums = useMemo(
+        () => albumOrder.map((id) => albumMap.get(id)).filter((a): a is AdminStickerAlbum => !!a),
+        [albumOrder, albumMap],
+    );
+
+    // ── Derived: sticker ──
+    const stickerMap = useMemo(() => new Map(stickers.map((s) => [s.id, s])), [stickers]);
+    const serverOrder = useMemo(() => stickers.map((s) => s.id), [stickers]);
+    const order = useMemo(() => reconcile(orderDraft, serverOrder), [orderDraft, serverOrder]);
+    const orderDirty = !sameOrder(order, serverOrder);
+
+    // bỏ edit của sticker đã bị xoá
+    const effectiveEdits = useMemo(
+        () => Object.fromEntries(Object.entries(edits).filter(([id]) => stickerMap.has(id))),
+        [edits, stickerMap],
+    );
+    const editCount = Object.keys(effectiveEdits).length;
+
+    const view = useMemo(
+        () => order.map((id) => ({ ...stickerMap.get(id)!, ...effectiveEdits[id] })),
+        [order, stickerMap, effectiveEdits],
+    );
+    const viewMap = useMemo(() => new Map(view.map((s) => [s.id, s])), [view]);
+
+    const albumCounts = useMemo(() => {
+        const m = new Map<string, number>();
+        for (const s of view) if (s.albumId) m.set(s.albumId, (m.get(s.albumId) ?? 0) + 1);
+        return m;
+    }, [view]);
+    const unassignedCount = view.filter((s) => !s.albumId).length;
+
+    const filteredIds = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        return view
+            .filter((s) => {
+                if (activeAlbumId === "none" && s.albumId) return false;
+                if (activeAlbumId !== "all" && activeAlbumId !== "none" && s.albumId !== activeAlbumId) return false;
+                if (q && !(s.alt || "").toLowerCase().includes(q)) return false;
+                return true;
+            })
+            .map((s) => s.id);
+    }, [view, activeAlbumId, search]);
+
+    const isDirty = albumOrderDirty || orderDirty || editCount > 0;
+    const activeAlbum = activeAlbumId !== "all" && activeAlbumId !== "none" ? albumMap.get(activeAlbumId) : undefined;
+
+    // ── Edit helper: tự bỏ edit nếu giá trị trùng server ──
+    const patchSticker = (id: string, patch: StickerEdit) => {
+        const server = stickerMap.get(id);
+        if (!server) return;
+        setEdits((prev) => {
+            const merged: StickerEdit = { ...prev[id], ...patch };
+            if (merged.isActive === server.isActive) delete merged.isActive;
+            if (merged.albumId !== undefined && merged.albumId === server.albumId) delete merged.albumId;
+            const next = { ...prev };
+            if (Object.keys(merged).length === 0) delete next[id];
+            else next[id] = merged;
+            return next;
+        });
+    };
+
+    const discardDrafts = () => {
+        setOrderDraft(null);
+        setAlbumOrderDraft(null);
+        setEdits({});
+    };
+
+    // cảnh báo khi rời trang mà chưa lưu
+    useEffect(() => {
+        if (!isDirty) return;
+        const handler = (e: BeforeUnloadEvent) => e.preventDefault();
+        window.addEventListener("beforeunload", handler);
+        return () => window.removeEventListener("beforeunload", handler);
+    }, [isDirty]);
+
+    // ── Save ──
+    const saveMut = useMutation({
+        mutationFn: async () => {
+            const jobs: Promise<unknown>[] = [];
+            if (albumOrderDirty) {
+                jobs.push(reorderStickerAlbums(albumOrder).then((d) => qc.setQueryData(ALBUMS_KEY, d)));
+            }
+            if (orderDirty || editCount > 0) {
+                jobs.push(
+                    batchUpdateStickers({
+                        order: orderDirty ? order : undefined,
+                        changes: editCount > 0
+                            ? Object.entries(effectiveEdits).map(([id, e]) => ({ id, ...e }))
+                            : undefined,
+                    }).then((d) => qc.setQueryData(adminKeys.chat_widget, d)),
+                );
+            }
+            await Promise.all(jobs);
+        },
+        onSuccess: discardDrafts,
+        onError: (e) => showAlert(axiosMessage(e), "Lỗi"),
+    });
+
+    // ── Album mutations (tạo / đổi tên / xoá: thực hiện ngay) ──
+    const createAlbumMut = useMutation({
+        mutationFn: () => createStickerAlbum(newAlbumName.trim()),
+        onSuccess: () => { setNewAlbumName(""); setAddingAlbum(false); invalidateAlbums(); },
+        onError: (e) => showAlert(axiosMessage(e), "Lỗi"),
+    });
+
+    const renameAlbumMut = useMutation({
+        mutationFn: ({ id, name }: { id: string; name: string }) => updateStickerAlbum(id, { name }),
+        onSuccess: () => { setRenaming(false); invalidateAlbums(); },
+        onError: (e) => showAlert(axiosMessage(e), "Lỗi"),
+    });
+
+    const deleteAlbumMut = useMutation({
+        mutationFn: (id: string) => deleteStickerAlbum(id),
+        onSuccess: (_, id) => {
+            invalidateAlbums();
+            invalidate();
+            // bỏ các edit đang trỏ tới album vừa xoá
+            setEdits((prev) => {
+                const next = { ...prev };
+                for (const [sid, e] of Object.entries(next)) {
+                    if (e.albumId === id) {
+                        const { albumId: _drop, ...rest } = e;
+                        if (Object.keys(rest).length) next[sid] = rest;
+                        else delete next[sid];
+                    }
+                }
+                return next;
+            });
+            if (activeAlbumId === id) setActiveAlbumId("all");
+            setConfirmTarget(null);
+        },
+        onError: (e) => showAlert(axiosMessage(e), "Lỗi"),
+    });
+
+    const deleteStickerMut = useMutation({
+        mutationFn: (id: string) => deleteSticker(id),
+        onSuccess: () => { invalidate(); setConfirmTarget(null); },
+        onError: (e) => showAlert(axiosMessage(e), "Lỗi"),
+    });
 
     const createUrlMut = useMutation({
         mutationFn: () =>
@@ -132,73 +396,6 @@ export function ChatWidgetConfigClient() {
         onError: (e) => showAlert(axiosMessage(e), "Lỗi"),
     });
 
-    const toggleActiveMut = useMutation({
-        mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => updateSticker(id, { isActive }),
-        onSuccess: invalidate,
-        onError: (e) => showAlert(axiosMessage(e), "Lỗi"),
-    });
-
-    const assignAlbumMut = useMutation({
-        mutationFn: ({ id, albumId }: { id: string; albumId: string | null }) => updateSticker(id, { albumId }),
-        onSuccess: invalidate,
-        onError: (e) => showAlert(axiosMessage(e), "Lỗi"),
-    });
-
-    const deleteStickerMut = useMutation({
-        mutationFn: (id: string) => deleteSticker(id),
-        onSuccess: () => { invalidate(); setConfirmTarget(null); },
-        onError: (e) => showAlert(axiosMessage(e), "Lỗi"),
-    });
-
-    const reorderMut = useMutation({
-        mutationFn: (ids: string[]) => reorderStickers(ids),
-        onSuccess: (data) => qc.setQueryData(adminKeys.chat_widget, data),
-        onError: (e) => showAlert(axiosMessage(e), "Lỗi"),
-    });
-
-    const createAlbumMut = useMutation({
-        mutationFn: () => createStickerAlbum(newAlbumName.trim()),
-        onSuccess: () => { setNewAlbumName(""); invalidateAlbums(); },
-        onError: (e) => showAlert(axiosMessage(e), "Lỗi"),
-    });
-
-    const renameAlbumMut = useMutation({
-        mutationFn: ({ id, name }: { id: string; name: string }) => updateStickerAlbum(id, { name }),
-        onSuccess: () => { setEditingAlbumId(null); invalidateAlbums(); },
-        onError: (e) => showAlert(axiosMessage(e), "Lỗi"),
-    });
-
-    const deleteAlbumMut = useMutation({
-        mutationFn: (id: string) => deleteStickerAlbum(id),
-        onSuccess: () => {
-            invalidateAlbums();
-            invalidate();
-            if (activeAlbumId === confirmTarget?.id) setActiveAlbumId("all");
-            setConfirmTarget(null);
-        },
-        onError: (e) => showAlert(axiosMessage(e), "Lỗi"),
-    });
-
-    const albumCounts = useMemo(() => {
-        const map = new Map<string, number>();
-        for (const s of stickers) {
-            if (s.albumId) map.set(s.albumId, (map.get(s.albumId) ?? 0) + 1);
-        }
-        return map;
-    }, [stickers]);
-
-    const unassignedCount = stickers.filter((s) => !s.albumId).length;
-    const canReorder = activeAlbumId === "all" && search.trim() === "";
-
-    const filteredStickers = useMemo(() => {
-        let list = stickers;
-        if (activeAlbumId === "none") list = list.filter((s) => !s.albumId);
-        else if (activeAlbumId !== "all") list = list.filter((s) => s.albumId === activeAlbumId);
-        const q = search.trim().toLowerCase();
-        if (q) list = list.filter((s) => (s.alt || "").toLowerCase().includes(q));
-        return list;
-    }, [stickers, activeAlbumId, search]);
-
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         e.target.value = "";
@@ -207,22 +404,37 @@ export function ChatWidgetConfigClient() {
         setPreviewFile({ file, previewUrl: URL.createObjectURL(file) });
     };
 
-    const move = (index: number, direction: -1 | 1) => {
-        const targetIndex = index + direction;
-        if (targetIndex < 0 || targetIndex >= stickers.length) return;
-        const next = [...stickers];
-        [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
-        reorderMut.mutate(next.map((s) => s.id));
-    };
-
-    function requestDeleteSticker(s: { id: string; alt: string }) {
-        setConfirmTarget({ type: "sticker", id: s.id, label: s.alt || "sticker này" });
-    }
-    function requestDeleteAlbum(a: { id: string; name: string }) {
-        setConfirmTarget({ type: "album", id: a.id, label: a.name });
-    }
-
     const confirmPending = deleteStickerMut.isPending || deleteAlbumMut.isPending;
+
+    const selectAlbum = (id: string) => { setActiveAlbumId(id); setRenaming(false); };
+
+    const [draggingId, setDraggingId] = useState<string | null>(null);
+
+    const sensors = useSensors(
+        useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
+        useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 6 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    );
+
+    const handleDragStart = ({ active }: DragStartEvent) => setDraggingId(String(active.id));
+
+    const handleDragEnd = ({ active, over }: DragEndEvent) => {
+        setDraggingId(null);
+        if (!over || active.id === over.id) return;
+        const from = filteredIds.indexOf(String(active.id));
+        const to = filteredIds.indexOf(String(over.id));
+        if (from < 0 || to < 0) return;
+        setOrderDraft(mergeSubsetOrder(order, arrayMove(filteredIds, from, to)));
+    };
+    const dirtySummary = [
+        albumOrderDirty && "thứ tự album",
+        orderDirty && "thứ tự sticker",
+        editCount > 0 && `${editCount} sticker chỉnh sửa`,
+    ].filter(Boolean).join(" · ");
+
+    const staticChip = (active: boolean) =>
+        `shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold transition ${active ? "bg-[#1a3c34] text-white" : "bg-black/[0.04] text-foreground/60 hover:bg-black/[0.08]"
+        }`;
 
     return (
         <div className="flex flex-col gap-8 pb-16">
@@ -234,117 +446,13 @@ export function ChatWidgetConfigClient() {
                 </p>
             </header>
 
-            <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
-                <div className="flex flex-col gap-6">
-
-                    {/* Quản lý Album */}
-                    <Card className="rounded-2xl border border-black/6 shadow-sm">
-                        <CardContent className="flex flex-col gap-4 px-5 py-5">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/45">
-                                Album ({albums.length})
-                            </p>
-
-                            {albums.length === 0 ? (
-                                <p className="text-xs text-foreground/40">
-                                    Chưa có album nào — tạo album để nhóm sticker theo chủ đề (vui, buồn, chào hỏi…).
-                                </p>
-                            ) : (
-                                <div className="flex flex-col gap-1.5">
-                                    {albums.map((a) => (
-                                        <div key={a.id} className="flex items-center gap-2 rounded-xl bg-black/[0.02] px-3 py-2">
-                                            {editingAlbumId === a.id ? (
-                                                <>
-                                                    <Input
-                                                        autoFocus
-                                                        value={editingAlbumName}
-                                                        onChange={(e) => setEditingAlbumName(e.target.value)}
-                                                        onKeyDown={(e) => {
-                                                            if (e.key === "Enter" && editingAlbumName.trim()) {
-                                                                renameAlbumMut.mutate({ id: a.id, name: editingAlbumName.trim() });
-                                                            }
-                                                            if (e.key === "Escape") setEditingAlbumId(null);
-                                                        }}
-                                                        className={`${adminInputClass} h-8 flex-1 text-xs`}
-                                                    />
-                                                    <Button
-                                                        size="sm"
-                                                        className="shrink-0 rounded-full bg-[#1a3c34] px-2.5 text-[11px] font-semibold text-white"
-                                                        onPress={() => editingAlbumName.trim() && renameAlbumMut.mutate({ id: a.id, name: editingAlbumName.trim() })}
-                                                        isDisabled={renameAlbumMut.isPending || !editingAlbumName.trim()}
-                                                    >
-                                                        Lưu
-                                                    </Button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setEditingAlbumId(null)}
-                                                        className="flex size-7 shrink-0 items-center justify-center rounded-full text-foreground/40 hover:bg-black/5"
-                                                        aria-label="Huỷ"
-                                                    >
-                                                        <X className="size-3.5" />
-                                                    </button>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setActiveAlbumId(a.id)}
-                                                        className={`flex-1 truncate text-left text-sm font-medium transition ${activeAlbumId === a.id ? "text-[#1a3c34]" : "text-foreground/75 hover:text-foreground"}`}
-                                                    >
-                                                        {a.name}
-                                                        <span className="ml-1.5 text-xs font-normal text-foreground/35">
-                                                            {albumCounts.get(a.id) ?? 0} sticker
-                                                        </span>
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => { setEditingAlbumId(a.id); setEditingAlbumName(a.name); }}
-                                                        className="flex size-7 shrink-0 items-center justify-center rounded-full text-foreground/35 hover:bg-black/5 hover:text-foreground"
-                                                        aria-label="Đổi tên"
-                                                    >
-                                                        <Pencil className="size-3.5" />
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => requestDeleteAlbum(a)}
-                                                        className="flex size-7 shrink-0 items-center justify-center rounded-full text-foreground/35 hover:bg-red-50 hover:text-red-600"
-                                                        aria-label="Xoá album"
-                                                    >
-                                                        <Trash2 className="size-3.5" />
-                                                    </button>
-                                                </>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                            <div className="flex items-center gap-2 border-t border-black/6 pt-4">
-                                <Input
-                                    value={newAlbumName}
-                                    onChange={(e) => setNewAlbumName(e.target.value)}
-                                    onKeyDown={(e) => e.key === "Enter" && newAlbumName.trim() && createAlbumMut.mutate()}
-                                    placeholder="Tên album mới, ví dụ: Vui vẻ"
-                                    className={`${adminInputClass} h-9 flex-1 text-xs`}
-                                />
-                                <Button
-                                    size="sm"
-                                    className="shrink-0 rounded-full bg-[#1a3c34] px-4 text-xs font-semibold text-white"
-                                    onPress={() => createAlbumMut.mutate()}
-                                    isDisabled={!newAlbumName.trim() || createAlbumMut.isPending}
-                                >
-                                    <Plus className="size-3.5" />
-                                    Tạo album
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Danh sách sticker */}
+            <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
+                <div className="flex min-w-0 flex-col gap-4">
                     <Card className="rounded-2xl border border-black/6 shadow-sm">
                         <CardContent className="flex flex-col gap-4 px-5 py-5">
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/45">
-                                    Sticker ({filteredStickers.length}/{stickers.length})
+                                    Sticker ({filteredIds.length}/{stickers.length})
                                 </p>
                                 <div className="relative w-full sm:w-56">
                                     <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-3.5 -translate-y-1/2 text-foreground/30" />
@@ -357,30 +465,158 @@ export function ChatWidgetConfigClient() {
                                 </div>
                             </div>
 
-                            <div className="flex flex-wrap gap-1.5">
-                                {([
-                                    { id: "all" as const, label: `Tất cả (${stickers.length})` },
-                                    ...albums.map((a) => ({ id: a.id, label: `${a.name} (${albumCounts.get(a.id) ?? 0})` })),
-                                    { id: "none" as const, label: `Chưa phân loại (${unassignedCount})` },
-                                ]).map((tab) => (
-                                    <button
-                                        key={tab.id}
-                                        type="button"
-                                        onClick={() => setActiveAlbumId(tab.id)}
-                                        className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${activeAlbumId === tab.id ? "bg-[#1a3c34] text-white" : "bg-black/[0.04] text-foreground/60 hover:bg-black/[0.08]"}`}
-                                    >
-                                        {tab.label}
-                                    </button>
-                                ))}
+                            {/* Thanh album: vừa là bộ lọc vừa kéo thả được */}
+                            <div className="flex max-w-full items-center gap-1.5 overflow-x-auto pb-1">
+                                <button type="button" onClick={() => selectAlbum("all")} className={staticChip(activeAlbumId === "all")}>
+                                    Tất cả ({stickers.length})
+                                </button>
+
+                                <Reorder.Group
+                                    as="div"
+                                    axis="x"
+                                    values={albumOrder}
+                                    onReorder={setAlbumOrderDraft}
+                                    className="flex items-center gap-1.5"
+                                >
+                                    {orderedAlbums.map((a) => (
+                                        <AlbumChip
+                                            key={a.id}
+                                            id={a.id}
+                                            label={a.name}
+                                            count={albumCounts.get(a.id) ?? 0}
+                                            active={activeAlbumId === a.id}
+                                            onSelect={() => selectAlbum(a.id)}
+                                        />
+                                    ))}
+                                </Reorder.Group>
+
+                                <button type="button" onClick={() => selectAlbum("none")} className={staticChip(activeAlbumId === "none")}>
+                                    Chưa phân loại ({unassignedCount})
+                                </button>
                             </div>
 
-                            {!canReorder && stickers.length > 0 && (
-                                <p className="text-[11px] text-amber-600">
-                                    Sắp xếp thủ công chỉ khả dụng khi xem "Tất cả" và không tìm kiếm.
-                                </p>
+                            {/* Tạo album: hàng riêng */}
+                            {addingAlbum ? (
+                                <div className="flex items-center gap-2">
+                                    <Input
+                                        autoFocus
+                                        value={newAlbumName}
+                                        onChange={(e) => setNewAlbumName(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter" && newAlbumName.trim()) createAlbumMut.mutate();
+                                            if (e.key === "Escape") { setAddingAlbum(false); setNewAlbumName(""); }
+                                        }}
+                                        placeholder="Tên album mới, ví dụ: Vui vẻ"
+                                        className={`${adminInputClass} h-8 min-w-0 flex-1 text-xs sm:max-w-xs`}
+                                    />
+                                    <Button
+                                        size="sm"
+                                        className="rounded-full bg-[#1a3c34] px-3 text-[11px] font-semibold text-white"
+                                        isDisabled={!newAlbumName.trim() || createAlbumMut.isPending}
+                                        onPress={() => createAlbumMut.mutate()}
+                                    >
+                                        Tạo
+                                    </Button>
+                                    <button
+                                        type="button"
+                                        aria-label="Huỷ"
+                                        onClick={() => { setAddingAlbum(false); setNewAlbumName(""); }}
+                                        className="flex size-7 shrink-0 items-center justify-center rounded-full text-foreground/40 hover:bg-black/5"
+                                    >
+                                        <X className="size-3.5" />
+                                    </button>
+                                </div>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={() => setAddingAlbum(true)}
+                                    className="flex w-fit items-center gap-1 rounded-full border border-dashed border-black/15 px-3 py-1.5 text-xs font-semibold text-foreground/50 hover:border-[#1a3c34]/40 hover:text-[#1a3c34]"
+                                >
+                                    <Plus className="size-3.5" />Thêm album
+                                </button>
                             )}
 
-                            {isLoading ? (
+                            {/* Đổi tên / xoá album đang chọn */}
+                            {activeAlbum && (
+                                <div className="flex items-center gap-2 rounded-xl bg-black/[0.02] px-3 py-2">
+                                    {renaming ? (
+                                        <>
+                                            <Input
+                                                autoFocus
+                                                value={renameValue}
+                                                onChange={(e) => setRenameValue(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === "Enter" && renameValue.trim())
+                                                        renameAlbumMut.mutate({ id: activeAlbum.id, name: renameValue.trim() });
+                                                    if (e.key === "Escape") setRenaming(false);
+                                                }}
+                                                className={`${adminInputClass} h-8 flex-1 text-xs`}
+                                            />
+                                            <Button
+                                                size="sm"
+                                                className="rounded-full bg-[#1a3c34] px-3 text-[11px] font-semibold text-white"
+                                                isDisabled={!renameValue.trim() || renameValue.trim() === activeAlbum.name || renameAlbumMut.isPending}
+                                                onPress={() => renameAlbumMut.mutate({ id: activeAlbum.id, name: renameValue.trim() })}
+                                            >
+                                                Lưu tên
+                                            </Button>
+                                            <button type="button" aria-label="Huỷ" onClick={() => setRenaming(false)}
+                                                className="flex size-7 items-center justify-center rounded-full text-foreground/40 hover:bg-black/5">
+                                                <X className="size-3.5" />
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <p className="min-w-0 flex-1 truncate text-xs text-foreground/55">
+                                                Album: <span className="font-semibold text-foreground/80">{activeAlbum.name}</span>
+                                            </p>
+                                            <button type="button" aria-label="Đổi tên"
+                                                onClick={() => { setRenameValue(activeAlbum.name); setRenaming(true); }}
+                                                className="flex size-7 items-center justify-center rounded-full text-foreground/35 hover:bg-black/5 hover:text-foreground">
+                                                <Pencil className="size-3.5" />
+                                            </button>
+                                            <button type="button" aria-label="Xoá album"
+                                                onClick={() => setConfirmTarget({ type: "album", id: activeAlbum.id, label: activeAlbum.name })}
+                                                className="flex size-7 items-center justify-center rounded-full text-foreground/35 hover:bg-red-50 hover:text-red-600">
+                                                <Trash2 className="size-3.5" />
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                            )}
+
+                            <p className="text-[11px] text-foreground/40">
+                                Kéo biểu tượng ⋮⋮ để sắp xếp album và sticker. Thay đổi chỉ được lưu khi bấm “Lưu thay đổi”.
+                            </p>
+
+                            {/* Thanh lưu: luôn hiện, chỉ enable khi có thay đổi */}
+                            <div className="sticky bottom-4 z-20 flex items-center justify-between gap-3 rounded-2xl border border-black/8 bg-white/95 px-4 py-3 shadow-lg backdrop-blur">
+                                <p className={`text-xs ${isDirty ? "font-medium text-amber-600" : "text-foreground/40"}`}>
+                                    {isDirty ? `Chưa lưu: ${dirtySummary}` : "Không có thay đổi"}
+                                </p>
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="gap-1.5 rounded-full text-foreground/60"
+                                        isDisabled={!isDirty || saveMut.isPending}
+                                        onPress={discardDrafts}
+                                    >
+                                        <RotateCcw className="size-3.5" />Hoàn tác
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        className="gap-1.5 rounded-full bg-[#1a3c34] px-4 font-semibold text-white"
+                                        isDisabled={!isDirty || saveMut.isPending}
+                                        onPress={() => saveMut.mutate()}
+                                    >
+                                        {saveMut.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
+                                        {saveMut.isPending ? "Đang lưu…" : "Lưu thay đổi"}
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {stickersQuery.isLoading ? (
                                 <div className="flex justify-center py-10">
                                     <Loader2 className="size-5 animate-spin text-foreground/30" />
                                 </div>
@@ -389,91 +625,58 @@ export function ChatWidgetConfigClient() {
                                     <StickerIcon className="size-8" />
                                     <p className="text-sm">Chưa có sticker nào — thêm sticker đầu tiên ở cột bên phải.</p>
                                 </div>
-                            ) : filteredStickers.length === 0 ? (
+                            ) : filteredIds.length === 0 ? (
                                 <div className="flex flex-col items-center gap-2 py-10 text-foreground/35">
                                     <ImageOff className="size-8" />
                                     <p className="text-sm">Không có sticker nào khớp với bộ lọc hiện tại.</p>
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                                    {filteredStickers.map((s) => {
-                                        const realIdx = stickers.findIndex((x) => x.id === s.id);
-                                        return (
-                                            <div
-                                                key={s.id}
-                                                className={`flex flex-col gap-2 rounded-xl border p-2.5 transition ${s.isActive ? "border-black/8" : "border-black/6 bg-black/[0.015] opacity-60"}`}
-                                            >
-                                                <div className="flex items-center justify-center rounded-lg bg-[#fafafa] p-2">
+                                <DndContext
+                                    sensors={sensors}
+                                    collisionDetection={closestCenter}
+                                    onDragStart={handleDragStart}
+                                    onDragEnd={handleDragEnd}
+                                    onDragCancel={() => setDraggingId(null)}
+                                >
+                                    <SortableContext items={filteredIds} strategy={rectSortingStrategy}>
+                                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 2xl:grid-cols-4">
+                                            {filteredIds.map((id) => {
+                                                const s = viewMap.get(id)!;
+                                                return (
+                                                    <StickerCard
+                                                        key={id}
+                                                        s={s}
+                                                        albums={orderedAlbums}
+                                                        edited={!!effectiveEdits[id]}
+                                                        onPatch={(patch) => patchSticker(id, patch)}
+                                                        onDelete={() => setConfirmTarget({ type: "sticker", id, label: s.alt || "sticker này" })}
+                                                    />
+                                                );
+                                            })}
+                                        </div>
+                                    </SortableContext>
+
+                                    <DragOverlay dropAnimation={{ duration: 200, easing: "cubic-bezier(0.18,0.67,0.6,1.22)" }}>
+                                        {draggingId && viewMap.get(draggingId) ? (
+                                            <div className="rotate-2 scale-105 rounded-2xl border border-[#1a3c34]/30 bg-white p-2.5 shadow-2xl">
+                                                <div className="aspect-square w-full overflow-hidden rounded-xl bg-[#fafafa]">
                                                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                                                    <img src={s.url} alt={s.alt || "sticker"} className="h-16 w-16 object-contain" />
-                                                </div>
-
-                                                {s.alt && (
-                                                    <p className="truncate text-center text-[11px] text-foreground/45" title={s.alt}>
-                                                        {s.alt}
-                                                    </p>
-                                                )}
-
-                                                <AlbumSelect
-                                                    value={s.albumId ?? UNASSIGNED}
-                                                    onChange={(id) => assignAlbumMut.mutate({ id: s.id, albumId: id === UNASSIGNED ? null : id })}
-                                                    albums={albums}
-                                                    isDisabled={assignAlbumMut.isPending}
-                                                    className="h-8 w-full text-[11px]"
-                                                />
-
-                                                <div className="flex items-center justify-between gap-1">
-                                                    <div className="flex gap-0.5">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => move(realIdx, -1)}
-                                                            disabled={!canReorder || realIdx === 0 || reorderMut.isPending}
-                                                            aria-label="Lên"
-                                                            className="flex size-6 items-center justify-center rounded-full text-foreground/40 hover:bg-black/5 disabled:opacity-25"
-                                                        >
-                                                            <ArrowUp className="size-3.5" />
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => move(realIdx, 1)}
-                                                            disabled={!canReorder || realIdx === stickers.length - 1 || reorderMut.isPending}
-                                                            aria-label="Xuống"
-                                                            className="flex size-6 items-center justify-center rounded-full text-foreground/40 hover:bg-black/5 disabled:opacity-25"
-                                                        >
-                                                            <ArrowDown className="size-3.5" />
-                                                        </button>
-                                                    </div>
-
-                                                    <Switch
-                                                        size="sm"
-                                                        isSelected={s.isActive}
-                                                        onChange={(v) => toggleActiveMut.mutate({ id: s.id, isActive: v })}
-                                                        isDisabled={toggleActiveMut.isPending}
-                                                    >
-                                                        <Switch.Control><Switch.Thumb /></Switch.Control>
-                                                    </Switch>
-
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => requestDeleteSticker(s)}
-                                                        className="flex size-6 items-center justify-center rounded-full text-foreground/35 hover:bg-red-50 hover:text-red-600"
-                                                        aria-label="Xoá"
-                                                    >
-                                                        <Trash2 className="size-3.5" />
-                                                    </button>
+                                                    <img src={viewMap.get(draggingId)!.url} alt="" className="size-full object-contain p-3" />
                                                 </div>
                                             </div>
-                                        );
-                                    })}
-                                </div>
+                                        ) : null}
+                                    </DragOverlay>
+                                </DndContext>
                             )}
                         </CardContent>
                     </Card>
+
+
                 </div>
 
-                <div className="flex flex-col gap-4">
-                    <Card className="sticky top-6 rounded-2xl border border-black/6 shadow-sm">
-                        <CardContent className="flex flex-col gap-5 px-5 py-5">
+                <div className="flex min-w-0 flex-col gap-4">
+                    <Card className="min-w-0 rounded-2xl border border-black/6 shadow-sm">
+                        <CardContent className="flex min-w-0 flex-col gap-4 px-5 py-5">
                             <div className="flex items-center gap-2">
                                 <Plus className="size-4 text-[#1a3c34]" />
                                 <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/45">Thêm sticker</p>

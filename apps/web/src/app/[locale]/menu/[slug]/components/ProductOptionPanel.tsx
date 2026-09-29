@@ -16,7 +16,8 @@ import {
 } from "@/lib/product-options";
 import { useTranslations, useLocale } from "next-intl";
 import { getDisplayName, getValueLabel, getDisplayDescription } from "@/lib/product-name";
-import { SOLD_COUNT_DISPLAY_BOOST } from "@/lib/constants";
+import { useOutOfStockToppingNames } from "@/services/topping/hooks";
+import { toppingNameKey } from "@/services/topping/api";
 
 
 type Props = { product: ApiProduct };
@@ -25,8 +26,16 @@ export function ProductOptionPanel({ product }: Props) {
   const t = useTranslations();
   const locale = useLocale();
   const accessToken = useAuthStore((s) => s.accessToken);
-  const toppings = (product.toppings ?? []).filter((t) => t.isActive !== false);
+  const { data: oosNameKeys } = useOutOfStockToppingNames();
+  const oosSet = useMemo(() => new Set(oosNameKeys ?? []), [oosNameKeys]);
 
+  const toppings = useMemo(
+    () =>
+      (product.toppings ?? [])
+        .filter((top) => top.isActive !== false)
+        .filter((top) => !oosSet.has(toppingNameKey(top.name))),
+    [product.toppings, oosSet],
+  );
   const optionGroups = useMemo(
     () => normalizeOptionGroups(product.optionGroups),
     [product.optionGroups],
@@ -37,7 +46,15 @@ export function ProductOptionPanel({ product }: Props) {
   const [quantity, setQuantity] = useState(1);
   const [note, setNote] = useState("");
   const [addedFeedback, setAddedFeedback] = useState(false);
-
+  
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedToppings((prev) => {
+      const allowedIds = new Set(toppings.map((top) => top.id));
+      const next = new Set([...prev].filter((id) => allowedIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [toppings]);
   useEffect(() => {
     const init: Record<string, string> = {};
     for (const g of optionGroups) {

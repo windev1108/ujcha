@@ -89,6 +89,7 @@ import { extractErrorCode } from "@/lib/utils";
 import { StoreClosedDialog } from "@/components/common/StoreClosedDialog";
 import { fetchGroupChatMessages, sendGroupChatMessage } from "@/services/chat/api";
 import { ChatBubble } from "@/components/chat/ChatBubble";
+import { OverflowPills } from "@/components/common/OverflowPills";
 
 const SESSION_KEY = (token: string) => `group_order_session_${token}`;
 const PARTICIPANT_KEY = (token: string) => `group_order_participant_${token}`;
@@ -185,6 +186,14 @@ function ProductPickerDrawer({
   const [search, setSearch] = useState("");
   const [customizeTarget, setCustomizeTarget] = useState<ApiProduct | null>(null);
   const { data: categories = [] } = useCategoriesQuery();
+  const categoryItems = useMemo(
+    () => [
+      { id: "", label: t("group_all_categories") },
+      ...categories.map((c) => ({ id: c.id, label: c.name })),
+    ],
+    [categories, t],
+  );
+
   const effectiveCategoryId = search.trim() ? undefined : activeCategoryId;
   const { data: allProducts = [], isLoading: productsLoading } = useProductsQuery({
     categoryId: effectiveCategoryId,
@@ -297,30 +306,24 @@ function ProductPickerDrawer({
             </div>
 
             {!search && (
-              <div className="scrollbar-none shrink-0 flex gap-2 overflow-x-auto px-5 pb-1 pt-3">
-                <button
-                  type="button"
-                  onClick={() => setActiveCategoryId(undefined)}
-                  className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${!activeCategoryId
-                    ? "bg-[#1a3c34] text-white"
-                    : "bg-black/6 text-foreground/60 hover:bg-black/10"
-                    }`}
-                >
-                  {t("group_all_categories")}
-                </button>
-                {categories.map((cat) => (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => setActiveCategoryId(cat.id)}
-                    className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${activeCategoryId === cat.id
-                      ? "bg-[#1a3c34] text-white"
-                      : "bg-black/6 text-foreground/60 hover:bg-black/10"
-                      }`}
-                  >
-                    {cat.name}
-                  </button>
-                ))}
+              <div className="shrink-0 px-5 pb-1 pt-3">
+                <OverflowPills
+                  items={categoryItems}
+                  activeId={activeCategoryId ?? ""}
+                  onSelect={(id) => setActiveCategoryId(id || undefined)}
+                  moreLabel={t("group_more_categories")}
+                  pillMaxClass="max-w-[200px]"
+                  pillClass={(a) =>
+                    `rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${a ? "bg-[#1a3c34] text-white" : "bg-black/6 text-foreground/60 hover:bg-black/10"
+                    }`
+                  }
+                  plusClass={(a) =>
+                    a ? "bg-[#1a3c34] text-white" : "bg-black/6 text-foreground/60 hover:bg-black/10"
+                  }
+                  itemClass={(a) =>
+                    `text-xs font-semibold ${a ? "bg-[#1a3c34]/10 text-[#1a3c34]" : "text-foreground/70 hover:bg-black/5"}`
+                  }
+                />
               </div>
             )}
 

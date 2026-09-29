@@ -22,7 +22,7 @@ import { useTranslations } from "next-intl";
 import { useAuth } from "@/hooks";
 import { motion, AnimatePresence } from "motion/react";
 import { useProfileQuery } from "@/services/profile/hooks";
-import { NotificationBell, NotificationToast } from "../common/NotificationDropdown";
+import { NotificationBell, NotificationBellMobile, NotificationToast } from "../common/NotificationDropdown";
 import { useNotificationStore } from "@/store/notification-store";
 import { applyFaviconBadge } from "@/lib/favicon-badge";
 import { useAuthStore } from "@/store/auth-store";
@@ -166,7 +166,11 @@ export function AppHeader() {
 
             {/* Cart */}
             <CartSection isPastHero={pathname === '/' ? isPastHero : true} />
-
+            {isLoggedIn && (
+              <div className="md:hidden mr-2">
+                <NotificationBellMobile isPastHero={pathname === '/' ? isPastHero : true} />
+              </div>
+            )}
             {/* Mobile: guest orders icon */}
             {!isLoggedIn && guestOrders.length > 0 && (
               <div className="relative md:hidden">
@@ -196,11 +200,6 @@ export function AppHeader() {
 
             {/* Mobile hamburger */}
             <div className="relative md:hidden">
-              {isLoggedIn && unreadCount > 0 && (
-                <span className="pointer-events-none absolute -right-0.5 -top-0.5 z-10 flex size-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold leading-none text-white ring-2 ring-white">
-                  {unreadCount > 9 ? "9+" : unreadCount}
-                </span>
-              )}
               <button
                 type="button"
                 onClick={() => setMenuOpen(true)}

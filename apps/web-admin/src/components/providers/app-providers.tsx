@@ -1,11 +1,9 @@
 "use client";
 
-import { GoogleOAuthProvider } from "@react-oauth/google";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { AppDialogProvider } from "@/components/common/app-dialog-provider";
-import { env } from "@/config/env";
 import { useAuthStore } from "@/store/auth-store";
 
 function AuthPersistHydration() {
@@ -37,9 +35,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       }),
   );
 
-  const googleId = env.GOOGLE_CLIENT_ID;
-
-  const inner = (
+  return (
     <AppDialogProvider>
       <AuthPersistHydration />
       <QueryClientProvider client={queryClient}>
@@ -48,13 +44,5 @@ export function AppProviders({ children }: { children: ReactNode }) {
         </>
       </QueryClientProvider>
     </AppDialogProvider>
-  );
-
-  if (!googleId) {
-    return inner;
-  }
-
-  return (
-    <GoogleOAuthProvider clientId={googleId}>{inner}</GoogleOAuthProvider>
-  );
+  )
 }

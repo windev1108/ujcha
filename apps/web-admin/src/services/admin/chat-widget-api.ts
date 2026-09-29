@@ -85,3 +85,17 @@ export async function reorderStickerAlbums(ids: string[]): Promise<AdminStickerA
     return data;
 }
 
+
+export interface StickerChange {
+    id: string;
+    isActive?: boolean;
+    albumId?: string | null;
+}
+
+export async function batchUpdateStickers(body: {
+    order?: string[];
+    changes?: StickerChange[];
+}): Promise<AdminSticker[]> {
+    const { data } = await api.put<AdminSticker[]>("/admin/chat-widget/stickers/batch", body);
+    return data;
+}

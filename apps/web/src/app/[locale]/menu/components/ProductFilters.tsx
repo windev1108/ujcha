@@ -3,9 +3,11 @@
 import { useCategoriesQuery } from "@/services/category/hooks";
 import { AnimatePresence, motion } from "motion/react";
 import { easeOutSmooth } from "@/app/[locale]/(landing)/components/RevealSection";
-import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Plus, Search, X } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
+import { Tooltip } from "@heroui/react";
+import { OverflowPills } from "@/components/common/OverflowPills";
 
 type Props = {
   activeCategory: string;
@@ -14,34 +16,66 @@ type Props = {
   onSearchChange: (q: string) => void;
 };
 
+const PILL_GAP = 6; // gap-1.5
+const PLUS_WIDTH = 32; // size-8
+
+const pillClass = (active: boolean) =>
+  `shrink-0 xl:max-w-[210px]  lg:max-w-[150px]  max-w-[120px] truncate rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors ${active
+    ? "bg-kun-products-forest text-white shadow-sm"
+    : "bg-kun-filter-pill-bg text-foreground/80 hover:bg-black/[0.07]"
+  }`;
+
+function TruncatedButton({
+  label,
+  className,
+  onClick,
+  triggerClassName,
+}: {
+  label: string;
+  className: string;
+  onClick: () => void;
+  triggerClassName?: string;
+}) {
+  const ref = useRef<HTMLButtonElement>(null);
+  const [truncated, setTruncated] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const check = () => setTruncated(el.scrollWidth > el.clientWidth + 1);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [label]);
+
+  return (
+    <Tooltip delay={0.1} isDisabled={!truncated}>
+      <Tooltip.Content>{label}</Tooltip.Content>
+      <Tooltip.Trigger className={triggerClassName}>
+        <button ref={ref} type="button" onClick={onClick} className={className}>
+          {label}
+        </button>
+      </Tooltip.Trigger>
+    </Tooltip>
+  );
+}
+
 export function ProductFilters({ activeCategory, onCategoryChange, search, onSearchChange }: Props) {
   const t = useTranslations();
   const { data: categories } = useCategoriesQuery();
   const [showSearch, setShowSearch] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const pillsRef = useRef<HTMLDivElement>(null);
-  const [fadeLeft, setFadeLeft] = useState(false);
-  const [fadeRight, setFadeRight] = useState(false);
 
-  const syncFade = () => {
-    const el = pillsRef.current;
-    if (!el) return;
-    setFadeLeft(el.scrollLeft > 1);
-    setFadeRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
-  };
 
-  useEffect(() => {
-    const el = pillsRef.current;
-    if (!el) return;
-    syncFade();
-    el.addEventListener("scroll", syncFade, { passive: true });
-    const ro = new ResizeObserver(syncFade);
-    ro.observe(el);
-    return () => { el.removeEventListener("scroll", syncFade); ro.disconnect(); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => { syncFade(); }, [categories]);
+  const allLabel = t("all");
+  const items = useMemo(
+    () => [
+      { id: "", label: t("all") },
+      ...(categories ?? []).map((c) => ({ id: c.slug, label: c.name })),
+    ],
+    [categories, t],
+  );
 
   const openSearch = () => {
     setShowSearch(true);
@@ -53,73 +87,29 @@ export function ProductFilters({ activeCategory, onCategoryChange, search, onSea
     onSearchChange("");
   };
 
+
   return (
     <div className="space-y-2">
       {/* Row 1: category pills + search toggle */}
       <div className="flex items-center gap-2">
-        {/* Horizontal-scroll pills */}
-        <div className="relative min-w-0 flex-1">
-          {/* Left fade + arrow */}
-          {fadeLeft && (
-            <>
-              <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-10 bg-gradient-to-r from-white to-transparent" />
-              <button
-                type="button"
-                aria-label="Cuộn trái"
-                onClick={() => pillsRef.current?.scrollBy({ left: -180, behavior: "smooth" })}
-                className="absolute left-0 top-1/2 z-20 flex size-6 -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white shadow-sm transition-colors hover:bg-black/[0.04]"
-              >
-                <ChevronLeft className="size-3.5 text-foreground/55" />
-              </button>
-            </>
-          )}
-
-          <div
-            ref={pillsRef}
-            className="overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          >
-            <div className="flex w-max min-w-full items-center gap-1.5 pb-px">
-              <button
-                type="button"
-                onClick={() => onCategoryChange("")}
-                className={`shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors ${activeCategory === ""
-                    ? "bg-kun-products-forest text-white shadow-sm"
-                    : "bg-kun-filter-pill-bg text-foreground/80 hover:bg-black/[0.07]"
-                  }`}
-              >
-                {t("all")}
-              </button>
-              {categories?.map((cat) => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => onCategoryChange(cat.slug)}
-                  className={`shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors ${activeCategory === cat.slug
-                      ? "bg-kun-products-forest text-white shadow-sm"
-                      : "bg-kun-filter-pill-bg text-foreground/80 hover:bg-black/[0.07]"
-                    }`}
-                >
-                  {cat.name}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Right fade + arrow */}
-          {fadeRight && (
-            <>
-              <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-white to-transparent" />
-              <button
-                type="button"
-                aria-label="Cuộn phải"
-                onClick={() => pillsRef.current?.scrollBy({ left: 180, behavior: "smooth" })}
-                className="absolute right-0 top-1/2 z-20 flex size-6 -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white shadow-sm transition-colors hover:bg-black/[0.04]"
-              >
-                <ChevronRight className="size-3.5 text-foreground/55" />
-              </button>
-            </>
-          )}
-        </div>
+        <OverflowPills
+          items={items}
+          activeId={activeCategory}
+          onSelect={onCategoryChange}
+          moreLabel="Xem thêm danh mục"
+          pillClass={(a) =>
+            `rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors ${a ? "bg-kun-products-forest text-white shadow-sm" : "bg-kun-filter-pill-bg text-foreground/80 hover:bg-black/[0.07]"
+            }`
+          }
+          plusClass={(a) =>
+            a
+              ? "bg-kun-products-forest text-white shadow-sm"
+              : "bg-kun-filter-pill-bg text-foreground/60 hover:bg-black/[0.07] hover:text-foreground"
+          }
+          itemClass={(a) =>
+            `text-[13px] font-medium ${a ? "bg-kun-products-forest/10 text-kun-products-forest" : "text-foreground/70 hover:bg-black/5"}`
+          }
+        />
 
         {/* Vertical divider */}
         <div className="h-5 w-px shrink-0 bg-black/10" />
@@ -130,8 +120,8 @@ export function ProductFilters({ activeCategory, onCategoryChange, search, onSea
           onClick={showSearch ? closeSearch : openSearch}
           aria-label={showSearch ? t("close") : t("search_product")}
           className={`cursor-pointer flex size-8 shrink-0 items-center justify-center rounded-full transition-colors ${showSearch || search
-              ? "bg-kun-products-forest text-white"
-              : "bg-kun-filter-pill-bg text-foreground/60 hover:bg-black/[0.07] hover:text-foreground"
+            ? "bg-kun-products-forest text-white"
+            : "bg-kun-filter-pill-bg text-foreground/60 hover:bg-black/[0.07] hover:text-foreground"
             }`}
         >
           {showSearch ? <X className="size-3.5" /> : <Search className="size-3.5" />}

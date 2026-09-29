@@ -20,6 +20,8 @@ import { useNotificationSocket } from "@/hooks/useNotificationSocket";
 import { useAuthStore } from "@/store/auth-store";
 import { useAuth } from "@/hooks";
 import { ROUTES } from "@/lib/routes";
+import { createPortal } from "react-dom";
+import { usePathname } from "next/navigation";
 
 function resolveNotif(n: AppNotification, t: TFn): { title: string; content: string } {
   const key = n.data?.notifKey as string | undefined;
@@ -203,35 +205,173 @@ export function NotificationToast() {
   );
 }
 
-export function NotificationBell({ isPastHero }: { isPastHero: boolean }) {
+function NotificationPanel({
+  variant,
+  onClose,
+}: {
+  variant: "dropdown" | "fullscreen";
+  onClose: () => void;
+}) {
   const t = useTranslations();
-  const { isLoggedIn, isHydrated } = useAuth();
-  const accessToken = useAuthStore((s) => s.accessToken);
-
-  // Wire realtime socket
-  useNotificationSocket(accessToken);
-
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const { isLoggedIn } = useAuth();
   const listRef = useRef<HTMLDivElement>(null);
-
-  const { data: unreadCountData } = useUnreadCountQuery(isLoggedIn && isHydrated);
   const unreadCount = useNotificationStore((s) => s.unreadCount);
-  const { data: notifications = [], isLoading } = useNotificationsQuery(open && isLoggedIn);
 
+  const { data: notifications = [], isLoading } = useNotificationsQuery(isLoggedIn);
   const markRead = useMarkReadMutation();
   const markAllRead = useMarkAllReadMutation();
   const deleteOne = useDeleteNotificationMutation();
   const deleteAll = useDeleteAllNotificationsMutation();
 
-  // Sync server unread count into store on first load
+  const isFull = variant === "fullscreen";
+
+  const handleMarkRead = useCallback((id: string) => {
+    markRead.mutate(id);
+    useNotificationStore.getState().setUnreadCount(
+      Math.max(0, useNotificationStore.getState().unreadCount - 1),
+    );
+  }, [markRead.mutate]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleDelete = useCallback((id: string) => {
+    deleteOne.mutate(id);
+  }, [deleteOne]);
+
+  function handleMarkAll() {
+    markAllRead.mutate(undefined, {
+      onSuccess: () => useNotificationStore.getState().setUnreadCount(0),
+    });
+    if (!isFull) onClose();
+  }
+
+  function handleDeleteAll() {
+    deleteAll.mutate(undefined);
+    if (!isFull) onClose();
+  }
+
+  const actions = (
+    <div className="flex items-center gap-1">
+      {unreadCount > 0 && (
+        <button
+          type="button"
+          onClick={handleMarkAll}
+          className="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium text-kun-primary transition-colors hover:bg-kun-primary/[0.08]"
+        >
+          <CheckCheck className="size-3.5" />
+          {t("notif_mark_all_read")}
+        </button>
+      )}
+      {notifications.length > 0 && (
+        <button
+          type="button"
+          onClick={handleDeleteAll}
+          className="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium text-foreground/40 transition-colors hover:bg-red-50 hover:text-red-500"
+        >
+          <Trash2 className="size-3.5" />
+          {t("notif_delete_all")}
+        </button>
+      )}
+    </div>
+  );
+
+  return (
+    <>
+      {/* Header */}
+      {isFull ? (
+        <div className="shrink-0 border-b border-black/[0.06] px-4 pb-2 pt-[max(env(safe-area-inset-top),12px)]">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <p className="text-base font-semibold text-foreground">{t("notifications")}</p>
+              {unreadCount > 0 && (
+                <span className="rounded-full bg-kun-primary px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                  {Math.min(unreadCount, 99)}
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label={t("close")}
+              className="flex size-9 items-center justify-center rounded-full bg-surface-card text-foreground/60 transition-colors hover:bg-surface-tertiary"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+          {(unreadCount > 0 || notifications.length > 0) && (
+            <div className="-ml-2.5 mt-1">{actions}</div>
+          )}
+        </div>
+      ) : (
+        <div className="flex items-center justify-between border-b border-black/[0.06] px-4 py-3">
+          <p className="text-sm font-semibold text-foreground">{t("notifications")}</p>
+          {actions}
+        </div>
+      )}
+
+      {/* Body */}
+      <div
+        ref={listRef}
+        className={`overflow-y-auto overscroll-contain py-1.5 ${isFull ? "min-h-0 flex-1" : "max-h-[380px]"}`}
+      >
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="size-5 animate-spin rounded-full border-2 border-kun-primary/20 border-t-kun-primary" />
+          </div>
+        ) : notifications.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-10 text-center">
+            <BellOff className="size-8 text-foreground/20" />
+            <p className="text-sm text-muted">{t("notif_empty_title")}</p>
+          </div>
+        ) : (
+          <div className="px-1.5">
+            {notifications.map((n) => (
+              <NotificationItem
+                key={n.id}
+                n={n}
+                onRead={handleMarkRead}
+                onDelete={handleDelete}
+                onClose={onClose}
+                scrollRoot={listRef}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div
+        className={`shrink-0 border-t border-black/[0.06] px-4 py-2.5 ${isFull ? "pb-[max(env(safe-area-inset-bottom),10px)]" : ""}`}
+      >
+        <Link
+          href={ROUTES.NOTIFICATIONS}
+          onClick={onClose}
+          className="flex w-full items-center justify-center gap-1.5 rounded-full py-1.5 text-xs font-medium text-kun-primary transition-colors hover:bg-kun-primary/[0.06]"
+        >
+          {t("notif_view_all")}
+        </Link>
+      </div>
+    </>
+  );
+}
+
+export function NotificationBell({ isPastHero }: { isPastHero: boolean }) {
+  const t = useTranslations();
+  const { isLoggedIn, isHydrated } = useAuth();
+  const accessToken = useAuthStore((s) => s.accessToken);
+
+  useNotificationSocket(accessToken);
+
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const { data: unreadCountData } = useUnreadCountQuery(isLoggedIn && isHydrated);
+  const unreadCount = useNotificationStore((s) => s.unreadCount);
+
   useEffect(() => {
     if (unreadCountData !== undefined) {
       useNotificationStore.getState().setUnreadCount(unreadCountData);
     }
   }, [unreadCountData]);
 
-  // Close on outside click
   useEffect(() => {
     if (!open) return;
     function handle(e: MouseEvent) {
@@ -241,18 +381,6 @@ export function NotificationBell({ isPastHero }: { isPastHero: boolean }) {
     return () => document.removeEventListener("mousedown", handle);
   }, [open]);
 
-  const handleMarkRead = useCallback((id: string) => {
-    markRead.mutate(id);
-    useNotificationStore.getState().setUnreadCount(
-      Math.max(0, useNotificationStore.getState().unreadCount - 1),
-    );
-  }, [markRead.mutate]);
-
-  const handleDelete = useCallback((id: string) => {
-    deleteOne.mutate(id);
-  }, [deleteOne]);
-
-  // Guest (or pre-hydration) — bell visible but links to login
   if (!isLoggedIn) {
     return (
       <Link
@@ -265,25 +393,13 @@ export function NotificationBell({ isPastHero }: { isPastHero: boolean }) {
     );
   }
 
-  function handleOpen() {
-    setOpen((v) => !v);
-  }
-
-  function handleMarkAll() {
-    markAllRead.mutate(undefined, {
-      onSuccess: () => useNotificationStore.getState().setUnreadCount(0),
-    });
-    setOpen(false);
-  }
-
   const displayCount = Math.min(unreadCount, 99);
 
   return (
     <div ref={ref} className="relative">
-      {/* Bell trigger */}
       <button
         type="button"
-        onClick={handleOpen}
+        onClick={() => setOpen((v) => !v)}
         aria-label={t("notifications")}
         className={`cursor-pointer flex size-9 items-center justify-center rounded-full transition ${isPastHero ? "text-foreground hover:bg-black/6" : "text-white hover:bg-black/6"}`}
       >
@@ -295,7 +411,6 @@ export function NotificationBell({ isPastHero }: { isPastHero: boolean }) {
         )}
       </button>
 
-      {/* Dropdown panel */}
       <AnimatePresence>
         {open && (
           <motion.div
@@ -303,75 +418,81 @@ export function NotificationBell({ isPastHero }: { isPastHero: boolean }) {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -8 }}
             transition={{ type: "spring", damping: 28, stiffness: 340 }}
-            className="absolute right-0 top-10 z-50 w-80 rounded-2xl border border-black/[0.06] bg-white shadow-[0_4px_20px_-8px_rgba(0,0,0,0.18)] overflow-hidden"
+            className="absolute right-0 top-10 z-50 w-80 overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_4px_20px_-8px_rgba(0,0,0,0.18)]"
           >
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-black/[0.06] px-4 py-3">
-              <p className="text-sm font-semibold text-foreground">{t("notifications")}</p>
-              <div className="flex items-center gap-1">
-                {unreadCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleMarkAll}
-                    className="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium text-kun-primary transition-colors hover:bg-kun-primary/[0.08]"
-                  >
-                    <CheckCheck className="size-3.5" />
-                    {t("notif_mark_all_read")}
-                  </button>
-                )}
-                {notifications.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => { deleteAll.mutate(undefined); setOpen(false); }}
-                    className="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium text-foreground/40 transition-colors hover:bg-red-50 hover:text-red-500"
-                  >
-                    <Trash2 className="size-3.5" />
-                    {t("notif_delete_all")}
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Body */}
-            <div ref={listRef} className="max-h-[380px] overflow-y-auto overscroll-contain py-1.5">
-              {isLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="size-5 animate-spin rounded-full border-2 border-kun-primary/20 border-t-kun-primary" />
-                </div>
-              ) : notifications.length === 0 ? (
-                <div className="flex flex-col items-center gap-2 py-10 text-center">
-                  <BellOff className="size-8 text-foreground/20" />
-                  <p className="text-sm text-muted">{t("notif_empty_title")}</p>
-                </div>
-              ) : (
-                <div className="px-1.5">
-                  {notifications.map((n) => (
-                    <NotificationItem
-                      key={n.id}
-                      n={n}
-                      onRead={handleMarkRead}
-                      onDelete={handleDelete}
-                      onClose={() => setOpen(false)}
-                      scrollRoot={listRef}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="border-t border-black/[0.06] px-4 py-2.5">
-              <Link
-                href={ROUTES.NOTIFICATIONS}
-                onClick={() => setOpen(false)}
-                className="flex w-full items-center justify-center gap-1.5 rounded-full py-1.5 text-xs font-medium text-kun-primary transition-colors hover:bg-kun-primary/[0.06]"
-              >
-                {t("notif_view_all")}
-              </Link>
-            </div>
+            <NotificationPanel variant="dropdown" onClose={() => setOpen(false)} />
           </motion.div>
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+
+export function NotificationBellMobile({ isPastHero }: { isPastHero: boolean }) {
+  const t = useTranslations();
+  const pathname = usePathname();
+  const { isLoggedIn } = useAuth();
+  const unreadCount = useNotificationStore((s) => s.unreadCount);
+  const [open, setOpen] = useState(false);
+
+  // Đóng khi đổi route
+  useEffect(() => { setOpen(false); }, [pathname]);
+
+  // Khoá scroll nền + Escape
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  if (!isLoggedIn) return null;
+
+  const displayCount = Math.min(unreadCount, 99);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label={t("notifications")}
+        className={`relative flex size-8 shrink-0 items-center justify-center rounded-full transition-colors ${isPastHero ? "text-foreground/70 hover:bg-black/6" : "text-white hover:bg-white/15"}`}
+      >
+        <Bell className="size-[18px]" />
+        {displayCount > 0 && (
+          <span className="pointer-events-none absolute -right-0.5 -top-0.5 flex min-w-[16px] items-center justify-center rounded-full bg-kun-primary px-1 py-px text-[10px] font-bold leading-none text-white">
+            {displayCount}
+          </span>
+        )}
+      </button>
+
+      {typeof document !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {open && (
+              <motion.div
+                key="notif-fullscreen"
+                initial={{ opacity: 0, y: 24 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 24 }}
+                transition={{ type: "spring", damping: 32, stiffness: 340 }}
+                className="fixed inset-0 z-[9999] flex flex-col bg-white"
+                role="dialog"
+                aria-modal="true"
+                aria-label={t("notifications")}
+              >
+                <NotificationPanel variant="fullscreen" onClose={() => setOpen(false)} />
+              </motion.div>
+            )}
+          </AnimatePresence>,
+          document.body,
+        )}
+    </>
   );
 }

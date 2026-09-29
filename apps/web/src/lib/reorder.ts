@@ -3,6 +3,7 @@ import { fetchGroupOrder, type GroupOrderState } from "@/services/group-order/ap
 import { fetchProductsByIds } from "@/services/cart/api";
 import type { ApiCartItem, ApiCartProduct, ApiCartTopping } from "@/services/cart/types";
 import { normalizeOptionGroups } from "./product-options";
+import { fetchOutOfStockToppingNames, toppingNameKey } from "@/services/topping/api";
 
 type OptionDetail = { group: string; label: string };
 type ExtraJson = { toppingId?: string };
@@ -110,16 +111,29 @@ function toProductArray(raw: unknown): ApiCartProduct[] {
 export async function resolveReorderItems(
   requests: ReorderRequestItem[],
   locale: string,
-): Promise<{ items: ApiCartItem[]; unavailableCount: number }> {
+): Promise<{
+  items: ApiCartItem[];
+  unavailableCount: number;
+  outOfStockToppingCount: number;
+}> {
   const productIds = [...new Set(requests.map((r) => r.productId))];
-  if (productIds.length === 0) return { items: [], unavailableCount: 0 };
+  if (productIds.length === 0) {
+    return { items: [], unavailableCount: 0, outOfStockToppingCount: 0 };
+  }
 
-  const raw: unknown = await fetchProductsByIds(productIds, locale);
+  const [raw, oosNames] = await Promise.all([
+    fetchProductsByIds(productIds, locale) as Promise<unknown>,
+    // Nếu API kho lỗi thì không chặn reorder, chỉ bỏ qua bước validate này
+    fetchOutOfStockToppingNames().catch(() => [] as string[]),
+  ]);
+
+  const oosKeys = new Set(oosNames.map(toppingNameKey));
   const products = toProductArray(raw);
   const productMap = new Map<string, ApiCartProduct>(products.map((p) => [p.id, p]));
 
   const items: ApiCartItem[] = [];
   let unavailableCount = 0;
+  let outOfStockToppingCount = 0;
 
   requests.forEach((req, idx) => {
     const product = productMap.get(req.productId);
@@ -128,22 +142,26 @@ export async function resolveReorderItems(
       return;
     }
 
-    // Chỉ giữ lại option nhóm nào vẫn còn tồn tại trên sản phẩm hiện tại
     const normalizedGroups = normalizeOptionGroups(product.optionGroups);
     const validGroupNames = new Set(normalizedGroups.map((g) => g.name));
     const selectedOptions = Object.fromEntries(
       Object.entries(req.selectedOptions).filter(([group]) => validGroupNames.has(group)),
     );
 
-    // Chỉ giữ lại topping còn active trên sản phẩm hiện tại
     const currentToppingsById = new Map((product.toppings ?? []).map((tp) => [tp.id, tp]));
-    const toppings: ApiCartTopping[] = req.toppingIds
-      .map((id) => currentToppingsById.get(id))
-      .filter((tp): tp is NonNullable<typeof tp> => !!tp && tp.isActive !== false)
-      .map((tp) => ({
+    const toppings: ApiCartTopping[] = [];
+    for (const id of req.toppingIds) {
+      const tp = currentToppingsById.get(id);
+      if (!tp || tp.isActive === false) continue;
+      if (oosKeys.has(toppingNameKey(tp.name))) {
+        outOfStockToppingCount += 1;
+        continue;
+      }
+      toppings.push({
         toppingId: tp.id,
         topping: { id: tp.id, name: tp.name, price: String(tp.price), nameTranslation: tp.nameTranslation },
-      }));
+      });
+    }
 
     items.push({
       id: `reorder-${idx}-${req.productId}`,
@@ -152,10 +170,10 @@ export async function resolveReorderItems(
       quantity: req.quantity,
       selectedOptions,
       toppings,
-      product, // ← giá/khuyến mãi lấy theo hiện tại, không phải giá lúc đặt đơn cũ
+      product,
       note: req.note ?? undefined,
     });
   });
 
-  return { items, unavailableCount };
+  return { items, unavailableCount, outOfStockToppingCount };
 }

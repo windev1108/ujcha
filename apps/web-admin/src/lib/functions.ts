@@ -34,3 +34,23 @@ export function flattenGroups(groups: RecipeGroupForm[]) {
         })),
     );
 }
+
+
+export function reconcile(draft: string[] | null, server: string[]): string[] {
+    if (!draft) return server;
+    const serverSet = new Set(server);
+    const kept = draft.filter((id) => serverSet.has(id));
+    const keptSet = new Set(kept);
+    return [...kept, ...server.filter((id) => !keptSet.has(id))];
+}
+
+export function sameOrder(a: string[], b: string[]) {
+    return a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
+/** Ghép thứ tự mới của tập con (đang lọc) vào đúng các slot của danh sách đầy đủ. */
+export function mergeSubsetOrder(full: string[], subsetNew: string[]): string[] {
+    const subset = new Set(subsetNew);
+    let i = 0;
+    return full.map((id) => (subset.has(id) ? subsetNew[i++] : id));
+}
