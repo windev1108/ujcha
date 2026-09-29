@@ -679,6 +679,7 @@ export function StaffApp() {
         <ChatDock
           rightOffset={aiPanelOpen ? 416 : 16}   // né AI panel rộng 400px
           onOpenOrder={setDetailOrder}
+          isOpenOrder={!!detailOrder}
         />
       )}
 

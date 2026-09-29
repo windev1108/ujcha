@@ -15,17 +15,15 @@ const MAX_IMAGE_MB = 8
 
 let stickersCache: ChatStickerDto[] | null = null // sticker ít đổi, khỏi fetch mỗi lần mở
 
-function sortAsc(list: ChatMessage[]) {
-    return [...list].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-}
 
 export function ChatPanel({
-    conversation, onClose, onViewOrder, viewingOrder,
+    conversation, onClose, onViewOrder, viewingOrder, isOpenOrder
 }: {
     conversation: DockConversation
     onClose: () => void
     onViewOrder: () => void
     viewingOrder: boolean
+    isOpenOrder?: boolean
 }) {
     const { kind, id } = conversation
     const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -199,16 +197,18 @@ export function ChatPanel({
                 </p>
             </div>
 
-            <Button
-                type="button"
-                onClick={onViewOrder}
-                variant='outline'
-                isDisabled={!c.orderId || viewingOrder}
-                className="flex shrink-0 items-center gap-1 rounded-full border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-40"
-            >
-                {viewingOrder ? <Loader2 className="size-3.5 animate-spin" /> : <ExternalLink className="size-3.5" />}
-                Xem đơn
-            </Button>
+            {!isOpenOrder &&
+                <Button
+                    type="button"
+                    onClick={onViewOrder}
+                    variant='outline'
+                    isDisabled={!c.orderId || viewingOrder}
+                    className="flex shrink-0 items-center gap-1 rounded-full border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                    {viewingOrder ? <Loader2 className="size-3.5 animate-spin" /> : <ExternalLink className="size-3.5" />}
+                    Xem đơn
+                </Button>
+            }
 
             <button
                 type="button"

@@ -206,7 +206,13 @@ export function ChatWindow({
     closedLabel?: string;
     placeholder?: string;
     myId?: string;
-    stickers?: { id: string; url: string; alt: string; albumId: string | null; album: { name: string | null } }[];
+    stickers?: {
+        id: string;
+        url: string;
+        alt: string;
+        albumId: string | null;
+        album: { name: string | null; sortOrder?: number | null };
+    }[];
 }) {
     const t = useTranslations()
     const listRef = useRef<HTMLDivElement>(null);
@@ -326,11 +332,20 @@ export function ChatWindow({
         if (file) setImage(file);
     };
     const stickerAlbums = useMemo(() => {
-        const map = new Map<string, string>(); // albumId -> tên album
+        const map = new Map<string, { id: string; name: string; sortOrder: number }>();
         for (const s of stickers) {
-            if (s.albumId && s.album?.name) map.set(s.albumId, s.album.name);
+            if (s.albumId && s.album?.name && !map.has(s.albumId)) {
+                map.set(s.albumId, {
+                    id: s.albumId,
+                    name: s.album.name,
+                    // album không có sortOrder sẽ nằm cuối
+                    sortOrder: s.album.sortOrder ?? Number.MAX_SAFE_INTEGER,
+                });
+            }
         }
-        return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+        return Array.from(map.values()).sort(
+            (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name),
+        );
     }, [stickers]);
     const visibleStickerAlbums = stickerAlbums.slice(0, MAX_VISIBLE_STICKER_TABS);
     const overflowStickerAlbums = stickerAlbums.slice(MAX_VISIBLE_STICKER_TABS);

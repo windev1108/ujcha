@@ -11,10 +11,12 @@ const WINDOW_GAP = 16
 
 export function ChatDock({
     onOpenOrder,
+    isOpenOrder,
     rightOffset = 16,
     bottomOffset = 20,
 }: {
     onOpenOrder: (order: AdminOrder) => void
+    isOpenOrder?: boolean;
     /** px tính từ mép phải màn hình — đẩy sang trái khi có panel khác (vd: AI panel) */
     rightOffset?: number
     bottomOffset?: number
@@ -56,6 +58,7 @@ export function ChatDock({
                         onClose={close}
                         onViewOrder={() => void handleViewOrder(active)}
                         viewingOrder={viewingKey === active.key}
+                        isOpenOrder={isOpenOrder}
                     />
                 </div>
             )}
