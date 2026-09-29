@@ -27,6 +27,8 @@ const MAX_IMAGE_MB = 10;
 const QUICK_EMOJI = "👍"; // đổi sang emoji bạn muốn dùng làm nút gửi nhanh mặc định
 const LOGO_URL = "/logo-only.png";
 const MAX_JUMBO_EMOJI_COUNT = 12; // tin nhắn toàn emoji, không quá số này thì hiển thị to + không nền
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const ACCEPT_IMAGE = ALLOWED_IMAGE_TYPES.join(",");
 export interface ChatWindowMessage {
     id: string;
     senderId: string;
@@ -43,7 +45,7 @@ function fmtTime(iso: string) {
 }
 
 function isValidImageFile(file: File): boolean {
-    return file.type.startsWith("image/") && file.size <= MAX_IMAGE_MB * 1024 * 1024;
+    return ALLOWED_IMAGE_TYPES.includes(file.type) && file.size <= MAX_IMAGE_MB * 1024 * 1024;
 }
 
 function ChatImage({
@@ -744,7 +746,7 @@ export function ChatWindow({
                         <input
                             ref={fileInputRef}
                             type="file"
-                            accept="image/*"
+                            accept={ACCEPT_IMAGE}
                             className="hidden"
                             onChange={handleFileChange}
                         />
