@@ -4,6 +4,7 @@ import {
   ArrayMaxSize,
   IsArray,
   IsBoolean,
+  IsEnum,
   IsInt,
   IsNumber,
   IsObject,
@@ -17,6 +18,7 @@ import {
 } from 'class-validator';
 import { ProductOptionGroupDto } from './product-option-group.dto';
 import { ProductToppingDto } from './product-topping.dto';
+import { PricingMode } from '@prisma/client';
 
 export class CreateProductDto {
   @ApiProperty({ format: 'uuid' })
@@ -25,7 +27,8 @@ export class CreateProductDto {
 
   @ApiPropertyOptional({
     example: 'Ujcha-MTC-001',
-    description: 'Tuỳ chọn — để trống sẽ tự sinh từ tên (slugify, tối đa 80 ký tự)',
+    description:
+      'Tuỳ chọn — để trống sẽ tự sinh từ tên (slugify, tối đa 80 ký tự)',
   })
   @IsOptional()
   @IsString()
@@ -129,8 +132,22 @@ export class CreateProductDto {
   @Max(100)
   discountPercent?: number;
 
-  @ApiPropertyOptional({ default: false, description: 'Gắn nhãn bán chạy — badge Best Seller + ưu tiên nổi bật' })
+  @ApiPropertyOptional({
+    default: false,
+    description: 'Gắn nhãn bán chạy — badge Best Seller + ưu tiên nổi bật',
+  })
   @IsOptional()
   @IsBoolean()
   isBestSeller?: boolean;
+
+  @IsOptional()
+  @IsEnum(PricingMode)
+  pricingMode?: PricingMode;
+
+  /** null = xoá override, kế thừa category/global. */
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(10000)
+  pricingMarkupPercent?: number | null;
 }

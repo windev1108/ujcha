@@ -5,10 +5,17 @@ import { RedisModule } from '../../redis/redis.module';
 import { AdminAuthModule } from '../auth/admin-auth.module';
 import { AdminIngredientController } from './admin-ingredient.controller';
 import { AdminIngredientService } from './admin-ingredient.service';
+import { PricingService } from '../../pricing/pricing.service';
+import { PricingConfigService } from '../../pricing/pricing-config.service';
 
 @Module({
   imports: [PrismaModule, RedisModule, AdminAuthModule],
   controllers: [AdminIngredientController],
-  providers: [AdminIngredientService, ProductService],
+  providers: [
+    AdminIngredientService,
+    ProductService,
+    PricingService,
+    PricingConfigService,
+  ],
 })
 export class AdminIngredientsModule {}

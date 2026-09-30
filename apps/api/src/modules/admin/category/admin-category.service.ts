@@ -9,10 +9,15 @@ import { normalizeTranslation } from '../../../helper/utils';
 import { slugify, uniqueSlugSuffix } from '../slug.util';
 import type { CreateCategoryDto } from './dto/create-category.dto';
 import type { UpdateCategoryDto } from './dto/update-category.dto';
+import { PricingService } from '../../pricing/pricing.service';
 
 @Injectable()
 export class AdminCategoryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly pricingService: PricingService
+
+  ) {}
 
   async list() {
     return this.prisma.category.findMany({
@@ -45,7 +50,12 @@ export class AdminCategoryService {
         slug,
         sortOrder: dto.sortOrder ?? 0,
         thumbnail: dto.thumbnail ?? null,
-        nameTranslation: normalizeTranslation(dto.nameTranslation) as unknown as Prisma.InputJsonValue,
+        nameTranslation: normalizeTranslation(
+          dto.nameTranslation,
+        ) as unknown as Prisma.InputJsonValue,
+        ...(dto.pricingMarkupPercent != null && {
+          pricingMarkupPercent: new Prisma.Decimal(dto.pricingMarkupPercent),
+        }),
       },
       include: { _count: { select: { products: true } } },
     });
@@ -60,19 +70,33 @@ export class AdminCategoryService {
       slug = await this.allocCategorySlug(base, id);
     }
 
-    return this.prisma.category.update({
+    const updated = await this.prisma.category.update({
       where: { id },
       data: {
         ...(dto.name !== undefined && { name: dto.name.trim() }),
         ...(slug !== undefined && { slug }),
         ...(dto.sortOrder !== undefined && { sortOrder: dto.sortOrder }),
-        ...(dto.thumbnail !== undefined && { thumbnail: dto.thumbnail || null }),
+        ...(dto.thumbnail !== undefined && {
+          thumbnail: dto.thumbnail || null,
+        }),
         ...(dto.nameTranslation !== undefined && {
-          nameTranslation: normalizeTranslation(dto.nameTranslation) as unknown as Prisma.InputJsonValue,
+          nameTranslation: normalizeTranslation(
+            dto.nameTranslation,
+          ) as unknown as Prisma.InputJsonValue,
+        }),
+        ...(dto.pricingMarkupPercent !== undefined && {
+          pricingMarkupPercent:
+            dto.pricingMarkupPercent === null
+              ? null
+              : new Prisma.Decimal(dto.pricingMarkupPercent),
         }),
       },
       include: { _count: { select: { products: true } } },
     });
+    if (dto.pricingMarkupPercent !== undefined) {
+      await this.pricingService.recomputeQuietly({ categoryId: id });
+    }
+    return updated;
   }
 
   async remove(id: string) {
@@ -96,7 +120,10 @@ export class AdminCategoryService {
     await this.prisma.category.delete({ where: { id } });
   }
 
-  private async allocCategorySlug(base: string, excludeId?: string): Promise<string> {
+  private async allocCategorySlug(
+    base: string,
+    excludeId?: string,
+  ): Promise<string> {
     let candidate = base;
     for (let i = 0; i < 12; i += 1) {
       const existing = await this.prisma.category.findFirst({

@@ -26,6 +26,8 @@ import { NotificationService } from '../notification/notification.service';
 import { OrderValidationService } from './order-validation.service';
 import {
   computeFinalPrice,
+  effectiveBasePrice,
+  resolveDiscountPercent,
   withGuestAddressFallback,
 } from '../../helper/utils';
 import { InventoryService } from '../admin/inventory/inventory.service';
@@ -94,7 +96,7 @@ function parseOptionCatalogValue(v: unknown): {
 /**
  * Cộng phụ phí tuỳ chọn nhóm (size, v.v.), bắt buộc đủ lựa chọn theo catalog.
  */
-function validateOptionsAndSurcharge(
+export function validateOptionsAndSurcharge(
   optionGroupsJson: unknown,
   options: Record<string, string> | undefined,
 ): {
@@ -242,12 +244,20 @@ export class OrderService {
           code: 'ORDER_PRODUCT_UNAVAILABLE',
         });
       }
-
+      const basePrice = effectiveBasePrice(product);
+      if (!skipOptionValidation && Number(basePrice.toString()) <= 0) {
+        throw new BadRequestException({
+          message: `Sản phẩm «${product.name}» chưa có giá.`,
+          code: 'ORDER_PRODUCT_PRICE_INVALID',
+        });
+      }
       // ── Base price từ DB, áp dụng giảm giá hiệu quả ─────────────────────
-      const effectiveDiscount =
-        globalDiscount > 0 ? globalDiscount : (product.discountPercent ?? 0);
+      const effectiveDiscount = resolveDiscountPercent(
+        product.discountPercent,
+        globalDiscount,
+      );
       let unit = new Prisma.Decimal(
-        computeFinalPrice(product.price, effectiveDiscount),
+        computeFinalPrice(basePrice, effectiveDiscount),
       );
 
       // ── Extras (toppings) — validated against product's inline toppings ───

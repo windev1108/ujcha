@@ -9,10 +9,14 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateIngredientDto } from '../inventory/dto/create-ingredient.dto';
 import { UpdateIngredientDto } from '../inventory/dto/update-ingredient.dto';
 import { AdjustIngredientStockDto } from '../inventory/dto/adjust-ingredient-stock.dto';
+import { PricingService } from '../../pricing/pricing.service';
 
 @Injectable()
 export class AdminIngredientService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly pricingService: PricingService,
+  ) {}
 
   list(q?: string) {
     return this.prisma.ingredient.findMany({
@@ -45,13 +49,43 @@ export class AdminIngredientService {
             ? new Prisma.Decimal(dto.lowStockThreshold)
             : null,
         note: dto.note?.trim() || null,
+        ...(dto.costPerUnit != null && {
+          costPerUnit: new Prisma.Decimal(dto.costPerUnit),
+          costUpdatedAt: new Date(),
+        }),
       },
     });
   }
 
   async update(id: string, dto: UpdateIngredientDto) {
-    await this.getById(id);
-    return this.prisma.ingredient.update({
+    const existing = await this.getById(id);
+
+    const unitChanging =
+      dto.unit !== undefined && dto.unit.trim() !== existing.unit;
+    if (
+      unitChanging &&
+      existing.costPerUnit != null &&
+      dto.costPerUnit === undefined
+    ) {
+      throw new BadRequestException({
+        message: 'Đổi đơn vị tính cần nhập lại giá vốn theo đơn vị mới.',
+        code: 'INGREDIENT_UNIT_CHANGE_REQUIRES_COST',
+      });
+    }
+
+    const nextCost =
+      dto.costPerUnit === undefined
+        ? undefined
+        : dto.costPerUnit === null
+          ? null
+          : new Prisma.Decimal(dto.costPerUnit);
+    const costChanged =
+      nextCost !== undefined &&
+      (nextCost === null
+        ? existing.costPerUnit !== null
+        : !existing.costPerUnit || !existing.costPerUnit.equals(nextCost));
+
+    const updated = await this.prisma.ingredient.update({
       where: { id },
       data: {
         ...(dto.name !== undefined && { name: dto.name.trim() }),
@@ -64,8 +98,21 @@ export class AdminIngredientService {
         }),
         ...(dto.note !== undefined && { note: dto.note?.trim() || null }),
         ...(dto.isActive !== undefined && { isActive: dto.isActive }),
+        ...(nextCost !== undefined && { costPerUnit: nextCost }),
+        ...(costChanged && { costUpdatedAt: new Date() }),
       },
     });
+    if (costChanged) {
+      const rows = await this.prisma.productRecipeItem.findMany({
+        where: { ingredientId: id },
+        select: { productId: true },
+        distinct: ['productId'],
+      });
+      await this.pricingService.recomputeQuietly({
+        productIds: rows.map((r) => r.productId),
+      });
+    }
+    return updated;
   }
 
   async adjustStock(id: string, dto: AdjustIngredientStockDto) {

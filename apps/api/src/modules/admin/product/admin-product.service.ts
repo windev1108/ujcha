@@ -21,6 +21,13 @@ import {
 import { RedisService } from '../../redis/redis.service';
 import { SetProductRecipeDto } from '../ingredients/dto/set-product-recipe.dto';
 import { RecipeResolveItemDto } from './dto/resolve-recipe-batch.dto';
+import {
+  CostLineInput,
+  lineCostKey,
+  PricingCostService,
+} from '../../pricing/pricing-cost.service';
+import { PricingService } from '../../pricing/pricing.service';
+import { buildPricingView } from '../../../helper/pricing-calc';
 
 const GLOBAL_DISCOUNT_KEY = 'ujcha:shop:globalDiscount';
 const GLOBAL_DISCOUNT_TTL = 60;
@@ -30,6 +37,8 @@ export class AdminProductService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    private readonly pricingCost: PricingCostService,
+    private readonly pricingService: PricingService,
   ) {}
 
   async list(categoryId?: string, categorySlug?: string, q?: string) {
@@ -118,11 +127,16 @@ export class AdminProductService {
         isSoldOut: dto.isSoldOut ?? false,
         isBestSeller: dto.isBestSeller ?? false,
         discountPercent: clampDiscountPercent(dto.discountPercent, 0),
+        ...(dto.pricingMode !== undefined && { pricingMode: dto.pricingMode }),
+        ...(dto.pricingMarkupPercent != null && {
+          pricingMarkupPercent: new Prisma.Decimal(dto.pricingMarkupPercent),
+        }),
       },
       include: { category: { select: { id: true, name: true, slug: true } } },
     });
+    await this.pricingService.recomputeQuietly({ productIds: [created.id] });
     await this.redis.delByPattern('ujcha:products:list:*');
-    return normalizeProductRow(created, await this.getGlobalDiscount());
+    return this.getById(created.id);
   }
 
   async update(id: string, dto: UpdateProductDto) {
@@ -211,11 +225,19 @@ export class AdminProductService {
         ...(dto.discountPercent !== undefined && {
           discountPercent: clampDiscountPercent(dto.discountPercent),
         }),
+        ...(dto.pricingMode !== undefined && { pricingMode: dto.pricingMode }),
+        ...(dto.pricingMarkupPercent !== undefined && {
+          pricingMarkupPercent:
+            dto.pricingMarkupPercent === null
+              ? null
+              : new Prisma.Decimal(dto.pricingMarkupPercent),
+        }),
       },
       include: { category: { select: { id: true, name: true, slug: true } } },
     });
+    await this.pricingService.recomputeQuietly({ productIds: [id] });
     await this.redis.delByPattern('ujcha:products:list:*');
-    return normalizeProductRow(updated, await this.getGlobalDiscount());
+    return this.getById(id);
   }
 
   async toggleAvailability(id: string, dto: ToggleProductAvailabilityDto) {
@@ -411,7 +433,7 @@ export class AdminProductService {
       }
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx) => {
       await tx.product.update({
         where: { id: productId },
         data: { recipeNote: dto.recipeNote?.trim() || null },
@@ -445,7 +467,8 @@ export class AdminProductService {
           })),
         });
       }
-
+      await this.pricingService.recomputeQuietly({ productIds: [productId] });
+      await this.redis.delByPattern('ujcha:products:list:*');
       return this.getRecipe(productId);
     });
   }
@@ -463,8 +486,11 @@ export class AdminProductService {
           order: { paymentStatus: 'paid', createdAt: { gte: from, lte: to } },
         },
         select: {
+          productId: true,
           quantity: true,
           price: true,
+          optionsJson: true,
+          extrasJson: true,
           product: {
             select: {
               id: true,
@@ -480,6 +506,26 @@ export class AdminProductService {
       }),
     ]);
 
+    const toCostLine = (it: (typeof items)[number]): CostLineInput => {
+      const o = it.optionsJson;
+      const options =
+        o && typeof o === 'object' && !Array.isArray(o)
+          ? (o as Record<string, string>)
+          : {};
+      const extras = Array.isArray(it.extrasJson)
+        ? (it.extrasJson as Array<{ toppingId?: string }>)
+        : [];
+      return {
+        productId: it.productId,
+        options,
+        toppingIds: extras
+          .map((e) => e?.toppingId)
+          .filter((x): x is string => !!x),
+      };
+    };
+    const lineCosts = await this.pricingCost.estimateLineCosts(
+      items.map(toCostLine),
+    );
     type ProductAgg = {
       productId: string;
       name: string;
@@ -488,6 +534,8 @@ export class AdminProductService {
       revenue: number;
       categoryId: string;
       categoryName: string;
+      cost: number;
+      revenueCosted: number;
     };
     type CategoryAgg = {
       categoryId: string;
@@ -500,12 +548,28 @@ export class AdminProductService {
     const byCategory = new Map<string, CategoryAgg>();
     let totalRevenue = 0;
     let totalQuantitySold = 0;
+    let totalCost = 0;
+    let totalRevenueCosted = 0;
+    let uncostedQuantity = 0;
+    const uncostedReasons: Record<string, number> = {};
 
     for (const it of items) {
       if (!it.product) continue;
       const lineRevenue = Number(it.price.toString()) * it.quantity;
       totalRevenue += lineRevenue;
       totalQuantitySold += it.quantity;
+
+      const lc = lineCosts.get(lineCostKey(toCostLine(it)));
+      const lineCost = lc?.ok ? lc.unitCost * it.quantity : null;
+      const lineRevenueCosted = lineCost === null ? 0 : lineRevenue;
+      if (lineCost === null) {
+        uncostedQuantity += it.quantity;
+        const reason = lc && !lc.ok ? lc.reason : 'no_recipe';
+        uncostedReasons[reason] = (uncostedReasons[reason] ?? 0) + it.quantity;
+      } else {
+        totalCost += lineCost;
+        totalRevenueCosted += lineRevenue;
+      }
 
       const imgs = Array.isArray(it.product.imageUrls)
         ? (it.product.imageUrls as string[])
@@ -514,6 +578,8 @@ export class AdminProductService {
       if (p) {
         p.quantitySold += it.quantity;
         p.revenue += lineRevenue;
+        p.cost += lineCost ?? 0;
+        p.revenueCosted += lineRevenueCosted;
       } else {
         byProduct.set(it.product.id, {
           productId: it.product.id,
@@ -523,6 +589,8 @@ export class AdminProductService {
           revenue: lineRevenue,
           categoryId: it.product.category.id,
           categoryName: it.product.category.name,
+          cost: lineCost ?? 0,
+          revenueCosted: lineRevenueCosted,
         });
       }
 
@@ -540,7 +608,23 @@ export class AdminProductService {
       }
     }
 
-    const all = [...byProduct.values()];
+    const r0 = (n: number) => Math.round(n);
+    const r1 = (n: number) => Math.round(n * 10) / 10;
+    const withProfit = (p: ProductAgg) => {
+      const profit = p.revenueCosted - p.cost;
+      return {
+        ...p,
+        cost: r0(p.cost),
+        profit: r0(profit),
+        marginPercent:
+          p.revenueCosted > 0 ? r1((profit / p.revenueCosted) * 100) : null,
+        costCoveragePercent:
+          p.revenue > 0 ? r1((p.revenueCosted / p.revenue) * 100) : 0,
+      };
+    };
+
+    const all = [...byProduct.values()].map(withProfit);
+    const grossProfit = totalRevenueCosted - totalCost;
     return {
       range: { from: from.toISOString(), to: to.toISOString() },
       overview: {
@@ -549,12 +633,26 @@ export class AdminProductService {
         totalOrders,
         avgOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0,
         distinctProductsSold: byProduct.size,
+        totalCost: r0(totalCost),
+        grossProfit: r0(grossProfit),
+        profitMarginPercent:
+          totalRevenueCosted > 0
+            ? r1((grossProfit / totalRevenueCosted) * 100)
+            : null,
+        costCoveragePercent:
+          totalRevenue > 0 ? r1((totalRevenueCosted / totalRevenue) * 100) : 0,
+        uncostedQuantity,
+        uncostedReasons,
       },
       topByQuantity: [...all]
         .sort((a, b) => b.quantitySold - a.quantitySold)
         .slice(0, limit),
       topByRevenue: [...all]
         .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, limit),
+      topByProfit: all // thêm
+        .filter((p) => p.revenueCosted > 0)
+        .sort((a, b) => b.profit - a.profit)
         .slice(0, limit),
       lowPerformers: [...all]
         .sort((a, b) => a.quantitySold - b.quantitySold)
@@ -787,11 +885,17 @@ function normalizeProductRow<
     toppings: unknown;
     nameTranslation: unknown;
     descriptionTranslation: unknown;
+    pricingMode: string;
+    autoPrice: unknown;
+    costPrice: unknown;
+    pricingSnapshotJson: unknown;
+    pricingComputedAt: Date | null;
   },
 >(row: T, globalDiscount = 0) {
   // Product-specific discount takes priority; global is the fallback when product has none
   const effectiveDiscount =
     row.discountPercent > 0 ? row.discountPercent : globalDiscount;
+  const pricing = buildPricingView(row);
   return {
     ...row,
     // discountPercent stays as the RAW stored value so the admin editor can round-trip it without accumulation
@@ -808,6 +912,9 @@ function normalizeProductRow<
     typeof row.descriptionTranslation === 'object'
       ? row.descriptionTranslation
       : {}) as Record<string, string>,
-    finalPrice: computeFinalPrice(row.price, effectiveDiscount),
+    finalPrice: computeFinalPrice(
+      pricing.effectiveBasePrice,
+      effectiveDiscount,
+    ),
   };
 }

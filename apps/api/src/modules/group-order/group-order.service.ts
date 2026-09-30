@@ -16,7 +16,12 @@ import {
   PointSource,
   Prisma,
 } from '@prisma/client';
-import { computeFinalPrice } from '../../helper/utils';
+import {
+  computeFinalPrice,
+  effectiveBasePrice,
+  normalizeInlineToppings,
+  resolveDiscountPercent,
+} from '../../helper/utils';
 import { OrdersGateway } from '../events/orders.gateway';
 import { NotificationService } from '../notification/notification.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -29,7 +34,10 @@ import type {
 } from './dto/group-order.dto';
 import { MailService } from '../mail/mail.service';
 import { StoreStatusService } from '../store/store-status.service';
-import { OrderService } from '../order/order.service';
+import {
+  OrderService,
+  validateOptionsAndSurcharge,
+} from '../order/order.service';
 import { PointService } from '../point/point.service';
 import { ChatService } from '../chat/chat.service';
 
@@ -373,7 +381,8 @@ export class GroupOrderService {
     const pageSize = q.pageSize ?? 20;
 
     const createdAt: Prisma.DateTimeFilter = {};
-    if (q.from) createdAt.gte = new Date(`${q.from.slice(0, 10)}T00:00:00+07:00`);
+    if (q.from)
+      createdAt.gte = new Date(`${q.from.slice(0, 10)}T00:00:00+07:00`);
     if (q.to) {
       const end = new Date(`${q.to.slice(0, 10)}T00:00:00+07:00`);
       end.setDate(end.getDate() + 1);
@@ -648,72 +657,88 @@ export class GroupOrderService {
       throw new BadRequestException('Khong the cap nhat mon khi don da khoa.');
     }
 
-    for (const item of items) {
-      if (item.quantity < 0) continue;
-      const product = await this.prisma.product.findUnique({
-        where: { id: item.productId },
-      });
-      if (!product) {
-        throw new BadRequestException(
-          `San pham khong ton tai: ${item.productId}`,
-        );
-      }
-      if (!product.isAvailable || product.isSoldOut) {
-        throw new BadRequestException(
-          `San pham khong con phuc vu: ${product.name}`,
-        );
-      }
-    }
-
+    const validItems = items.filter((i) => i.quantity > 0);
+    const productIds = [...new Set(validItems.map((i) => i.productId))];
+    const products = productIds.length
+      ? await this.prisma.product.findMany({
+        where: { id: { in: productIds } },
+      })
+      : [];
+    const productById = new Map(products.map((p) => [p.id, p]));
     const globalDiscount = await this.getGlobalDiscount();
+
+    // Tính và kiểm tra toàn bộ TRƯỚC khi xoá dữ liệu cũ của participant
+    const rows: Prisma.GroupOrderParticipantItemCreateManyInput[] =
+      validItems.map((item) => {
+        const product = productById.get(item.productId);
+        if (!product) {
+          throw new BadRequestException(
+            `San pham khong ton tai: ${item.productId}`,
+          );
+        }
+        if (!product.isAvailable || product.isSoldOut) {
+          throw new BadRequestException(
+            `San pham khong con phuc vu: ${product.name}`,
+          );
+        }
+        const baseRaw = effectiveBasePrice(product);
+        if (Number(baseRaw.toString()) <= 0) {
+          throw new BadRequestException({
+            message: `Sản phẩm «${product.name}» chưa có giá.`,
+            code: 'ORDER_PRODUCT_PRICE_INVALID',
+          });
+        }
+
+        const discount = resolveDiscountPercent(
+          product.discountPercent,
+          globalDiscount,
+        );
+        const basePrice = computeFinalPrice(product.price, discount);
+        const { surcharge, normalized } = validateOptionsAndSurcharge(
+          product.optionGroups,
+          item.selectedOptions,
+        );
+
+        // Topping: lấy tên và giá từ DB, bỏ qua giá client gửi
+        const catalog = normalizeInlineToppings(product.toppings);
+        const toppings = (
+          (item.toppings ?? []) as Array<{ id?: string; toppingId?: string }>
+        ).map((raw) => {
+          const id = String(raw?.id ?? raw?.toppingId ?? '');
+          const t = catalog.find((c) => c.id === id && c.isActive);
+          if (!t) {
+            throw new BadRequestException({
+              message: 'Topping không tồn tại hoặc đã tắt.',
+              code: 'GROUP_ORDER_TOPPING_INVALID',
+            });
+          }
+          return {
+            id: t.id,
+            toppingId: t.id, // InventoryService đọc extra.toppingId
+            name: t.name,
+            price: t.price,
+            nameTranslation: t.nameTranslation ?? {},
+          };
+        });
+
+        return {
+          participantId: participant.id,
+          productId: item.productId,
+          quantity: item.quantity,
+          unitPrice: new Prisma.Decimal(basePrice).add(surcharge),
+          selectedOptions: normalized,
+          toppingsJson: toppings,
+          note: item.note?.trim() ? item.note.trim().slice(0, 500) : null,
+        };
+      });
 
     await this.prisma.$transaction(async (tx) => {
       await tx.groupOrderParticipantItem.deleteMany({
         where: { participantId: participant.id },
       });
-
-      const validItems = items.filter((i) => i.quantity > 0);
-      if (validItems.length > 0) {
-        for (const item of validItems) {
-          const product = await tx.product.findUnique({
-            where: { id: item.productId },
-          });
-          if (!product) continue;
-          const effectiveDiscount =
-            globalDiscount > 0
-              ? globalDiscount
-              : (product.discountPercent ?? 0);
-          const basePrice = computeFinalPrice(product.price, effectiveDiscount);
-
-          const productOptionGroups = Array.isArray(product.optionGroups)
-            ? (product.optionGroups as any[])
-            : [];
-          let optionSurcharge = 0;
-          for (const grp of productOptionGroups) {
-            const sel = item.selectedOptions?.[grp.name];
-            if (!sel) continue;
-            const vals = Array.isArray(grp.values) ? grp.values : [];
-            const matched = vals.find(
-              (v: any) => String(v.label ?? v).trim() === String(sel).trim(),
-            );
-            if (matched?.priceDelta)
-              optionSurcharge += Number(matched.priceDelta);
-          }
-
-          await tx.groupOrderParticipantItem.create({
-            data: {
-              participantId: participant.id,
-              productId: item.productId,
-              quantity: item.quantity,
-              unitPrice: new Prisma.Decimal(basePrice + optionSurcharge),
-              selectedOptions: item.selectedOptions ?? {},
-              toppingsJson: (item.toppings ?? []) as any,
-              note: item.note ?? null,
-            },
-          });
-        }
+      if (rows.length > 0) {
+        await tx.groupOrderParticipantItem.createMany({ data: rows });
       }
-
       await tx.groupOrderParticipant.update({
         where: { id: participant.id },
         data: { isReady: false },

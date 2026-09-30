@@ -1,15 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InventoryTransactionType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-
-type Condition = { group: string; value: string };
-
-function conditionsMatch(
-  conditions: Condition[],
-  selectedOptions: Record<string, string>,
-): boolean {
-  return conditions.every((c) => selectedOptions[c.group] === c.value);
-}
+import { pickBestRecipeRows } from '../../../helper/recipe-match';
 
 @Injectable()
 export class InventoryService {
@@ -27,6 +19,7 @@ export class InventoryService {
       const items = await tx.orderItem.findMany({
         where: { orderId },
         select: {
+          id: true,
           productId: true,
           quantity: true,
           optionsJson: true,
@@ -65,33 +58,17 @@ export class InventoryService {
         const productRecipes = recipeRows.filter(
           (r) => r.productId === item.productId,
         );
-
-        const bestByIngredient = new Map<
-          string,
-          { quantity: Prisma.Decimal; score: number }
-        >();
-
-        for (const r of productRecipes) {
-          const conditions = (r.conditions as unknown as Condition[]) ?? [];
-          if (!conditionsMatch(conditions, selectedOptions)) continue;
-
-          const score = conditions.length;
-          const current = bestByIngredient.get(r.ingredientId);
-          if (!current || score > current.score) {
-            bestByIngredient.set(r.ingredientId, {
-              quantity: r.quantity,
-              score,
-            });
-          } else if (current && score === current.score) {
-            // Hai dòng cùng mức độ cụ thể cùng khớp — dữ liệu cấu hình mơ hồ.
-            this.logger.warn(
-              `Ambiguous recipe match cho product ${item.productId}, ingredient ${r.ingredientId} (order ${orderId}): nhiều dòng cùng score=${score}.`,
-            );
-          }
+        const { picked, ambiguousIngredientIds } = pickBestRecipeRows(
+          productRecipes,
+          selectedOptions,
+        );
+        for (const ingredientId of ambiguousIngredientIds) {
+          this.logger.warn(
+            `Ambiguous recipe match cho product ${item.productId}, ingredient ${ingredientId} (order ${orderId}): nhiều dòng cùng mức điều kiện.`,
+          );
         }
-
-        for (const [ingredientId, best] of bestByIngredient) {
-          addNeed(ingredientId, best.quantity.mul(item.quantity));
+        for (const [ingredientId, row] of picked) {
+          addNeed(ingredientId, row.quantity.mul(item.quantity));
         }
 
         // ── Nguyên liệu từ topping đã chọn (không đổi) ──
@@ -128,7 +105,7 @@ export class InventoryService {
         });
         if (resultQty.lessThan(0)) {
           this.logger.warn(
-            `Nguyên liệu "${ingredient.name}" âm kho sau đơn ${orderId}: ${resultQty}`,
+            `Nguyên liệu "${ingredient.name}" âm kho sau đơn ${orderId}: ${Number(resultQty)}`,
           );
         }
       }

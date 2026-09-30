@@ -227,6 +227,8 @@ model Category {
   updatedAt       DateTime  @updatedAt
   products        Product[]
 
+   /// null = kế thừa markup global.
+  pricingMarkupPercent Decimal? @db.Decimal(7, 2)
   @@index([sortOrder])
 }
 
@@ -269,6 +271,16 @@ model Product {
   feedbacks          Feedback[]
   toppingRecipeItems ProductToppingRecipeItem[]
 
+  pricingMode          PricingMode @default(auto)
+  /// null = kế thừa category / global.
+  pricingMarkupPercent Decimal?    @db.Decimal(7, 2)
+  /// Giá vốn của biến thể mốc (snapshot).
+  costPrice            Decimal?    @db.Decimal(14, 2)
+  /// Giá cơ bản tự động; null = dùng Product.price.
+  autoPrice            Decimal?    @db.Decimal(12, 2)
+  pricingSnapshotJson  Json?
+  pricingComputedAt    DateTime?
+
   @@index([categoryId])
   @@index([isAvailable])
   @@index([isSoldOut])
@@ -285,6 +297,9 @@ model Ingredient {
   isActive          Boolean  @default(true)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+
+  costPerUnit       Decimal?  @db.Decimal(14, 4)
+  costUpdatedAt     DateTime?
 
   recipeItems        ProductRecipeItem[]
   transactions       InventoryTransaction[]
@@ -1213,4 +1228,19 @@ model Sticker {
   @@index([isActive])
   @@index([sortOrder])
   @@index([albumId])
+}
+
+enum PricingMode {
+  auto
+  fixed
+}
+
+/// Cấu hình giá tự động — singleton id = "default". Chưa có dòng nào = tắt.
+model PricingConfig {
+  id                   String   @id @default("default")
+  /// Công tắc tổng / tắt khẩn cấp: false → mọi món dùng giá cố định.
+  isEnabled            Boolean  @default(false)
+  defaultMarkupPercent Decimal? @db.Decimal(7, 2)
+  roundingStep         Int      @default(1000)
+  updatedAt            DateTime @updatedAt
 }

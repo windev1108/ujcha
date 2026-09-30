@@ -214,6 +214,14 @@ export function computeFinalPrice(
   return Math.round((base * (1 - discountPercent / 100)) / 1000) * 1000;
 }
 
+export function resolveDiscountPercent(
+  productDiscount: number | null | undefined,
+  globalDiscount: number | null | undefined,
+): number {
+  const p = productDiscount ?? 0;
+  return p > 0 ? p : (globalDiscount ?? 0);
+}
+
 const SOLD_COUNT_MIN = 10;
 const SOLD_COUNT_BOOST = 10;
 
@@ -273,4 +281,43 @@ export function buildScopeKey(
     .sort((a, b) => a.group.localeCompare(b.group))
     .map((c) => `${c.group}::${c.value}`)
     .join('|');
+}
+
+const PRICING_INTERNAL_KEYS = [
+  'costPrice',
+  'autoPrice',
+  'pricingMode',
+  'pricingMarkupPercent',
+  'pricingSnapshotJson',
+  'pricingComputedAt',
+  'recipeNote',
+] as const;
+
+/** Bỏ các cột giá vốn / giá tự động trước khi trả ra API công khai. */
+export function stripPricingInternals<T extends object>(row: T) {
+  const out = { ...row } as Record<string, unknown>;
+  for (const k of PRICING_INTERNAL_KEYS) delete out[k];
+  return out as Omit<T, (typeof PRICING_INTERNAL_KEYS)[number]>;
+}
+
+/** Giá cơ bản hiệu lực (trước giảm giá): fixed → Product.price; ngược lại autoPrice ?? price. */
+export function effectiveBasePrice<P>(p: {
+  pricingMode?: string | null;
+  price: P;
+  autoPrice?: P | null;
+}): P {
+  if (p.pricingMode === 'fixed') return p.price;
+  return p.autoPrice ?? p.price;
+}
+
+/** Trả CÙNG shape, chỉ thay `price` bằng giá hiệu lực. Phải gọi TRƯỚC stripPricingInternals. */
+export function applyEffectivePricing<
+  T extends {
+    price: unknown;
+    pricingMode?: string | null;
+    autoPrice?: unknown;
+  },
+>(row: T): T {
+  if (row.pricingMode === 'fixed' || row.autoPrice == null) return row;
+  return { ...row, price: row.autoPrice };
 }

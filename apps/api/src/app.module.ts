@@ -39,6 +39,7 @@ import { ToppingModule } from './modules/topping/topping.module';
 import { StoreModule } from './modules/store/store.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { UploadModule } from './modules/upload/upload.module';
+import { PricingModule } from './modules/pricing/pricing.module';
 
 @Module({
   imports: [
@@ -86,6 +87,7 @@ import { UploadModule } from './modules/upload/upload.module';
     StoreModule,
     ChatModule,
     UploadModule,
+    PricingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

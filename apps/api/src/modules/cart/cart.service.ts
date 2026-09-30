@@ -1,6 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Cart } from '@prisma/client';
-import { computeFinalPrice, normalizeInlineOptionGroups, normalizeInlineToppings } from '../../helper/utils';
+import {
+  applyEffectivePricing,
+  computeFinalPrice,
+  normalizeInlineOptionGroups,
+  normalizeInlineToppings,
+  resolveDiscountPercent,
+  stripPricingInternals,
+} from '../../helper/utils';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import type { AddToCartDto } from './dto/add-to-cart.dto';
@@ -14,6 +21,8 @@ const CART_ITEM_INCLUDE = {
       nameTranslation: true,
       slug: true,
       price: true,
+      pricingMode: true,
+      autoPrice: true,
       imageUrls: true,
       discountPercent: true,
       optionGroups: true,
@@ -35,7 +44,12 @@ function buildToppingsJson(
   const toppings = normalizeInlineToppings(productToppings);
   return toppings
     .filter((t) => t.isActive && selectedIds.includes(t.id))
-    .map((t) => ({ id: t.id, name: t.name, price: t.price, nameTranslation: t.nameTranslation ?? {} }));
+    .map((t) => ({
+      id: t.id,
+      name: t.name,
+      price: t.price,
+      nameTranslation: t.nameTranslation ?? {},
+    }));
 }
 
 /** Normalize a raw cart item, merging global discount into finalPrice. */
@@ -44,24 +58,29 @@ function normalizeCartItem(item: any, globalDiscount: number) {
     Array.isArray(item.toppingsJson) ? item.toppingsJson : [];
 
   const effectiveDiscount = item.product
-    ? (globalDiscount > 0 ? globalDiscount : (item.product.discountPercent ?? 0))
+    ? resolveDiscountPercent(item.product.discountPercent, globalDiscount)
     : 0;
-
+  const priced = item.product ? applyEffectivePricing(item.product) : null;
   return {
     ...item,
     toppingsJson: undefined,
     toppings: rawToppings.map((t) => ({
       toppingId: t.id,
-      topping: { id: t.id, name: t.name, price: String(t.price), nameTranslation: (t as any).nameTranslation ?? {} },
+      topping: {
+        id: t.id,
+        name: t.name,
+        price: String(t.price),
+        nameTranslation: (t as any).nameTranslation ?? {},
+      },
     })),
-    product: item.product
+    product: priced
       ? {
-          ...item.product,
-          discountPercent: effectiveDiscount,
-          optionGroups: normalizeInlineOptionGroups(item.product.optionGroups),
-          toppings: normalizeInlineToppings(item.product.toppings),
-          finalPrice: computeFinalPrice(item.product.price, effectiveDiscount),
-        }
+        ...stripPricingInternals(priced),
+        discountPercent: effectiveDiscount,
+        optionGroups: normalizeInlineOptionGroups(item.product.optionGroups),
+        toppings: normalizeInlineToppings(item.product.toppings),
+        finalPrice: computeFinalPrice(priced.price, effectiveDiscount),
+      }
       : item.product,
   };
 }
@@ -146,9 +165,13 @@ export class CartService {
       where: { id: itemId },
       data: {
         quantity: dto.quantity,
-        ...(dto.selectedOptions !== undefined && { selectedOptions: dto.selectedOptions }),
+        ...(dto.selectedOptions !== undefined && {
+          selectedOptions: dto.selectedOptions,
+        }),
         ...(toppingsJson !== undefined && { toppingsJson }),
-        ...(dto.note !== undefined && { note: dto.note.trim().slice(0, 500) || null }),
+        ...(dto.note !== undefined && {
+          note: dto.note.trim().slice(0, 500) || null,
+        }),
       },
       include: CART_ITEM_INCLUDE,
     });

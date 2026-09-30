@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -29,6 +30,7 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductService } from '../../product/product.service';
 import { SetProductRecipeDto } from '../ingredients/dto/set-product-recipe.dto';
 import { ResolveRecipeBatchDto } from './dto/resolve-recipe-batch.dto';
+import { PricingCostService } from '../../pricing/pricing-cost.service';
 
 @ApiTags('admin-products')
 @ApiBearerAuth('admin-access-token')
@@ -39,7 +41,41 @@ export class AdminProductController {
   constructor(
     private readonly adminProductService: AdminProductService,
     private readonly productService: ProductService,
+    private readonly pricingCost: PricingCostService,
   ) { }
+
+  @Get('pricing/preview')
+  @ApiOperation({
+    summary: 'Xem trước giá tự động từ cost (dry-run, không ghi DB)',
+  })
+  @ApiQuery({ name: 'categoryId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'categorySlug', required: false })
+  @ApiQuery({
+    name: 'markup',
+    required: false,
+    description:
+      'Markup % trên cost. VD 150 → giá = cost × 2.5, làm tròn lên 1.000đ',
+  })
+  pricingPreview(
+    @Query('categoryId') categoryId?: string,
+    @Query('categorySlug') categorySlug?: string,
+    @Query('markup') markup?: string,
+    @Query('productId', new ParseUUIDPipe({ optional: true })) productId?: string,
+  ) {
+    const n = markup ? Number(markup) : undefined;
+    if (n !== undefined && (!Number.isFinite(n) || n < 0 || n > 10_000)) {
+      throw new BadRequestException({
+        message: 'markup không hợp lệ.',
+        code: 'PRICING_MARKUP_INVALID',
+      });
+    }
+    return this.pricingCost.preview({
+      productId,
+      categoryId,
+      categorySlug,
+      markupPercent: n,
+    });
+  }
 
   @Get()
   @ApiOperation({ summary: 'Danh sách sản phẩm' })
@@ -133,7 +169,8 @@ export class AdminProductController {
   @Post('recipe/resolve-batch')
   @HttpCode(200)
   @ApiOperation({
-    summary: 'Resolve công thức cho nhiều item cùng lúc (POS) — dùng chung đơn Ujcha & Grab',
+    summary:
+      'Resolve công thức cho nhiều item cùng lúc (POS) — dùng chung đơn Ujcha & Grab',
   })
   resolveRecipeBatch(@Body() dto: ResolveRecipeBatchDto) {
     return this.adminProductService.resolveRecipeBatch(dto.items);

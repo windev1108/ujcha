@@ -4,6 +4,7 @@ import {
   ArrayMaxSize,
   IsArray,
   IsBoolean,
+  IsEnum,
   IsInt,
   IsNumber,
   IsObject,
@@ -18,6 +19,7 @@ import {
 } from 'class-validator';
 import { ProductOptionGroupDto } from './product-option-group.dto';
 import { ProductToppingDto } from './product-topping.dto';
+import { PricingMode } from '@prisma/client';
 
 export class UpdateProductDto {
   @ApiPropertyOptional({ format: 'uuid' })
@@ -25,7 +27,9 @@ export class UpdateProductDto {
   @IsUUID('4')
   categoryId?: string;
 
-  @ApiPropertyOptional({ description: 'Để chuỗi rỗng để tự sinh lại SKU từ tên' })
+  @ApiPropertyOptional({
+    description: 'Để chuỗi rỗng để tự sinh lại SKU từ tên',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(80)
@@ -66,12 +70,16 @@ export class UpdateProductDto {
   @MaxLength(2000, { each: true })
   imageUrls?: string[];
 
-  @ApiPropertyOptional({ description: 'Bản dịch tên món: { "en": "...", "ko": "..." }' })
+  @ApiPropertyOptional({
+    description: 'Bản dịch tên món: { "en": "...", "ko": "..." }',
+  })
   @IsOptional()
   @IsObject()
   nameTranslation?: Record<string, string>;
 
-  @ApiPropertyOptional({ description: 'Bản dịch mô tả món: { "en": "...", "ko": "..." }' })
+  @ApiPropertyOptional({
+    description: 'Bản dịch mô tả món: { "en": "...", "ko": "..." }',
+  })
   @IsOptional()
   @IsObject()
   descriptionTranslation?: Record<string, string>;
@@ -110,8 +118,21 @@ export class UpdateProductDto {
   @Max(100)
   discountPercent?: number;
 
-  @ApiPropertyOptional({ description: 'Gắn nhãn bán chạy — badge Best Seller + ưu tiên nổi bật' })
+  @ApiPropertyOptional({
+    description: 'Gắn nhãn bán chạy — badge Best Seller + ưu tiên nổi bật',
+  })
   @IsOptional()
   @IsBoolean()
   isBestSeller?: boolean;
+
+  @IsOptional()
+  @IsEnum(PricingMode)
+  pricingMode?: PricingMode;
+
+  /** null = xoá override, kế thừa category/global. */
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(10000)
+  pricingMarkupPercent?: number | null;
 }
