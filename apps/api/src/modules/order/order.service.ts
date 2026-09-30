@@ -190,7 +190,7 @@ export class OrderService {
     private readonly inventoryService: InventoryService,
     private readonly storeStatus: StoreStatusService,
     private readonly chatService: ChatService,
-  ) { }
+  ) {}
 
   calculateTotal(items: CreateOrderItemDto[]): Prisma.Decimal {
     let sum = new Prisma.Decimal(0);
@@ -301,7 +301,7 @@ export class OrderService {
         normalized: optionsNormalized,
         details: optionDetails,
       } = skipOptionValidation
-          ? {
+        ? {
             surcharge: new Prisma.Decimal(0),
             normalized: {} as Record<string, string>,
             details: [] as {
@@ -311,7 +311,7 @@ export class OrderService {
               nameTranslation?: Record<string, string>;
             }[],
           }
-          : validateOptionsAndSurcharge(optionGroupsResolved, item.options);
+        : validateOptionsAndSurcharge(optionGroupsResolved, item.options);
       unit = unit.add(optionSurcharge);
 
       // Merge client-provided nameTranslation as fallback for option values the product record may lack.
@@ -379,9 +379,6 @@ export class OrderService {
         code: 'ORDER_ITEMS_EMPTY',
       });
     }
-    if (!options?.skipStoreHoursCheck) {
-      await this.storeStatus.assertOpenForOrders();
-    }
 
     this.orderValidation.assertCreateOrderTypeRules(dto);
 
@@ -393,6 +390,12 @@ export class OrderService {
       dto.type === OrderType.delivery && dto.scheduledDeliveryTime
         ? new Date(dto.scheduledDeliveryTime)
         : null;
+
+    if (!options?.skipStoreHoursCheck) {
+      await this.storeStatus.assertOpenForOrders(new Date(), {
+        scheduledAt: scheduledDeliveryDate,
+      });
+    }
 
     if (dto.type === OrderType.pickup && pickupDate) {
       if (Number.isNaN(pickupDate.getTime())) {
@@ -587,8 +590,8 @@ export class OrderService {
       const vatAmount =
         vatPercent > 0
           ? new Prisma.Decimal(
-            Math.round((Number(finalAmount) * vatPercent) / 100),
-          )
+              Math.round((Number(finalAmount) * vatPercent) / 100),
+            )
           : new Prisma.Decimal(0);
       const vatRate = new Prisma.Decimal(vatPercent);
 
@@ -1015,20 +1018,20 @@ export class OrderService {
     const [txns, groupLinks] = await Promise.all([
       orderIds.length > 0
         ? this.prisma.pointTransaction.findMany({
-          where: {
-            userId,
-            type: PointTransactionType.earn,
-            source: PointSource.order,
-            referenceId: { in: orderIds },
-          },
-          select: { referenceId: true, amount: true },
-        })
+            where: {
+              userId,
+              type: PointTransactionType.earn,
+              source: PointSource.order,
+              referenceId: { in: orderIds },
+            },
+            select: { referenceId: true, amount: true },
+          })
         : Promise.resolve([]),
       orderIds.length > 0
         ? this.prisma.groupOrder.findMany({
-          where: { orderId: { in: orderIds } },
-          select: { orderId: true, token: true },
-        })
+            where: { orderId: { in: orderIds } },
+            select: { orderId: true, token: true },
+          })
         : Promise.resolve([]),
     ]);
 

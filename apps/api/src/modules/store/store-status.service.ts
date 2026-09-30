@@ -10,7 +10,7 @@ import { StoreOperationStatus } from '@prisma/client';
 
 @Injectable()
 export class StoreStatusService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async getConfig() {
     const existing = await this.prisma.storeHoursConfig.findUnique({
@@ -52,12 +52,15 @@ export class StoreStatusService {
   }
 
   /** Validate DUY NHẤT ở đây. FE không tự tính giờ để chặn nữa. */
-  async assertOpenForOrders(now: Date = new Date()) {
+  async assertOpenForOrders(
+    now: Date = new Date(),
+    opts?: { scheduledAt?: Date | null },
+  ) {
     const status = await this.getStatus(now);
     if (status.isOpenForOrders) return;
 
-    // status.status !== 'opening' nghĩa là admin chủ động đóng (kể cả busy-ngoài-giờ)
-    if (status.status !== 'opening') {
+    // Admin chủ động đóng → chặn cả đơn hẹn giờ
+    if (status.status === 'closed') {
       throw new BadRequestException({
         message:
           status.statusReason?.trim() ||
@@ -66,8 +69,23 @@ export class StoreStatusService {
       });
     }
 
+    // Ngoài giờ mở cửa: cho phép nếu là đơn hẹn giờ và giờ hẹn nằm trong giờ mở cửa
+    if (opts?.scheduledAt) {
+      const scheduledWithinHours = isWithinStoreHours(
+        status.openMinutes,
+        status.closeMinutes,
+        vnMinutesOfDay(opts.scheduledAt),
+      );
+      if (scheduledWithinHours) return;
+
+      throw new BadRequestException({
+        message: `Giờ hẹn giao phải nằm trong giờ mở cửa: ${minutesToHHmm(status.openMinutes)} - ${minutesToHHmm(status.closeMinutes)}.`,
+        code: 'STORE_SCHEDULE_OUTSIDE_HOURS',
+      });
+    }
+
     throw new BadRequestException({
-      message: `Cửa hàng hiện đang đóng cửa. Giờ mở cửa: ${minutesToHHmm(status.openMinutes)} - ${minutesToHHmm(status.closeMinutes)}.`,
+      message: `Cửa hàng hiện đang đóng cửa. Giờ mở cửa: ${minutesToHHmm(status.openMinutes)} - ${minutesToHHmm(status.closeMinutes)}. Bạn có thể chọn hẹn giờ giao trong giờ mở cửa.`,
       code: 'STORE_CLOSED_HOURS',
     });
   }
