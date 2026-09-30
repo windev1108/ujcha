@@ -138,7 +138,7 @@ function toISODate(d: Date): string {
   return `${y}-${m}-${day}`
 }
 
-function getApiDateRange(key: QuickDate, dateFrom: string, dateTo: string): { from?: string; to?: string } {
+export function getApiDateRange(key: QuickDate, dateFrom?: string, dateTo?: string): { from?: string; to?: string } {
   const now = new Date()
   if (key === 'today') {
     const d = toISODate(now)

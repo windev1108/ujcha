@@ -38,4 +38,5 @@ export const ROUTES = {
     GROUP_ORDERS: '/group-orders',
     INVENTORY: '/inventory',
     CHAT_WIDGET: '/chat-widget',
+    REVENUE_STATS: "/revenue-stats"
 } as const

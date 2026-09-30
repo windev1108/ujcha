@@ -9,7 +9,7 @@ import {
     TextArea,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Boxes, Loader2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { AlertTriangle, Boxes, Coins, Loader2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { useAppDialog } from "@/components/common/app-dialog-provider";
@@ -21,9 +21,11 @@ import {
     deleteAdminIngredient,
     fetchAdminIngredients,
     updateAdminIngredient,
+    UpdateIngredientBody,
     type CreateIngredientBody,
 } from "@/services/admin/ingredients-api";
 import type { Ingredient } from "@/services/admin/types";
+import { formatCost, parseCost } from "@/lib/functions";
 
 function isLowStock(ing: Ingredient): boolean {
     if (!ing.lowStockThreshold) return false;
@@ -44,7 +46,8 @@ export function IngredientsTab() {
     const [stockDraftId, setStockDraftId] = useState<string | null>(null);
     const [stockDraft, setStockDraft] = useState<{ changeQty: string; note: string }>({ changeQty: "", note: "" });
     const [deletingId, setDeletingId] = useState<string | null>(null);
-
+    const [formCost, setFormCost] = useState("");
+    const [editCost, setEditCost] = useState("");
     const invalidate = () => void queryClient.invalidateQueries({ queryKey: adminKeys.ingredients });
 
     const { data: ingredients = [], isLoading } = useQuery({
@@ -57,12 +60,13 @@ export function IngredientsTab() {
         onSuccess: () => {
             invalidate();
             setForm(emptyForm);
+            setFormCost("");
             setShowAddForm(false);
         },
     });
 
     const updateMut = useMutation({
-        mutationFn: (p: { id: string; body: CreateIngredientBody }) =>
+        mutationFn: (p: { id: string; body: UpdateIngredientBody }) =>
             updateAdminIngredient(p.id, p.body),
         onSuccess: () => {
             invalidate();
@@ -103,6 +107,7 @@ export function IngredientsTab() {
 
     const startEdit = (ing: Ingredient) => {
         setEditingId(ing.id);
+        setEditCost(ing.costPerUnit != null ? String(Number.parseFloat(ing.costPerUnit)) : "");
         setEditForm({
             name: ing.name,
             unit: ing.unit,
@@ -120,6 +125,10 @@ export function IngredientsTab() {
         });
         if (ok) deleteMut.mutate(ing.id);
     };
+
+    const createCost = parseCost(formCost);
+    const createCostInvalid = createCost === "invalid";
+    const noCostCount = ingredients.filter((i) => i.isActive && i.costPerUnit == null).length;
 
     return (
         <div className="flex flex-col gap-5">
@@ -173,6 +182,15 @@ export function IngredientsTab() {
                             />
                             <Input
                                 fullWidth
+                                inputMode="decimal"
+                                value={formCost}
+                                onChange={(e) => setFormCost(e.target.value)}
+                                placeholder={`Giá vốn / 1 ${form.unit.trim() || "đơn vị"} (đ) — tuỳ chọn`}
+                                className={adminInputClass}
+                                disabled={createMut.isPending}
+                            />
+                            <Input
+                                fullWidth
                                 type="number"
                                 min={0}
                                 step={0.01}
@@ -199,6 +217,12 @@ export function IngredientsTab() {
                                 disabled={createMut.isPending}
                             />
                         </div>
+                        <p className="text-xs text-foreground/45">
+                            Giá vốn tính theo <b>1 đơn vị</b> đã nhập (đơn vị g thì nhập giá 1 g, không phải giá 1 kg).
+                        </p>
+                        {createCostInvalid && (
+                            <p className="text-xs text-red-600">Giá vốn không hợp lệ (số ≥ 0, tối đa 4 chữ số thập phân).</p>
+                        )}
                         <TextArea
                             fullWidth
                             value={form.note ?? ""}
@@ -221,13 +245,14 @@ export function IngredientsTab() {
                             </Button>
                             <Button
                                 className="rounded-full bg-[#1a3c34] px-5 text-sm font-semibold text-white"
-                                isDisabled={!form.name.trim() || !form.unit.trim() || createMut.isPending}
+                                isDisabled={!form.name.trim() || !form.unit.trim() || createCostInvalid || createMut.isPending}
                                 onPress={() =>
                                     createMut.mutate({
                                         name: form.name.trim(),
                                         unit: form.unit.trim(),
                                         stockQty: form.stockQty,
                                         lowStockThreshold: form.lowStockThreshold,
+                                        ...(typeof createCost === "number" && { costPerUnit: createCost }),
                                         note: form.note?.trim() || undefined,
                                     })
                                 }
@@ -301,6 +326,13 @@ export function IngredientsTab() {
                             const rowBusy = isTogglingThis || isDeletingThis || isAdjustingThis;
 
                             if (isEditing) {
+                                const parsedCost = parseCost(editCost);
+                                const origCost = ing.costPerUnit != null ? Number.parseFloat(ing.costPerUnit) : null;
+                                const costInvalid = parsedCost === "invalid";
+                                const costChanged = !costInvalid && parsedCost !== origCost;
+                                const unitChanged = editForm.unit.trim() !== ing.unit;
+                                // Backend bắt buộc nhập lại giá vốn khi đổi đơn vị; chặn sớm ở FE cho rõ lỗi.
+                                const needRecost = unitChanged && origCost !== null && !costChanged;
                                 return (
                                     <div key={ing.id} className="flex flex-col gap-2 px-5 py-4">
                                         <div className="grid gap-2 sm:grid-cols-2">
@@ -317,6 +349,15 @@ export function IngredientsTab() {
                                                 value={editForm.unit}
                                                 onChange={(e) => setEditForm((f) => ({ ...f, unit: e.target.value }))}
                                                 placeholder="Đơn vị"
+                                                className={adminInputClass}
+                                                disabled={updateMut.isPending}
+                                            />
+                                            <Input
+                                                fullWidth
+                                                inputMode="decimal"
+                                                value={editCost}
+                                                onChange={(e) => setEditCost(e.target.value)}
+                                                placeholder={`Giá vốn / 1 ${editForm.unit.trim() || "đơn vị"} (đ)`}
                                                 className={adminInputClass}
                                                 disabled={updateMut.isPending}
                                             />
@@ -361,7 +402,7 @@ export function IngredientsTab() {
                                             <Button
                                                 size="sm"
                                                 className="rounded-full bg-[#1a3c34] px-4 text-white"
-                                                isDisabled={!editForm.name.trim() || !editForm.unit.trim() || updateMut.isPending}
+                                                isDisabled={!editForm.name.trim() || !editForm.unit.trim() || costInvalid || needRecost || updateMut.isPending}
                                                 onPress={() =>
                                                     updateMut.mutate({
                                                         id: ing.id,
@@ -370,6 +411,7 @@ export function IngredientsTab() {
                                                             unit: editForm.unit.trim(),
                                                             lowStockThreshold: editForm.lowStockThreshold,
                                                             note: editForm.note?.trim() || undefined,
+                                                            ...(costChanged && { costPerUnit: parsedCost as number | null }),
                                                         },
                                                     })
                                                 }
@@ -400,6 +442,12 @@ export function IngredientsTab() {
                                                         Sắp hết
                                                     </span>
                                                 )}
+                                                {noCostCount > 0 && (
+                                                    <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 ring-1 ring-amber-600/15">
+                                                        <Coins className="size-3.5" />
+                                                        {noCostCount} chưa có giá vốn
+                                                    </span>
+                                                )}
                                                 {isTogglingThis && (
                                                     <Loader2 className="size-3 animate-spin text-foreground/40" />
                                                 )}
@@ -413,6 +461,16 @@ export function IngredientsTab() {
                                                     <span className="ml-1">
                                                         (ngưỡng {Number.parseFloat(ing.lowStockThreshold).toLocaleString("vi-VN")} {ing.unit})
                                                     </span>
+                                                )}
+                                            </p>
+                                            <p className="text-xs text-foreground/45">
+                                                Giá vốn:{" "}
+                                                {ing.costPerUnit != null ? (
+                                                    <span className="font-semibold tabular-nums text-[#1a3c34]">
+                                                        {formatCost(ing.costPerUnit)}đ/{ing.unit}
+                                                    </span>
+                                                ) : (
+                                                    <span className="font-semibold text-amber-600">Chưa nhập</span>
                                                 )}
                                             </p>
                                             {ing.note && <p className="mt-0.5 text-xs text-foreground/40">{ing.note}</p>}

@@ -24,6 +24,7 @@ import {
   updateAdminCategory,
 } from "@/services/admin/categories-api";
 import type { AdminCategory } from "@/services/admin/types";
+import { markupToInput, parseMarkupInput } from "@/lib/pricing-format";
 
 // ─── Category form modal ──────────────────────────────────────────────────────
 
@@ -32,6 +33,7 @@ type CategoryFormData = {
   slug: string;
   sortOrder: string;
   thumbnail: string;
+  pricingMarkupPercent: string;
 };
 
 function CategoryModal({
@@ -52,7 +54,8 @@ function CategoryModal({
   const [sortOrder, setSortOrder] = useState(String(initial?.sortOrder ?? 0));
   const [thumbnail, setThumbnail] = useState(initial?.thumbnail ?? "");
   const [thumbError, setThumbError] = useState(false);
-
+  const [markup, setMarkup] = useState(markupToInput(initial?.pricingMarkupPercent));
+  const markupParsed = parseMarkupInput(markup);
   return (
     <>
       <Modal.Header className="border-b border-black/6 px-5 py-4">
@@ -92,6 +95,22 @@ function CategoryModal({
           />
         </div>
         <div className="flex flex-col gap-1.5">
+          <Label className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Markup giá tự động (%)</Label>
+          <Input
+            inputMode="decimal"
+            value={markup}
+            onChange={(e) => setMarkup(e.target.value)}
+            placeholder="Để trống = kế thừa mặc định toàn shop"
+            className="rounded-xl"
+            disabled={isPending}
+          />
+          <p className={`text-[11px] ${markupParsed.ok ? "text-foreground/40" : "text-red-500"}`}>
+            {markupParsed.ok
+              ? "VD 150 → giá = giá vốn × 2,5. Áp dụng cho món trong danh mục chưa có markup riêng."
+              : "Markup không hợp lệ (0–10.000)."}
+          </p>
+        </div>
+        <div className="flex flex-col gap-1.5">
           <Label className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Thumbnail (URL ảnh)</Label>
           <Input
             value={thumbnail}
@@ -125,12 +144,12 @@ function CategoryModal({
         <Button variant="ghost" onPress={onClose} isDisabled={isPending}>Hủy</Button>
         <Button
           className="rounded-full bg-[#1a3c34] font-semibold text-white"
-          onPress={() => onSave({ name, slug, sortOrder, thumbnail })}
-          isDisabled={isPending || !name.trim()}
+          onPress={() => onSave({ name, slug, sortOrder, thumbnail, pricingMarkupPercent: markup })}
+          isDisabled={isPending || !name.trim() || !markupParsed.ok}
         >
           {isPending ? "Đang lưu…" : mode === "create" ? "Thêm" : "Lưu"}
         </Button>
-      </Modal.Footer>
+      </Modal.Footer >
     </>
   );
 }
@@ -150,13 +169,16 @@ export function CategoriesTab() {
   const [editCat, setEditCat] = useState<AdminCategory | null>(null);
 
   const createMut = useMutation({
-    mutationFn: (d: CategoryFormData) =>
-      createAdminCategory({
+    mutationFn: (d: CategoryFormData) => {
+      const pr = parseMarkupInput(d.pricingMarkupPercent);
+      return createAdminCategory({
         name: d.name.trim(),
         slug: d.slug.trim() || undefined,
         sortOrder: Number.parseInt(d.sortOrder, 10) || 0,
         thumbnail: d.thumbnail.trim() || null,
-      }),
+        ...(pr.ok && pr.value != null ? { pricingMarkupPercent: pr.value } : {}),
+      })
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: adminKeys.categories });
       catModal.close();
@@ -164,15 +186,19 @@ export function CategoriesTab() {
   });
 
   const updateMut = useMutation({
-    mutationFn: (d: CategoryFormData) =>
-      updateAdminCategory(editCat!.id, {
+    mutationFn: (d: CategoryFormData) => {
+      const pr = parseMarkupInput(d.pricingMarkupPercent);
+      return updateAdminCategory(editCat!.id, {
         name: d.name.trim(),
         slug: d.slug.trim() || undefined,
         sortOrder: Number.parseInt(d.sortOrder, 10) || 0,
         thumbnail: d.thumbnail.trim() || null,
-      }),
+        pricingMarkupPercent: pr.ok ? pr.value : null,
+      })
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: adminKeys.categories });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
       catModal.close();
       setEditCat(null);
     },
@@ -209,7 +235,7 @@ export function CategoriesTab() {
 
       <Card className="overflow-x-auto rounded-2xl border border-black/6 shadow-sm">
         <CardContent className="p-0">
-          <Table.Root className="min-w-[640px]" aria-label="Danh mục">
+          <Table.Root className="min-w-[720px]" aria-label="Danh mục">
             <Table.ScrollContainer>
               <Table.Content>
                 <Table.Header>
@@ -226,6 +252,9 @@ export function CategoriesTab() {
                     Thứ tự
                   </Table.Column>
                   <Table.Column className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-foreground/45">
+                    Kế thừa
+                  </Table.Column>
+                  <Table.Column className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-foreground/45">
                     Số SP
                   </Table.Column>
                   <Table.Column className="px-5 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-foreground/45">
@@ -235,81 +264,84 @@ export function CategoriesTab() {
                 <Table.Body>
                   {isLoading
                     ? Array.from({ length: 5 }).map((_, i) => (
-                        <Table.Row key={i}>
-                          {Array.from({ length: 6 }).map((__, j) => (
-                            <Table.Cell key={j} className="px-5 py-4">
-                              <div className="h-4 animate-pulse rounded-md bg-black/5" />
-                            </Table.Cell>
-                          ))}
-                        </Table.Row>
-                      ))
+                      <Table.Row key={i}>
+                        {Array.from({ length: 7 }).map((__, j) => (
+                          <Table.Cell key={j} className="px-5 py-4">
+                            <div className="h-4 animate-pulse rounded-md bg-black/5" />
+                          </Table.Cell>
+                        ))}
+                      </Table.Row>
+                    ))
                     : categories.map((c) => (
-                        <Table.Row key={c.id} id={c.id}>
-                          <Table.Cell className="px-5 py-4 font-semibold text-foreground">
-                            {c.name}
-                          </Table.Cell>
-                          <Table.Cell className="px-5 py-4">
-                            {c.thumbnail ? (
-                              <div className="relative size-10 overflow-hidden rounded-lg border border-black/6">
-                                <Image
-                                  src={c.thumbnail}
-                                  alt={c.name}
-                                  fill
-                                  className="object-cover"
-                                  sizes="40px"
-                                  unoptimized
-                                />
-                              </div>
-                            ) : (
-                              <span className="text-xs text-foreground/30">—</span>
-                            )}
-                          </Table.Cell>
-                          <Table.Cell className="px-5 py-4 font-mono text-xs text-foreground/70">
-                            {c.slug}
-                          </Table.Cell>
-                          <Table.Cell className="px-5 py-4 tabular-nums">
-                            {c.sortOrder}
-                          </Table.Cell>
-                          <Table.Cell className="px-5 py-4 text-sm text-foreground/60">
-                            {c._count?.products ?? 0}
-                          </Table.Cell>
-                          <Table.Cell className="px-5 py-4 text-right">
-                            <div className="inline-flex justify-end gap-1">
-                              <Button
-                                isIconOnly
-                                size="sm"
-                                variant="ghost"
-                                aria-label="Sửa"
-                                onPress={() => openEdit(c)}
-                              >
-                                <Pencil className="size-4" />
-                              </Button>
-                              <Button
-                                isIconOnly
-                                size="sm"
-                                variant="ghost"
-                                className="text-red-600 hover:bg-red-50"
-                                aria-label="Xóa"
-                                isDisabled={
-                                  deleteMut.isPending ||
-                                  (c._count?.products ?? 0) > 0
-                                }
-                                onPress={async () => {
-                                  const ok = await confirm({
-                                    title: "Xóa danh mục?",
-                                    description: `Xóa danh mục "${c.name}"?`,
-                                    tone: "danger",
-                                    confirmLabel: "Xóa",
-                                  });
-                                  if (ok) deleteMut.mutate(c.id);
-                                }}
-                              >
-                                <Trash2 className="size-4" />
-                              </Button>
+                      <Table.Row key={c.id} id={c.id}>
+                        <Table.Cell className="px-5 py-4 font-semibold text-foreground">
+                          {c.name}
+                        </Table.Cell>
+                        <Table.Cell className="px-5 py-4">
+                          {c.thumbnail ? (
+                            <div className="relative size-10 overflow-hidden rounded-lg border border-black/6">
+                              <Image
+                                src={c.thumbnail}
+                                alt={c.name}
+                                fill
+                                className="object-cover"
+                                sizes="40px"
+                                unoptimized
+                              />
                             </div>
-                          </Table.Cell>
-                        </Table.Row>
-                      ))}
+                          ) : (
+                            <span className="text-xs text-foreground/30">—</span>
+                          )}
+                        </Table.Cell>
+                        <Table.Cell className="px-5 py-4 font-mono text-xs text-foreground/70">
+                          {c.slug}
+                        </Table.Cell>
+                        <Table.Cell className="px-5 py-4 tabular-nums">
+                          {c.sortOrder}
+                        </Table.Cell>
+                        <Table.Cell className="px-5 py-4 text-sm tabular-nums text-foreground/60">
+                          {c.pricingMarkupPercent != null ? `${Number(c.pricingMarkupPercent)}%` : <span className="text-foreground/30">Kế thừa</span>}
+                        </Table.Cell>
+                        <Table.Cell className="px-5 py-4 text-sm text-foreground/60">
+                          {c._count?.products ?? 0}
+                        </Table.Cell>
+                        <Table.Cell className="px-5 py-4 text-right">
+                          <div className="inline-flex justify-end gap-1">
+                            <Button
+                              isIconOnly
+                              size="sm"
+                              variant="ghost"
+                              aria-label="Sửa"
+                              onPress={() => openEdit(c)}
+                            >
+                              <Pencil className="size-4" />
+                            </Button>
+                            <Button
+                              isIconOnly
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-600 hover:bg-red-50"
+                              aria-label="Xóa"
+                              isDisabled={
+                                deleteMut.isPending ||
+                                (c._count?.products ?? 0) > 0
+                              }
+                              onPress={async () => {
+                                const ok = await confirm({
+                                  title: "Xóa danh mục?",
+                                  description: `Xóa danh mục "${c.name}"?`,
+                                  tone: "danger",
+                                  confirmLabel: "Xóa",
+                                });
+                                if (ok) deleteMut.mutate(c.id);
+                              }}
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </div>
+                        </Table.Cell>
+                      </Table.Row>
+                    ))}
                 </Table.Body>
               </Table.Content>
             </Table.ScrollContainer>

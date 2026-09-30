@@ -29,6 +29,7 @@ import {
   type LucideIcon,
   StoreIcon,
   Sticker,
+  TrendingUp,
 } from "lucide-react";
 
 import { useAuthStore } from "@/store/auth-store";
@@ -55,6 +56,7 @@ type NavItem = {
 
 const ALL_NAV_ITEMS: NavItem[] = [
   { href: ROUTES.DASHBOARD, label: "Tổng quan", icon: LayoutDashboard, permission: "dashboard" },
+  { href: ROUTES.REVENUE_STATS, label: "Doanh thu", icon: TrendingUp, permission: "products" },
   { href: ROUTES.STORE, label: "Cửa hàng", icon: Store, permission: "store" },
   { href: ROUTES.HRM, label: "Nhân sự (HRM)", icon: Users2, permission: "hrm" },
   { href: ROUTES.USERS, label: "Khách hàng", icon: UserCog, permission: "users" },

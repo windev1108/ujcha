@@ -39,6 +39,7 @@ export type AdminCategory = {
   slug: string;
   thumbnail: string | null;
   sortOrder: number;
+  pricingMarkupPercent: string | null;
   _count?: { products: number };
 };
 
@@ -115,6 +116,9 @@ export type AdminProduct = {
   globalDiscountPercent: number;
   createdAt?: string;
   updatedAt?: string;
+  pricingMode: PricingMode;
+  pricingMarkupPercent: string | null;
+  pricing: ProductPricingInfo;
   category: { id: string; name: string; slug: string };
 };
 
@@ -159,6 +163,8 @@ export type CreateProductBody = {
   isSoldOut?: boolean;
   isBestSeller?: boolean;
   discountPercent?: number;
+  pricingMode?: PricingMode;
+  pricingMarkupPercent?: number | null;
 };
 
 export type UpdateProductBody = Partial<CreateProductBody>;
@@ -169,6 +175,7 @@ export type CreateCategoryBody = {
   sortOrder?: number;
   thumbnail?: string | null;
   nameTranslation?: Record<string, string>;
+  pricingMarkupPercent?: number | null;
 };
 
 export type UpdateCategoryBody = Partial<CreateCategoryBody>;
@@ -1042,6 +1049,8 @@ export type Ingredient = {
   stockQty: string;
   lowStockThreshold: string | null;
   note: string | null;
+  costPerUnit: string | null;
+  costUpdatedAt: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -1107,6 +1116,10 @@ export type AdminProductStatItem = {
   revenue: number;
   categoryId: string;
   categoryName: string;
+  cost: number;
+  profit: number;
+  marginPercent: number | null;
+  costCoveragePercent: number;
 };
 
 export type AdminProductCategoryStat = {
@@ -1124,11 +1137,18 @@ export type AdminProductStats = {
     totalOrders: number;
     avgOrderValue: number;
     distinctProductsSold: number;
+    totalCost: number;
+    grossProfit: number;
+    profitMarginPercent: number | null;
+    costCoveragePercent: number;
+    uncostedQuantity: number;
+    uncostedReasons: Record<string, number>;
   };
   topByQuantity: AdminProductStatItem[];
   topByRevenue: AdminProductStatItem[];
   lowPerformers: AdminProductStatItem[];
   categoryBreakdown: AdminProductCategoryStat[];
+  topByProfit: AdminProductStatItem[];
 };
 
 export type FetchAdminProductStatsParams = { from?: string; to?: string; limit?: number };
@@ -1147,3 +1167,62 @@ export type RecipeGroupForm = {
   conditions: RecipeCondition[];
   ingredients: { ingredientId: string; quantity: number }[];
 };
+
+
+export type PricingPreviewStatus =
+  | "ok"
+  | "no_recipe"
+  | "missing_cost"
+  | "zero_cost"
+
+export type PricingPreviewItem = {
+  productId: string;
+  name: string;
+  sku: string | null;
+  category: string;
+  isAvailable: boolean;
+  fixedPrice: number;
+  status: PricingPreviewStatus;
+  missingIngredients?: string[];
+  referenceVariant?: Record<string, string>;
+  cost?: number;
+  fixedPriceOfReference?: number;
+  referenceSource?: Record<string, "default" | "lowest_price">;
+  actualMarkupPercent?: number;
+  foodCostPercent?: number;
+  previewPrice?: number | null;
+  priceDiff?: number | null;
+  warnings?: string[];
+};
+
+export type PricingPreviewResponse = {
+  markupPercent: number | null;
+  summary: Record<string, number>;
+  items: PricingPreviewItem[];
+};
+
+
+export type PricingMode = "auto" | "fixed";
+export type PricingSource = "product" | "category" | "global" | "fixed";
+export type ProductPricingStatus =
+  | "ok" | "fixed" | "no_recipe" | "missing_cost" | "zero_cost"
+  | "baseline_non_positive" | "not_computed";
+
+export interface ProductPricingInfo {
+  mode: PricingMode;
+  source: PricingSource;
+  markupPercent: number | null;
+  costPrice: number | null;
+  autoPrice: number | null;
+  effectiveBasePrice: number;
+  actualMarkupPercent: number | null;
+  status: ProductPricingStatus;
+  warnings: string[];
+  computedAt: string | null;
+}
+export interface PricingConfig {
+  isEnabled: boolean;
+  defaultMarkupPercent: number | null;
+  roundingStep: number;
+}
+export interface PricingRecomputeResult { scanned: number; updated: number }

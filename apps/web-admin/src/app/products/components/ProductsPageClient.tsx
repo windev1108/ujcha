@@ -60,7 +60,7 @@ import {
 import type { AdminProduct } from "@/services/admin/types";
 
 import { GrabImportDialog } from "./GrabImportDialog";
-import { ProductStatsTab } from "./ProductStatsTab";
+import { PricingConfigCard } from "./PricingConfigCard";
 
 const PAGE_SIZE = 12;
 type StatusFilter = "all" | "active" | "sold_out" | "disabled";
@@ -100,14 +100,12 @@ export function ProductsPageClient() {
   const searchParams = useSearchParams();
   const { confirm } = useAppDialog();
 
-  type TabId = "products" | "categories" | "stats";
+  type TabId = "products" | "categories";
   const tabParam = searchParams.get("tab");
-  const activeTab: TabId =
-    tabParam === "categories" ? "categories" : tabParam === "products" ? "products" : "stats";
+  const activeTab: TabId = tabParam === "categories" ? "categories" : "products";
 
   const setTab = (tab: TabId) => {
-    const url = tab === "stats" ? "/products" : `/products?tab=${tab}`;
-    router.replace(url);
+    router.replace(tab === "products" ? ROUTES.PRODUCTS : `${ROUTES.PRODUCTS}?tab=${tab}`);
   };
 
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -122,6 +120,8 @@ export function ProductsPageClient() {
   const chipsRef = useRef<HTMLDivElement>(null);
   const [chipsFadeLeft, setChipsFadeLeft] = useState(false);
   const [chipsFadeRight, setChipsFadeRight] = useState(false);
+  const baseOf = (p: AdminProduct) => p.pricing?.effectiveBasePrice ?? p.price;
+  const isAutoPriced = (p: AdminProduct) => !!p.pricing && p.pricing.mode !== "fixed" && p.pricing.autoPrice != null;
 
   const syncChipsFade = () => {
     const el = chipsRef.current;
@@ -197,7 +197,9 @@ export function ProductsPageClient() {
   }, [filtered, currentPage]);
 
   const pageWindow = usePaginationWindow(currentPage, pageCount, 5);
-
+  useEffect(() => {
+    if (tabParam === "stats") router.replace(ROUTES.REVENUE_STATS);
+  }, [tabParam, router]);
   useEffect(() => { setPage(1); }, [categoryFilter, statusFilter, debouncedSearch]);
 
   const deleteMut = useMutation({
@@ -278,7 +280,6 @@ export function ProductsPageClient() {
       <div className="flex gap-1 border-b border-black/6 pb-px">
         {(
           [
-            ["stats", "Thống kê"],
             ["products", "Sản phẩm"],
             ["categories", "Danh mục"],
           ] as const
@@ -296,7 +297,6 @@ export function ProductsPageClient() {
           </button>
         ))}
       </div>
-      {activeTab === "stats" && <ProductStatsTab />}
       {activeTab === "categories" && <CategoriesTab />}
 
       {activeTab === "products" && <>
@@ -559,49 +559,52 @@ export function ProductsPageClient() {
 
           {/* Inline settings panel */}
           {showSettings && (
-            <Card className="rounded-2xl border border-[#1a3c34]/12 bg-[color-mix(in_oklab,#ecfdf5_40%,white)] shadow-sm">
-              <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-5">
-                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <Label className="text-xs font-bold uppercase tracking-wider text-[#1a3c34]">
-                    Giảm giá toàn bộ sản phẩm (%)
-                  </Label>
-                  <Description className="text-[11px] text-foreground/50">
-                    Khi được bật, ghi đè % giảm giá riêng từng sản phẩm. Khi tắt (0%), từng sản phẩm dùng mức giảm riêng.
-                  </Description>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={globalDiscountInput}
-                    onChange={(e) => setGlobalDiscountInput(e.target.value)}
-                    className="h-9 w-24 rounded-full border border-black/10 bg-white px-3 text-center text-sm font-semibold"
-                    disabled={saveGlobalDiscountMut.isPending}
-                    aria-label="Phần trăm giảm giá toàn shop"
-                  />
-                  <span className="text-sm text-foreground/50">%</span>
-                  <Button
-                    className="h-9 rounded-full bg-[#1a3c34] px-5 text-sm font-semibold text-white"
-                    onPress={() => {
-                      const n = Number.parseInt(globalDiscountInput, 10);
-                      saveGlobalDiscountMut.mutate({
-                        globalDiscountPercent: Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 0,
-                      });
-                    }}
-                    isDisabled={saveGlobalDiscountMut.isPending}
-                  >
-                    {saveGlobalDiscountMut.isPending ? "Đang lưu…" : "Lưu"}
-                  </Button>
-                </div>
-                {globalPct > 0 && (
-                  <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-700">
-                    Đang giảm {globalPct}% toàn shop
-                  </span>
-                )}
-              </CardContent>
-            </Card>
+            <>
+              <Card className="rounded-2xl border border-[#1a3c34]/12 bg-[color-mix(in_oklab,#ecfdf5_40%,white)] shadow-sm">
+                <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-5">
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-[#1a3c34]">
+                      Giảm giá toàn bộ sản phẩm (%)
+                    </Label>
+                    <Description className="text-[11px] text-foreground/50">
+                      Áp dụng cho các món không có giảm giá riêng. Món đã đặt giảm giá riêng sẽ dùng mức riêng của nó.
+                    </Description>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={globalDiscountInput}
+                      onChange={(e) => setGlobalDiscountInput(e.target.value)}
+                      className="h-9 w-24 rounded-full border border-black/10 bg-white px-3 text-center text-sm font-semibold"
+                      disabled={saveGlobalDiscountMut.isPending}
+                      aria-label="Phần trăm giảm giá toàn shop"
+                    />
+                    <span className="text-sm text-foreground/50">%</span>
+                    <Button
+                      className="h-9 rounded-full bg-[#1a3c34] px-5 text-sm font-semibold text-white"
+                      onPress={() => {
+                        const n = Number.parseInt(globalDiscountInput, 10);
+                        saveGlobalDiscountMut.mutate({
+                          globalDiscountPercent: Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 0,
+                        });
+                      }}
+                      isDisabled={saveGlobalDiscountMut.isPending}
+                    >
+                      {saveGlobalDiscountMut.isPending ? "Đang lưu…" : "Lưu"}
+                    </Button>
+                  </div>
+                  {globalPct > 0 && (
+                    <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-700">
+                      Đang giảm {globalPct}% toàn shop
+                    </span>
+                  )}
+                </CardContent>
+              </Card>
+              <PricingConfigCard />
+            </>
           )}
         </div>
 
@@ -688,6 +691,7 @@ export function ProductsPageClient() {
               const st = getProductDisplayStatus(p);
               const thumb = primaryProductImage(p);
               const eff = effectiveDiscountPercent(p, globalPct);
+              const base = baseOf(p);
               return (
                 <div
                   key={p.id}
@@ -743,11 +747,11 @@ export function ProductsPageClient() {
                     <div className="mt-auto flex items-center justify-between pt-2">
                       <div className="flex flex-col">
                         <span className="text-sm font-bold tabular-nums text-[#1a3c34]">
-                          {eff > 0 ? formatVnd(computeAdminFinalPrice(p.price, eff)) : formatVnd(p.price)}
+                          {eff > 0 ? formatVnd(computeAdminFinalPrice(base, eff)) : formatVnd(base)}
                         </span>
                         {eff > 0 && (
                           <span className="text-[11px] tabular-nums text-foreground/40 line-through">
-                            {formatVnd(p.price)}
+                            {formatVnd(base)}
                           </span>
                         )}
                       </div>
@@ -784,9 +788,13 @@ export function ProductsPageClient() {
                       <Trash2 className="size-3.5" />
                     </button>
                   </div>
+                  {isAutoPriced(p) && (
+                    <span className="text-[10px] font-semibold text-[#5a8f7a]">Giá tự động</span>
+                  )}
                 </div>
               );
             })}
+
           </div>
         ) : (
           // ── List / Table view ──
@@ -919,6 +927,9 @@ export function ProductsPageClient() {
                               </Button>
                             </div>
                           </Table.Cell>
+                          {isAutoPriced(p) && (
+                            <span className="text-[10px] font-semibold text-[#5a8f7a]">Giá tự động</span>
+                          )}
                         </Table.Row>
                       );
                     })}

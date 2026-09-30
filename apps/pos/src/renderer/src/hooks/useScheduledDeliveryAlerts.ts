@@ -3,6 +3,7 @@ import { fetchOrders } from '../api'
 import type { AdminOrder, OrderStatus } from '../types/common'
 import { DEFAULT_SCHEDULED_ALERT_CONFIG, type ScheduledAlertConfig } from '../types/common'
 import { KEYS, loadLocal } from '../lib/local-storage'
+import { getApiDateRange } from '@/components/OrdersModal'
 
 const ACTIVE_STATUSES: OrderStatus[] = ['pending', 'confirmed', 'preparing', 'ready']
 
@@ -19,9 +20,10 @@ export function useScheduledDeliveryAlerts(onAlert: (order: AdminOrder) => void,
         const cfg = loadLocal<ScheduledAlertConfig>(KEYS.scheduledAlert, DEFAULT_SCHEDULED_ALERT_CONFIG)
         if (!cfg.enabled) return
         try {
-            const today = new Date().toISOString().slice(0, 10)
-            const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)
-            const data = await fetchOrders(1, 200, today, tomorrow)
+            const { from, to } = getApiDateRange('week')
+            // const today = new Date().toISOString().slice(0, 10)
+            // const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)
+            const data = await fetchOrders(1, 200, from, to)
             const items = (data as { items: AdminOrder[] }).items ?? []
             const now = Date.now()
             for (const o of items) {

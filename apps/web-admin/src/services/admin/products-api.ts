@@ -1,6 +1,6 @@
 import { api } from "@/config/server";
 
-import type { AdminProduct, AdminProductStats, CreateProductBody, FetchAdminProductStatsParams, ProductRecipe, SetProductRecipeBody, UpdateProductBody } from "./types";
+import type { AdminProduct, AdminProductStats, CreateProductBody, FetchAdminProductStatsParams, PricingPreviewResponse, ProductRecipe, SetProductRecipeBody, UpdateProductBody } from "./types";
 
 export async function fetchAdminProductStats(
   params?: FetchAdminProductStatsParams,
@@ -71,3 +71,23 @@ export async function setAdminProductRecipe(
   return data;
 }
 
+
+export async function fetchAdminPricingPreview(params: {
+  productId?: string;
+  categoryId?: string;
+  categorySlug?: string;
+  markup?: number;
+}): Promise<PricingPreviewResponse> {
+  const { data } = await api.get<PricingPreviewResponse>(
+    "/admin/products/pricing/preview",
+    {
+      params: {
+        ...(params.productId ? { productId: params.productId } : {}),
+        ...(params.categoryId ? { categoryId: params.categoryId } : {}),
+        ...(params.categorySlug ? { categorySlug: params.categorySlug } : {}),
+        ...(params.markup !== undefined ? { markup: params.markup } : {}),
+      },
+    },
+  );
+  return data;
+}

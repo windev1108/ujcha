@@ -54,3 +54,15 @@ export function mergeSubsetOrder(full: string[], subsetNew: string[]): string[] 
     let i = 0;
     return full.map((id) => (subset.has(id) ? subsetNew[i++] : id));
 }
+
+export function parseCost(text: string): number | null | "invalid" {
+    const t = text.trim().replace(",", ".");
+    if (!t) return null;
+    const n = Number(t);
+    if (!Number.isFinite(n) || n < 0 || Math.round(n * 1e4) / 1e4 !== n) return "invalid";
+    return n;
+}
+
+export function formatCost(v: string): string {
+    return Number.parseFloat(v).toLocaleString("vi-VN", { maximumFractionDigits: 4 });
+}

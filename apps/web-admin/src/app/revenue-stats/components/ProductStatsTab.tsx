@@ -22,6 +22,12 @@ import { fetchAdminProductStats } from "@/services/admin/products-api";
 const forest = "#1a3c34";
 const grid = "rgba(0,0,0,0.06)";
 const palette = ["#1a3c34", "#5a8f7a", "#d97706", "#dc2626", "#2563eb", "#7c3aed", "#0891b2", "#be185d"];
+const UNCOSTED_REASON_LABEL: Record<string, string> = {
+  no_recipe: "chưa có công thức",
+  missing_cost: "thiếu giá vốn nguyên liệu",
+  missing_options: "đơn không có tuỳ chọn (vd đơn ngoài)",
+  topping_no_recipe: "topping chưa có định lượng",
+};
 
 type RangeKey = "7" | "30" | "90";
 
@@ -32,10 +38,23 @@ function rangeToFrom(range: RangeKey): string {
   d.setHours(0, 0, 0, 0);
   return d.toISOString();
 }
-
+function StatCard({ label, value, accent }: { label: string; value: string | null; accent: string }) {
+  return (
+    <div className="flex flex-col gap-1 rounded-2xl border border-black/8 bg-white p-4">
+      <span className={`text-lg font-bold tabular-nums sm:text-xl ${accent}`}>
+        {value === null ? (
+          <span className="inline-block h-6 w-16 animate-pulse rounded-lg bg-black/8" />
+        ) : (
+          value
+        )}
+      </span>
+      <span className="text-[11px] font-semibold text-foreground/55">{label}</span>
+    </div>
+  );
+}
 export function ProductStatsTab() {
   const [range, setRange] = useState<RangeKey>("30");
-  const [metric, setMetric] = useState<"revenue" | "quantity">("revenue");
+
   const from = useMemo(() => rangeToFrom(range), [range]);
 
   const { data, isLoading } = useQuery({
@@ -43,12 +62,22 @@ export function ProductStatsTab() {
     queryFn: () => fetchAdminProductStats({ from, limit: 10 }),
   });
 
-  const topList = metric === "revenue" ? data?.topByRevenue : data?.topByQuantity;
+  const [metric, setMetric] = useState<"revenue" | "quantity" | "profit">("revenue");
+
+  const ov = data?.overview;
+  const metricLabel = { revenue: "doanh thu", quantity: "số lượng", profit: "lợi nhuận" }[metric];
+  const topList =
+    metric === "revenue" ? data?.topByRevenue
+      : metric === "profit" ? data?.topByProfit
+        : data?.topByQuantity;
   const chartData = (topList ?? []).map((p) => ({
     name: p.name.length > 18 ? `${p.name.slice(0, 18)}…` : p.name,
     fullName: p.name,
-    value: metric === "revenue" ? p.revenue : p.quantitySold,
+    value: metric === "revenue" ? p.revenue : metric === "profit" ? p.profit : p.quantitySold,
+    margin: p.marginPercent,
+    coverage: p.costCoveragePercent,
   }));
+
   const categoryData = (data?.categoryBreakdown ?? []).map((c, i) => ({
     name: c.categoryName,
     value: c.revenue,
@@ -75,28 +104,33 @@ export function ProductStatsTab() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {(
-          [
-            { label: "Doanh thu", value: data ? formatVnd(data.overview.totalRevenue) : null, accent: "text-[#1a3c34]" },
-            { label: "Số món đã bán", value: data ? data.overview.totalQuantitySold.toLocaleString("vi-VN") : null, accent: "text-emerald-700" },
-            { label: "Đơn hàng", value: data ? data.overview.totalOrders.toLocaleString("vi-VN") : null, accent: "text-blue-700" },
-            { label: "TB / đơn", value: data ? formatVnd(data.overview.avgOrderValue) : null, accent: "text-amber-700" },
-          ] as const
-        ).map((s) => (
-          <div key={s.label} className="flex flex-col gap-1 rounded-2xl border border-black/8 bg-white p-4">
-            <span className={`text-lg font-bold tabular-nums sm:text-xl ${s.accent}`}>
-              {isLoading || s.value === null ? (
-                <span className="inline-block h-6 w-16 animate-pulse rounded-lg bg-black/8" />
-              ) : (
-                s.value
-              )}
-            </span>
-            <span className="text-[11px] font-semibold text-foreground/55">{s.label}</span>
-          </div>
-        ))}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <StatCard label="Giá vốn ước tính" value={ov ? formatVnd(ov.totalCost) : null} accent="text-foreground/70" />
+        <StatCard
+          label="Lợi nhuận gộp"
+          value={ov ? formatVnd(ov.grossProfit) : null}
+          accent={ov && ov.grossProfit < 0 ? "text-red-600" : "text-emerald-700"}
+        />
+        <StatCard
+          label="Biên lợi nhuận"
+          value={ov ? (ov.profitMarginPercent != null ? `${ov.profitMarginPercent}%` : "—") : null}
+          accent="text-[#1a3c34]"
+        />
       </div>
-
+      {ov && ov.totalRevenue > 0 && (
+        <div className="rounded-xl bg-amber-50 px-4 py-3 text-xs text-amber-800 ring-1 ring-amber-200/80">
+          Giá vốn và lợi nhuận mới tính được cho <b>{ov.costCoveragePercent}%</b> doanh thu
+          {ov.uncostedQuantity > 0 && (
+            <>
+              {" "}({ov.uncostedQuantity.toLocaleString("vi-VN")} món chưa tính được:{" "}
+              {Object.entries(ov.uncostedReasons)
+                .map(([k, n]) => `${UNCOSTED_REASON_LABEL[k] ?? k} ${n}`)
+                .join(" · ")})
+            </>
+          )}
+          . Ước tính theo công thức và giá vốn hiện tại, chưa trừ giảm giá cấp đơn (voucher, điểm, giảm giá nhóm) và phí ship.
+        </div>
+      )}
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         <Card className="rounded-2xl border border-black/[0.06] bg-white shadow-[0_12px_40px_-24px_rgba(0,0,0,0.15)]">
           <CardContent className="flex flex-col gap-4 p-5 sm:p-6">
@@ -106,7 +140,7 @@ export function ProductStatsTab() {
                   Sản phẩm bán chạy
                 </p>
                 <p className="mt-1 text-sm text-foreground/60">
-                  Top 10 theo {metric === "revenue" ? "doanh thu" : "số lượng"}
+                  Top 10 theo {metricLabel}{metric === "profit" && " (chỉ phần đã có giá vốn)"}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-0.5 rounded-full border border-black/10 bg-white p-1 shadow-sm">
@@ -114,6 +148,7 @@ export function ProductStatsTab() {
                   [
                     ["revenue", "Doanh thu"],
                     ["quantity", "Số lượng"],
+                    ["profit", "Lợi nhuận"],
                   ] as const
                 ).map(([k, label]) => (
                   <button
@@ -132,7 +167,9 @@ export function ProductStatsTab() {
               <div className="h-[320px] animate-pulse rounded-xl bg-black/[0.04]" />
             ) : chartData.length === 0 ? (
               <div className="flex h-[200px] items-center justify-center text-sm text-foreground/40">
-                Chưa có đơn hàng đã thanh toán trong khoảng thời gian này.
+                {metric === "profit" && (ov?.totalRevenue ?? 0) > 0
+                  ? "Chưa tính được lợi nhuận: các món chưa có công thức hoặc giá vốn nguyên liệu."
+                  : "Chưa có đơn hàng đã thanh toán trong khoảng thời gian này."}
               </div>
             ) : (
               <div className="h-[320px] w-full min-h-[320px]">
@@ -147,8 +184,10 @@ export function ProductStatsTab() {
                       tickFormatter={(v) => {
                         if (metric === "quantity") return String(v);
                         const n = Number(v);
-                        if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}tr`;
-                        if (n >= 1000) return `${Math.round(n / 1000)}k`;
+                        const a = Math.abs(n);
+                        const sign = n < 0 ? "-" : "";
+                        if (a >= 1_000_000) return `${sign}${(a / 1_000_000).toFixed(1)}tr`;
+                        if (a >= 1000) return `${sign}${Math.round(a / 1000)}k`;
                         return String(n);
                       }}
                     />
@@ -157,18 +196,27 @@ export function ProductStatsTab() {
                       cursor={{ fill: "rgba(0,0,0,0.03)" }}
                       content={({ active, payload }) => {
                         if (!active || !payload?.length) return null;
-                        const d = payload[0]?.payload as { fullName: string; value: number };
+                        const d = payload[0]?.payload as { fullName: string; value: number; margin: number | null; coverage: number };
                         return (
                           <div style={{ borderRadius: 12, border: "1px solid rgba(0,0,0,0.06)", background: "#fff", padding: "10px 14px", boxShadow: "0 12px 40px -20px rgba(0,0,0,0.2)" }}>
                             <p style={{ fontSize: 12, fontWeight: 700, color: "#1a3c34" }}>{d.fullName}</p>
                             <p style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
                               {metric === "revenue" ? formatVnd(d.value) : `${d.value} món`}
                             </p>
+                            {metric === "profit" && d.margin != null && (
+                              <p style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>
+                                Biên {d.margin}% · đã tính {d.coverage}% doanh thu món
+                              </p>
+                            )}
                           </div>
                         );
                       }}
                     />
-                    <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={14} fill={forest} />
+                    <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={14} fill={forest}>
+                      {chartData.map((d, i) => (
+                        <Cell key={i} fill={d.value < 0 ? "#dc2626" : forest} />
+                      ))}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>

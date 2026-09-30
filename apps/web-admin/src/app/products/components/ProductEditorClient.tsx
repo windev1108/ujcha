@@ -31,14 +31,17 @@ import { adminKeys } from "@/services/admin/keys";
 import { fetchAdminCategories } from "@/services/admin/categories-api";
 import {
   createAdminProduct,
+  fetchAdminPricingPreview,
   fetchAdminProduct,
   fetchAdminProductRecipe,
   setAdminProductRecipe,
   updateAdminProduct,
 } from "@/services/admin/products-api";
-import type { AdminProduct, ProductOptionGroup, ProductRecipe, ProductTopping, RecipeGroupForm, RecipeItemForm, ToppingRecipeItemForm } from "@/services/admin/types";
+import type { AdminProduct, PricingMode, PricingPreviewItem, PricingPreviewStatus, ProductOptionGroup, ProductRecipe, ProductTopping, RecipeGroupForm, RecipeItemForm, ToppingRecipeItemForm } from "@/services/admin/types";
 import { fetchAdminIngredients } from "@/services/admin/ingredients-api";
 import { buildScopeKey, flattenGroups, groupsFromFlatItems } from "@/lib/functions";
+import { markupToInput, parseMarkupInput } from "@/lib/pricing-format";
+import { ProductPricingCard } from "./ProductPricingCard";
 
 function parseApiMessage(err: unknown): string {
   if (err && typeof err === "object" && "response" in err) {
@@ -70,6 +73,8 @@ function serializeProductFormSnapshot(input: {
   isAvailable: boolean;
   isSoldOut: boolean;
   isBestSeller: boolean;
+  pricingMode: PricingMode;
+  pricingMarkup: string;
 }): string {
   const urls = input.imageUrls.map((u) => u.trim()).filter(Boolean);
   const p = Number.parseFloat(input.price);
@@ -78,6 +83,7 @@ function serializeProductFormSnapshot(input: {
   const discountRounded = Number.isFinite(disc)
     ? Math.min(100, Math.max(0, disc))
     : 0;
+  const mk = parseMarkupInput(input.pricingMarkup);
   return JSON.stringify({
     sku: input.sku.trim(),
     name: input.name.trim(),
@@ -91,6 +97,8 @@ function serializeProductFormSnapshot(input: {
     isAvailable: input.isAvailable,
     isSoldOut: input.isSoldOut,
     isBestSeller: input.isBestSeller,
+    pricingMode: input.pricingMode,
+    pricingMarkup: mk.ok ? mk.value : input.pricingMarkup.trim(),
   });
 }
 
@@ -109,7 +117,108 @@ function snapshotFromAdminProduct(existing: AdminProduct): string {
     isAvailable: existing.isAvailable,
     isSoldOut: existing.isSoldOut ?? false,
     isBestSeller: existing.isBestSeller ?? false,
+    pricingMode: existing.pricingMode ?? "auto",
+    pricingMarkup: markupToInput(existing.pricingMarkupPercent),
   });
+}
+
+const PREVIEW_STATUS_TEXT: Record<Exclude<PricingPreviewStatus, "ok">, string> = {
+  no_recipe: "Chưa có công thức cho món này (hoặc chưa lưu). Lưu công thức để tính giá vốn.",
+  missing_cost: "Thiếu giá vốn của nguyên liệu trong công thức nên chưa tính được.",
+  zero_cost: "Tổng giá vốn bằng 0 — kiểm tra định lượng và giá vốn nguyên liệu.",
+};
+
+function PreviewRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-3 py-1 text-sm">
+      <span className="text-foreground/55">{label}</span>
+      <span className="text-right font-semibold tabular-nums text-[#1a3c34]">{children}</span>
+    </div>
+  );
+}
+
+function PricingPreviewPanel({
+  item,
+  isError,
+}: {
+  item?: PricingPreviewItem;
+  isError: boolean;
+}) {
+  if (isError) {
+    return <p className="text-xs text-red-600">Không tải được xem trước giá.</p>;
+  }
+  if (!item) return <div className="h-24 animate-pulse rounded-xl bg-black/5" />;
+
+  if (item.status !== "ok") {
+    return (
+      <div className="flex flex-col gap-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-800 ring-1 ring-amber-200/80">
+        <p>{PREVIEW_STATUS_TEXT[item.status]}</p>
+        {item.missingIngredients && item.missingIngredients.length > 0 && (
+          <p className="text-xs">
+            Cần nhập giá vốn cho: <b>{item.missingIngredients.join(", ")}</b>
+          </p>
+        )}
+        <p className="text-xs text-amber-700/80">
+          Khi chưa tính được, món dùng giá cố định như hiện tại.
+        </p>
+      </div>
+    );
+  }
+
+  const variantEntries = Object.entries(item.referenceVariant ?? {});
+  const diff = item.priceDiff ?? 0;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="rounded-xl bg-[#f7faf9] p-3 ring-1 ring-[#1a3c34]/10">
+        <PreviewRow label="Biến thể tính giá">
+          {variantEntries.length === 0 ? (
+            "Không có biến thể"
+          ) : (
+            <span className="flex flex-col items-end gap-0.5 font-medium">
+              {variantEntries.map(([group, value]) => (
+                <span key={group}>
+                  {group}: {value}{" "}
+                  <span className="text-xs font-normal text-foreground/45">
+                    ({item.referenceSource?.[group] === "default" ? "mặc định" : "giá thấp nhất"})
+                  </span>
+                </span>
+              ))}
+            </span>
+          )}
+        </PreviewRow>
+        <PreviewRow label="Giá vốn">{formatVnd(item.cost!)}</PreviewRow>
+        <PreviewRow label="Giá cố định hiện tại">{formatVnd(item.fixedPriceOfReference!)}</PreviewRow>
+        {item.actualMarkupPercent != null && item.foodCostPercent != null && (
+          <p className="pt-1 text-right text-xs text-foreground/50">
+            Đang lãi markup {item.actualMarkupPercent}% · food cost {item.foodCostPercent}%
+          </p>
+        )}
+      </div>
+
+      {item.previewPrice != null && (
+        <div className="rounded-xl border border-[#1a3c34]/15 p-3">
+          <p className="text-xs text-foreground/50">Giá theo markup đã nhập</p>
+          <p className="text-2xl font-bold tabular-nums text-[#1a3c34]">
+            {formatVnd(item.previewPrice)}
+          </p>
+          <p className="text-xs text-foreground/55">
+            {diff === 0
+              ? "Bằng giá cố định hiện tại"
+              : `${diff > 0 ? "Cao hơn" : "Thấp hơn"} giá cố định ${formatVnd(Math.abs(diff))}`}
+          </p>
+        </div>
+      )}
+
+      {item.warnings && item.warnings.length > 0 && (
+        <ul className="flex flex-col gap-1 rounded-xl bg-amber-50 p-3 text-xs text-amber-800 ring-1 ring-amber-200/80">
+          {item.warnings.map((w) => (
+            <li key={w}>• {w}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 type Props = { mode: "create" | "edit"; productId?: string };
@@ -161,6 +270,8 @@ export function ProductEditorClient({ mode, productId }: Props) {
   const [toppingRecipeItems, setToppingRecipeItems] = useState<ToppingRecipeItemForm[]>([]);
   const [loadedRecipe, setLoadedRecipe] = useState<ProductRecipe | null>(null);
   const createBaselineReadyRef = useRef(false);
+  const [pricingMode, setPricingMode] = useState<PricingMode>("auto");
+  const [pricingMarkupText, setPricingMarkupText] = useState("");
 
   const duplicateRecipeGroup = (gIdx: number) =>
     setRecipeGroups((prev) => {
@@ -196,7 +307,41 @@ export function ProductEditorClient({ mode, productId }: Props) {
         items: flattenGroups(recipeGroups),
         toppingItems: toppingRecipeItems,
       }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: ["admin", "products", productId, "pricing-preview"],
+      }),
   });
+  const [previewMarkupText, setPreviewMarkupText] = useState("150");
+  const [debouncedMarkupText, setDebouncedMarkupText] = useState("150");
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedMarkupText(previewMarkupText), 400);
+    return () => clearTimeout(t);
+  }, [previewMarkupText]);
+
+  // undefined = để trống (chỉ xem giá vốn); "invalid" = không gọi API
+  const previewMarkup = useMemo<number | undefined | "invalid">(() => {
+    const t = debouncedMarkupText.trim().replace(",", ".");
+    if (!t) return undefined;
+    const n = Number(t);
+    return Number.isFinite(n) && n >= 0 && n <= 10_000 ? n : "invalid";
+  }, [debouncedMarkupText]);
+
+  const {
+    data: pricingPreview,
+    isFetching: previewFetching,
+    isError: previewError,
+  } = useQuery({
+    queryKey: ["admin", "products", productId, "pricing-preview", previewMarkup ?? null],
+    queryFn: () =>
+      fetchAdminPricingPreview({
+        productId: productId!,
+        markup: previewMarkup === "invalid" ? undefined : previewMarkup,
+      }),
+    enabled: mode === "edit" && !!productId && previewMarkup !== "invalid",
+  });
+  const previewItem = pricingPreview?.items.find((i) => i.productId === productId);
 
   useEffect(() => {
     if (mode === "edit" && existing) {
@@ -215,6 +360,8 @@ export function ProductEditorClient({ mode, productId }: Props) {
       setIsSoldOut(existing.isSoldOut ?? false);
       setIsBestSeller(existing.isBestSeller ?? false);
       setBaselineSnapshot(snapshotFromAdminProduct(existing));
+      setPricingMode(existing.pricingMode ?? "auto");
+      setPricingMarkupText(markupToInput(existing.pricingMarkupPercent));
     } else if (mode === "create" && categories.length) {
       setCategoryId((id) => id || categories[0]!.id);
       if (!createBaselineReadyRef.current) {
@@ -233,6 +380,8 @@ export function ProductEditorClient({ mode, productId }: Props) {
             isAvailable: true,
             isSoldOut: false,
             isBestSeller: false,
+            pricingMode: "auto",
+            pricingMarkup: "",
           }),
         );
       }
@@ -248,6 +397,8 @@ export function ProductEditorClient({ mode, productId }: Props) {
       const p = Number.parseFloat(price);
       if (!Number.isFinite(p) || p < 0) throw new Error("INVALID_PRICE");
       if (!name.trim() || !categoryId) throw new Error("REQUIRED");
+      const mk = parseMarkupInput(pricingMarkupText);
+      if (!mk.ok) throw new Error("INVALID_MARKUP");
       const discRaw = Number.parseInt(discountPercent, 10);
       const disc = Number.isFinite(discRaw)
         ? Math.min(100, Math.max(0, discRaw))
@@ -259,11 +410,13 @@ export function ProductEditorClient({ mode, productId }: Props) {
         price: p,
         discountPercent: disc,
         imageUrls: urls,
-        optionGroups: optionGroups.length > 0 ? optionGroups : undefined,
-        toppings: toppings.length > 0 ? toppings : undefined,
+        optionGroups: mode === "edit" || optionGroups.length > 0 ? optionGroups : undefined,
+        toppings: mode === "edit" || toppings.length > 0 ? toppings : undefined,
         isAvailable,
         isSoldOut,
         isBestSeller,
+        pricingMode,
+        pricingMarkupPercent: mk.value
       };
       const skuTrim = sku.trim();
       if (mode === "create") {
@@ -285,6 +438,7 @@ export function ProductEditorClient({ mode, productId }: Props) {
       const msg = e instanceof Error ? e.message : parseApiMessage(e);
       if (msg === "INVALID_PRICE") setError("Giá không hợp lệ.");
       else if (msg === "REQUIRED") setError("Tên và danh mục là bắt buộc.");
+      else if (msg === "INVALID_MARKUP") setError("Markup không hợp lệ (0–10.000).");
       else setError(parseApiMessage(e));
     },
   });
@@ -306,6 +460,8 @@ export function ProductEditorClient({ mode, productId }: Props) {
         isAvailable,
         isSoldOut,
         isBestSeller,
+        pricingMode,
+        pricingMarkup: pricingMarkupText,
       }),
     [
       sku,
@@ -555,7 +711,7 @@ export function ProductEditorClient({ mode, productId }: Props) {
               </div>
               <div className={adminFieldStack}>
                 <Label className={adminLabelClassProduct}>
-                  Giá bán (VNĐ) *
+                  Giá cố định / dự phòng (VNĐ) *
                 </Label>
                 <Input
                   fullWidth
@@ -567,6 +723,12 @@ export function ProductEditorClient({ mode, productId }: Props) {
                   className={`w-full ${adminInputClass}`}
                   disabled={pending}
                 />
+                {existing?.pricing && existing.pricing.mode !== "fixed" && existing.pricing.autoPrice != null ? (
+                  <Description className="text-xs text-[#5a8f7a]">
+                    Đang áp dụng giá tự động{" "}
+                    <span className="font-semibold tabular-nums">{formatVnd(existing.pricing.autoPrice)}</span>; giá này chỉ dùng khi không tính được giá tự động.
+                  </Description>
+                ) : null}
                 {priceRange ? (
                   <Description className="text-xs text-foreground/50">
                     Giá hiển thị: từ{" "}
@@ -580,6 +742,7 @@ export function ProductEditorClient({ mode, productId }: Props) {
                     tuỳ biến thể đã chọn.
                   </Description>
                 ) : null}
+
               </div>
               <div className={adminFieldStack}>
                 <Label className={adminLabelClassProduct}>
@@ -1222,6 +1385,52 @@ export function ProductEditorClient({ mode, productId }: Props) {
               ) : null}
             </CardContent>
           </Card>
+          <ProductPricingCard
+            pricing={mode === "edit" ? existing?.pricing : undefined}
+            mode={pricingMode}
+            onModeChange={setPricingMode}
+            markupText={pricingMarkupText}
+            onMarkupChange={setPricingMarkupText}
+            disabled={pending}
+          />
+          {mode === "edit" && (
+            <Card className="rounded-2xl border border-black/6 shadow-sm">
+              <CardContent className="flex flex-col gap-4 p-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-bold uppercase tracking-wide text-[#1a3c34]">
+                    Xem trước giá theo giá vốn
+                  </h2>
+                  {previewFetching && (
+                    <span className="text-xs text-foreground/40">Đang tính…</span>
+                  )}
+                </div>
+                <p className="text-xs text-foreground/50">
+                  Chạy thử theo markup nhập bên dưới, không thay đổi giá bán. Giá thật do card
+                  &quot;Giá tự động&quot; và cấu hình toàn shop quyết định. Tính cho biến thể mặc định
+                  (nhóm nào chưa đặt mặc định thì lấy giá trị có phụ phí thấp nhất).
+                </p>
+                <div className={adminFieldStack}>
+                  <Label className={adminLabelClassProduct}>
+                    Lợi nhuận kỳ vọng thử (markup %)
+                  </Label>
+                  <Input
+                    fullWidth
+                    inputMode="decimal"
+                    value={previewMarkupText}
+                    onChange={(e) => setPreviewMarkupText(e.target.value)}
+                    placeholder="VD 150 → giá = giá vốn × 2,5"
+                    className={`w-full ${adminInputClass}`}
+                  />
+                  {previewMarkup === "invalid" && (
+                    <Description className="text-xs text-red-600">
+                      Markup không hợp lệ (0–10.000).
+                    </Description>
+                  )}
+                </div>
+                <PricingPreviewPanel item={previewItem} isError={previewError} />
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="rounded-2xl border border-black/6 shadow-sm">
             <CardContent className="flex flex-col gap-4 p-6">
