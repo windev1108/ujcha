@@ -1,5 +1,7 @@
 import {
   ConflictException,
+  HttpException,
+  HttpStatus,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -14,6 +16,8 @@ import { SessionService } from '../session/session.service';
 import { SmsService } from '../sms/sms.service';
 import { UserService } from '../user/user.service';
 import { PointService } from '../point/point.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
 
 export type AuthTokens = {
   accessToken: string;
@@ -32,7 +36,12 @@ export type SessionContext = {
 };
 
 const BCRYPT_ROUNDS = 10;
+const MAX_LOGIN_ATTEMPTS = 10;
+const LOCK_MINUTES = 30;
+const LOCK_SECONDS = LOCK_MINUTES * 60;
 
+const failKey = (key: string) => `login:fail:${key}`;
+const lockKey = (key: string) => `login:lock:${key}`;
 @Injectable()
 export class AuthService {
   constructor(
@@ -43,6 +52,8 @@ export class AuthService {
     private readonly smsService: SmsService,
     private readonly fraudService: FraudService,
     private readonly pointService: PointService,
+    private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
   ) { }
 
   /** Gửi OTP để đăng ký hoặc quên mật khẩu. */
@@ -130,21 +141,66 @@ export class AuthService {
 
     if (!user.password) {
       throw new UnauthorizedException({
-        message:
-          'Tài khoản này chưa thiết lập mật khẩu. Hãy dùng "Quên mật khẩu" để tạo mới.',
+        message: 'Tài khoản này chưa thiết lập mật khẩu.',
         code: 'PASSWORD_NOT_SET',
       });
     }
 
+    const key = `${ctx.ipAddress}:${ctx.deviceId}`;
+    await this.assertNotLocked(key);
+
     const matches = await bcrypt.compare(password, user.password);
-    if (!matches) {
-      throw new UnauthorizedException({
-        message: 'Mật khẩu không đúng.',
-        code: 'INVALID_PASSWORD',
-      });
+    if (!matches) return this.registerFailedLogin(key); // luôn throw
+
+    await this.redis.del(failKey(key));
+    return this.issueTokensAndSession(user, ctx);
+  }
+
+  private async assertNotLocked(key: string) {
+    const lock = await this.redis.get<{ lockedUntil: string }>(lockKey(key));
+    if (!lock) return; // key hết TTL là tự mở khoá
+    const lockedUntil = new Date(lock.lockedUntil);
+    if (lockedUntil > new Date())
+      throw this.accountLockedException(lockedUntil);
+  }
+
+  private async registerFailedLogin(key: string): Promise<never> {
+    const count = await this.redis.incrementWindow(failKey(key), LOCK_SECONDS);
+    const remaining = Math.max(0, MAX_LOGIN_ATTEMPTS - count);
+
+    if (count >= MAX_LOGIN_ATTEMPTS) {
+      const lockedUntil = new Date(Date.now() + LOCK_SECONDS * 1000);
+      await this.redis.set(
+        lockKey(key),
+        { lockedUntil: lockedUntil.toISOString() },
+        LOCK_SECONDS,
+      );
+      await this.redis.del(failKey(key));
+      throw this.accountLockedException(lockedUntil);
     }
 
-    return this.issueTokensAndSession(user, ctx);
+    throw new UnauthorizedException({
+      message: 'Mật khẩu không đúng.',
+      code: 'INVALID_PASSWORD',
+      remainingAttempts: remaining,
+      maxAttempts: MAX_LOGIN_ATTEMPTS,
+    });
+  }
+
+  private accountLockedException(lockedUntil: Date) {
+    const retryAfterSeconds = Math.max(
+      1,
+      Math.ceil((lockedUntil.getTime() - Date.now()) / 1000),
+    );
+    return new HttpException(
+      {
+        message: 'Tài khoản tạm khoá do nhập sai mật khẩu quá nhiều lần.',
+        code: 'ACCOUNT_LOCKED',
+        lockedUntil: lockedUntil.toISOString(),
+        retryAfterSeconds,
+      },
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
   }
 
   /** Đặt lại mật khẩu qua OTP (quên mật khẩu). */
@@ -165,6 +221,12 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
     await this.userService.updateUser(user.id, { password: passwordHash });
+
+    await Promise.all([
+      this.redis.delByPattern(`login:fail:${user.id}:*`),
+      this.redis.delByPattern(`login:lock:${user.id}:*`),
+    ]);
+    await this.sessionService.revokeAllSessions(user.id, 'password_reset');
   }
 
   /** Đổi mật khẩu khi đã đăng nhập. Sau khi đổi thành công, thu hồi mọi session khác để bảo vệ tài khoản. */

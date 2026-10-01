@@ -8,10 +8,29 @@ import { AuthSplitLayout } from "@/components/auth/AuthSplitLayout";
 import { useLocalizedHref } from "@/i18n/use-localized-href";
 import { useLoginMutation } from "@/services/auth/hooks";
 import { useTranslations } from "next-intl";
+import { parseApiError } from "@/lib/api-error";
 
-function axiosErrorMessage(e: unknown, fallback: string): string {
-  const err = e as { response?: { data?: { message?: string } }; message?: string };
-  return err.response?.data?.message ?? err.message ?? fallback;
+type TFn = ReturnType<typeof useTranslations>;
+
+function loginErrorMessage(e: unknown, t: TFn): string {
+  const { code, remainingAttempts, retryAfterSeconds } = parseApiError(e);
+
+  switch (code) {
+    case "USER_NOT_FOUND":
+      return t("error_user_not_found");
+    case "PASSWORD_NOT_SET":
+      return t("error_password_not_set");
+    case "INVALID_PASSWORD":
+      return remainingAttempts !== undefined
+        ? t("error_invalid_password_remaining", { remaining: remainingAttempts })
+        : t("error_invalid_password");
+    case "ACCOUNT_LOCKED":
+      return t("error_account_locked", {
+        minutes: Math.max(1, Math.ceil((retryAfterSeconds ?? 0) / 60)),
+      });
+    default:
+      return t("generic_error");
+  }
 }
 
 function isValidPhone(phone: string): boolean {
@@ -166,11 +185,10 @@ export function LoginFormCard() {
         <label className="flex cursor-pointer select-none items-center gap-2.5">
           <div
             onClick={() => setRememberMe((v) => !v)}
-            className={`flex size-4.5 items-center justify-center rounded border transition ${
-              rememberMe
-                ? "border-[#1a3c34] bg-[#1a3c34]"
-                : "border-black/20 bg-white"
-            }`}
+            className={`flex size-4.5 items-center justify-center rounded border transition ${rememberMe
+              ? "border-[#1a3c34] bg-[#1a3c34]"
+              : "border-black/20 bg-white"
+              }`}
           >
             {rememberMe && <Check className="size-3 stroke-[3] text-white" />}
           </div>
@@ -184,8 +202,8 @@ export function LoginFormCard() {
 
         {/* API error */}
         {login.isError && (
-          <div className="rounded-xl border border-red-100 bg-red-50 px-3.5 py-2.5 text-xs text-red-700">
-            {axiosErrorMessage(login.error, t("generic_error"))}
+          <div role="alert" className="rounded-xl border border-red-100 bg-red-50 px-3.5 py-2.5 text-xs text-red-700">
+            {loginErrorMessage(login.error, t)}
           </div>
         )}
 

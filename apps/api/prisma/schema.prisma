@@ -48,11 +48,10 @@ model User {
   emailMarketingEnabled Boolean   @default(false)
   /// Lần cuối upload avatar — giới hạn 1 lần / ngày.
   lastAvatarUploadAt    DateTime?
-
-  registrationIp       String?
-  registrationDeviceId String?
-  suspiciousAt         DateTime?
-  suspiciousReason     String?
+  registrationIp        String?
+  registrationDeviceId  String?
+  suspiciousAt          DateTime?
+  suspiciousReason      String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -60,6 +59,12 @@ model User {
   @@index([registrationIp])
   @@index([referredBy])
   @@index([registrationDeviceId])
+}
+model LoginAttempt {
+  key         String    @id        
+  failedCount Int       @default(0)
+  lockedUntil DateTime?
+  updatedAt   DateTime  @updatedAt
 }
 
 enum PointTransactionType {
@@ -227,8 +232,9 @@ model Category {
   updatedAt       DateTime  @updatedAt
   products        Product[]
 
-   /// null = kế thừa markup global.
+  /// null = kế thừa markup global.
   pricingMarkupPercent Decimal? @db.Decimal(7, 2)
+
   @@index([sortOrder])
 }
 
@@ -298,8 +304,8 @@ model Ingredient {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  costPerUnit       Decimal?  @db.Decimal(14, 4)
-  costUpdatedAt     DateTime?
+  costPerUnit   Decimal?  @db.Decimal(14, 4)
+  costUpdatedAt DateTime?
 
   recipeItems        ProductRecipeItem[]
   transactions       InventoryTransaction[]

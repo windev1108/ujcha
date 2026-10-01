@@ -1332,5 +1332,10 @@
     "sun": "Chủ nhật", "mon": "Thứ Hai", "tue": "Thứ Ba", "wed": "Thứ Tư",
     "thu": "Thứ Năm", "fri": "Thứ Sáu", "sat": "Thứ Bảy"
   }
-}
+},
+  "error_user_not_found": "Số điện thoại chưa được đăng ký.",
+  "error_password_not_set": "Tài khoản chưa thiết lập mật khẩu. Hãy dùng \"Quên mật khẩu\" để tạo mới.",
+  "error_invalid_password": "Mật khẩu không đúng.",
+  "error_invalid_password_remaining": "Mật khẩu không đúng. Bạn còn {remaining} lần thử.",
+  "error_account_locked": "Tài khoản tạm khoá do nhập sai quá nhiều lần. Vui lòng thử lại sau {minutes} phút hoặc dùng \"Quên mật khẩu\"."
 }

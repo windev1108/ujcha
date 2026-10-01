@@ -14,6 +14,8 @@ import { JwtTokensService } from './jwt-tokens.service';
 import { JwtAuthGuard } from './jwt.guard';
 import { JwtStrategy } from './jwt.strategy';
 import { PointModule } from '../point/point.module';
+import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
 
 @Module({
   imports: [
@@ -31,7 +33,14 @@ import { PointModule } from '../point/point.module';
     PointModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtTokensService, JwtStrategy, JwtAuthGuard],
+  providers: [
+    AuthService,
+    JwtTokensService,
+    JwtStrategy,
+    JwtAuthGuard,
+    PrismaService,
+    RedisService,
+  ],
   exports: [
     AuthService,
     JwtTokensService,

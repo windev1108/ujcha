@@ -33,6 +33,7 @@ export type SessionDeviceInfo = {
 export type RevokeReason =
   | 'logout'
   | 'password_change'
+  | 'password_reset'
   | 'device_limit'
   | 'reuse_detected'
   | 'relogin_same_device'
@@ -68,7 +69,7 @@ export class SessionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
-  ) {}
+  ) { }
 
   /**
    * Tạo session mới khi login/register/google-login.
@@ -174,12 +175,12 @@ export class SessionService {
       session.userId !== userId ||
       session.expiredAt <= new Date()
     ) {
-      if (session && session.userId === userId) {
-        this.logger.warn(
-          `Possible refresh token reuse detected for user ${userId}, session ${sessionId}`,
-        );
-        await this.revokeAllSessions(userId, 'reuse_detected');
-      }
+      // if (session && session.userId === userId) {
+      //   this.logger.warn(
+      //     `Possible refresh token reuse detected for user ${userId}, session ${sessionId}`,
+      //   );
+      //   await this.revokeAllSessions(userId, 'reuse_detected');
+      // }
       throw new UnauthorizedException({
         message: 'Phiên không tồn tại hoặc refresh token đã bị thu hồi.',
         code: 'REFRESH_SESSION_MISMATCH',
