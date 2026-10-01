@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { useNotificationStore } from "@/store/notification-store";
 import { useQuery } from "@tanstack/react-query";
 import { mergeMessages } from "@/lib/chat-messages";
+import { Avatar, AvatarFallback } from "@heroui/react";
 
 const PAGE_SIZE = 25;
 const MAX_IMAGE_MB = 10;
@@ -30,9 +31,13 @@ interface ChatBubbleProps {
   open?: boolean;
   stackIndex?: number;
   label?: string;
+  avatarText?: string;
+  hidden?: boolean;
+  onGone?: () => void;
   onViewOrder?: () => void;
   onOpenChange?: (open: boolean) => void;
   onIncoming?: (msg: ChatMessage) => void;
+  onHide?: () => void;
 }
 
 const SELF_SENDER_TYPES: ChatMessage["senderType"][] = ["customer", "guest"];
@@ -42,7 +47,7 @@ function isMine(msg: ChatMessage, myId?: string) {
   return SELF_SENDER_TYPES.includes(msg.senderType);
 }
 
-export function ChatBubble({ onViewOrder, label, stackIndex, kind, hostName, roomId, enabled, fetchMessages, sendMessage, myId, className, open: controlledOpen, onOpenChange, onIncoming }: ChatBubbleProps) {
+export function ChatBubble({ avatarText, onViewOrder, label, stackIndex, kind, hostName, roomId, enabled, hidden, onHide, onGone, fetchMessages, sendMessage, myId, className, open: controlledOpen, onOpenChange, onIncoming }: ChatBubbleProps) {
   const t = useTranslations();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -93,12 +98,17 @@ export function ChatBubble({ onViewOrder, label, stackIndex, kind, hostName, roo
       const res = await fetchMessages({ limit: PAGE_SIZE });
       setMessages((prev) => mergeMessages(prev, res.messages))
       setHasMore(res.hasMore);
-    } catch {
+    } catch (err) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 404 || status === 410) {
+        onGone?.();
+        return;
+      }
       setLoadError(true);
     } finally {
       setInitialLoading(false);
     }
-  }, [enabled, roomId, fetchMessages]);
+  }, [enabled, roomId, fetchMessages, onGone]);
 
   useEffect(() => {
     void loadInitial();
@@ -232,9 +242,17 @@ export function ChatBubble({ onViewOrder, label, stackIndex, kind, hostName, roo
   };
 
   if (!enabled) return null;
+  if (hidden) return null;
 
   return (
-    <div className={stacked ? undefined : `fixed bottom-5 right-5 z-[50] flex flex-col items-end gap-3 ${className ?? ""}`}>
+    <div
+      className={
+        stacked
+          ? `group fixed size-14 ${open ? "z-[55]" : "z-50"}`
+          : `fixed bottom-5 right-5 z-[50] flex flex-col items-end gap-3 ${className ?? ""}`
+      }
+      style={stacked ? { right: 20, bottom: 20 + stackIndex! * 76 } : undefined}
+    >
       <AnimatePresence>
         {open && (
           <motion.div
@@ -286,17 +304,20 @@ export function ChatBubble({ onViewOrder, label, stackIndex, kind, hostName, roo
         type="button"
         onClick={toggleOpen}
         aria-label={label ? `${t("chat_bubble_aria_label")} #${label}` : t("chat_bubble_aria_label")}
-        style={
-          stacked
-            ? { position: "fixed", right: 20, bottom: 20 + stackIndex! * 76, zIndex: 50 }
-            : undefined
-        }
         className="relative cursor-pointer flex size-14 items-center justify-center rounded-full bg-[#1a3c34] text-white shadow-[0_8px_24px_-6px_rgba(26,60,52,0.5)] transition hover:opacity-90"
       >
         <AnimatePresence mode="wait" initial={false}>
           {open ? (
             <motion.span key="x" initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.6, opacity: 0 }}>
               <X className="size-6" />
+            </motion.span>
+          ) : avatarText ? (
+            <motion.span key="avatar" initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.6, opacity: 0 }}>
+              <Avatar className="size-11 bg-white/15 ring-1 ring-white/30">
+                <AvatarFallback className="bg-transparent text-[13px] font-extrabold tracking-wide text-white">
+                  {avatarText}
+                </AvatarFallback>
+              </Avatar>
             </motion.span>
           ) : (
             <motion.span key="icon" initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.6, opacity: 0 }}>
@@ -321,6 +342,17 @@ export function ChatBubble({ onViewOrder, label, stackIndex, kind, hostName, roo
           </span>
         )} */}
       </button>
+      {stacked && onHide && !open && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onHide(); }}
+          aria-label={t("chat_dismiss")}
+          title={t("chat_dismiss")}
+          className="absolute -left-1.5 -top-1.5 flex size-5 cursor-pointer items-center justify-center rounded-full bg-white text-foreground/60 opacity-0 shadow ring-1 ring-black/10 transition hover:bg-red-50 hover:text-red-500 focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+        >
+          <X className="size-3" />
+        </button>
+      )}
     </div>
   );
 }

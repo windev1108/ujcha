@@ -57,7 +57,11 @@ export class ChatGateway {
   }
 
   broadcastToRoom(kind: ChatRoomKind, id: string, message: unknown) {
-    this.server.to(this.roomName(kind, id)).emit('message', message);
+    this.server.to(this.roomName(kind, id)).emit('message', {
+      ...(message as object),
+      roomKind: kind,
+      roomId: id,
+    });
   }
 
   notifyStaffNewMessage(kind: ChatRoomKind, id: string) {

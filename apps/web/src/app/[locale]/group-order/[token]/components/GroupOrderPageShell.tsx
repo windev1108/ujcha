@@ -85,7 +85,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { getDisplayName } from "@/lib/product-name";
 import { getDeviceId } from "@/hooks/useDeviceId";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
-import { extractErrorCode } from "@/lib/utils";
+import { chatAvatarText, extractErrorCode } from "@/lib/utils";
 import { StoreClosedDialog } from "@/components/common/StoreClosedDialog";
 import { fetchGroupChatMessages, sendGroupChatMessage } from "@/services/chat/api";
 import { ChatBubble } from "@/components/chat/ChatBubble";
@@ -2341,7 +2341,7 @@ export function GroupOrderPageShell() {
             {sessionToken && (
               <ChatBubble
                 kind="group"
-                hostName={host?.name ?? 'Đơn hàng nhóm'}
+                hostName={host?.name ?? t("group_order_session_title")}
                 roomId={state.id}
                 enabled={state.status !== "completed" && state.status !== "cancelled"}
                 fetchMessages={(opts) => fetchGroupChatMessages(token, sessionToken, opts)}

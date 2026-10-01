@@ -93,3 +93,9 @@ export function buildMapEmbedUrl(lat?: number | null, lng?: number | null, addre
     }
     return null
 }
+
+export function chatAvatarText(code?: string | null, len = 3) {
+  if (!code) return "";
+  const clean = code.replace(/[^a-zA-Z0-9]/g, "");
+  return clean.slice(-len).toUpperCase();
+}
