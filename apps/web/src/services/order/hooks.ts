@@ -17,6 +17,7 @@ import {
   type UpdateAddressPayload,
 } from './api'
 import { useAuthStore } from '@/store/auth-store'
+import { useChatDockStore } from '@/store/chat-dock-store'
 
 export const addressKeys = {
   list: ['addresses'] as const,
@@ -111,9 +112,10 @@ export function useCreateOrderMutation() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (payload: CreateOrderPayload) => createOrder(payload),
-    onSuccess: () => {
+    onSuccess: (order) => {
       queryClient.invalidateQueries({ queryKey: ['cart'] })
       queryClient.invalidateQueries({ queryKey: ['profile'] })
+      useChatDockStore.getState().register({ id: order.id, paymentCode: order.paymentCode });
     },
   })
 }

@@ -3,10 +3,9 @@
 import { useCategoriesQuery } from "@/services/category/hooks";
 import { AnimatePresence, motion } from "motion/react";
 import { easeOutSmooth } from "@/app/[locale]/(landing)/components/RevealSection";
-import { Plus, Search, X } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Search, X } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Tooltip } from "@heroui/react";
 import { OverflowPills } from "@/components/common/OverflowPills";
 
 type Props = {
@@ -16,50 +15,6 @@ type Props = {
   onSearchChange: (q: string) => void;
 };
 
-const PILL_GAP = 6; // gap-1.5
-const PLUS_WIDTH = 32; // size-8
-
-const pillClass = (active: boolean) =>
-  `shrink-0 xl:max-w-[210px]  lg:max-w-[150px]  max-w-[120px] truncate rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors ${active
-    ? "bg-kun-products-forest text-white shadow-sm"
-    : "bg-kun-filter-pill-bg text-foreground/80 hover:bg-black/[0.07]"
-  }`;
-
-function TruncatedButton({
-  label,
-  className,
-  onClick,
-  triggerClassName,
-}: {
-  label: string;
-  className: string;
-  onClick: () => void;
-  triggerClassName?: string;
-}) {
-  const ref = useRef<HTMLButtonElement>(null);
-  const [truncated, setTruncated] = useState(false);
-
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const check = () => setTruncated(el.scrollWidth > el.clientWidth + 1);
-    check();
-    const ro = new ResizeObserver(check);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [label]);
-
-  return (
-    <Tooltip delay={0.1} isDisabled={!truncated}>
-      <Tooltip.Content>{label}</Tooltip.Content>
-      <Tooltip.Trigger className={triggerClassName}>
-        <button ref={ref} type="button" onClick={onClick} className={className}>
-          {label}
-        </button>
-      </Tooltip.Trigger>
-    </Tooltip>
-  );
-}
 
 export function ProductFilters({ activeCategory, onCategoryChange, search, onSearchChange }: Props) {
   const t = useTranslations();
@@ -67,8 +22,6 @@ export function ProductFilters({ activeCategory, onCategoryChange, search, onSea
   const [showSearch, setShowSearch] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-
-  const allLabel = t("all");
   const items = useMemo(
     () => [
       { id: "", label: t("all") },

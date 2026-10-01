@@ -1338,5 +1338,10 @@
   "error_password_not_set": "No password set for this account. Use \"Forgot password\" to create one.",
   "error_invalid_password": "Incorrect password.",
   "error_invalid_password_remaining": "Incorrect password. You have {remaining} attempts left.",
-  "error_account_locked": "Account temporarily locked due to too many failed attempts. Try again in {minutes} minutes or use \"Forgot password\"."
+  "error_account_locked": "Account temporarily locked due to too many failed attempts. Try again in {minutes} minutes or use \"Forgot password\".",
+  "chat_preview_image": "Sent an image",
+  "chat_preview_sticker": "Sent a sticker",
+  "chat_toast_order_label": "Order #{code}",
+  "chat_toast_more": "{count} new messages",
+  "chat_view_order": "View order"
 }

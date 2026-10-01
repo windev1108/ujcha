@@ -27,6 +27,12 @@ interface ChatBubbleProps {
   sendMessage: (content: string, type?: ChatMessageType) => Promise<ChatMessage>;
   myId?: string;
   className?: string;
+  open?: boolean;
+  stackIndex?: number;
+  label?: string;
+  onViewOrder?: () => void;
+  onOpenChange?: (open: boolean) => void;
+  onIncoming?: (msg: ChatMessage) => void;
 }
 
 const SELF_SENDER_TYPES: ChatMessage["senderType"][] = ["customer", "guest"];
@@ -36,13 +42,8 @@ function isMine(msg: ChatMessage, myId?: string) {
   return SELF_SENDER_TYPES.includes(msg.senderType);
 }
 
-function sortAsc(list: ChatMessage[]) {
-  return [...list].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-}
-
-export function ChatBubble({ kind, hostName, roomId, enabled, fetchMessages, sendMessage, myId, className }: ChatBubbleProps) {
+export function ChatBubble({ onViewOrder, label, stackIndex, kind, hostName, roomId, enabled, fetchMessages, sendMessage, myId, className, open: controlledOpen, onOpenChange, onIncoming }: ChatBubbleProps) {
   const t = useTranslations();
-  const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -53,6 +54,8 @@ export function ChatBubble({ kind, hostName, roomId, enabled, fetchMessages, sen
   const [uploadingImage, setUploadingImage] = useState(false);
   const [closed, setClosed] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [innerOpen, setInnerOpen] = useState(false);
+  const stacked = stackIndex !== undefined;
   const { data: stickers = [] } = useQuery({
     queryKey: ["chat-stickers"],
     queryFn: fetchChatStickers,
@@ -64,9 +67,16 @@ export function ChatBubble({ kind, hostName, roomId, enabled, fetchMessages, sen
   const hasMoreRef = useRef(false);
   hasMoreRef.current = hasMore;
   const loadingMoreRef = useRef(false);
+  const seenIdsRef = useRef(new Set<string>())
+  const open = controlledOpen ?? innerOpen;
+  const setOpen = useCallback((v: boolean) => {
+    setInnerOpen(v);
+    onOpenChange?.(v);
+  }, [onOpenChange]);
   const openRef = useRef(open);
   openRef.current = open;
-  const seenIdsRef = useRef(new Set<string>())
+
+  useEffect(() => { if (open) setUnreadCount(0); }, [open]);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   useEffect(() => {
@@ -131,21 +141,24 @@ export function ChatBubble({ kind, hostName, roomId, enabled, fetchMessages, sen
       if (seenIdsRef.current.has(msg.id)) return
       seenIdsRef.current.add(msg.id)
       setMessages((prev) => mergeMessages(prev, [msg]))
-      if (!isMine(msg, myId)) {
-        if (kind !== 'group') {
-          audioRef.current?.play().catch(() => { });
-        }
-        if (!openRef.current) {
-          setUnreadCount((c) => c + 1);
-        }
-        // Badge trên tab trình duyệt — chỉ khi user không nhìn vào tab này
-        if (typeof document !== "undefined" && document.visibilityState === "hidden") {
-          const senderName = msg.displayName;
-          const notiMessage = kind === "group" ? t("chat_group_new_message", { name: hostName ?? "" }) : t("chat_bg_new_message", { name: senderName ?? "" })
-          useNotificationStore
-            .getState()
-            .addBgNotif(notiMessage);
-        }
+
+      if (isMine(msg, myId)) return
+
+      if (kind !== 'group') {
+        audioRef.current?.play().catch(() => { })
+      }
+
+      if (!openRef.current) {
+        setUnreadCount((c) => c + 1)
+        onIncoming?.(msg)
+      }
+
+      // Badge trên tab trình duyệt — chỉ khi user không nhìn vào tab này
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        const notiMessage = kind === "group"
+          ? t("chat_group_new_message", { name: hostName ?? "" })
+          : t("chat_bg_new_message", { name: msg.displayName ?? "" })
+        useNotificationStore.getState().addBgNotif(notiMessage)
       }
     },
     onRoomClosed: () => setClosed(true),
@@ -153,12 +166,10 @@ export function ChatBubble({ kind, hostName, roomId, enabled, fetchMessages, sen
   });
 
   const toggleOpen = useCallback(() => {
-    setOpen((v) => {
-      const next = !v;
-      if (next) setUnreadCount(0);
-      return next;
-    });
-  }, []);
+    const next = !openRef.current;
+    setOpen(next);
+    if (next) setUnreadCount(0);
+  }, [setOpen]);
 
   const appendMessage = (msg: ChatMessage) => {
     setMessages((prev) => mergeMessages(prev, [msg]))
@@ -223,7 +234,7 @@ export function ChatBubble({ kind, hostName, roomId, enabled, fetchMessages, sen
   if (!enabled) return null;
 
   return (
-    <div className={`fixed bottom-5 right-5 z-[20] flex flex-col items-end gap-3 ${className ?? ""}`}>
+    <div className={stacked ? undefined : `fixed bottom-5 right-5 z-[50] flex flex-col items-end gap-3 ${className ?? ""}`}>
       <AnimatePresence>
         {open && (
           <motion.div
@@ -231,13 +242,19 @@ export function ChatBubble({ kind, hostName, roomId, enabled, fetchMessages, sen
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.96 }}
             transition={{ type: "spring", damping: 26, stiffness: 340 }}
-            className="w-[min(92vw,500px)] overflow-hidden rounded-3xl border border-black/6 bg-white shadow-[0_12px_40px_-12px_rgba(0,0,0,0.25)]"
+            className={`overflow-hidden rounded-3xl border border-black/6 bg-white shadow-[0_12px_40px_-12px_rgba(0,0,0,0.25)] ${stacked
+              ? "fixed bottom-5 right-[84px] z-[21] w-[min(calc(100vw-100px),500px)]"
+              : "w-[min(92vw,500px)]"
+              }`}
           >
             <ChatWindow
               key={roomId ?? "none"}
               stickers={stickers}
               title={kind === 'group' ? t("chat_group_order_title", { host: hostName ?? 'Guest' }) : t("chat_title")}
-              eyebrow={kind === 'group' ? t("chat_group_order_eyebrow") : t("chat_eyebrow")}
+              eyebrow={
+                label ? `#${label}`
+                  : kind === "group" ? t("chat_group_order_eyebrow") : t("chat_eyebrow")
+              }
               messages={messages}
               loading={initialLoading}
               loadError={loadError}
@@ -257,6 +274,8 @@ export function ChatBubble({ kind, hostName, roomId, enabled, fetchMessages, sen
               errorLabel={t("chat_load_error")}
               closedLabel={t("chat_closed_notice")}
               placeholder={t("chat_placeholder")}
+              onViewOrder={onViewOrder}
+              viewOrderLabel={t("chat_view_order")}
               myId={myId}
             />
           </motion.div>
@@ -266,7 +285,12 @@ export function ChatBubble({ kind, hostName, roomId, enabled, fetchMessages, sen
       <button
         type="button"
         onClick={toggleOpen}
-        aria-label={t("chat_bubble_aria_label")}
+        aria-label={label ? `${t("chat_bubble_aria_label")} #${label}` : t("chat_bubble_aria_label")}
+        style={
+          stacked
+            ? { position: "fixed", right: 20, bottom: 20 + stackIndex! * 76, zIndex: 50 }
+            : undefined
+        }
         className="relative cursor-pointer flex size-14 items-center justify-center rounded-full bg-[#1a3c34] text-white shadow-[0_8px_24px_-6px_rgba(26,60,52,0.5)] transition hover:opacity-90"
       >
         <AnimatePresence mode="wait" initial={false}>
@@ -290,6 +314,12 @@ export function ChatBubble({ kind, hostName, roomId, enabled, fetchMessages, sen
             {unreadCount > 9 ? "9+" : unreadCount}
           </motion.span>
         )}
+
+        {/* {stacked && label && (
+          <span className="absolute -bottom-4 left-1/2 max-w-[100px] -translate-x-1/2 truncate rounded-full bg-white px-1.5 py-0.5 text-[9px] font-bold text-[#1a3c34] shadow ring-1 ring-black/10">
+            #{label}
+          </span>
+        )} */}
       </button>
     </div>
   );

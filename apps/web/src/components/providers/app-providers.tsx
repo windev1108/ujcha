@@ -9,6 +9,7 @@ import { RefCodeCapture } from "@/components/common/RefCodeCapture";
 import { StoreStatusModal } from "@/components/common/StoreStatusModal";
 import { ProductionSecurityGuard } from "../auth/ProductionSecurityGuard";
 import { GlobalAnnouncementModal } from "../common/GlobalAnnouncementModal";
+import { GlobalChatDock } from "../chat/GlobalChatDock";
 
 function AuthPersistHydration() {
   const setHydrated = useAuthStore((s) => s.setHydrated);
@@ -47,6 +48,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <StoreStatusModal />
         <GlobalAnnouncementModal />
+        <GlobalChatDock />
         {children}
       </QueryClientProvider>
     </>

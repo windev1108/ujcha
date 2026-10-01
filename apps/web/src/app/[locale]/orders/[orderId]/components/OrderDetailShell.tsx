@@ -37,6 +37,7 @@ import { extractReorderRequestFromGroupOrder, extractReorderRequestFromOrder, re
 import { toast } from "sonner";
 import { fetchOrderChatMessages, sendOrderChatMessage } from "@/services/chat/api";
 import { ChatBubble } from "@/components/chat/ChatBubble";
+import { useChatDockStore } from "@/store/chat-dock-store";
 
 // ── formatters ────────────────────────────────────────────────────────────────
 
@@ -493,6 +494,14 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
     return storedId === hostParticipant.id;
   }, [groupOrder, groupToken, authUser?.id]);
 
+  useEffect(() => {
+    if (!order) return;
+    const canChat = !isGroupOrder || isGroupOrderHost; // giữ đúng rule cũ
+    if (!canChat) return;
+    const { register, unregister } = useChatDockStore.getState();
+    if (isTerminal) unregister(order.id);
+    else register({ id: order.id, paymentCode: order.paymentCode });
+  }, [order?.id, order?.paymentCode, isTerminal, isGroupOrder, isGroupOrderHost]);
   // Identify the current viewer's participant — must be before early returns (Rules of Hooks)
   const myGroupParticipant: GroupOrderParticipant | null = useMemo(() => {
     if (
@@ -1745,15 +1754,6 @@ export function OrderDetailShell({ paymentCode }: { paymentCode: string }) {
                 )}
               </div>
             </motion.div>
-          )}
-          {(!isGroupOrder || isGroupOrderHost) && (
-            <ChatBubble
-              kind="order"
-              roomId={order.id}
-              enabled={!isTerminal}
-              fetchMessages={(opts) => fetchOrderChatMessages(order.paymentCode, opts)}
-              sendMessage={(content, type) => sendOrderChatMessage(order.paymentCode, content, type)}
-            />
           )}
 
           {/* ── Payment summary ───────────────────────────────────── */}

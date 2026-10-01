@@ -14,6 +14,7 @@ import {
     ImagePlus,
     ImageOff,
     Plus,
+    ExternalLink,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage, Tooltip } from "@heroui/react";
 import { Categories, EmojiStyle, type EmojiClickData } from "emoji-picker-react";
@@ -182,6 +183,8 @@ export function ChatWindow({
     closedLabel = "Cuộc trò chuyện đã kết thúc",
     placeholder = "Nhập tin nhắn…",
     myId,
+    onViewOrder,
+    viewOrderLabel,
     stickers = []
 }: {
     title?: string;
@@ -194,6 +197,8 @@ export function ChatWindow({
     onLoadMore?: () => void;
     closed: boolean;
     input: string;
+    onViewOrder?: () => void;
+    viewOrderLabel?: string;
     onInputChange: (v: string) => void;
     onSend: () => void;
     onSendSticker: (url: string) => void;
@@ -586,6 +591,18 @@ export function ChatWindow({
                     {eyebrow && <p className="text-[10px] font-semibold uppercase tracking-widest text-foreground/40">{eyebrow}</p>}
                     <p className="truncate text-sm font-bold text-foreground">{title}</p>
                 </div>
+                {onViewOrder && (
+                    <button
+                        type="button"
+                        onClick={onViewOrder}
+                        title={viewOrderLabel}
+                        aria-label={viewOrderLabel}
+                        className="cursor-pointer flex h-7 items-center gap-1 rounded-full px-2.5 text-xs font-semibold text-[#1a3c34] hover:bg-[#1a3c34]/8"
+                    >
+                        <ExternalLink className="size-3.5" />
+                        {viewOrderLabel}
+                    </button>
+                )}
                 <button onClick={onClose} aria-label="Đóng"
                     className="cursor-pointer flex size-7 items-center justify-center rounded-full text-foreground/40 hover:bg-black/6">
                     <X className="size-4" />

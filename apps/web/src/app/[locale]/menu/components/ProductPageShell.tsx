@@ -30,7 +30,7 @@ function Shell() {
     <div className="min-h-screen bg-surface-soft">
       <ProductPageIntro />
 
-      <div className="sticky top-12 sm:top-16 z-30 border-b border-black/6 bg-white/95 backdrop-blur-sm">
+      <div className="sticky top-12 sm:top-16 z-10 border-b border-black/6 bg-white/95 backdrop-blur-sm">
         <div className="container py-2">
           <ProductFilters
             activeCategory={activeCategory}
