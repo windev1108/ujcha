@@ -1343,5 +1343,6 @@
   "chat_preview_sticker": "Sent a sticker",
   "chat_toast_order_label": "Order #{code}",
   "chat_toast_more": "{count} new messages",
-  "chat_view_order": "View order"
+  "chat_view_order": "View order",
+  "chat_dismiss": "Dismiss chat"
 }

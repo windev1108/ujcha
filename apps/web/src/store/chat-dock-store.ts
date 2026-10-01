@@ -19,6 +19,9 @@ interface ChatDockState {
     orders: TrackedOrder[];
     openId: string | null;
     toasts: ChatToast[];
+    hiddenIds: string[];
+    hide: (id: string) => void;
+    show: (id: string) => void;
     register: (o: { id: string; paymentCode: string }) => void;
     unregister: (id: string) => void;
     openChat: (id: string) => void;
@@ -34,6 +37,17 @@ export const useChatDockStore = create<ChatDockState>()(
             openId: null,
             open: false,
             toasts: [],
+            hiddenIds: [],
+
+            hide: (id) =>
+                set((s) => ({
+                    hiddenIds: s.hiddenIds.includes(id) ? s.hiddenIds : [...s.hiddenIds, id],
+                    openId: s.openId === id ? null : s.openId,
+                    toasts: s.toasts.filter((t) => t.orderId !== id),
+                })),
+
+            show: (id) =>
+                set((s) => ({ hiddenIds: s.hiddenIds.filter((x) => x !== id) })),
             register: ({ id, paymentCode }) =>
                 set((s) => {
                     const now = Date.now();
@@ -49,7 +63,11 @@ export const useChatDockStore = create<ChatDockState>()(
                 })),
 
             openChat: (id) =>
-                set((s) => ({ openId: id, toasts: s.toasts.filter((t) => t.orderId !== id) })),
+                set((s) => ({
+                    openId: id,
+                    hiddenIds: s.hiddenIds.filter((x) => x !== id),
+                    toasts: s.toasts.filter((t) => t.orderId !== id),
+                })),
 
             setOpenId: (id) =>
                 set((s) => ({

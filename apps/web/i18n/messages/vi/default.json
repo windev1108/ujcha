@@ -1342,5 +1342,6 @@
   "chat_preview_sticker": "Đã gửi một sticker",
   "chat_toast_order_label": "Đơn #{code}",
   "chat_toast_more": "{count} tin nhắn mới",
-  "chat_view_order": "Xem đơn hàng"
+  "chat_view_order": "Xem đơn hàng",
+  "chat_dismiss": "Đóng cuộc trò chuyện"
 }
