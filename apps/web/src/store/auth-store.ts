@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import type { AuthUser } from "@/services/auth/types";
+import { useChatDockStore } from "./chat-dock-store";
 
 type Tokens = {
   accessToken: string;
@@ -43,6 +44,8 @@ export const useAuthStore = create<AuthState>()(
         if (typeof document !== "undefined") {
           document.cookie = "ujcha-auth-state=; path=/; max-age=0; SameSite=Lax";
         }
+         const orders = useChatDockStore.getState().orders
+         orders.forEach((o) => useChatDockStore.getState().unregister(o.id))
         set({ user: null, accessToken: null, refreshToken: null });
       },
     }),
