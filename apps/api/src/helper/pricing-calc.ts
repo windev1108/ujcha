@@ -15,10 +15,10 @@ export type IngredientCostInfo = {
 };
 export type PricingConfigLite = {
   isEnabled: boolean;
-  defaultMarkupPercent: number | null;
+  defaultMarginPercent: number | null;
   roundingStep: number;
 };
-export type MarkupSource = 'product' | 'category' | 'global' | 'fixed';
+export type MarginSource = 'product' | 'category' | 'global' | 'fixed';
 export type PricingStatus =
   | 'ok'
   | 'fixed'
@@ -34,37 +34,50 @@ const num = (v: unknown): number | null => {
 };
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-/** cost × (1 + markup/100), làm tròn LÊN theo step. Dùng Decimal để không lệch số. */
+/** Biên lợi nhuận gộp hợp lệ: 0 ≤ x < 100 (tính trên GIÁ BÁN). */
+export const isValidMargin = (n: number | null | undefined): n is number =>
+  n != null && Number.isFinite(n) && n >= 0 && n < 100;
+
+/**
+ * Giá = cost ÷ (1 − biên/100), làm tròn LÊN theo step.
+ * Dùng Decimal để không lệch số.
+ */
 export function priceFromCost(
   cost: Prisma.Decimal,
-  markupPercent: number,
+  marginPercent: number,
   step = DEFAULT_ROUNDING_STEP,
 ): number {
   const s = step > 0 ? step : DEFAULT_ROUNDING_STEP;
+  if (!isValidMargin(marginPercent)) {
+    throw new RangeError(
+      `Biên lợi nhuận phải trong [0, 100): ${marginPercent}`,
+    );
+  }
   return cost
-    .mul(new Prisma.Decimal(markupPercent).div(100).add(1))
+    .div(new Prisma.Decimal(1).sub(new Prisma.Decimal(marginPercent).div(100)))
     .div(s)
     .ceil()
     .mul(s)
     .toNumber();
 }
 
-export function resolveMarkup(
-  product: { pricingMode: string; pricingMarkupPercent: unknown },
-  categoryMarkupPercent: unknown,
+export function resolveMargin(
+  product: { pricingMode: string; pricingMarginPercent: unknown },
+  categoryMarginPercent: unknown,
   config: PricingConfigLite,
-): { markupPercent: number | null; source: MarkupSource } {
+): { marginPercent: number | null; source: MarginSource } {
   if (!config.isEnabled || product.pricingMode === 'fixed') {
-    return { markupPercent: null, source: 'fixed' };
+    return { marginPercent: null, source: 'fixed' };
   }
-  const p = num(product.pricingMarkupPercent);
-  if (p != null) return { markupPercent: p, source: 'product' };
-  const c = num(categoryMarkupPercent);
-  if (c != null) return { markupPercent: c, source: 'category' };
-  if (config.defaultMarkupPercent != null) {
-    return { markupPercent: config.defaultMarkupPercent, source: 'global' };
+  // Giá trị ngoài [0, 100) bị bỏ qua, rơi xuống cấp kế tiếp.
+  const p = num(product.pricingMarginPercent);
+  if (isValidMargin(p)) return { marginPercent: p, source: 'product' };
+  const c = num(categoryMarginPercent);
+  if (isValidMargin(c)) return { marginPercent: c, source: 'category' };
+  if (isValidMargin(config.defaultMarginPercent)) {
+    return { marginPercent: config.defaultMarginPercent, source: 'global' };
   }
-  return { markupPercent: null, source: 'fixed' };
+  return { marginPercent: null, source: 'fixed' };
 }
 
 /** Tầng lõi: cost + giá của biến thể mốc. Khớp CHÍNH XÁC như trừ kho. */
@@ -72,7 +85,7 @@ export function computeCostAndPrice(input: {
   optionGroups: unknown;
   recipeRows: RecipeRowLike[];
   ingredients: Map<string, IngredientCostInfo>;
-  markupPercent: number | null;
+  marginPercent: number | null;
   roundingStep?: number;
 }) {
   const ref = buildReferenceSelection(
@@ -145,8 +158,10 @@ export function computeCostAndPrice(input: {
 
   let refPrice: number | null = null;
   let autoPrice: number | null = null;
-  if (input.markupPercent != null) {
-    refPrice = priceFromCost(cost, input.markupPercent, input.roundingStep);
+  if (input.marginPercent != null && !isValidMargin(input.marginPercent)) {
+    warnings.push('INVALID_MARGIN: biên lợi nhuận phải trong khoảng [0, 100).');
+  } else if (input.marginPercent != null) {
+    refPrice = priceFromCost(cost, input.marginPercent, input.roundingStep);
     autoPrice = refPrice - ref.delta; // BASELINE: giá khi mọi phụ phí = 0
     if (autoPrice <= 0) {
       warnings.push(
@@ -164,40 +179,43 @@ export function computeCostAndPrice(input: {
   };
 }
 
-/** Tầng recompute: áp quy tắc bật/tắt + markup 3 cấp. */
+/** Tầng recompute: áp quy tắc bật/tắt + biên lợi nhuận 3 cấp. */
 export function computeProductPricing(input: {
   product: {
     pricingMode: string;
-    pricingMarkupPercent: unknown;
+    pricingMarginPercent: unknown;
     optionGroups: unknown;
   };
-  categoryMarkupPercent: unknown;
+  categoryMarginPercent: unknown;
   config: PricingConfigLite;
   recipeRows: RecipeRowLike[];
   ingredients: Map<string, IngredientCostInfo>;
 }) {
-  const { markupPercent, source } = resolveMarkup(
+  const { marginPercent, source } = resolveMargin(
     input.product,
-    input.categoryMarkupPercent,
+    input.categoryMarginPercent,
     input.config,
   );
   const calc = computeCostAndPrice({
     optionGroups: input.product.optionGroups,
     recipeRows: input.recipeRows,
     ingredients: input.ingredients,
-    markupPercent,
+    marginPercent,
     roundingStep: input.config.roundingStep,
   });
 
   let status: PricingStatus = calc.status;
   let autoPrice: number | null = null;
-  if (markupPercent == null) {
+  if (marginPercent == null) {
     status = 'fixed'; // vẫn giữ cost để lưu costPrice nếu tính được
   } else if (calc.status === 'ok') {
-    if (calc.autoPrice! <= 0) status = 'baseline_non_positive';
-    else autoPrice = calc.autoPrice;
+    if (calc.autoPrice == null || calc.autoPrice <= 0) {
+      status = 'baseline_non_positive';
+    } else {
+      autoPrice = calc.autoPrice;
+    }
   }
-  return { ...calc, status, source, markupPercent, autoPrice };
+  return { ...calc, status, source, marginPercent, autoPrice };
 }
 export type PricingResult = ReturnType<typeof computeProductPricing>;
 
@@ -205,7 +223,7 @@ export type PricingResult = ReturnType<typeof computeProductPricing>;
 export function buildPricingSnapshot(r: PricingResult) {
   return {
     source: r.source,
-    markupPercent: r.markupPercent,
+    marginPercent: r.marginPercent,
     refVariant: r.refVariant,
     refSource: r.refSource,
     refDelta: r.refDelta,
@@ -238,18 +256,19 @@ export function buildPricingView(row: {
   const listPrice = effectiveBasePrice + (num(snap?.refDelta) ?? 0); // giá của biến thể mốc
   return {
     mode: row.pricingMode,
-    source: (snap?.source as MarkupSource | undefined) ?? 'fixed',
-    markupPercent: num(snap?.markupPercent),
+    source: (snap?.source as MarginSource | undefined) ?? 'fixed',
+    marginPercent: num(snap?.marginPercent),
     costPrice,
     autoPrice,
     effectiveBasePrice,
-    actualMarkupPercent:
-      costPrice && costPrice > 0
-        ? Math.round((listPrice / costPrice - 1) * 1000) / 10
+    // Biên lợi nhuận gộp thực tế trên giá niêm yết (cùng định nghĩa với dashboard doanh thu).
+    actualMarginPercent:
+      costPrice != null && costPrice > 0 && listPrice > 0
+        ? Math.round((1 - costPrice / listPrice) * 1000) / 10
         : null,
     status:
       (snap?.status as PricingStatus | undefined) ?? ('not_computed' as const),
-    warnings: Array.isArray(snap?.warnings) ? (snap!.warnings as string[]) : [],
+    warnings: Array.isArray(snap?.warnings) ? (snap.warnings as string[]) : [],
     computedAt: row.pricingComputedAt,
   };
 }

@@ -149,5 +149,5 @@ export class CreateProductDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   @Max(10000)
-  pricingMarkupPercent?: number | null;
+  pricingMarginPercent?: number | null;
 }

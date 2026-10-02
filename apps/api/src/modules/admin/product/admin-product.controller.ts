@@ -31,6 +31,7 @@ import { ProductService } from '../../product/product.service';
 import { SetProductRecipeDto } from '../ingredients/dto/set-product-recipe.dto';
 import { ResolveRecipeBatchDto } from './dto/resolve-recipe-batch.dto';
 import { PricingCostService } from '../../pricing/pricing-cost.service';
+import { isValidMargin } from '../../../helper/pricing-calc';
 
 @ApiTags('admin-products')
 @ApiBearerAuth('admin-access-token')
@@ -51,29 +52,29 @@ export class AdminProductController {
   @ApiQuery({ name: 'categoryId', required: false, format: 'uuid' })
   @ApiQuery({ name: 'categorySlug', required: false })
   @ApiQuery({
-    name: 'markup',
+    name: 'margin',
     required: false,
     description:
-      'Markup % trên cost. VD 150 → giá = cost × 2.5, làm tròn lên 1.000đ',
+      'Biên lợi nhuận gộp % trên giá bán (0 ≤ x < 100). VD 60 → giá = cost ÷ 0.4, làm tròn lên 1.000đ',
   })
   pricingPreview(
     @Query('categoryId') categoryId?: string,
     @Query('categorySlug') categorySlug?: string,
-    @Query('markup') markup?: string,
+    @Query('margin') margin?: string,
     @Query('productId', new ParseUUIDPipe({ optional: true })) productId?: string,
   ) {
-    const n = markup ? Number(markup) : undefined;
-    if (n !== undefined && (!Number.isFinite(n) || n < 0 || n > 10_000)) {
+    const n = margin ? Number(margin) : undefined;
+    if (n !== undefined && !isValidMargin(n)) {
       throw new BadRequestException({
-        message: 'markup không hợp lệ.',
-        code: 'PRICING_MARKUP_INVALID',
+        message: 'Biên lợi nhuận phải từ 0 đến dưới 100%.',
+        code: 'PRICING_MARGIN_INVALID',
       });
     }
     return this.pricingCost.preview({
       productId,
       categoryId,
       categorySlug,
-      markupPercent: n,
+      marginPercent: n,
     });
   }
 

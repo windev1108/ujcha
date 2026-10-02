@@ -17,7 +17,7 @@ export class AdminCategoryService {
     private readonly prisma: PrismaService,
     private readonly pricingService: PricingService
 
-  ) {}
+  ) { }
 
   async list() {
     return this.prisma.category.findMany({
@@ -53,8 +53,8 @@ export class AdminCategoryService {
         nameTranslation: normalizeTranslation(
           dto.nameTranslation,
         ) as unknown as Prisma.InputJsonValue,
-        ...(dto.pricingMarkupPercent != null && {
-          pricingMarkupPercent: new Prisma.Decimal(dto.pricingMarkupPercent),
+        ...(dto.pricingMarginPercent != null && {
+          pricingMarginPercent: new Prisma.Decimal(dto.pricingMarginPercent),
         }),
       },
       include: { _count: { select: { products: true } } },
@@ -84,16 +84,16 @@ export class AdminCategoryService {
             dto.nameTranslation,
           ) as unknown as Prisma.InputJsonValue,
         }),
-        ...(dto.pricingMarkupPercent !== undefined && {
-          pricingMarkupPercent:
-            dto.pricingMarkupPercent === null
+        ...(dto.pricingMarginPercent !== undefined && {
+          pricingMarginPercent:
+            dto.pricingMarginPercent === null
               ? null
-              : new Prisma.Decimal(dto.pricingMarkupPercent),
+              : new Prisma.Decimal(dto.pricingMarginPercent),
         }),
       },
       include: { _count: { select: { products: true } } },
     });
-    if (dto.pricingMarkupPercent !== undefined) {
+    if (dto.pricingMarginPercent !== undefined) {
       await this.pricingService.recomputeQuietly({ categoryId: id });
     }
     return updated;

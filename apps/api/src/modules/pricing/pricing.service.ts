@@ -41,7 +41,7 @@ export class PricingService {
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
     private readonly pricingConfig: PricingConfigService,
-  ) {}
+  ) { }
 
   /** Dùng ở các hook: lỗi recompute không được làm hỏng thao tác chính (đã có cron đêm làm lưới an toàn). */
   async recomputeQuietly(scope: RecomputeScope = {}) {
@@ -81,12 +81,12 @@ export class PricingService {
       select: {
         id: true,
         pricingMode: true,
-        pricingMarkupPercent: true,
+        pricingMarginPercent: true,
         optionGroups: true,
         autoPrice: true,
         costPrice: true,
         pricingSnapshotJson: true,
-        category: { select: { pricingMarkupPercent: true } },
+        category: { select: { pricingMarginPercent: true } },
       },
     });
 
@@ -123,7 +123,7 @@ export class PricingService {
     for (const p of products) {
       const r = computeProductPricing({
         product: p,
-        categoryMarkupPercent: p.category.pricingMarkupPercent,
+        categoryMarginPercent: p.category.pricingMarginPercent,
         config,
         recipeRows: rowsByProduct.get(p.id) ?? [],
         ingredients,

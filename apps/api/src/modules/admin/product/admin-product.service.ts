@@ -128,8 +128,8 @@ export class AdminProductService {
         isBestSeller: dto.isBestSeller ?? false,
         discountPercent: clampDiscountPercent(dto.discountPercent, 0),
         ...(dto.pricingMode !== undefined && { pricingMode: dto.pricingMode }),
-        ...(dto.pricingMarkupPercent != null && {
-          pricingMarkupPercent: new Prisma.Decimal(dto.pricingMarkupPercent),
+        ...(dto.pricingMarginPercent != null && {
+          pricingMarginPercent: new Prisma.Decimal(dto.pricingMarginPercent),
         }),
       },
       include: { category: { select: { id: true, name: true, slug: true } } },
@@ -226,11 +226,11 @@ export class AdminProductService {
           discountPercent: clampDiscountPercent(dto.discountPercent),
         }),
         ...(dto.pricingMode !== undefined && { pricingMode: dto.pricingMode }),
-        ...(dto.pricingMarkupPercent !== undefined && {
-          pricingMarkupPercent:
-            dto.pricingMarkupPercent === null
+        ...(dto.pricingMarginPercent !== undefined && {
+          pricingMarginPercent:
+            dto.pricingMarginPercent === null
               ? null
-              : new Prisma.Decimal(dto.pricingMarkupPercent),
+              : new Prisma.Decimal(dto.pricingMarginPercent),
         }),
       },
       include: { category: { select: { id: true, name: true, slug: true } } },
@@ -916,5 +916,6 @@ function normalizeProductRow<
       pricing.effectiveBasePrice,
       effectiveDiscount,
     ),
+    pricing,
   };
 }

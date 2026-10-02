@@ -47,9 +47,14 @@ export class UpdateCategoryDto {
   @IsObject()
   nameTranslation?: Record<string, string>;
 
+  @ApiPropertyOptional({
+    nullable: true,
+    description:
+      'Biên lợi nhuận gộp mục tiêu (%) trên giá bán, 0 ≤ x < 100. null = kế thừa global.',
+  })
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
-  @Max(10000)
-  pricingMarkupPercent?: number | null; // null = xoá override, kế thừa global
+  @Max(99.99)
+  pricingMarginPercent?: number | null;
 }

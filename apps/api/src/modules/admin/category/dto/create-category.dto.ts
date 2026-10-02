@@ -56,5 +56,5 @@ export class CreateCategoryDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   @Max(10000)
-  pricingMarkupPercent?: number | null; // null = xoá override, kế thừa global
+  pricingMarginPercent?: number | null;
 }

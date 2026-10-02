@@ -28,15 +28,15 @@ export class PricingCostService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly pricingConfig: PricingConfigService,
-  ) {}
+  ) { }
 
   async preview(params: {
     productId?: string;
     categoryId?: string;
     categorySlug?: string;
-    markupPercent?: number;
+    marginPercent?: number;
   }) {
-    const { productId, categoryId, categorySlug, markupPercent } = params;
+    const { productId, categoryId, categorySlug, marginPercent } = params;
     const products = await this.prisma.product.findMany({
       where: productId
         ? { id: productId }
@@ -92,7 +92,7 @@ export class PricingCostService {
         p,
         rowsByProduct.get(p.id) ?? [],
         ingredients,
-        markupPercent,
+        marginPercent,
         roundingStep,
       ),
     );
@@ -100,7 +100,7 @@ export class PricingCostService {
       (acc, it) => ({ ...acc, [it.status]: (acc[it.status] ?? 0) + 1 }),
       { total: items.length },
     );
-    return { markupPercent: markupPercent ?? null, summary, items };
+    return { marginPercent: marginPercent ?? null, summary, items };
   }
 
   private analyze(
@@ -115,7 +115,7 @@ export class PricingCostService {
     },
     rows: RecipeRow[],
     ingredients: Map<string, IngredientInfo>,
-    markupPercent: number | undefined,
+    marginPercent: number | undefined,
     roundingStep: number,
   ) {
     const fixedPrice = Number(product.price.toString());
@@ -123,7 +123,7 @@ export class PricingCostService {
       optionGroups: product.optionGroups,
       recipeRows: rows,
       ingredients,
-      markupPercent: markupPercent ?? null,
+      marginPercent: marginPercent ?? null,
       roundingStep,
     });
 
@@ -152,14 +152,15 @@ export class PricingCostService {
 
     const costN = calc.cost;
     const listPrice = fixedPrice + calc.refDelta;
-    const previewPrice = calc.refPrice; // null khi không truyền markup
+    const previewPrice = calc.refPrice; // null khi không truyền biên
     return {
       ...base,
       status: 'ok' as CostStatus,
       cost: costN,
       fixedPriceOfReference: listPrice,
-      actualMarkupPercent:
-        listPrice > 0 ? Math.round((listPrice / costN - 1) * 1000) / 10 : null,
+      // Biên lợi nhuận gộp thực tế trên giá niêm yết (cùng định nghĩa với dashboard doanh thu).
+      actualMarginPercent:
+        listPrice > 0 ? Math.round((1 - costN / listPrice) * 1000) / 10 : null,
       foodCostPercent:
         listPrice > 0 ? Math.round((costN / listPrice) * 1000) / 10 : null,
       previewPrice,

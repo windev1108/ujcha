@@ -5,11 +5,11 @@ import { RedisService } from '../redis/redis.service';
 import type { UpdatePricingConfigDto } from './dto/update-pricing-config.dto';
 import { PricingConfigLite } from '../../helper/pricing-calc';
 
-const KEY = 'ujcha:pricing:config';
+const KEY = 'ujcha:pricing:config:v2';
 const TTL = 30;
 const DEFAULTS: PricingConfigLite = {
   isEnabled: false,
-  defaultMarkupPercent: null,
+  defaultMarginPercent: null,
   roundingStep: 1000,
 };
 
@@ -32,10 +32,10 @@ export class PricingConfigService {
     const cfg: PricingConfigLite = row
       ? {
           isEnabled: row.isEnabled,
-          defaultMarkupPercent:
-            row.defaultMarkupPercent == null
+          defaultMarginPercent:
+            row.defaultMarginPercent == null
               ? null
-              : row.defaultMarkupPercent.toNumber(),
+              : row.defaultMarginPercent.toNumber(),
           roundingStep: row.roundingStep,
         }
       : DEFAULTS;
@@ -44,24 +44,24 @@ export class PricingConfigService {
   }
 
   async update(dto: UpdatePricingConfigDto): Promise<PricingConfigLite> {
-    const markup =
-      dto.defaultMarkupPercent === undefined
+    const margin =
+      dto.defaultMarginPercent === undefined
         ? undefined // không đổi
-        : dto.defaultMarkupPercent === null
+        : dto.defaultMarginPercent === null
           ? null // xoá
-          : new Prisma.Decimal(dto.defaultMarkupPercent);
+          : new Prisma.Decimal(dto.defaultMarginPercent);
 
     await this.prisma.pricingConfig.upsert({
       where: { id: 'default' },
       create: {
         id: 'default',
         isEnabled: dto.isEnabled ?? DEFAULTS.isEnabled,
-        defaultMarkupPercent: markup ?? null,
+        defaultMarginPercent: margin ?? null,
         roundingStep: dto.roundingStep ?? DEFAULTS.roundingStep,
       },
       update: {
         ...(dto.isEnabled !== undefined && { isEnabled: dto.isEnabled }),
-        ...(markup !== undefined && { defaultMarkupPercent: markup }),
+        ...(margin !== undefined && { defaultMarginPercent: margin }),
         ...(dto.roundingStep !== undefined && {
           roundingStep: dto.roundingStep,
         }),

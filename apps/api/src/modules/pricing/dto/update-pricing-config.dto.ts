@@ -12,12 +12,12 @@ export class UpdatePricingConfigDto {
   @IsBoolean()
   isEnabled?: boolean;
 
-  /** null = xoá markup mặc định. */
+  /** null = xoá margin mặc định. */
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   @Max(10000)
-  defaultMarkupPercent?: number | null;
+  defaultMarginPercent?: number | null;
 
   @IsOptional()
   @IsInt()
