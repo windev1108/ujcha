@@ -39,7 +39,7 @@ export type AdminCategory = {
   slug: string;
   thumbnail: string | null;
   sortOrder: number;
-  pricingMarkupPercent: string | null;
+  pricingMarginPercent: string | null;
   _count?: { products: number };
 };
 
@@ -117,7 +117,7 @@ export type AdminProduct = {
   createdAt?: string;
   updatedAt?: string;
   pricingMode: PricingMode;
-  pricingMarkupPercent: string | null;
+  pricingMarginPercent: string | null;
   pricing: ProductPricingInfo;
   category: { id: string; name: string; slug: string };
 };
@@ -164,7 +164,7 @@ export type CreateProductBody = {
   isBestSeller?: boolean;
   discountPercent?: number;
   pricingMode?: PricingMode;
-  pricingMarkupPercent?: number | null;
+  pricingMarginPercent?: number | null;
 };
 
 export type UpdateProductBody = Partial<CreateProductBody>;
@@ -175,7 +175,7 @@ export type CreateCategoryBody = {
   sortOrder?: number;
   thumbnail?: string | null;
   nameTranslation?: Record<string, string>;
-  pricingMarkupPercent?: number | null;
+  pricingMarginPercent?: number | null;
 };
 
 export type UpdateCategoryBody = Partial<CreateCategoryBody>;
@@ -1188,7 +1188,7 @@ export type PricingPreviewItem = {
   cost?: number;
   fixedPriceOfReference?: number;
   referenceSource?: Record<string, "default" | "lowest_price">;
-  actualMarkupPercent?: number;
+  actualMarginPercent?: number;
   foodCostPercent?: number;
   previewPrice?: number | null;
   priceDiff?: number | null;
@@ -1196,7 +1196,7 @@ export type PricingPreviewItem = {
 };
 
 export type PricingPreviewResponse = {
-  markupPercent: number | null;
+  marginPercent: number | null;
   summary: Record<string, number>;
   items: PricingPreviewItem[];
 };
@@ -1211,18 +1211,18 @@ export type ProductPricingStatus =
 export interface ProductPricingInfo {
   mode: PricingMode;
   source: PricingSource;
-  markupPercent: number | null;
+  marginPercent: number | null;
   costPrice: number | null;
   autoPrice: number | null;
   effectiveBasePrice: number;
-  actualMarkupPercent: number | null;
+  actualMarginPercent: number | null;
   status: ProductPricingStatus;
   warnings: string[];
   computedAt: string | null;
 }
 export interface PricingConfig {
   isEnabled: boolean;
-  defaultMarkupPercent: number | null;
+  defaultMarginPercent: number | null;
   roundingStep: number;
 }
 export interface PricingRecomputeResult { scanned: number; updated: number }

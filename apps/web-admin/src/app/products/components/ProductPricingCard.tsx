@@ -3,12 +3,13 @@
 import { Card, CardContent, Description, Input, Label } from "@heroui/react";
 
 import { adminFieldStack, adminInputClass, adminLabelClassProduct } from "@/lib/admin-form-classes";
-import { parseMarkupInput } from "@/lib/pricing-format";
+import { parseMarginInput, parseMarkupInput } from "@/lib/pricing-format";
 import { formatVnd } from "@/lib/product-display";
 import type { PricingMode, PricingSource, ProductPricingInfo, ProductPricingStatus } from "@/services/admin/types";
+import { MARGIN_HINT, MARGIN_MAX, MARGIN_MIN } from "@/lib/pricing-margin";
 
 const SOURCE_TEXT: Record<PricingSource, string> = {
-    product: "riêng của món", category: "từ danh mục", global: "mặc định toàn shop", fixed: "chưa có markup",
+    product: "riêng của món", category: "từ danh mục", global: "mặc định toàn shop", fixed: "chưa có biên lợi nhuận",
 };
 const STATUS_TEXT: Record<Exclude<ProductPricingStatus, "ok" | "fixed">, string> = {
     not_computed: "Chưa tính giá tự động cho món này.",
@@ -31,15 +32,15 @@ type Props = {
     pricing?: ProductPricingInfo;
     mode: PricingMode;
     onModeChange: (m: PricingMode) => void;
-    markupText: string;
-    onMarkupChange: (v: string) => void;
+    marginText: string;
+    onMarginChange: (v: string) => void;
     disabled: boolean;
 };
 
-export function ProductPricingCard({ pricing, mode, onModeChange, markupText, onMarkupChange, disabled }: Props) {
-    const parsed = parseMarkupInput(markupText);
-    const inherited = pricing && pricing.source !== "product" && pricing.markupPercent != null
-        ? `Kế thừa ${pricing.markupPercent}% (${SOURCE_TEXT[pricing.source]})`
+export function ProductPricingCard({ pricing, mode, onModeChange, marginText, onMarginChange, disabled }: Props) {
+    const parsed = parseMarginInput(marginText);
+    const inherited = pricing && pricing.source !== "product" && pricing.marginPercent != null
+        ? `Kế thừa ${pricing.marginPercent}% (${SOURCE_TEXT[pricing.source]})`
         : "Để trống = kế thừa danh mục / mặc định";
 
     return (
@@ -64,20 +65,20 @@ export function ProductPricingCard({ pricing, mode, onModeChange, markupText, on
                 </div>
 
                 <div className={adminFieldStack}>
-                    <Label className={adminLabelClassProduct}>Markup riêng của món (%)</Label>
+                    <Label className={adminLabelClassProduct}>Biên lợi nhuận gộp riêng của món (%)</Label>
                     <Input
                         fullWidth
                         inputMode="decimal"
-                        value={markupText}
-                        onChange={(e) => onMarkupChange(e.target.value)}
+                        value={marginText}
+                        onChange={(e) => onMarginChange(e.target.value)}
                         placeholder={inherited}
                         className={`w-full ${adminInputClass}`}
                         disabled={disabled || mode === "fixed"}
                     />
                     <Description className={`text-xs ${parsed.ok ? "text-foreground/45" : "text-red-600"}`}>
                         {parsed.ok
-                            ? "Ghi đè markup của danh mục và mặc định toàn shop. Chỉ có tác dụng khi công tắc giá tự động toàn shop đang bật."
-                            : "Markup không hợp lệ (0–10.000)."}
+                            ? `${MARGIN_HINT} Ghi đè biên của danh mục và mặc định toàn shop; chỉ có tác dụng khi công tắc giá tự động toàn shop đang bật.`
+                            : `Biên không hợp lệ (${MARGIN_MIN}–${MARGIN_MAX}%).`}
                     </Description>
                 </div>
 
@@ -86,19 +87,26 @@ export function ProductPricingCard({ pricing, mode, onModeChange, markupText, on
                         <p className="text-[11px] text-foreground/40">Kết quả của lần lưu gần nhất.</p>
                         {pricing.status === "ok" ? (
                             <div className="rounded-xl bg-[#f7faf9] p-3 ring-1 ring-[#1a3c34]/10">
-                                <Row label="Markup đang áp dụng">
-                                    {pricing.markupPercent}% <span className="text-xs font-normal text-foreground/45">({SOURCE_TEXT[pricing.source]})</span>
+                                <Row label="Biên đang áp dụng">
+                                    {pricing.marginPercent != null ? `${pricing.marginPercent}%` : "—"}{" "}
+                                    <span className="text-xs font-normal text-foreground/45">({SOURCE_TEXT[pricing.source]})</span>
                                 </Row>
                                 {pricing.costPrice != null && <Row label="Giá vốn">{formatVnd(pricing.costPrice)}</Row>}
                                 <Row label="Giá cơ bản tự động">{formatVnd(pricing.autoPrice!)}</Row>
-                                {pricing.actualMarkupPercent != null && (
-                                    <p className="pt-1 text-right text-xs text-foreground/50">Lãi thực tế {pricing.actualMarkupPercent}% trên giá vốn</p>
+                                {pricing.actualMarginPercent != null && (
+                                    <p className="pt-1 text-right text-xs text-foreground/50">
+                                        Biên thực tế{" "}
+                                        <span className={pricing.actualMarginPercent < 0 ? "font-semibold text-red-600" : ""}>
+                                            {pricing.actualMarginPercent}%
+                                        </span>{" "}
+                                        trên giá bán
+                                    </p>
                                 )}
                             </div>
                         ) : pricing.status === "fixed" ? (
                             <div className="rounded-xl bg-zinc-50 p-3 text-sm text-foreground/60 ring-1 ring-black/6">
                                 Đang dùng giá cố định{" "}
-                                {pricing.mode === "fixed" ? "(món đặt chế độ giữ giá cố định)." : "(chưa có markup áp dụng hoặc công tắc toàn shop đang tắt)."}
+                                {pricing.mode === "fixed" ? "(món đặt chế độ giữ giá cố định)." : "(chưa có biên lợi nhuận áp dụng hoặc công tắc toàn shop đang tắt)."}
                             </div>
                         ) : (
                             <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800 ring-1 ring-amber-200/80">

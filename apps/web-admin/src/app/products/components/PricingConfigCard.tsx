@@ -6,7 +6,7 @@ import { RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { useAppDialog } from "@/components/common/app-dialog-provider";
-import { markupToInput, parseMarkupInput } from "@/lib/pricing-format";
+import { marginToInput, markupToInput, parseMarginInput, parseMarkupInput } from "@/lib/pricing-format";
 import {
     fetchPricingConfig,
     pricingConfigKey,
@@ -14,6 +14,7 @@ import {
     updatePricingConfig,
 } from "@/services/admin/pricing-api";
 import { useAuthStore } from "@/store/auth-store";
+import { marginPriceExample } from "@/lib/pricing-margin";
 
 const STEPS = [500, 1000, 2000, 5000] as const;
 
@@ -32,7 +33,7 @@ export function PricingConfigCard() {
     const { data: cfg } = useQuery({ queryKey: pricingConfigKey, queryFn: fetchPricingConfig });
 
     const [enabled, setEnabled] = useState(false);
-    const [markupText, setMarkupText] = useState("");
+    const [marginText, setMarginText] = useState("");
     const [step, setStep] = useState<number>(1000);
     const [notice, setNotice] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -40,17 +41,21 @@ export function PricingConfigCard() {
     useEffect(() => {
         if (!cfg) return;
         setEnabled(cfg.isEnabled);
-        setMarkupText(markupToInput(cfg.defaultMarkupPercent));
+        setMarginText(marginToInput(cfg.defaultMarginPercent));
         setStep(cfg.roundingStep);
     }, [cfg]);
 
-    const parsed = parseMarkupInput(markupText);
+    const parsed = parseMarginInput(marginText);
+    const example =
+        parsed.ok && parsed.value != null
+            ? marginPriceExample(15000, parsed.value, step)
+            : null;
     const dirty =
         !!cfg &&
         (enabled !== cfg.isEnabled ||
             step !== cfg.roundingStep ||
             !parsed.ok ||
-            parsed.value !== cfg.defaultMarkupPercent);
+            parsed.value !== cfg.defaultMarginPercent);
 
     const refreshAll = () => {
         void queryClient.invalidateQueries({ queryKey: pricingConfigKey });
@@ -61,7 +66,7 @@ export function PricingConfigCard() {
         mutationFn: () =>
             updatePricingConfig({
                 isEnabled: enabled,
-                defaultMarkupPercent: parsed.ok ? parsed.value : null,
+                defaultMarginPercent: parsed.ok ? parsed.value : null,
                 roundingStep: step,
             }),
         onSuccess: (r) => {
@@ -87,7 +92,7 @@ export function PricingConfigCard() {
             const ok = await confirm({
                 title: enabled ? "Bật giá tự động?" : "Tắt giá tự động?",
                 description: enabled
-                    ? "Giá bán của các món đủ giá vốn và có markup sẽ đổi theo giá vốn ngay lập tức."
+                    ? "Giá bán của các món đủ giá vốn và có biên lợi nhuận sẽ đổi theo giá vốn ngay lập tức."
                     : "Mọi món sẽ quay về giá cố định ngay lập tức.",
                 tone: "danger",
                 confirmLabel: enabled ? "Bật" : "Tắt",
@@ -109,7 +114,7 @@ export function PricingConfigCard() {
                             Giá tự động theo giá vốn
                         </Label>
                         <Description className="text-[11px] text-foreground/50">
-                            Giá = giá vốn × (1 + markup%), làm tròn lên. Món chưa tính được giá vốn hoặc để chế độ
+                            Giá = giá vốn ÷ (1 − biên%), làm tròn lên. Món chưa tính được giá vốn hoặc để chế độ
                             "giữ giá cố định" vẫn dùng giá cố định. Tắt công tắc = mọi món về giá cố định.
                         </Description>
                     </div>
@@ -125,20 +130,24 @@ export function PricingConfigCard() {
 
                 <div className="grid gap-4 sm:grid-cols-2">
                     <div className="flex flex-col gap-1.5">
-                        <Label className="text-xs font-semibold text-foreground/60">Markup mặc định toàn shop (%)</Label>
+                        <Label className="text-xs font-semibold text-foreground/60">Biên lợi nhuận gộp mặc định toàn shop (%)</Label>
                         <Input
                             inputMode="decimal"
-                            value={markupText}
-                            onChange={(e) => setMarkupText(e.target.value)}
+                            value={marginText}
+                            onChange={(e) => setMarginText(e.target.value)}
                             placeholder="Để trống = không áp dụng mặc định"
                             className="h-9 rounded-full border border-black/10 bg-white px-3 text-sm"
                             disabled={locked}
                         />
                         {!parsed.ok ? (
-                            <Description className="text-xs text-red-600">Markup không hợp lệ (0–10.000).</Description>
+                            <Description className="text-xs text-red-600">Biên không hợp lệ (0–99,99%).</Description>
                         ) : (
                             <Description className="text-[11px] text-foreground/45">
-                                VD 150 → giá = giá vốn × 2,5. Markup của danh mục hoặc món sẽ ghi đè mức này.
+                                Biên tính trên giá bán, không phải trên giá vốn.{" "}
+                                {example != null && parsed.ok && parsed.value != null
+                                    ? `VD giá vốn 15.000đ, biên ${parsed.value}% → ${example.toLocaleString("vi-VN")}đ. `
+                                    : "VD giá vốn 15.000đ, biên 60% → 38.000đ. "}
+                                Biên của danh mục hoặc món sẽ ghi đè mức này.
                             </Description>
                         )}
                     </div>

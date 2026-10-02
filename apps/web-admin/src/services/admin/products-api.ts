@@ -76,7 +76,7 @@ export async function fetchAdminPricingPreview(params: {
   productId?: string;
   categoryId?: string;
   categorySlug?: string;
-  markup?: number;
+  margin?: number;
 }): Promise<PricingPreviewResponse> {
   const { data } = await api.get<PricingPreviewResponse>(
     "/admin/products/pricing/preview",
@@ -85,7 +85,7 @@ export async function fetchAdminPricingPreview(params: {
         ...(params.productId ? { productId: params.productId } : {}),
         ...(params.categoryId ? { categoryId: params.categoryId } : {}),
         ...(params.categorySlug ? { categorySlug: params.categorySlug } : {}),
-        ...(params.markup !== undefined ? { markup: params.markup } : {}),
+        ...(params.margin !== undefined ? { margin: params.margin } : {}),
       },
     },
   );

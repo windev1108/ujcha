@@ -40,8 +40,9 @@ import {
 import type { AdminProduct, PricingMode, PricingPreviewItem, PricingPreviewStatus, ProductOptionGroup, ProductRecipe, ProductTopping, RecipeGroupForm, RecipeItemForm, ToppingRecipeItemForm } from "@/services/admin/types";
 import { fetchAdminIngredients } from "@/services/admin/ingredients-api";
 import { buildScopeKey, flattenGroups, groupsFromFlatItems } from "@/lib/functions";
-import { markupToInput, parseMarkupInput } from "@/lib/pricing-format";
+import { marginToInput, markupToInput, parseMarginInput, parseMarkupInput } from "@/lib/pricing-format";
 import { ProductPricingCard } from "./ProductPricingCard";
+import { isValidMargin } from "@/lib/pricing-margin";
 
 function parseApiMessage(err: unknown): string {
   if (err && typeof err === "object" && "response" in err) {
@@ -74,7 +75,7 @@ function serializeProductFormSnapshot(input: {
   isSoldOut: boolean;
   isBestSeller: boolean;
   pricingMode: PricingMode;
-  pricingMarkup: string;
+  pricingMargin: string;
 }): string {
   const urls = input.imageUrls.map((u) => u.trim()).filter(Boolean);
   const p = Number.parseFloat(input.price);
@@ -83,7 +84,7 @@ function serializeProductFormSnapshot(input: {
   const discountRounded = Number.isFinite(disc)
     ? Math.min(100, Math.max(0, disc))
     : 0;
-  const mk = parseMarkupInput(input.pricingMarkup);
+  const mg = parseMarginInput(input.pricingMargin);
   return JSON.stringify({
     sku: input.sku.trim(),
     name: input.name.trim(),
@@ -98,7 +99,7 @@ function serializeProductFormSnapshot(input: {
     isSoldOut: input.isSoldOut,
     isBestSeller: input.isBestSeller,
     pricingMode: input.pricingMode,
-    pricingMarkup: mk.ok ? mk.value : input.pricingMarkup.trim(),
+    pricingMargin: mg.ok ? mg.value : input.pricingMargin.trim(),
   });
 }
 
@@ -118,7 +119,7 @@ function snapshotFromAdminProduct(existing: AdminProduct): string {
     isSoldOut: existing.isSoldOut ?? false,
     isBestSeller: existing.isBestSeller ?? false,
     pricingMode: existing.pricingMode ?? "auto",
-    pricingMarkup: markupToInput(existing.pricingMarkupPercent),
+    pricingMargin: marginToInput(existing.pricingMarginPercent),
   });
 }
 
@@ -189,16 +190,20 @@ function PricingPreviewPanel({
         </PreviewRow>
         <PreviewRow label="Giá vốn">{formatVnd(item.cost!)}</PreviewRow>
         <PreviewRow label="Giá cố định hiện tại">{formatVnd(item.fixedPriceOfReference!)}</PreviewRow>
-        {item.actualMarkupPercent != null && item.foodCostPercent != null && (
+        {item.actualMarginPercent != null && item.foodCostPercent != null && (
           <p className="pt-1 text-right text-xs text-foreground/50">
-            Đang lãi markup {item.actualMarkupPercent}% · food cost {item.foodCostPercent}%
+            Biên thực tế hiện tại{" "}
+            <span className={item.actualMarginPercent < 0 ? "font-semibold text-red-600" : ""}>
+              {item.actualMarginPercent}%
+            </span>{" "}
+            · food cost {item.foodCostPercent}%
           </p>
         )}
       </div>
 
       {item.previewPrice != null && (
         <div className="rounded-xl border border-[#1a3c34]/15 p-3">
-          <p className="text-xs text-foreground/50">Giá theo markup đã nhập</p>
+          <p className="text-xs text-foreground/50">Giá theo biên lợi nhuận đã nhập</p>
           <p className="text-2xl font-bold tabular-nums text-[#1a3c34]">
             {formatVnd(item.previewPrice)}
           </p>
@@ -271,7 +276,7 @@ export function ProductEditorClient({ mode, productId }: Props) {
   const [loadedRecipe, setLoadedRecipe] = useState<ProductRecipe | null>(null);
   const createBaselineReadyRef = useRef(false);
   const [pricingMode, setPricingMode] = useState<PricingMode>("auto");
-  const [pricingMarkupText, setPricingMarkupText] = useState("");
+  const [pricingMarginText, setPricingMarginText] = useState("");
 
   const duplicateRecipeGroup = (gIdx: number) =>
     setRecipeGroups((prev) => {
@@ -312,34 +317,34 @@ export function ProductEditorClient({ mode, productId }: Props) {
         queryKey: ["admin", "products", productId, "pricing-preview"],
       }),
   });
-  const [previewMarkupText, setPreviewMarkupText] = useState("150");
-  const [debouncedMarkupText, setDebouncedMarkupText] = useState("150");
+  const [previewMarginText, setPreviewMarginText] = useState("60");
+  const [debouncedMarginText, setDebouncedMarginText] = useState("60");
 
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedMarkupText(previewMarkupText), 400);
+    const t = setTimeout(() => setDebouncedMarginText(previewMarginText), 400);
     return () => clearTimeout(t);
-  }, [previewMarkupText]);
+  }, [previewMarginText]);
 
   // undefined = để trống (chỉ xem giá vốn); "invalid" = không gọi API
-  const previewMarkup = useMemo<number | undefined | "invalid">(() => {
-    const t = debouncedMarkupText.trim().replace(",", ".");
+  const previewMargin = useMemo<number | undefined | "invalid">(() => {
+    const t = debouncedMarginText.trim().replace(",", ".");
     if (!t) return undefined;
     const n = Number(t);
-    return Number.isFinite(n) && n >= 0 && n <= 10_000 ? n : "invalid";
-  }, [debouncedMarkupText]);
+    return isValidMargin(n) ? n : "invalid";
+  }, [debouncedMarginText]);
 
   const {
     data: pricingPreview,
     isFetching: previewFetching,
     isError: previewError,
   } = useQuery({
-    queryKey: ["admin", "products", productId, "pricing-preview", previewMarkup ?? null],
+    queryKey: ["admin", "products", productId, "pricing-preview", previewMargin ?? null],
     queryFn: () =>
       fetchAdminPricingPreview({
         productId: productId!,
-        markup: previewMarkup === "invalid" ? undefined : previewMarkup,
+        margin: previewMargin === "invalid" ? undefined : previewMargin,
       }),
-    enabled: mode === "edit" && !!productId && previewMarkup !== "invalid",
+    enabled: mode === "edit" && !!productId && previewMargin !== "invalid",
   });
   const previewItem = pricingPreview?.items.find((i) => i.productId === productId);
 
@@ -361,7 +366,7 @@ export function ProductEditorClient({ mode, productId }: Props) {
       setIsBestSeller(existing.isBestSeller ?? false);
       setBaselineSnapshot(snapshotFromAdminProduct(existing));
       setPricingMode(existing.pricingMode ?? "auto");
-      setPricingMarkupText(markupToInput(existing.pricingMarkupPercent));
+      setPricingMarginText(marginToInput(existing.pricingMarginPercent));
     } else if (mode === "create" && categories.length) {
       setCategoryId((id) => id || categories[0]!.id);
       if (!createBaselineReadyRef.current) {
@@ -381,7 +386,7 @@ export function ProductEditorClient({ mode, productId }: Props) {
             isSoldOut: false,
             isBestSeller: false,
             pricingMode: "auto",
-            pricingMarkup: "",
+            pricingMargin: "",
           }),
         );
       }
@@ -397,8 +402,8 @@ export function ProductEditorClient({ mode, productId }: Props) {
       const p = Number.parseFloat(price);
       if (!Number.isFinite(p) || p < 0) throw new Error("INVALID_PRICE");
       if (!name.trim() || !categoryId) throw new Error("REQUIRED");
-      const mk = parseMarkupInput(pricingMarkupText);
-      if (!mk.ok) throw new Error("INVALID_MARKUP");
+      const mg = parseMarginInput(pricingMarginText);
+      if (!mg.ok) throw new Error("INVALID_MARGIN");
       const discRaw = Number.parseInt(discountPercent, 10);
       const disc = Number.isFinite(discRaw)
         ? Math.min(100, Math.max(0, discRaw))
@@ -416,7 +421,7 @@ export function ProductEditorClient({ mode, productId }: Props) {
         isSoldOut,
         isBestSeller,
         pricingMode,
-        pricingMarkupPercent: mk.value
+        pricingMarginPercent: mg.value,
       };
       const skuTrim = sku.trim();
       if (mode === "create") {
@@ -438,7 +443,7 @@ export function ProductEditorClient({ mode, productId }: Props) {
       const msg = e instanceof Error ? e.message : parseApiMessage(e);
       if (msg === "INVALID_PRICE") setError("Giá không hợp lệ.");
       else if (msg === "REQUIRED") setError("Tên và danh mục là bắt buộc.");
-      else if (msg === "INVALID_MARKUP") setError("Markup không hợp lệ (0–10.000).");
+      else if (msg === "INVALID_MARGIN") setError("Biên lợi nhuận không hợp lệ (0–99,99%).");
       else setError(parseApiMessage(e));
     },
   });
@@ -461,7 +466,7 @@ export function ProductEditorClient({ mode, productId }: Props) {
         isSoldOut,
         isBestSeller,
         pricingMode,
-        pricingMarkup: pricingMarkupText,
+        pricingMargin: pricingMarginText,
       }),
     [
       sku,
@@ -476,6 +481,8 @@ export function ProductEditorClient({ mode, productId }: Props) {
       isAvailable,
       isSoldOut,
       isBestSeller,
+      pricingMode,
+      pricingMarginText,
     ],
   );
 
@@ -1389,8 +1396,8 @@ export function ProductEditorClient({ mode, productId }: Props) {
             pricing={mode === "edit" ? existing?.pricing : undefined}
             mode={pricingMode}
             onModeChange={setPricingMode}
-            markupText={pricingMarkupText}
-            onMarkupChange={setPricingMarkupText}
+            marginText={pricingMarginText}
+            onMarginChange={setPricingMarginText}
             disabled={pending}
           />
           {mode === "edit" && (
@@ -1405,25 +1412,25 @@ export function ProductEditorClient({ mode, productId }: Props) {
                   )}
                 </div>
                 <p className="text-xs text-foreground/50">
-                  Chạy thử theo markup nhập bên dưới, không thay đổi giá bán. Giá thật do card
+                  Chạy thử theo biên lợi nhuận nhập bên dưới, không thay đổi giá bán. Giá thật do card
                   &quot;Giá tự động&quot; và cấu hình toàn shop quyết định. Tính cho biến thể mặc định
                   (nhóm nào chưa đặt mặc định thì lấy giá trị có phụ phí thấp nhất).
                 </p>
                 <div className={adminFieldStack}>
                   <Label className={adminLabelClassProduct}>
-                    Lợi nhuận kỳ vọng thử (markup %)
+                    Biên lợi nhuận gộp thử (%)
                   </Label>
                   <Input
                     fullWidth
                     inputMode="decimal"
-                    value={previewMarkupText}
-                    onChange={(e) => setPreviewMarkupText(e.target.value)}
-                    placeholder="VD 150 → giá = giá vốn × 2,5"
+                    value={previewMarginText}
+                    onChange={(e) => setPreviewMarginText(e.target.value)}
+                    placeholder="VD 60 → giá = giá vốn ÷ 0,4"
                     className={`w-full ${adminInputClass}`}
                   />
-                  {previewMarkup === "invalid" && (
+                  {previewMargin === "invalid" && (
                     <Description className="text-xs text-red-600">
-                      Markup không hợp lệ (0–10.000).
+                      Biên không hợp lệ (0–99,99%).
                     </Description>
                   )}
                 </div>
