@@ -12,7 +12,7 @@ import type { ChatMessage } from "@/services/chat/api";
 import { useRouter } from "next/navigation";
 import { ROUTES } from "@/lib/routes";
 import { chatAvatarText } from "@/lib/utils";
-import { fetchOrderDetail } from "@/services/order/api";
+import { useMyOrdersQuery } from "@/services/order/hooks";
 
 const checkedIds = new Set<string>(); // module-level: mỗi đơn chỉ kiểm tra 1 lần / phiên
 
@@ -97,29 +97,33 @@ export function GlobalChatDock() {
     const router = useRouter();
     const [mounted, setMounted] = useState(false);
     useEffect(() => setMounted(true), []);
-
+    const { data: ordersData } = useMyOrdersQuery();
     const orders = useChatDockStore((s) => s.orders);
     const openId = useChatDockStore((s) => s.openId);
     const setOpenId = useChatDockStore((s) => s.setOpenId);
     const unregister = useChatDockStore((s) => s.unregister);
+    const register = useChatDockStore((s) => s.register);
     const hiddenIds = useChatDockStore((s) => s.hiddenIds);
     const hide = useChatDockStore((s) => s.hide);
     const show = useChatDockStore((s) => s.show);
     const incoming = useIncoming();
+
     useEffect(() => {
         if (!mounted) return;
-        orders.forEach(async (o) => {
+        ordersData?.items?.forEach(async (o) => {
             if (checkedIds.has(o.id)) return;
             checkedIds.add(o.id);
             try {
-                const d = await fetchOrderDetail(o.paymentCode);
-                if (d.status === "completed" || d.status === "cancelled") unregister(o.id);
+                if (o.status === "completed" || o.status === "cancelled") unregister(o.id);
+                if (o.status !== "completed" && o.status !== "cancelled") {
+                    register({ id: o.id, paymentCode: o.paymentCode });
+                }
             } catch (err) {
                 if (isNotFound(err)) unregister(o.id);
                 else checkedIds.delete(o.id); // lỗi mạng: cho phép kiểm tra lại lần sau
             }
         });
-    }, [mounted, orders, unregister]);
+    }, [mounted, orders, ordersData?.items, unregister, register]);
     if (!mounted) return null;
     const onGroupPage = pathname.startsWith("/group-order");
 
