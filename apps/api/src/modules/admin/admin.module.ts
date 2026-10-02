@@ -29,6 +29,7 @@ import { AdminStoreModule } from './store/admin-store.module';
 import { AdminIngredientsModule } from './ingredients/admin-ingredients.module';
 import { AdminToppingModule } from './toppings/admin-topping.module';
 import { AdminChatWidgetModule } from './chat-widget/admin-chat-widget.module';
+import { AdminFinanceStatsModule } from './stats/admin-finance.stats.module';
 
 @Module({
   imports: [
@@ -62,6 +63,7 @@ import { AdminChatWidgetModule } from './chat-widget/admin-chat-widget.module';
     AdminIngredientsModule,
     AdminToppingModule,
     AdminChatWidgetModule,
+    AdminFinanceStatsModule,
   ],
   exports: [
     AdminAuthModule,
