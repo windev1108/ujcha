@@ -5,7 +5,7 @@ import { Package } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { ROUTES } from "@/lib/routes";
-import { ProductStatsTab } from "./ProductStatsTab";
+import { FinanceStatsTab } from "./FinanceStatsTab";
 
 
 export function RevenueStatsPageClient() {
@@ -35,7 +35,7 @@ export function RevenueStatsPageClient() {
                 </Button>
             </header>
 
-            <ProductStatsTab />
+            <FinanceStatsTab />
         </div>
     );
 }

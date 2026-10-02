@@ -1226,3 +1226,96 @@ export interface PricingConfig {
   roundingStep: number;
 }
 export interface PricingRecomputeResult { scanned: number; updated: number }
+
+
+// ── 1) Thêm vào services/admin/types.ts ─────────────────────────────────────
+
+export type FinanceSummary = {
+  orders: number;
+  itemsSold: number;
+  /** Doanh thu hàng (đã trừ giảm giá theo món, chưa trừ giảm giá cấp đơn). */
+  goodsRevenue: number;
+  /** Giảm giá cấp đơn: voucher, đơn nhóm, giảm tay ở POS. */
+  orderDiscount: number;
+  /** Giảm bằng điểm UjCha. */
+  pointDiscount: number;
+  netGoodsRevenue: number;
+  shippingFee: number;
+  /** Tổng khách thực trả = Σ finalAmount. */
+  totalCollected: number;
+  reconcileDiff: number;
+  vatIncluded: number;
+  avgOrderValue: number;
+  discountRatePercent: number;
+  cogs: number;
+  costedNetRevenue: number;
+  grossProfit: number;
+  grossMarginPercent: number | null;
+  costCoveragePercent: number;
+  uncostedQuantity: number;
+  uncostedReasons: Record<string, number>;
+};
+
+export type FinanceDayPoint = {
+  date: string; // YYYY-MM-DD (giờ VN)
+  orders: number;
+  goodsRevenue: number;
+  orderDiscount: number;
+  pointDiscount: number;
+  shippingFee: number;
+  totalCollected: number;
+  cogs: number;
+  grossProfit: number;
+};
+
+export type FinanceSplitRow = {
+  key: string;
+  orders: number;
+  totalCollected: number;
+};
+
+export type FinanceHourRow = {
+  hour: number;
+  orders: number;
+  totalCollected: number;
+};
+
+export type FinanceProductRow = {
+  productId: string;
+  name: string;
+  imageUrl: string | null;
+  categoryName: string;
+  quantitySold: number;
+  goodsRevenue: number;
+  cogs: number;
+  grossProfit: number;
+  marginPercent: number | null;
+  costCoveragePercent: number;
+};
+
+export type FinanceCategoryRow = {
+  categoryId: string;
+  categoryName: string;
+  quantitySold: number;
+  goodsRevenue: number;
+  cogs: number;
+  grossProfit: number;
+  marginPercent: number | null;
+  costCoveragePercent: number;
+};
+
+export type FinanceStats = {
+  range: { from: string; to: string; days: number };
+  summary: FinanceSummary;
+  previous: { range: { from: string; to: string }; summary: FinanceSummary };
+  daily: FinanceDayPoint[];
+  byOrderType: FinanceSplitRow[];
+  byPaymentType: FinanceSplitRow[];
+  byChannel: FinanceSplitRow[];
+  byHour: FinanceHourRow[];
+  products: FinanceProductRow[];
+  lowPerformers: FinanceProductRow[];
+  categories: FinanceCategoryRow[];
+  uncostedIngredients: { name: string; quantity: number; revenue: number }[];
+};
+
