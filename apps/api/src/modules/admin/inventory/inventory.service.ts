@@ -32,16 +32,11 @@ export class InventoryService {
       });
 
       const productIds = [...new Set(items.map((i) => i.productId))];
-      const [recipeRows, toppingRecipeRows] = productIds.length
-        ? await Promise.all([
-            tx.productRecipeItem.findMany({
-              where: { productId: { in: productIds } },
-            }),
-            tx.productToppingRecipeItem.findMany({
-              where: { productId: { in: productIds } },
-            }),
-          ])
-        : [[], []];
+          const recipeRows = productIds.length
+        ? await tx.productRecipeItem.findMany({
+            where: { productId: { in: productIds } },
+          })
+        : [];
       const globalToppingRecipes = await loadGlobalToppingRecipes(tx);
       const needByIngredient = new Map<string, Prisma.Decimal>();
       const addNeed = (ingredientId: string, qty: Prisma.Decimal) =>

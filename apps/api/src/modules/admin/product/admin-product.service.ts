@@ -40,7 +40,7 @@ export class AdminProductService {
     private readonly redis: RedisService,
     private readonly pricingCost: PricingCostService,
     private readonly pricingService: PricingService,
-  ) { }
+  ) {}
 
   async list(categoryId?: string, categorySlug?: string, q?: string) {
     const qx = q?.trim();
@@ -52,12 +52,12 @@ export class AdminProductService {
             categorySlug ? { category: { slug: categorySlug } } : {},
             qx
               ? {
-                OR: [
-                  { name: { contains: qx, mode: 'insensitive' } },
-                  { sku: { contains: qx, mode: 'insensitive' } },
-                  { description: { contains: qx, mode: 'insensitive' } },
-                ],
-              }
+                  OR: [
+                    { name: { contains: qx, mode: 'insensitive' } },
+                    { sku: { contains: qx, mode: 'insensitive' } },
+                    { description: { contains: qx, mode: 'insensitive' } },
+                  ],
+                }
               : {},
           ],
         },
@@ -362,18 +362,11 @@ export class AdminProductService {
       });
     }
 
-    const [items, toppingItems] = await Promise.all([
-      this.prisma.productRecipeItem.findMany({
-        where: { productId },
-        include: { ingredient: true },
-        orderBy: [{ scopeKey: 'asc' }, { createdAt: 'asc' }], // đổi từ optionGroupName
-      }),
-      this.prisma.productToppingRecipeItem.findMany({
-        where: { productId },
-        include: { ingredient: true },
-        orderBy: { createdAt: 'asc' },
-      }),
-    ]);
+    const items = await this.prisma.productRecipeItem.findMany({
+      where: { productId },
+      include: { ingredient: true },
+      orderBy: [{ scopeKey: 'asc' }, { createdAt: 'asc' }],
+    });
     const globalRows = await this.prisma.globalToppingRecipeItem.findMany({
       include: { ingredient: true },
     });
@@ -394,7 +387,6 @@ export class AdminProductService {
     return {
       recipeNote: product.recipeNote,
       items,
-      toppingItems,
       globalToppingItems,
     };
   }
@@ -411,7 +403,6 @@ export class AdminProductService {
     }
 
     const optionGroups = (product.optionGroups as any[]) ?? [];
-    const toppings = (product.toppings as any[]) ?? [];
 
     const seenScopeKeys = new Map<string, Set<string>>(); // ingredientId -> set of scopeKey, chặn trùng ở tầng service (fail sớm, đẹp hơn để DB unique bắt)
 
@@ -446,22 +437,12 @@ export class AdminProductService {
       seenScopeKeys.set(it.ingredientId, set);
     }
 
-    for (const t of dto.toppingItems ?? []) {
-      if (!toppings.some((tp: any) => tp.id === t.toppingId)) {
-        throw new BadRequestException({
-          message: 'Topping không tồn tại trên sản phẩm.',
-          code: 'INVALID_RECIPE_TOPPING',
-        });
-      }
-    }
-
     await this.prisma.$transaction(async (tx) => {
       await tx.product.update({
         where: { id: productId },
         data: { recipeNote: dto.recipeNote?.trim() || null },
       });
       await tx.productRecipeItem.deleteMany({ where: { productId } });
-      await tx.productToppingRecipeItem.deleteMany({ where: { productId } });
       if (dto.items.length) {
         await tx.productRecipeItem.createMany({
           data: dto.items.map((i) => {
@@ -475,16 +456,6 @@ export class AdminProductService {
               quantity: new Prisma.Decimal(i.quantity),
             };
           }),
-        });
-      }
-      if (dto.toppingItems?.length) {
-        await tx.productToppingRecipeItem.createMany({
-          data: dto.toppingItems.map((t) => ({
-            productId,
-            toppingId: t.toppingId,
-            ingredientId: t.ingredientId,
-            quantity: new Prisma.Decimal(t.quantity),
-          })),
         });
       }
     });
@@ -692,21 +663,21 @@ export class AdminProductService {
     const products =
       productIds.length || skus.length
         ? await this.prisma.product.findMany({
-          where: {
-            OR: [
-              ...(productIds.length ? [{ id: { in: productIds } }] : []),
-              ...(skus.length ? [{ sku: { in: skus } }] : []),
-            ],
-          },
-          select: {
-            id: true,
-            name: true,
-            sku: true,
-            optionGroups: true, // ← thêm: cần để suy default cho group bị thiếu
-            toppings: true,
-            recipeNote: true,
-          },
-        })
+            where: {
+              OR: [
+                ...(productIds.length ? [{ id: { in: productIds } }] : []),
+                ...(skus.length ? [{ sku: { in: skus } }] : []),
+              ],
+            },
+            select: {
+              id: true,
+              name: true,
+              sku: true,
+              optionGroups: true, // ← thêm: cần để suy default cho group bị thiếu
+              toppings: true,
+              recipeNote: true,
+            },
+          })
         : [];
 
     const byId = new Map(products.map((p) => [p.id, p]));
@@ -715,18 +686,13 @@ export class AdminProductService {
     );
 
     const relevantProductIds = products.map((p) => p.id);
-    const [recipeItems, toppingRecipeItems] = relevantProductIds.length
-      ? await Promise.all([
-        this.prisma.productRecipeItem.findMany({
+    const recipeItems = relevantProductIds.length
+      ? await this.prisma.productRecipeItem.findMany({
           where: { productId: { in: relevantProductIds } },
           include: { ingredient: true },
-        }),
-        this.prisma.productToppingRecipeItem.findMany({
-          where: { productId: { in: relevantProductIds } },
-          include: { ingredient: true },
-        }),
-      ])
-      : [[], []];
+        })
+      : [];
+
     const globalToppingRows =
       await this.prisma.globalToppingRecipeItem.findMany({
         include: { ingredient: true },
@@ -863,22 +829,8 @@ export class AdminProductService {
 
       const matchedToppingItems = toppingsArr
         .filter((t) => matchLabel(t.name, selectedNorm))
-        .flatMap((t) => {
-          const own = toppingRecipeItems.filter(
-            (tri) => tri.productId === product.id && tri.toppingId === t.id,
-          );
-          if (own.length) {
-            return own.map((tri) => ({
-              id: tri.id,
-              ingredientId: tri.ingredientId,
-              ingredientName: tri.ingredient.name,
-              unit: tri.ingredient.unit,
-              quantity: tri.quantity.toString(),
-              toppingId: t.id,
-              toppingName: t.name,
-            }));
-          }
-          return globalToppingRows
+        .flatMap((t) =>
+          globalToppingRows
             .filter((g) => g.nameKey === toppingNameKey(t.name))
             .map((g) => ({
               id: g.id,
@@ -888,8 +840,8 @@ export class AdminProductService {
               quantity: g.quantity.toString(),
               toppingId: t.id,
               toppingName: t.name,
-            }));
-        });
+            })),
+        );
 
       result[item.key] = {
         matched: true,
@@ -943,11 +895,11 @@ function normalizeProductRow<
     optionGroups: normalizeInlineOptionGroups(row.optionGroups as any),
     toppings: normalizeInlineToppings(row.toppings as any),
     nameTranslation: (row.nameTranslation &&
-      typeof row.nameTranslation === 'object'
+    typeof row.nameTranslation === 'object'
       ? row.nameTranslation
       : {}) as Record<string, string>,
     descriptionTranslation: (row.descriptionTranslation &&
-      typeof row.descriptionTranslation === 'object'
+    typeof row.descriptionTranslation === 'object'
       ? row.descriptionTranslation
       : {}) as Record<string, string>,
     finalPrice: computeFinalPrice(

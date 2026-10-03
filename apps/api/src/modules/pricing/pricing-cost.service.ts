@@ -1,8 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { normalizeInlineOptionGroups } from '../../helper/utils';
 import {
-  buildReferenceSelection,
   pickBestRecipeRows,
 } from '../../helper/recipe-match';
 import { PrismaService } from '../prisma/prisma.service';
@@ -32,7 +30,7 @@ export class PricingCostService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly pricingConfig: PricingConfigService,
-  ) {}
+  ) { }
 
   async preview(params: {
     productId?: string;
@@ -179,40 +177,27 @@ export class PricingCostService {
     if (lines.length === 0) return out;
 
     const productIds = [...new Set(lines.map((l) => l.productId))];
-    const [
-      recipeRows,
-      toppingRows,
-      ingredientRows,
-      globalToppingRecipes,
-      products,
-    ] = await Promise.all([
-      this.prisma.productRecipeItem.findMany({
-        where: { productId: { in: productIds } },
-        select: {
-          productId: true,
-          ingredientId: true,
-          quantity: true,
-          conditions: true,
-        },
-      }),
-      this.prisma.productToppingRecipeItem.findMany({
-        where: { productId: { in: productIds } },
-        select: {
-          productId: true,
-          toppingId: true,
-          ingredientId: true,
-          quantity: true,
-        },
-      }),
-      this.prisma.ingredient.findMany({
-        select: { id: true, costPerUnit: true },
-      }),
-      loadGlobalToppingRecipes(this.prisma),
-      this.prisma.product.findMany({
-        where: { id: { in: productIds } },
-        select: { id: true, toppings: true },
-      }),
-    ]);
+    const [recipeRows, ingredientRows, globalToppingRecipes, products] =
+      await Promise.all([
+        this.prisma.productRecipeItem.findMany({
+          where: { productId: { in: productIds } },
+          select: {
+            productId: true,
+            ingredientId: true,
+            quantity: true,
+            conditions: true,
+          },
+        }),
+        this.prisma.ingredient.findMany({
+          select: { id: true, costPerUnit: true },
+        }),
+        loadGlobalToppingRecipes(this.prisma),
+        this.prisma.product.findMany({
+          where: { id: { in: productIds } },
+          select: { id: true, toppings: true },
+        }),
+      ]);
+
     const toppingNameOf = new Map<string, string>(); // `${productId}|${toppingId}` -> name
     for (const p of products) {
       const arr = Array.isArray(p.toppings) ? (p.toppings as any[]) : [];
@@ -228,13 +213,6 @@ export class PricingCostService {
       const arr = recipesByProduct.get(r.productId) ?? [];
       arr.push(r);
       recipesByProduct.set(r.productId, arr);
-    }
-    const toppingsByKey = new Map<string, typeof toppingRows>();
-    for (const t of toppingRows) {
-      const k = `${t.productId}|${t.toppingId}`;
-      const arr = toppingsByKey.get(k) ?? [];
-      arr.push(t);
-      toppingsByKey.set(k, arr);
     }
 
     for (const l of lines) {
