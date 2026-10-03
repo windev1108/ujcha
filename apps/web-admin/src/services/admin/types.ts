@@ -1100,7 +1100,6 @@ export type ProductToppingRecipeItem = {
 export type ProductRecipe = {
   recipeNote: string | null;
   items: ProductRecipeItem[];
-  toppingItems: ProductToppingRecipeItem[];
   globalToppingItems: {
     toppingId: string;
     toppingName: string;
@@ -1175,7 +1174,6 @@ export type RecipeItemForm = {
   quantity: number;
   conditions: { group: string; value: string }[];
 };
-export type ToppingRecipeItemForm = { toppingId: string; ingredientId: string; quantity: number };
 
 export type RecipeGroupForm = {
   localId: string; // key ổn định khi đang sửa, KHÔNG dùng scopeKey vì nó đổi theo conditions

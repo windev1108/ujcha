@@ -37,10 +37,10 @@ import {
   setAdminProductRecipe,
   updateAdminProduct,
 } from "@/services/admin/products-api";
-import type { AdminProduct, PricingMode, PricingPreviewItem, PricingPreviewStatus, ProductOptionGroup, ProductRecipe, ProductTopping, RecipeGroupForm, RecipeItemForm, ToppingRecipeItemForm } from "@/services/admin/types";
+import type { AdminProduct, PricingMode, PricingPreviewItem, PricingPreviewStatus, ProductOptionGroup, ProductRecipe, ProductTopping, RecipeGroupForm } from "@/services/admin/types";
 import { fetchAdminIngredients } from "@/services/admin/ingredients-api";
 import { buildScopeKey, flattenGroups, groupsFromFlatItems } from "@/lib/functions";
-import { marginToInput, markupToInput, parseMarginInput, parseMarkupInput } from "@/lib/pricing-format";
+import { marginToInput, parseMarginInput } from "@/lib/pricing-format";
 import { ProductPricingCard } from "./ProductPricingCard";
 import { isValidMargin } from "@/lib/pricing-margin";
 
@@ -272,7 +272,6 @@ export function ProductEditorClient({ mode, productId }: Props) {
   const [baselineSnapshot, setBaselineSnapshot] = useState<string | null>(null);
   const [recipeGroups, setRecipeGroups] = useState<RecipeGroupForm[]>([]);
   const [recipeNote, setRecipeNote] = useState("");
-  const [toppingRecipeItems, setToppingRecipeItems] = useState<ToppingRecipeItemForm[]>([]);
   const [loadedRecipe, setLoadedRecipe] = useState<ProductRecipe | null>(null);
   const createBaselineReadyRef = useRef(false);
   const [pricingMode, setPricingMode] = useState<PricingMode>("auto");
@@ -296,13 +295,6 @@ export function ProductEditorClient({ mode, productId }: Props) {
     setLoadedRecipe(recipe);
     setRecipeNote(recipe.recipeNote ?? "");
     setRecipeGroups(groupsFromFlatItems(recipe.items));
-    setToppingRecipeItems(
-      recipe.toppingItems.map((t) => ({
-        toppingId: t.toppingId,
-        ingredientId: t.ingredientId,
-        quantity: Number(t.quantity) || 0,
-      })),
-    );
   }
 
   const saveRecipeMut = useMutation({
@@ -310,7 +302,6 @@ export function ProductEditorClient({ mode, productId }: Props) {
       setAdminProductRecipe(productId!, {
         recipeNote: recipeNote.trim() || undefined,
         items: flattenGroups(recipeGroups),
-        toppingItems: toppingRecipeItems,
       }),
     onSuccess: () =>
       queryClient.invalidateQueries({
@@ -1282,45 +1273,17 @@ export function ProductEditorClient({ mode, productId }: Props) {
                 <p className="text-xs text-foreground/50">
                   Tự lấy theo tên topping từ cấu hình global (tab Topping). Không cần nhập lại ở từng sản phẩm.
                 </p>
-                {toppings.filter((t) => t.name.trim()).length === 0 ? (
+                                {toppings.filter((t) => t.name.trim()).length === 0 ? (
                   <p className="text-sm text-foreground/40">Sản phẩm chưa có topping nào.</p>
                 ) : (
                   toppings
                     .filter((t) => t.name.trim())
                     .map((t) => {
-                      const overrides = toppingRecipeItems.filter((r) => r.toppingId === t.id);
                       const globals = (recipe?.globalToppingItems ?? []).filter((g) => g.toppingId === t.id);
-                      const isOverride = overrides.length > 0;
                       return (
                         <div key={t.id} className="flex flex-col gap-1 rounded-xl border border-black/8 p-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-sm font-semibold">{t.name}</span>
-                            {isOverride ? (
-                              <Button
-                                size="sm" variant="ghost" className="rounded-xl"
-                                onPress={() =>
-                                  setToppingRecipeItems((prev) => prev.filter((r) => r.toppingId !== t.id))
-                                }
-                              >
-                                Dùng định lượng global
-                              </Button>
-                            ) : null}
-                          </div>
-                          {isOverride ? (
-                            <>
-                              <span className="w-fit rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 ring-1 ring-amber-200/80">
-                                Đang ghi đè riêng cho sản phẩm này
-                              </span>
-                              <p className="text-xs text-foreground/60">
-                                {overrides
-                                  .map((o) => {
-                                    const ing = ingredients.find((i) => i.id === o.ingredientId);
-                                    return `${ing?.name ?? "?"} ${o.quantity}${ing?.unit ?? ""}`;
-                                  })
-                                  .join(" · ")}
-                              </p>
-                            </>
-                          ) : globals.length > 0 ? (
+                          <span className="text-sm font-semibold">{t.name}</span>
+                          {globals.length > 0 ? (
                             <p className="text-xs text-[#5a8f7a]">
                               Global: {globals.map((g) => `${g.ingredientName} ${Number(g.quantity)}${g.unit}`).join(" · ")}
                             </p>
