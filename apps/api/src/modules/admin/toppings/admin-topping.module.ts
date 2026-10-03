@@ -4,10 +4,12 @@ import { PrismaModule } from '../../prisma/prisma.module';
 import { RedisModule } from '../../redis/redis.module';
 import { AdminToppingService } from './admin-topping.service';
 import { AdminToppingController } from './admin-topping.controller';
+import { PricingService } from '../../pricing/pricing.service';
+import { PricingConfigService } from '../../pricing/pricing-config.service';
 
 @Module({
   imports: [PrismaModule, RedisModule],
   controllers: [AdminToppingController],
-  providers: [AdminToppingService],
+  providers: [AdminToppingService, PricingService, PricingConfigService],
 })
-export class AdminToppingModule {}
+export class AdminToppingModule { }

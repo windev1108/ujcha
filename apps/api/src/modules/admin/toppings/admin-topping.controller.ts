@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   Post,
+  Put,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -14,6 +15,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AdminToppingService } from './admin-topping.service';
 import { SetToppingOutOfStockDto } from '../../topping/dto/set-topping-out-of-stock.dto';
+import { SetToppingRecipeDto } from './dto/set-topping-recipe.dto';
 
 @ApiTags('admin-toppings')
 @ApiBearerAuth('admin-access-token')
@@ -39,5 +41,14 @@ export class AdminToppingController {
   })
   setOutOfStock(@Body() dto: SetToppingOutOfStockDto) {
     return this.service.setOutOfStock(dto);
+  }
+
+  @Put('recipe')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Cấu hình định lượng nguyên liệu global cho 1 tên topping',
+  })
+  setRecipe(@Body() dto: SetToppingRecipeDto) {
+    return this.service.setRecipe(dto);
   }
 }

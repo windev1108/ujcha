@@ -2,6 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InventoryTransactionType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { pickBestRecipeRows } from '../../../helper/recipe-match';
+import {
+  loadGlobalToppingRecipes,
+  resolveToppingRecipeRows,
+} from '../../../helper/topping-recipe';
 
 @Injectable()
 export class InventoryService {
@@ -38,7 +42,7 @@ export class InventoryService {
             }),
           ])
         : [[], []];
-
+      const globalToppingRecipes = await loadGlobalToppingRecipes(tx);
       const needByIngredient = new Map<string, Prisma.Decimal>();
       const addNeed = (ingredientId: string, qty: Prisma.Decimal) =>
         needByIngredient.set(
@@ -51,8 +55,6 @@ export class InventoryService {
       for (const item of items) {
         const selectedOptions =
           (item.optionsJson as Record<string, string> | null) ?? {};
-        const extras =
-          (item.extrasJson as { toppingId?: string }[] | null) ?? [];
 
         // ── Nguyên liệu theo biến thể: chọn dòng "khớp nhiều điều kiện nhất" cho từng ingredient ──
         const productRecipes = recipeRows.filter(
@@ -71,15 +73,23 @@ export class InventoryService {
           addNeed(ingredientId, row.quantity.mul(item.quantity));
         }
 
-        // ── Nguyên liệu từ topping đã chọn (không đổi) ──
+        // ── Nguyên liệu từ topping: ưu tiên override của sản phẩm, không có thì dùng global theo tên ──
+        const extras =
+          (item.extrasJson as { toppingId?: string; name?: string }[] | null) ??
+          [];
+        const productToppingRows = toppingRecipeRows.filter(
+          (tr) => tr.productId === item.productId,
+        );
         for (const extra of extras) {
           if (!extra.toppingId) continue;
-          for (const tr of toppingRecipeRows.filter(
-            (tr) =>
-              tr.productId === item.productId &&
-              tr.toppingId === extra.toppingId,
-          )) {
-            addNeed(tr.ingredientId, tr.quantity.mul(item.quantity));
+          const rows = resolveToppingRecipeRows(
+            productToppingRows,
+            extra.toppingId,
+            extra.name ?? '',
+            globalToppingRecipes,
+          );
+          for (const r of rows) {
+            addNeed(r.ingredientId, r.quantity.mul(item.quantity));
           }
         }
       }

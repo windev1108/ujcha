@@ -311,7 +311,8 @@ model Ingredient {
   recipeItems        ProductRecipeItem[]
   transactions       InventoryTransaction[]
   toppingRecipeItems ProductToppingRecipeItem[]
-
+  globalToppingRecipeItems GlobalToppingRecipeItem[] 
+  
   @@index([isActive])
 }
 
@@ -1250,4 +1251,19 @@ model PricingConfig {
   defaultMarginPercent Decimal? @db.Decimal(7, 2)
   roundingStep         Int      @default(1000)
   updatedAt            DateTime @updatedAt
+}
+
+/// Định lượng nguyên liệu của 1 topping — áp dụng global theo tên topping (nameKey chuẩn hoá).
+model GlobalToppingRecipeItem {
+  id           String     @id @default(uuid()) @db.Uuid
+  nameKey      String
+  ingredientId String     @db.Uuid
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+  quantity     Decimal    @db.Decimal(12, 3)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([nameKey, ingredientId])
+  @@index([nameKey])
+  @@index([ingredientId])
 }

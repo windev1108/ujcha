@@ -10,6 +10,7 @@ import { CreateIngredientDto } from '../inventory/dto/create-ingredient.dto';
 import { UpdateIngredientDto } from '../inventory/dto/update-ingredient.dto';
 import { AdjustIngredientStockDto } from '../inventory/dto/adjust-ingredient-stock.dto';
 import { PricingService } from '../../pricing/pricing.service';
+import { findProductIdsByToppingNameKeys } from '../../../helper/topping-recipe';
 
 @Injectable()
 export class AdminIngredientService {
@@ -103,13 +104,25 @@ export class AdminIngredientService {
       },
     });
     if (costChanged) {
-      const rows = await this.prisma.productRecipeItem.findMany({
-        where: { ingredientId: id },
-        select: { productId: true },
-        distinct: ['productId'],
-      });
+      const [rows, globalRows] = await Promise.all([
+        this.prisma.productRecipeItem.findMany({
+          where: { ingredientId: id },
+          select: { productId: true },
+          distinct: ['productId'],
+        }),
+        this.prisma.globalToppingRecipeItem.findMany({
+          where: { ingredientId: id },
+          select: { nameKey: true },
+        }),
+      ]);
+      const viaTopping = await findProductIdsByToppingNameKeys(
+        this.prisma,
+        globalRows.map((g) => g.nameKey),
+      );
       await this.pricingService.recomputeQuietly({
-        productIds: rows.map((r) => r.productId),
+        productIds: [
+          ...new Set([...rows.map((r) => r.productId), ...viaTopping]),
+        ],
       });
     }
     return updated;

@@ -10,18 +10,18 @@ import {
 
 // ── Ngày giờ theo múi giờ VN (UTC+7) ─────────────────────────────────────────
 const VN_OFFSET_MS = 7 * 3600_000;
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const vnDay = (d: Date) =>
+export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+export const vnDay = (d: Date) =>
   new Date(d.getTime() + VN_OFFSET_MS).toISOString().slice(0, 10);
-const vnHour = (d: Date) => new Date(d.getTime() + VN_OFFSET_MS).getUTCHours();
-const startOf = (s: string) => new Date(`${s}T00:00:00+07:00`);
-const endOf = (s: string) => new Date(`${s}T23:59:59.999+07:00`);
-const addDays = (s: string, n: number) => {
+export const vnHour = (d: Date) => new Date(d.getTime() + VN_OFFSET_MS).getUTCHours();
+export const startOf = (s: string) => new Date(`${s}T00:00:00+07:00`);
+export const endOf = (s: string) => new Date(`${s}T23:59:59.999+07:00`);
+export const addDays = (s: string, n: number) => {
   const d = new Date(`${s}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 };
-const diffDays = (a: string, b: string) =>
+export const diffDays = (a: string, b: string) =>
   Math.round(
     (Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000,
   );

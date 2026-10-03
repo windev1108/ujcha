@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { PricingConfigService } from './pricing-config.service';
 import { computeCostAndPrice } from '../../helper/pricing-calc';
+import { loadGlobalToppingRecipes, resolveToppingRecipeRows } from '../../helper/topping-recipe';
 
 type IngredientInfo = { name: string; costPerUnit: Prisma.Decimal | null };
 type RecipeRow = {
@@ -175,7 +176,13 @@ export class PricingCostService {
     if (lines.length === 0) return out;
 
     const productIds = [...new Set(lines.map((l) => l.productId))];
-    const [recipeRows, toppingRows, ingredientRows] = await Promise.all([
+    const [
+      recipeRows,
+      toppingRows,
+      ingredientRows,
+      globalToppingRecipes,
+      products,
+    ] = await Promise.all([
       this.prisma.productRecipeItem.findMany({
         where: { productId: { in: productIds } },
         select: {
@@ -197,8 +204,19 @@ export class PricingCostService {
       this.prisma.ingredient.findMany({
         select: { id: true, costPerUnit: true },
       }),
+      loadGlobalToppingRecipes(this.prisma),
+      this.prisma.product.findMany({
+        where: { id: { in: productIds } },
+        select: { id: true, toppings: true },
+      }),
     ]);
-
+    const toppingNameOf = new Map<string, string>(); // `${productId}|${toppingId}` -> name
+    for (const p of products) {
+      const arr = Array.isArray(p.toppings) ? (p.toppings as any[]) : [];
+      for (const t of arr) {
+        toppingNameOf.set(`${p.id}|${t.id}`, String(t?.name ?? ''));
+      }
+    }
     const unitCostOf = new Map(
       ingredientRows.map((i) => [i.id, i.costPerUnit]),
     );
@@ -250,7 +268,13 @@ export class PricingCostService {
 
       let toppingNoRecipe = false;
       for (const toppingId of l.toppingIds) {
-        const trs = toppingsByKey.get(`${l.productId}|${toppingId}`) ?? [];
+        const own = toppingsByKey.get(`${l.productId}|${toppingId}`) ?? [];
+        const trs = resolveToppingRecipeRows(
+          own,
+          toppingId,
+          toppingNameOf.get(`${l.productId}|${toppingId}`) ?? '',
+          globalToppingRecipes,
+        );
         if (trs.length === 0) {
           toppingNoRecipe = true;
           continue;
