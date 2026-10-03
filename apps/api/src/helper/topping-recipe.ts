@@ -22,17 +22,9 @@ export async function loadGlobalToppingRecipes(
 
 /** Ưu tiên dòng riêng của sản phẩm (override); không có thì dùng global theo tên. */
 export function resolveToppingRecipeRows(
-  productRows: {
-    toppingId: string;
-    ingredientId: string;
-    quantity: Prisma.Decimal;
-  }[],
-  toppingId: string,
   toppingName: string,
   global: GlobalToppingRecipeMap,
 ): { ingredientId: string; quantity: Prisma.Decimal }[] {
-  const own = productRows.filter((r) => r.toppingId === toppingId);
-  if (own.length) return own;
   return global.get(toppingNameKey(toppingName)) ?? [];
 }
 

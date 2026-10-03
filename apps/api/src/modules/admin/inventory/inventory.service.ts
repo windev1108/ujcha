@@ -77,18 +77,12 @@ export class InventoryService {
         const extras =
           (item.extrasJson as { toppingId?: string; name?: string }[] | null) ??
           [];
-        const productToppingRows = toppingRecipeRows.filter(
-          (tr) => tr.productId === item.productId,
-        );
         for (const extra of extras) {
           if (!extra.toppingId) continue;
-          const rows = resolveToppingRecipeRows(
-            productToppingRows,
-            extra.toppingId,
+          for (const r of resolveToppingRecipeRows(
             extra.name ?? '',
             globalToppingRecipes,
-          );
-          for (const r of rows) {
+          )) {
             addNeed(r.ingredientId, r.quantity.mul(item.quantity));
           }
         }

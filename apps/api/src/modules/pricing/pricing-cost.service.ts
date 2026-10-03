@@ -8,7 +8,10 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { PricingConfigService } from './pricing-config.service';
 import { computeCostAndPrice } from '../../helper/pricing-calc';
-import { loadGlobalToppingRecipes, resolveToppingRecipeRows } from '../../helper/topping-recipe';
+import {
+  loadGlobalToppingRecipes,
+  resolveToppingRecipeRows,
+} from '../../helper/topping-recipe';
 
 type IngredientInfo = { name: string; costPerUnit: Prisma.Decimal | null };
 type RecipeRow = {
@@ -29,7 +32,7 @@ export class PricingCostService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly pricingConfig: PricingConfigService,
-  ) { }
+  ) {}
 
   async preview(params: {
     productId?: string;
@@ -268,10 +271,7 @@ export class PricingCostService {
 
       let toppingNoRecipe = false;
       for (const toppingId of l.toppingIds) {
-        const own = toppingsByKey.get(`${l.productId}|${toppingId}`) ?? [];
         const trs = resolveToppingRecipeRows(
-          own,
-          toppingId,
           toppingNameOf.get(`${l.productId}|${toppingId}`) ?? '',
           globalToppingRecipes,
         );

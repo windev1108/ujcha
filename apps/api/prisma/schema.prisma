@@ -276,7 +276,6 @@ model Product {
   orderItems         OrderItem[]
   groupOrderItems    GroupOrderParticipantItem[]
   feedbacks          Feedback[]
-  toppingRecipeItems ProductToppingRecipeItem[]
 
   pricingMode          PricingMode @default(auto)
   /// null = kế thừa category / global.
@@ -310,7 +309,6 @@ model Ingredient {
 
   recipeItems        ProductRecipeItem[]
   transactions       InventoryTransaction[]
-  toppingRecipeItems ProductToppingRecipeItem[]
   globalToppingRecipeItems GlobalToppingRecipeItem[] 
   
   @@index([isActive])
@@ -331,25 +329,6 @@ model ProductRecipeItem {
 
   @@unique([productId, ingredientId, scopeKey])
   @@index([productId])
-  @@index([ingredientId])
-}
-
-/// Định lượng nguyên liệu hao thêm khi khách chọn 1 topping cụ thể của sản phẩm.
-model ProductToppingRecipeItem {
-  id           String     @id @default(uuid()) @db.Uuid
-  productId    String     @db.Uuid
-  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
-  /// id của topping trong Product.toppings (JSON) — không FK vì topping là embed.
-  toppingId    String
-  ingredientId String     @db.Uuid
-  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
-  quantity     Decimal    @db.Decimal(12, 3)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-
-  @@unique([productId, toppingId, ingredientId])
-  @@index([productId])
-  @@index([toppingId])
   @@index([ingredientId])
 }
 
