@@ -18,7 +18,7 @@ export function RevenueStatsPageClient() {
                         Báo cáo
                     </p>
                     <h1 className="mt-1 text-[28px] font-bold tracking-tight text-[#1a1a1a]">
-                        Thống kê doanh thu / lợi nhuận
+                        Thống kê
                     </h1>
                     <p className="mt-1.5 text-sm text-foreground/50">
                         Doanh thu, giá vốn, lợi nhuận và mức độ phủ giá vốn theo món và danh mục.

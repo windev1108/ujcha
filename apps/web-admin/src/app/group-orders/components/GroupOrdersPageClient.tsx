@@ -363,7 +363,8 @@ function ActiveGroupOrdersTab() {
         </div>
       ) : items.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-black/10 py-16 text-center">
-          <Users className="size-10 text-foreground/20" />
+          <Users className="size-10 te
+          xt-foreground/20" />
           <div>
             <p className="text-sm font-semibold text-foreground/50">
               {hasFilter ? "Không có đơn nhóm nào khớp bộ lọc" : "Chưa có đơn nhóm nào"}
@@ -371,7 +372,7 @@ function ActiveGroupOrdersTab() {
           </div>
         </div>
       ) : (
-        <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 ${isFetching ? "opacity-70" : ""}`}>
+        <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 ${isFetching ? "opacity-70" : ""}`}>
           {items.map((go) => (
             <ActiveGroupOrderCard key={go.id} go={go} />
           ))}

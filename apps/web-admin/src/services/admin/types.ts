@@ -313,11 +313,18 @@ export type AdminOrderItem = {
     price: string;
   };
 };
+export type AdminToppingRecipeItem = {
+  ingredientId: string;
+  ingredientName: string;
+  unit: string;
+  quantity: number;
+};
 
 export type AdminTopping = {
   nameKey: string;
   name: string;
   isOutOfStock: boolean;
+  recipeItems: AdminToppingRecipeItem[]
 };
 
 /** Đồng bộ Prisma `VoucherDiscountType` */
@@ -1094,6 +1101,14 @@ export type ProductRecipe = {
   recipeNote: string | null;
   items: ProductRecipeItem[];
   toppingItems: ProductToppingRecipeItem[];
+  globalToppingItems: {
+    toppingId: string;
+    toppingName: string;
+    ingredientId: string;
+    ingredientName: string;
+    unit: string;
+    quantity: string;
+  }[];
 };
 
 export type SetProductRecipeBody = {
@@ -1319,3 +1334,16 @@ export type FinanceStats = {
   uncostedIngredients: { name: string; quantity: number; revenue: number }[];
 };
 
+
+export type CustomerCell = {
+  lat0: number; lng0: number; lat1: number; lng1: number;
+  customers: number; orders: number; revenue: number;
+};
+export type AdminCustomerStats = {
+  range: { from: string; to: string };
+  repeat: {
+    cohortCustomers: number; repeatedCustomers: number; repeatRatePercent: number | null;
+    customersInRange: number; newCustomers: number; returningCustomers: number; anonymousOrders: number;
+  };
+  geo: { cellSize: number; totalOrders: number; geocodedOrders: number; cells: CustomerCell[] };
+};

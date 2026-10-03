@@ -17,3 +17,11 @@ export async function setAdminToppingOutOfStock(
   );
   return data;
 }
+
+export async function setAdminToppingRecipe(
+  name: string,
+  items: { ingredientId: string; quantity: number }[],
+) {
+  const { data } = await api.put("/admin/toppings/recipe", { name, items });
+  return data;
+}

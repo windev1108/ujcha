@@ -4,13 +4,14 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
 import { formatVnd } from "@/lib/product-display";
-import { fetchAdminFinanceStats } from "@/services/admin/finance-api"; // chỉnh lại path cho đúng file bạn đặt hàm này
+import { fetchAdminCustomerStats, fetchAdminFinanceStats } from "@/services/admin/finance-api"; // chỉnh lại path cho đúng file bạn đặt hàm này
 
 import { CategoriesTable, LowPerformers, ProductsTable, UncostedIngredients } from "./FinanceTables";
 import { RevenueStructure, SplitCard } from "./FinanceBreakdowns";
 import { DailyTrendChart, HourlyChart } from "./FinanceTrendCharts";
 import { DeltaBadge, KpiCard, Segmented } from "@/components/common/FinanceModule";
 import { addDays, CHANNEL_LABEL, deltaPercent, diffDays, ORDER_TYPE_LABEL, PAYMENT_LABEL, UNCOSTED_REASON_LABEL, vnToday } from "@/lib/finance-utils";
+import { CustomerInsights } from "./CustomerInsights";
 
 
 type RangeKey = "7" | "30" | "90" | "custom";
@@ -34,7 +35,12 @@ export function FinanceStatsTab() {
     enabled: rangeValid,
     placeholderData: keepPreviousData,
   });
-
+  const { data: customerData } = useQuery({
+    queryKey: ["admin", "stats", "customers", from, to],
+    queryFn: () => fetchAdminCustomerStats({ from, to }),
+    enabled: rangeValid,
+    placeholderData: keepPreviousData,
+  });
   const s = data?.summary;
   const p = data?.previous.summary;
   const d = (cur?: number, prev?: number) =>
@@ -126,6 +132,7 @@ export function FinanceStatsTab() {
         <SplitCard eyebrow="Theo thanh toán" rows={data?.byPaymentType} labels={PAYMENT_LABEL} />
       </div>
 
+      <CustomerInsights data={customerData} />
       <ProductsTable products={data?.products} />
       <CategoriesTable categories={data?.categories} />
 

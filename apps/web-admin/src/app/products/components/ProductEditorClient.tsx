@@ -1276,45 +1276,62 @@ export function ProductEditorClient({ mode, productId }: Props) {
                 </Button>
               </div>
 
-              {/* Định lượng theo topping */}
+              {/* Định lượng theo topping — tự map từ cấu hình global */}
               <div className="flex flex-col gap-2 border-t border-black/6 pt-4">
                 <Label className={adminLabelClassProduct}>Định lượng nguyên liệu hao thêm theo topping</Label>
-                {toppings.length === 0 ? (
+                <p className="text-xs text-foreground/50">
+                  Tự lấy theo tên topping từ cấu hình global (tab Topping). Không cần nhập lại ở từng sản phẩm.
+                </p>
+                {toppings.filter((t) => t.name.trim()).length === 0 ? (
                   <p className="text-sm text-foreground/40">Sản phẩm chưa có topping nào.</p>
                 ) : (
-                  <>
-                    {toppingRecipeItems.map((it, idx) => (
-                      <div key={idx} className="flex flex-wrap items-center gap-2 rounded-xl border border-black/8 p-2">
-                        <Select className="min-w-[140px] flex-1" value={it.toppingId}
-                          onChange={(k) => setToppingRecipeItems((prev) => prev.map((r, i) => (i === idx ? { ...r, toppingId: String(k) } : r)))}>
-                          <Select.Trigger className={adminSelectTriggerClass}><Select.Value className={adminSelectValueClass} /><Select.Indicator /></Select.Trigger>
-                          <Select.Popover placement="bottom start">
-                            <ListBox>{toppings.map((t) => <ListBox.Item key={t.id} id={t.id} textValue={t.name}>{t.name || "(chưa đặt tên)"}</ListBox.Item>)}</ListBox>
-                          </Select.Popover>
-                        </Select>
-
-                        <Select className="min-w-[160px] flex-1" value={it.ingredientId}
-                          onChange={(k) => setToppingRecipeItems((prev) => prev.map((r, i) => (i === idx ? { ...r, ingredientId: String(k) } : r)))}>
-                          <Select.Trigger className={adminSelectTriggerClass}><Select.Value className={adminSelectValueClass} /><Select.Indicator /></Select.Trigger>
-                          <Select.Popover placement="bottom start">
-                            <ListBox>{ingredients.map((ing) => <ListBox.Item key={ing.id} id={ing.id} textValue={ing.name}>{ing.name} ({ing.unit})</ListBox.Item>)}</ListBox>
-                          </Select.Popover>
-                        </Select>
-
-                        <Input type="number" min={0} step={0.01} value={String(it.quantity)}
-                          onChange={(e) => setToppingRecipeItems((prev) => prev.map((r, i) => (i === idx ? { ...r, quantity: Number(e.target.value) || 0 } : r)))}
-                          className={`w-28 ${adminInputClass}`} placeholder="Định lượng" />
-
-                        <Button isIconOnly variant="ghost" size="sm" onPress={() => setToppingRecipeItems((prev) => prev.filter((_, i) => i !== idx))}>
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      </div>
-                    ))}
-                    <Button variant="ghost" size="sm" className="w-fit rounded-xl"
-                      onPress={() => setToppingRecipeItems((prev) => [...prev, { toppingId: toppings[0]?.id ?? "", ingredientId: ingredients[0]?.id ?? "", quantity: 0 }])}>
-                      <Plus className="mr-1.5 size-3.5" /> Thêm định lượng topping
-                    </Button>
-                  </>
+                  toppings
+                    .filter((t) => t.name.trim())
+                    .map((t) => {
+                      const overrides = toppingRecipeItems.filter((r) => r.toppingId === t.id);
+                      const globals = (recipe?.globalToppingItems ?? []).filter((g) => g.toppingId === t.id);
+                      const isOverride = overrides.length > 0;
+                      return (
+                        <div key={t.id} className="flex flex-col gap-1 rounded-xl border border-black/8 p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-sm font-semibold">{t.name}</span>
+                            {isOverride ? (
+                              <Button
+                                size="sm" variant="ghost" className="rounded-xl"
+                                onPress={() =>
+                                  setToppingRecipeItems((prev) => prev.filter((r) => r.toppingId !== t.id))
+                                }
+                              >
+                                Dùng định lượng global
+                              </Button>
+                            ) : null}
+                          </div>
+                          {isOverride ? (
+                            <>
+                              <span className="w-fit rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 ring-1 ring-amber-200/80">
+                                Đang ghi đè riêng cho sản phẩm này
+                              </span>
+                              <p className="text-xs text-foreground/60">
+                                {overrides
+                                  .map((o) => {
+                                    const ing = ingredients.find((i) => i.id === o.ingredientId);
+                                    return `${ing?.name ?? "?"} ${o.quantity}${ing?.unit ?? ""}`;
+                                  })
+                                  .join(" · ")}
+                              </p>
+                            </>
+                          ) : globals.length > 0 ? (
+                            <p className="text-xs text-[#5a8f7a]">
+                              Global: {globals.map((g) => `${g.ingredientName} ${Number(g.quantity)}${g.unit}`).join(" · ")}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-foreground/40">
+                              Chưa có định lượng global cho topping này — cấu hình ở tab Topping.
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })
                 )}
               </div>
             </CardContent>

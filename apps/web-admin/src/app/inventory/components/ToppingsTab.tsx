@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, CardContent, Input, Switch } from "@heroui/react";
+import { Button, Card, CardContent, Input, Switch } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PackageX, Search } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -10,11 +10,13 @@ import {
   fetchAdminToppings,
   setAdminToppingOutOfStock,
 } from "@/services/admin/toppings-api";
+import ToppingRecipeEditor from "./ToppingTabEditor";
+
 
 export function ToppingsTab() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
-
+  const [openKey, setOpenKey] = useState<string | null>(null);
   const { data: toppings = [], isLoading } = useQuery({
     queryKey: adminKeys.toppings,
     queryFn: fetchAdminToppings,
@@ -106,36 +108,54 @@ export function ToppingsTab() {
         <Card className="overflow-hidden rounded-2xl border border-black/6 shadow-sm">
           <CardContent className="flex flex-col divide-y divide-black/6 p-0">
             {filtered.map((t) => (
-              <div
-                key={t.nameKey}
-                className={`flex items-center justify-between gap-4 px-5 py-3.5 transition-colors ${
-                  t.isOutOfStock ? "bg-amber-50/50" : ""
-                }`}
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-foreground">{t.name}</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2.5">
-                  <span
-                    className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                      t.isOutOfStock
+              <div key={t.nameKey} className={t.isOutOfStock ? "bg-amber-50/50" : ""}>
+                <div className="flex items-center justify-between gap-4 px-5 py-3.5 transition-colors">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-foreground">{t.name}</p>
+                    <p className="truncate text-xs text-foreground/45">
+                      {t.recipeItems.length === 0
+                        ? "Chưa có định lượng"
+                        : t.recipeItems
+                          .map((r) => `${r.ingredientName} ${r.quantity}${r.unit}`)
+                          .join(" · ")}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2.5">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="rounded-full"
+                      onPress={() => setOpenKey((k) => (k === t.nameKey ? null : t.nameKey))}
+                    >
+                      Định lượng
+                    </Button>
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${t.isOutOfStock
                         ? "bg-amber-100 text-amber-700"
                         : "bg-emerald-50 text-emerald-700"
-                    }`}
-                  >
-                    {t.isOutOfStock ? "Hết hàng" : "Còn hàng"}
-                  </span>
-                  <Switch
-                    isSelected={t.isOutOfStock}
-                    onChange={(v) => toggleMut.mutate({ name: t.name, isOutOfStock: v })}
-                    isDisabled={toggleMut.isPending}
-                    aria-label={`Đánh dấu ${t.name} hết hàng`}
-                  >
-                    <Switch.Control>
-                      <Switch.Thumb />
-                    </Switch.Control>
-                  </Switch>
+                        }`}
+                    >
+                      {t.isOutOfStock ? "Hết hàng" : "Còn hàng"}
+                    </span>
+                    <Switch
+                      isSelected={t.isOutOfStock}
+                      onChange={(v) => toggleMut.mutate({ name: t.name, isOutOfStock: v })}
+                      isDisabled={toggleMut.isPending}
+                      aria-label={`Đánh dấu ${t.name} hết hàng`}
+                    >
+                      <Switch.Control>
+                        <Switch.Thumb />
+                      </Switch.Control>
+                    </Switch>
+                  </div>
                 </div>
+                {openKey === t.nameKey && (
+                  <ToppingRecipeEditor
+                    key={t.nameKey}
+                    topping={t}
+                    onClose={() => setOpenKey(null)}
+                  />
+                )}
               </div>
             ))}
           </CardContent>
